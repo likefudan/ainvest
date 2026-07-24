@@ -1,10 +1,10 @@
 # ainvest 可执行实施 TODO
 
-> 基于：`likefudan/ainvest` 的 `design.md`（PR #1，2026-07-24 已合并）
+> 基于：`likefudan/ainvest` 的 `design.md`（PR #1，2026-07-24 已合并）以及随后确认的安全默认决策
 >
 > 文档用途：将 ainvest 从“只有架构设计”推进到 Paper Trading、研究、审批、Robinhood 只读接入和受控实盘。每张任务卡都可以交给独立 Codex sub-agent、Cursor Agent 或其他 AI 工具执行。
 >
-> 安全原则：除非任务卡明确属于 Phase 5，并且所有实盘门禁已经通过，否则所有实现必须保持 `TRADING_MODE=paper`、`LIVE_TRADING_ENABLED=false`、`REQUIRE_HUMAN_APPROVAL=true`。
+> 安全原则：除非任务卡明确属于 Phase 5，并且所有实盘门禁已经通过，否则所有实现必须保持 `TRADING_MODE=paper`、`LIVE_TRADING_ENABLED=false`、`REQUIRE_HUMAN_APPROVAL=true`。首版固定 `REGULAR_TRADING_HOURS_ONLY=true`、`REQUIRE_COMPLETE_RISK_LIMITS=true`。
 
 ## 0. 当前基线
 
@@ -55,6 +55,8 @@ ainvest 是一个 AI 辅助研究、确定性 Python 策略决策、独立风控
 13. 策略插件是任意 Python 代码，必须在独立进程中运行；无凭据、默认无网络、只读文件系统、有限 CPU/内存/时间。
 14. 不得使用要求 Robinhood 用户名/密码或非官方接口的 Broker 库。
 15. 任何 agent 都不得把真实 token、账户号、Passkey 私钥或 `.env` 内容写入代码、测试快照或日志。
+16. 首版只允许在美股常规交易时段创建或执行订单；盘前、盘后、隔夜、节假日和提前收市后的时段一律不交易。
+17. 任一必需风控额度缺失、为空、格式错误或无效时必须拒绝交易，不得使用隐式额度默认值。
 
 ### 1.3 首版非目标
 
@@ -172,7 +174,8 @@ flowchart TD
 - **建议文件**：`docs/decisions/README.md`、`docs/adr/0001-*.md` 模板。
 - **执行清单**：
   - 建立状态：`proposed / accepted / superseded`。
-  - 为以下问题各建条目：行情供应商、新闻供应商、基本面供应商、AI 模型、审批域名/部署、Telegram 身份、首版策略、风险额度、交易时段、数据保留期。
+  - 为以下未决问题各建条目：行情供应商、新闻供应商、基本面供应商、AI 模型、审批域名/部署、Telegram 身份、首版策略、风险额度具体数值、数据保留期。
+  - 为已确定的“仅美股常规交易时段”和“缺失必需风控额度即拒绝交易”建立 `accepted` 决策记录，agent 不得重新选择。
   - 记录 owner、deadline、默认安全行为和受影响 milestone。
   - 未决项必须有 fail-closed 默认值；例如无实盘报价供应商则禁止实盘。
 - **验收**：
@@ -224,8 +227,8 @@ flowchart TD
 - **依赖**：FND-001。
 - **建议文件**：`src/ainvest/config.py`、`config/risk.example.yaml`、`config/strategies.example.yaml`、`.env.example`。
 - **执行清单**：
-  - 建立 Pydantic Settings；集中定义 `TRADING_MODE`、`LIVE_TRADING_ENABLED`、`REQUIRE_HUMAN_APPROVAL`。
-  - 默认值固定为 paper/false/true。
+  - 建立 Pydantic Settings；集中定义 `TRADING_MODE`、`LIVE_TRADING_ENABLED`、`REQUIRE_HUMAN_APPROVAL`、`REGULAR_TRADING_HOURS_ONLY`、`REQUIRE_COMPLETE_RISK_LIMITS`。
+  - 默认值固定为 paper/false/true/true/true；首版拒绝把后两项设为 false。
   - 配置来源优先级明确；生产拒绝未知字段和不安全组合。
   - YAML 使用安全 loader，禁止任意对象、`eval`、lambda 和表达式。
   - secret 字段 `repr=False`，错误消息不得回显值。
@@ -489,7 +492,7 @@ flowchart TD
 - **执行清单**：
   - 规则接口只接收不可变 RiskContext，返回 rule code/severity/decision/reason/evidence。
   - 聚合优先级：任何 hard reject -> REJECTED；review-only -> NEEDS_REVIEW；否则 APPROVED。
-  - 缺输入、规则异常、未知规则均 fail closed。
+  - 缺输入、缺任一必需风控额度、规则异常、未知规则均 fail closed。
   - 决策记录 rule set/config/code versions 和 input digest。
 - **验收**：规则顺序不改变最终结果；异常规则无法被吞掉后批准；每个结果可解释、可审计。
 
@@ -501,6 +504,7 @@ flowchart TD
 - **执行清单**：
   - 单笔最大名义金额、单标的最大权重、单行业最大暴露。
   - 单日最大成交额、最低现金保留、单日已实现/未实现亏损。
+  - 所有必需额度必须显式配置并通过范围校验；缺失或无效时返回 REJECTED，不提供可交易的默认额度。
   - 计算 post-trade 状态，不只检查当前状态。
   - 无行业映射、P&L 不完整、账户净值异常时拒绝或 NEEDS_REVIEW，不默认通过。
 - **验收**：阈值等于/略超边界测试；买卖两侧和负 P&L；Decimal property tests。
@@ -513,7 +517,7 @@ flowchart TD
 - **执行清单**：
   - 只允许配置白名单内普通美股/ETF。
   - 拒绝 options、crypto、margin、short、leveraged/inverse ETF。
-  - 校验 regular session、节假日、提前收市和交易 halt。
+  - 固定只允许 regular session；校验节假日、提前收市和交易 halt，首版不提供盘前/盘后开关。
   - 元数据缺失时拒绝。
 - **验收**：每一类禁用资产有测试；非交易时段/节假日/提前收市失败关闭。
 
@@ -1336,7 +1340,12 @@ flowchart TD
 11. 即使实现了 live，部署和仓库默认仍为 Paper；真实写单必须有用户逐笔明确授权。
 12. Gate 5 完成后已切回 Paper，并保存脱敏复盘。
 
-## 16. 暂不应交给 Agent 自行决定的事项
+## 16. 决策权限边界
+
+以下安全决策已经确定，所有 agent 必须直接实现，不得改回可选行为：
+
+- 仅在美股常规交易时段创建或执行新订单。
+- 任一必需风控额度未配置或无效时，一律拒绝交易。
 
 以下项目需要产品/账户持有人做最终选择。Agent 可以调研、提出 ADR 选项和实现抽象，但不能自行开通、购买或启用：
 
@@ -1348,6 +1357,5 @@ flowchart TD
 - Robinhood Agentic Account 授权和预算。
 - 首版策略参数。
 - 单笔/单股/行业/单日/回撤阈值。
-- 是否仅常规交易时段。
 - 审计和市场原始数据保留期。
 - 任何真实订单的最终提交。

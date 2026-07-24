@@ -376,6 +376,10 @@ Risk Engine 返回：
 
 每个结果都必须包含机器可读的规则编号和人类可读的原因。
 
+任何必需的风控额度缺失、为空、格式错误或超出允许范围时，Risk Engine 必须返回 `REJECTED`，不得使用隐式默认额度继续交易。系统可以继续运行研究任务，但不能创建或执行订单提案。
+
+首版所有会创建或执行订单提案的流程仅允许在美股常规交易时段运行。节假日、提前收市后的时段、盘前、盘后和隔夜时段一律不创建新订单；研究、审计和成交核对任务可以在非交易时段运行。
+
 ### 5.5 Approval Service
 
 Approval Service 创建订单提案、生成一次性令牌并验证 Passkey。
@@ -709,7 +713,11 @@ ainvest/
 TRADING_MODE=paper
 LIVE_TRADING_ENABLED=false
 REQUIRE_HUMAN_APPROVAL=true
+REGULAR_TRADING_HOURS_ONLY=true
+REQUIRE_COMPLETE_RISK_LIMITS=true
 ```
+
+首版不允许关闭 `REGULAR_TRADING_HOURS_ONLY` 或 `REQUIRE_COMPLETE_RISK_LIMITS`。交易日和提前收市时间必须由交易日历确定，不能使用固定的工作日或本地时钟判断。
 
 切换实盘不能只依赖一个环境变量，至少还需：
 
@@ -779,6 +787,8 @@ REQUIRE_HUMAN_APPROVAL=true
 - kill switch 阻止所有新订单
 - 非白名单 Telegram 用户不能审批
 - 非 Agentic Account 不能交易
+- 任一必需风控额度未配置时不能交易
+- 非美股常规交易时段不能创建或执行新订单
 
 ## 15. 分阶段实施
 
@@ -850,6 +860,8 @@ REQUIRE_HUMAN_APPROVAL=true
 | 首版执行模式 | 默认 Paper Trading |
 | 实盘审批 | 每笔必须人工确认 |
 | AI 权限 | 研究和解释，不直接下单 |
+| 交易时段 | 仅在美股常规交易时段创建或执行订单 |
+| 风控配置缺失行为 | 任一必需风控额度未配置或无效时拒绝交易 |
 
 ## 17. 实现前仍需确定
 
@@ -858,8 +870,7 @@ REQUIRE_HUMAN_APPROVAL=true
 - 审批页面域名和部署环境
 - Telegram Bot 的创建与允许用户 ID
 - 首版策略和具体参数
-- 单笔、单股、单日和最大回撤限制
-- 是否只在常规交易时段运行
+- 单笔、单股、单日和最大回撤限制的具体数值
 - 数据和审计记录保留期限
 
 这些选择不影响总体架构，可以在各阶段开始前分别确定。
