@@ -1,6 +1,6 @@
 # ainvest 可执行实施 TODO
 
-> 基于：`likefudan/ainvest` 的 `design.md`（PR #1，2026-07-24 已合并）以及随后确认的安全默认决策
+> 基于：`likefudan/ainvest` 的 `design.md`（PR #1，2026-07-24 已合并）以及随后确认的安全和数据源决策
 >
 > 文档用途：将 ainvest 从“只有架构设计”推进到 Paper Trading、研究、审批、Robinhood 只读接入和受控实盘。每张任务卡都可以交给独立 Codex sub-agent、Cursor Agent 或其他 AI 工具执行。
 >
@@ -57,6 +57,10 @@ ainvest 是一个 AI 辅助研究、确定性 Python 策略决策、独立风控
 15. 任何 agent 都不得把真实 token、账户号、Passkey 私钥或 `.env` 内容写入代码、测试快照或日志。
 16. 首版只允许在美股常规交易时段创建或执行订单；盘前、盘后、隔夜、节假日和提前收市后的时段一律不交易。
 17. 任一必需风控额度缺失、为空、格式错误或无效时必须拒绝交易，不得使用隐式额度默认值。
+18. Robinhood MCP 正式提供且通过契约测试的读取能力必须优先通过 Robinhood Read Gateway 使用，不重复引入同类默认供应商。
+19. 实盘报价只使用 Robinhood MCP `get_equity_quotes`；点差和深度使用 `get_equity_price_book`。MCP 失败、过期、缺字段或冲突时拒绝交易，不得回退到 Alpaca、yfinance 或其他行情源。
+20. Research Agent 和 Strategy Engine 只能访问只读网关返回的版本化 schema，不能持有原始 MCP session、OAuth token 或写单工具。
+21. SEC EDGAR + EdgarTools 提供原始申报证据；新闻和事件使用 GDELT、SEC 8-K/Form 4 和公司 Investor Relations；yfinance 仅为可选开发/离线适配器，Alpaca 不是首版默认依赖。
 
 ### 1.3 首版非目标
 
@@ -80,6 +84,7 @@ ainvest 是一个 AI 辅助研究、确定性 Python 策略决策、独立风控
 - Passkey：py_webauthn。
 - 调度：APScheduler 3.11.x。
 - Robinhood：官方 Trading MCP + MCP Python SDK。
+- 数据源：Robinhood MCP 能力优先；SEC EDGAR/EdgarTools 提供原始申报，GDELT/SEC/公司公告提供新闻事件，yfinance 仅作可选开发和离线用途。
 - 测试：pytest、Hypothesis、HTTPX mock。
 - 日志/监控：structlog、OpenTelemetry、Prometheus。
 
@@ -174,8 +179,8 @@ flowchart TD
 - **建议文件**：`docs/decisions/README.md`、`docs/adr/0001-*.md` 模板。
 - **执行清单**：
   - 建立状态：`proposed / accepted / superseded`。
-  - 为以下未决问题各建条目：行情供应商、新闻供应商、基本面供应商、AI 模型、审批域名/部署、Telegram 身份、首版策略、风险额度具体数值、数据保留期。
-  - 为已确定的“仅美股常规交易时段”和“缺失必需风控额度即拒绝交易”建立 `accepted` 决策记录，agent 不得重新选择。
+  - 为以下未决问题各建条目：AI 模型、审批域名/部署、Telegram 身份、首版策略、风险额度具体数值、数据保留期。
+  - 为已确定的“仅美股常规交易时段”“缺失必需风控额度即拒绝交易”和“Robinhood MCP 优先的数据源策略”建立 `accepted` 决策记录，agent 不得重新选择。
   - 记录 owner、deadline、默认安全行为和受影响 milestone。
   - 未决项必须有 fail-closed 默认值；例如无实盘报价供应商则禁止实盘。
 - **验收**：
@@ -611,7 +616,7 @@ flowchart TD
 
 ### DAT-001 — 数据适配器 Ports 与测试替身
 
-- **目标**：统一 quote、OHLCV、fundamentals、news/events 和 instrument metadata。
+- **目标**：统一 quote、price book、OHLCV、fundamentals、news/events 和 instrument metadata，并为 Robinhood Read Gateway 建立供应商无关接口。
 - **依赖**：DOM-002、PAP-001。
 - **建议文件**：`src/ainvest/data/{ports,models,fakes}.py`。
 - **执行清单**：
@@ -619,24 +624,24 @@ flowchart TD
   - 所有返回值补齐 provenance、observed/received time、timezone、delayed、quality flags。
   - 建立 deterministic fake provider 与 fixture dataset。
   - 禁止上层直接 import 第三方供应商 SDK。
-- **验收**：各 provider 共享 contract tests；缺时间/来源的数据无法进入 ResearchPacket。
+- **验收**：各 provider 共享 contract tests；缺时间/来源的数据无法进入 ResearchPacket；实盘 quote port 不提供跨供应商自动 fallback。
 
-### DAT-002 — 开发/Paper 行情与 OHLCV 适配器
+### DAT-002 — 可选开发/离线行情与 OHLCV 适配器
 
-- **目标**：为本地研究和回测接入开发数据源，首选设计指定的 yfinance。
-- **依赖**：DAT-001、GOV-001 的行情决策。
+- **目标**：在没有 Robinhood 授权时，用 yfinance 支持本地开发、回测和离线研究，但不进入任何实盘风险决策。
+- **依赖**：DAT-001。
 - **建议文件**：`src/ainvest/data/providers/yahoo.py`。
 - **执行清单**：
   - 实现 quote、历史 OHLCV、corporate actions 的薄适配。
   - 明确调整价/未调整价、交易所时区、延迟属性和供应商限制。
   - 网络超时、空响应、rate limit 转为稳定错误；缓存必须保留原 observed_at。
-  - 代码和文档显式标注“不可作为实盘唯一报价”。
-- **验收**：使用录制/伪造响应的测试不依赖公网；拆股/分红、缺 bar、时区、重复索引均覆盖。
+  - 代码、类型和文档显式标记 `development_only`；live mode 不得构造或调用该 adapter。
+- **验收**：使用录制/伪造响应的测试不依赖公网；拆股/分红、缺 bar、时区、重复索引均覆盖；live 配置引用此 provider 时启动失败。
 
 ### DAT-003 — SEC/基本面与财报事件适配器
 
-- **目标**：使用 EdgarTools 获取可引用的公司申报和财报日历基础信息。
-- **依赖**：DAT-001、GOV-001 的基本面决策。
+- **目标**：使用 SEC EDGAR + EdgarTools 获取可引用的原始公司申报和监管事件，补充 Robinhood MCP 的标准化基本面。
+- **依赖**：DAT-001。
 - **建议文件**：`src/ainvest/data/providers/sec.py`。
 - **执行清单**：
   - 支持公司映射、10-K/10-Q/8-K/Form 4 metadata 和选定 XBRL 指标。
@@ -647,14 +652,14 @@ flowchart TD
 
 ### DAT-004 — 新闻、宏观事件与交易日历
 
-- **目标**：接入选定新闻/事件供应商，并提供可靠美股交易时段。
-- **依赖**：DAT-001、GOV-001 的新闻决策、RSK-003。
+- **目标**：接入 GDELT、SEC 8-K/Form 4 和公司 Investor Relations 公告，并提供可靠美股交易时段。
+- **依赖**：DAT-001、DAT-003、RSK-003。
 - **建议文件**：`src/ainvest/data/providers/news.py`、`calendar.py`。
 - **执行清单**：
   - 新闻统一 title/url/publisher/published_at/received_at/symbols/license/quality。
   - 去重只合并同一事件引用，不丢失多个来源。
+  - GDELT 用于新闻发现；SEC 和公司公告标记为高可信一手事件，正文许可和引用范围显式保存。
   - 使用 pandas-market-calendars 处理节假日和提前收市。
-  - 新闻供应商未决定时先完成 port/fake，不私自选付费服务。
 - **验收**：时区、DST、提前收市、重复新闻和未来 published_at 测试通过；Risk Engine 使用同一 calendar service。
 
 ### DAT-005 — 指标、数据质量、缓存与快照
@@ -675,7 +680,7 @@ flowchart TD
 - **依赖**：DAT-001～005、DOM-002～003。
 - **建议文件**：`src/ainvest/agents/tools/`。
 - **执行清单**：
-  - 工具覆盖 quote/history/indicators/filings/news/portfolio concentration/buying power。
+  - 工具覆盖 quote/price book/history/indicators/filings/news/portfolio concentration/buying power；Robinhood 能力只通过 Read Gateway 访问。
   - 输入输出均为 Pydantic schema，设置超时和最大返回量。
   - 工具返回证据 ID，模型只能引用现有证据。
   - 工具层不持有 Broker 写权限。
@@ -880,27 +885,30 @@ flowchart TD
 
 ### RHB-001 — MCP 连接、认证与只读 Client
 
-- **目标**：连接官方 `https://agent.robinhood.com/mcp/trading`，只暴露读取能力。
+- **目标**：连接官方 `https://agent.robinhood.com/mcp/trading` 并实现 Robinhood Read Gateway，只暴露固定白名单读取能力。
 - **依赖**：PAP-001、FND-003、SEC-002、GOV-001 授权决策。
 - **建议文件**：`src/ainvest/execution/robinhood/read_client.py`。
 - **执行清单**：
   - 使用官方 MCP endpoint 和 MCP Python SDK；认证 token 只来自 secret provider。
-  - 初始化时发现/校验工具 schema，建立只读 allowlist。
-  - 对 account/positions/buying power/orders/history 调用设置 timeout、稳定错误和 trace。
+  - 初始化时发现/校验工具 schema，allowlist 至少覆盖已采用的 `get_equity_quotes`、`get_equity_price_book`、`get_equity_historicals`、`get_equity_fundamentals`、`get_financials`、`get_equity_technical_indicators`、`get_earnings_results`、`get_earnings_calendar`、`get_indexes`、`get_index_quotes`、`get_accounts`、`get_portfolio`、`get_equity_positions`、`get_equity_orders` 和 `get_equity_tradability`。
+  - 未在 allowlist 中的工具默认拒绝；工具 schema 新增或不兼容变化不得自动扩大权限。
+  - Research/Strategy 进程只接收网关输出，不获得原始 MCP session、OAuth token 或 write tool。
+  - 对所有调用设置 timeout、稳定错误和 trace。
   - 日志只记录工具名、耗时、结果摘要，不记录 token/完整账户号。
 - **验收**：fake MCP contract tests；未知/写工具不可调用；认证、timeout、schema drift 均 fail closed。
 
-### RHB-002 — Robinhood 数据规范化与组合快照
+### RHB-002 — Robinhood 行情、基本面与组合数据规范化
 
-- **目标**：将 MCP 账户数据映射为 ainvest 的 versioned schemas。
+- **目标**：将 MCP 行情、标准化基本面和账户数据映射为 ainvest 的 versioned schemas。
 - **依赖**：RHB-001、DOM-002～004、DB-001。
 - **建议文件**：`src/ainvest/execution/robinhood/mappers.py`。
 - **执行清单**：
-  - 映射 account scope、cash/buying power、positions、open orders、order history。
+  - 映射 quote、price book、historicals、fundamentals、financials、account scope、cash/buying power、positions、open orders、order history。
+  - 实盘 quote 必须包含 symbol、last/bid/ask、observed_at 或等价服务端时间、source/session；缺失时标记不可用于实盘。
   - 验证必须是预期 Agentic Account；非 Agentic/无法确定 scope 时标记不可交易。
   - Decimal、symbol、时区、状态映射不允许静默 fallback。
   - 保存原响应 digest 和 normalized snapshot。
-- **验收**：录制/合成 payload contract tests；未知 enum、缺账户 scope、金额不一致失败关闭。
+- **验收**：录制/合成 payload contract tests；未知 enum、缺账户 scope、金额不一致、quote 缺 bid/ask/时间或过期均失败关闭。
 
 ### RHB-003 — 只读运行时强制与真实组合 Paper 模式
 
@@ -909,8 +917,9 @@ flowchart TD
 - **建议文件**：只读 service entry point、部署权限、integration tests。
 - **执行清单**：
   - 使用只读 protocol、只读 MCP 工具 allowlist 和独立服务身份。
-  - 将真实组合 snapshot 注入 Strategy/Sizer/Risk，但 broker 仍固定 PaperBroker。
+  - 将 Robinhood 实时行情、基本面和真实组合 snapshot 注入 Strategy/Sizer/Risk，但 broker 仍固定 PaperBroker。
   - 启动日志和 health 明示 `read_only=true`、`execution=paper`。
+  - 对 MCP quote 失败执行拒绝交易；不得构造 Alpaca/yfinance fallback。
   - 测试尝试调用 submit 时在客户端/配置/部署权限至少两层失败。
 - **验收**：真实数据可驱动 Paper proposal；任何代码路径都无法到 Robinhood 写工具。
 
@@ -919,11 +928,12 @@ flowchart TD
 - **目标**：证明真实账户状态可用于 Paper，且实盘写路径不存在。
 - **依赖**：RHB-001～003、REL-001～003、OBS-001～002。
 - **执行清单**：
-  - 读取 account/positions/buying power/orders 并生成快照。
+  - 读取 quote/price book/historicals/fundamentals/account/positions/buying power/orders 并生成快照。
   - 用快照跑完整 Paper workflow 和审批。
   - 进行权限/工具 allowlist 审核与写调用负面测试。
-  - 对比 MCP 与内部 snapshot 金额/仓位。
-- **验收**：达到 design Phase 4 标准；生成 `docs/releases/phase-4-acceptance.md`，明确“无实盘下单能力”。
+  - 对比 MCP 与内部 snapshot 金额/仓位，并验证 quote 新鲜度、bid/ask 和 schema drift 行为。
+  - 注入 MCP quote timeout/缺字段/冲突，确认不会调用其他 provider 且订单被拒绝。
+- **验收**：达到 design Phase 4 标准；生成 `docs/releases/phase-4-acceptance.md`，明确“无实盘下单能力”和“实盘行情无自动 fallback”。
 
 ---
 
@@ -948,7 +958,7 @@ flowchart TD
 - **建议文件**：`src/ainvest/execution/service.py`。
 - **执行清单**：
   - 原子 claim approval；验证未过期、未消费、order hash 匹配。
-  - 重新读取 quote/buying power/positions/open orders。
+  - 通过 Robinhood Read Gateway 重新读取 quote/price book/buying power/positions/open orders；任何行情失败直接 PRE_TRADE_REJECTED，不切换供应商。
   - 完整运行 pre-trade Risk Engine；价格偏移超限则 PRE_TRADE_REJECTED。
   - 进入 SUBMITTING 后使用稳定 client order ID 提交。
   - 成功保存 Broker ID -> SUBMITTED；明确拒绝 -> REJECTED；超时/断连 -> SUBMIT_UNKNOWN。
@@ -1179,7 +1189,8 @@ flowchart TD
 - **建议文件**：`tests/safety/`、独立 CI workflow。
 - **执行清单**：
   - 审批过期；改数量/限价/策略版本；双击；MCP timeout；kill switch；非白名单 Telegram；非 Agentic Account。
-  - 增加 stale quote、account mismatch、open-order conflict、write tool schema drift、live config 单门禁缺失。
+  - 增加 stale/missing/conflicting MCP quote、account mismatch、open-order conflict、read/write tool schema drift、live config 单门禁缺失。
+  - 验证实盘代码没有 Alpaca/yfinance fallback；MCP timeout 后没有调用任何其他 quote provider。
   - Safety suite 只用 mock/sandbox，不提交真实订单。
   - 生成带 commit/config/test digest 的 attestation，供 live guard 验证。
 - **验收**：任一 safety test 失败则无法构建/部署 write service；attestation 与当前 commit/config 不一致时 live guard 拒绝启动。
@@ -1339,6 +1350,7 @@ flowchart TD
 10. Safety Gate 无失败，威胁模型 high/critical 残余风险清零或由用户明确接受。
 11. 即使实现了 live，部署和仓库默认仍为 Paper；真实写单必须有用户逐笔明确授权。
 12. Gate 5 完成后已切回 Paper，并保存脱敏复盘。
+13. 实盘行情只来自 Robinhood Read Gateway；MCP 失败时拒绝交易，代码中不存在 Alpaca/yfinance 自动回退路径。
 
 ## 16. 决策权限边界
 
@@ -1346,10 +1358,12 @@ flowchart TD
 
 - 仅在美股常规交易时段创建或执行新订单。
 - 任一必需风控额度未配置或无效时，一律拒绝交易。
+- Robinhood MCP 正式提供且通过契约测试的能力优先使用 MCP，并通过 Read Gateway 隔离写权限。
+- 实盘行情只使用 Robinhood MCP，失败时拒绝交易且不回退到 Alpaca/yfinance。
+- SEC EDGAR/EdgarTools 提供原始申报证据；GDELT、SEC 和公司公告提供新闻事件；yfinance 仅作可选开发/离线用途。
 
 以下项目需要产品/账户持有人做最终选择。Agent 可以调研、提出 ADR 选项和实现抽象，但不能自行开通、购买或启用：
 
-- 实盘行情、新闻和基本面供应商及其许可。
 - AI 模型供应商、预算和数据保留条款。
 - 公网域名、云环境、TLS 和 secret manager。
 - Telegram Bot 创建、允许的 user_id/chat_id。

@@ -81,7 +81,7 @@ ainvest 不自行实现通用基础设施。数据验证、插件发现、技术
 ```mermaid
 flowchart LR
     MD["市场数据、新闻、财报"] --> RA["Research Agent"]
-    RM["Robinhood MCP<br/>账户、持仓、订单历史"] --> RA
+    RM["Robinhood MCP<br/>行情、基本面、账户、持仓、订单"] --> RA
     RA --> RP["Research Packet"]
     RP --> SE["Python Strategy Engine"]
     SE --> TS["Trade Signal"]
@@ -131,6 +131,18 @@ flowchart LR
 
 系统不得静默混合不同时间点、复权方式或币种的数据。
 
+首版采用以下数据源优先级：
+
+1. Robinhood 官方 Trading MCP 是其公开工具能够提供的数据的首选来源，包括实时股票报价、Level 2 price book、历史 OHLCV、标准化基本面、财务数据、技术指标、财报日历、指数，以及账户、购买力、仓位和订单。
+2. 实盘报价只使用 Robinhood MCP 的 `get_equity_quotes`，并在需要校验点差与深度时使用 `get_equity_price_book`。执行前必须重新获取；超时、缺字段、时间戳缺失、数据过期、工具 schema 不兼容或结果冲突时一律拒绝交易。
+3. 实盘流程不得自动回退到 Alpaca、yfinance 或其他免费行情源。辅助来源只能用于开发、离线研究或差异监控；来源差异超过阈值时应拒绝交易，而不是选择其中一个继续执行。
+4. Research Agent 和 Strategy Engine 不得直接持有具备写单能力的 MCP 会话或凭据。它们只能通过 Robinhood Read Gateway 调用经过白名单验证的只读工具，并接收 ainvest 版本化 schema。
+5. SEC EDGAR + EdgarTools 用于获取可引用的原始申报、XBRL、8-K 和 Form 4，作为基本面和公司事件的权威证据来源；Robinhood MCP 用于标准化基本面和快速查询。
+6. 新闻和外部事件使用 GDELT、SEC 8-K/Form 4 和公司 Investor Relations 公告。只有 Robinhood MCP 正式工具清单中存在并通过契约测试的能力，才可以替代对应外部适配器。
+7. yfinance 只作为无需 Robinhood 授权时的可选开发、回测或离线研究适配器。Alpaca 不作为首版默认依赖。
+
+Robinhood Read Gateway 启动时必须发现并固定允许的 MCP 工具 schema。任何新增、删除或不兼容变更都需要重新通过契约测试，不能在运行时自动扩大工具权限。
+
 ### 5.2 Research Agent
 
 Research Agent 负责：
@@ -145,6 +157,8 @@ Research Agent 负责：
 模型不得自行计算重要金额、仓位或技术指标。此类数值应由 Python 工具计算，模型只负责解释。
 
 Research Agent 的输出是 `ResearchPacket`，而不是 `BUY` 或 `SELL` 指令。
+
+Research Agent 访问 Robinhood 数据时只能调用 Read Gateway，不能看到 MCP OAuth token、原始 MCP session 或任何创建/修改订单的工具。
 
 ### 5.3 Strategy Engine
 
@@ -418,6 +432,8 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 7. 记录 Robinhood 返回的订单 ID。
 8. 持续查询直至进入终态或交给核对任务处理。
 
+步骤 2 的实盘报价必须来自 Robinhood Read Gateway。`get_equity_quotes` 和 `get_equity_price_book` 的响应只有在包含风控所需的标的、bid、ask、时间和来源信息并通过新鲜度检查后才可使用；否则本次执行进入 `PRE_TRADE_REJECTED`，不得切换到其他行情供应商重试。
+
 首版只允许在 Robinhood Agentic Account 中交易。Robinhood 官方文档说明，Trading MCP 可以读取授权账户数据，但交易仅能发生在 Agentic Account。
 
 参考：
@@ -618,8 +634,10 @@ stateDiagram-v2
 |---|---|---|
 | Agent 与结构化输出 | [Pydantic AI](https://github.com/pydantic/pydantic-ai) | 模型无关、工具调用、MCP、结构化输出 |
 | 数据协议与配置 | [Pydantic](https://github.com/pydantic/pydantic) | 领域模型、验证与 JSON Schema |
-| SEC 文件 | [EdgarTools](https://github.com/dgunning/edgartools) | 10-K、10-Q、8-K、Form 4、XBRL |
-| 开发行情 | [yfinance](https://github.com/ranaroussi/yfinance) | 只用于研究和 Paper Trading，不作为实盘唯一报价 |
+| 默认行情与标准化基本面 | Robinhood 官方 Trading MCP | 实盘唯一报价源；也优先复用官方历史行情、基本面、指标和账户工具 |
+| 原始申报与监管事件 | [EdgarTools](https://github.com/dgunning/edgartools) + SEC EDGAR | 10-K、10-Q、8-K、Form 4、XBRL 和可引用证据 |
+| 新闻与外部事件 | GDELT + SEC + 公司 Investor Relations | GDELT 负责新闻发现，SEC/公司公告负责高可信事件 |
+| 可选开发行情 | [yfinance](https://github.com/ranaroussi/yfinance) | 只用于开发、回测和离线研究，不进入实盘风控 |
 | 技术指标 | [TA-Lib Python](https://github.com/TA-Lib/ta-lib-python) | 避免自行实现常见指标 |
 | 策略注册 | [pluggy](https://github.com/pytest-dev/pluggy) + Python `entry_points` + StrategyRegistry | 多团队独立开发、发布和发现策略 |
 | 回测 | [bt](https://github.com/pmorissette/bt) | MIT 许可，适合股票组合与再平衡 |
@@ -642,6 +660,7 @@ stateDiagram-v2
 - backtesting.py 使用 AGPLv3；首版优先选择 MIT 许可的 `bt`。
 - VectorBT 社区版带 Commons Clause，不作为默认核心依赖。
 - yfinance 本身开源，但 Yahoo 数据的使用权受 Yahoo 条款约束。
+- Alpaca 不作为首版默认依赖；实盘不得在 Robinhood MCP 失败时自动回退到 Alpaca 或 yfinance。
 - pluggy 使用 MIT 许可，只承担插件 Hook、发现和注册，不承担隔离与风控。
 - 原版 Zipline 和 Pyfolio 不作为新项目基础。
 - 不使用要求 Robinhood 用户名、密码并调用非官方接口的 Broker 库或 MCP Server。
@@ -806,7 +825,9 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ### Phase 2：研究能力
 
-- 接入市场、新闻和基本面数据
+- 建立 Robinhood Read Gateway 接口和只读工具 allowlist；在尚未授权 MCP 时使用 fake 或可选 yfinance 完成开发
+- 接入 GDELT、SEC EDGAR 和公司 Investor Relations 新闻/事件数据
+- 接入 SEC 原始申报，并为 Robinhood MCP 标准化基本面预留统一适配器
 - 实现技术指标工具
 - 接入 AI Research Agent
 - 建立来源、时效和质量标记
@@ -825,10 +846,11 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 ### Phase 4：Robinhood 只读接入
 
 - 连接官方 Trading MCP
-- 读取账户、持仓、购买力和订单历史
+- 读取实时报价、price book、历史行情、基本面、账户、持仓、购买力和订单历史
+- 通过 Robinhood Read Gateway 只暴露固定白名单工具和版本化数据
 - 将真实组合快照用于 Paper Trading
 
-验收标准：系统无法调用任何实盘下单路径。
+验收标准：系统无法调用任何实盘下单路径；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
 
 ### Phase 5：受控实盘
 
@@ -862,10 +884,15 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 | AI 权限 | 研究和解释，不直接下单 |
 | 交易时段 | 仅在美股常规交易时段创建或执行订单 |
 | 风控配置缺失行为 | 任一必需风控额度未配置或无效时拒绝交易 |
+| 数据源总策略 | Robinhood MCP 正式提供的能力优先使用 MCP，并通过只读网关隔离写权限 |
+| 实盘行情 | Robinhood MCP `get_equity_quotes`；点差与深度使用 `get_equity_price_book` |
+| 实盘行情失败行为 | 拒绝交易，不自动回退到 Alpaca、yfinance 或其他来源 |
+| 基本面 | Robinhood MCP 用于标准化查询；SEC EDGAR + EdgarTools 用于原始申报和证据 |
+| 新闻与事件 | GDELT + SEC 8-K/Form 4 + 公司 Investor Relations 公告 |
+| 开发与离线行情 | yfinance 可选；Alpaca 不作为首版默认依赖 |
 
 ## 17. 实现前仍需确定
 
-- 市场、新闻和基本面数据供应商
 - AI 模型与调用方式
 - 审批页面域名和部署环境
 - Telegram Bot 的创建与允许用户 ID
