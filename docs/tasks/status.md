@@ -79,7 +79,7 @@ plan batch complete only when every card in that section has merged.
 | Batch A complete | Batch A | all of the above | complete |
 | Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | complete (merged) |
 | Batch B — Part 2 (B2) | Batch B | `P02-T2` | complete (merged) |
-| Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | next |
+| Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | in_review |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | after B3 |
 | Batch B complete | Batch B | all of the above | after B4 merges |
 
@@ -87,10 +87,39 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch B — Part 3 (B3)** (`P02-T3`, `P02-T4`) —
-candidate-order, risk, approval, and broker schemas plus canonical order
-serialization and hashing. Its coordinator must claim B3 here from current
-`main` before implementation begins.
+### Batch B — Part 3 (B3)
+
+- **Batch:** Batch B — Part 3 (B3) — order/risk/approval/broker schemas and
+  canonical order hashing (`P02-T3`, `P02-T4`)
+- **Plan batch:** Batch B (partial; remaining part B4)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Integration branch:** `task/batch-b3-order-schemas`
+- **Base commit:** `c6fedb8cf4011ff305ff40f8503c44e94def9996`
+- **Dependency PRs/commits:** Batch B2 /
+  [PR #23](https://github.com/likefudan/ainvest/pull/23) /
+  [PR #24](https://github.com/likefudan/ainvest/pull/24)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/schemas/orders.py`,
+  `src/ainvest/schemas/risk.py`, `src/ainvest/schemas/approval.py`,
+  `src/ainvest/schemas/broker.py`, `src/ainvest/schemas/__init__.py`,
+  `src/ainvest/approval/`, `tests/unit/schemas/**`,
+  `tests/unit/approval/**`, `docs/tasks/status.md`, `README.md`
+- **Safety posture:** domain schemas, hash helpers, and unit tests only; Paper
+  remains the default; no broker write capability, credentials, AI calls,
+  Telegram runtime, or live trading are introduced
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Handoff notes:** Added money-moving schemas (`CandidateOrder`,
+  `OrderProposal`, risk/approval/broker/cancel types) with telegram+paper and
+  webauthn+live enforcement, plus canonical `sha256:` order/cancel digests and
+  fixed vectors. `./scripts/dev verify` passed (149 tests; 84.65% coverage);
+  `./scripts/dev audit` clean.
+- **Next after merge:** Batch B — Part 4 (B4) — `P02-T5`
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T3` | Define Candidate Order, Risk, Approval, and Broker Schemas | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T0`, `P02-T2` | TBD |
+| `P02-T4` | Implement Canonical Order Serialization and Hashing | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T3` | TBD |
 
 ## Completed batches
 

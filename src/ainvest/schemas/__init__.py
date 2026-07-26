@@ -5,6 +5,19 @@ Schemas are the shared dependency foundation. They must not import other
 Domain models stay separate from persistence/ORM models.
 """
 
+from ainvest.schemas.approval import (
+    ApprovalChallenge,
+    ApprovalEvent,
+    ApprovalMethod,
+    ApprovalScope,
+)
+from ainvest.schemas.broker import (
+    BrokerFill,
+    BrokerOrder,
+    CancelCommand,
+    CancelResult,
+    ReconciliationResult,
+)
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
     AssetType,
@@ -24,6 +37,14 @@ from ainvest.schemas.market import (
     ResearchPortfolioSection,
     TechnicalIndicators,
 )
+from ainvest.schemas.orders import (
+    CandidateOrder,
+    OrderProposal,
+    OrderSide,
+    OrderType,
+    TimeInForce,
+    order_proposal_example,
+)
 from ainvest.schemas.portfolio import (
     AccountScope,
     ExposureSnapshot,
@@ -40,6 +61,7 @@ from ainvest.schemas.research import (
     parse_research_packet,
     research_packet_example,
 )
+from ainvest.schemas.risk import RiskDecision, RiskOutcome, RiskViolation
 from ainvest.schemas.strategy import (
     SignalIntent,
     StrategyContext,
@@ -54,7 +76,16 @@ from ainvest.schemas.strategy import (
 __all__ = [
     "SCHEMA_VERSION_V1",
     "AccountScope",
+    "ApprovalChallenge",
+    "ApprovalEvent",
+    "ApprovalMethod",
+    "ApprovalScope",
     "AssetType",
+    "BrokerFill",
+    "BrokerOrder",
+    "CancelCommand",
+    "CancelResult",
+    "CandidateOrder",
     "EvidenceCitation",
     "EvidenceKind",
     "ExposureSnapshot",
@@ -67,20 +98,29 @@ __all__ = [
     "OhlcvBar",
     "OpenOrderSide",
     "OpenOrderSnapshot",
+    "OrderProposal",
+    "OrderSide",
+    "OrderType",
     "PortfolioSnapshot",
     "PositionSnapshot",
     "Provenance",
     "QualityFlag",
+    "ReconciliationResult",
     "ResearchMarketSection",
     "ResearchPacket",
     "ResearchPortfolioSection",
+    "RiskDecision",
+    "RiskOutcome",
+    "RiskViolation",
     "SignalIntent",
     "StrategyContext",
     "StrategyState",
     "TechnicalIndicators",
     "ThesisSection",
+    "TimeInForce",
     "TradeSignal",
     "decimal_json_schema",
+    "order_proposal_example",
     "parse_research_packet",
     "parse_strategy_context",
     "parse_trade_signal",
