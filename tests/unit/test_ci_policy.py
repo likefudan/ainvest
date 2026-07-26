@@ -64,3 +64,20 @@ def test_dependabot_groups_github_action_updates() -> None:
     )
 
     assert actions_update["groups"]["github-actions"]["patterns"] == ["*"]
+
+
+@pytest.mark.unit
+def test_dependabot_requires_deliberate_uv_major_upgrades() -> None:
+    """Routine uv updates include minor/patch releases but exclude majors."""
+    config = yaml.safe_load(DEPENDABOT_CONFIG.read_text(encoding="utf-8"))
+    uv_update = next(update for update in config["updates"] if update["package-ecosystem"] == "uv")
+
+    assert uv_update["allow"] == [
+        {
+            "dependency-name": "*",
+            "update-types": [
+                "version-update:semver-minor",
+                "version-update:semver-patch",
+            ],
+        }
+    ]
