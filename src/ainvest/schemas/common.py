@@ -110,26 +110,40 @@ def enforce_bounded_decimal(value: Decimal) -> Decimal:
     """Reject Decimals whose coefficient/exponent can amplify memory or CPU.
 
     Hashing and exact integer scaling expand exponents into digit strings or
-    ``10 ** n`` integers. Bound significand digits and absolute exponent before
-    those expansions. Trailing-zero stripping is considered because it can raise
-    the stored exponent before rendering.
+    ``10 ** n`` integers. Insignificant trailing zeros are stripped first so
+    equivalent encodings (``1`` vs ``1.000…0``) share the same accepted domain;
+    coefficient, exponent, and rendered-length limits then apply to that
+    canonical tuple. Raw input string length is still guarded at parse time.
     """
     if not value.is_finite():
         raise ValueError("NaN and Infinity are not allowed")
-    _sign, digits, exp = value.as_tuple()
+    sign, digits, exp = value.as_tuple()
     if not isinstance(exp, int):
         raise ValueError("NaN and Infinity are not allowed")
-    if len(digits) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
-        raise ValueError("decimal significand exceeds maximum digits")
-    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
-        raise ValueError("decimal exponent exceeds maximum magnitude")
-    stripped_exp = exp
+
     digs = list(digits)
     while digs and digs[-1] == 0:
         digs.pop()
-        stripped_exp += 1
-    if digs and abs(stripped_exp) > MAX_DECIMAL_ABS_EXPONENT:
+        exp += 1
+    if not digs:
+        return value
+
+    if len(digs) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
+        raise ValueError("decimal significand exceeds maximum digits")
+    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
         raise ValueError("decimal exponent exceeds maximum magnitude")
+
+    coefficient_len = len(digs)
+    if exp >= 0:
+        rendered_len = coefficient_len + exp
+    else:
+        place = -exp
+        # "0." + fractional zeros + digits, or insert a decimal point.
+        rendered_len = 2 + place if place >= coefficient_len else coefficient_len + 1
+    if sign:
+        rendered_len += 1
+    if rendered_len > MAX_DECIMAL_STRING_LENGTH:
+        raise ValueError("decimal exceeds maximum canonical length")
     return value
 
 

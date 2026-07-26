@@ -51,6 +51,21 @@ def test_decimal_runtime_rejects_scientific_notation_and_extreme_exponents() -> 
 
 
 @pytest.mark.unit
+def test_trailing_zero_equivalent_decimals_share_accepted_domain() -> None:
+    """Bounds apply after stripping insignificant trailing zeros."""
+    adapter = TypeAdapter(Money)
+    assert adapter.validate_python("1") == Decimal("1")
+    padded = "1." + ("0" * 40)
+    assert len(padded) <= 64
+    assert adapter.validate_python(padded) == Decimal("1")
+
+    tiny = "0." + ("0" * 27) + "1"  # 1e-28 fixed-point
+    assert adapter.validate_python(tiny) == Decimal("1e-28")
+    tiny_padded = tiny + "00"
+    assert adapter.validate_python(tiny_padded) == Decimal("1e-28")
+
+
+@pytest.mark.unit
 def test_decimal_json_schema_is_string_only() -> None:
     """Generated validation schema must not allow JSON numbers."""
     fragment = decimal_json_schema()

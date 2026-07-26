@@ -169,3 +169,23 @@ def test_extreme_decimal_exponents_are_rejected_before_allocation() -> None:
         compute_order_hash({**base, "quantity": Decimal("1e1000000")})
     with pytest.raises(ValueError, match="exponent"):
         compute_order_hash({**base, "limit_price": Decimal("1e-1000000")})
+
+
+@pytest.mark.unit
+def test_hash_accepts_trailing_zero_equivalent_quantities() -> None:
+    base = _base_order()
+    plain = deepcopy(base)
+    plain["quantity"] = "1"
+    plain["maximum_notional"] = "214.50"
+    padded = deepcopy(plain)
+    padded["quantity"] = "1." + ("0" * 40)
+    assert compute_order_hash(plain) == compute_order_hash(padded)
+
+    tiny = deepcopy(base)
+    tiny["limit_price"] = "0." + ("0" * 27) + "1"
+    tiny["price_increment"] = tiny["limit_price"]
+    tiny["quantity"] = "1"
+    tiny["maximum_notional"] = tiny["limit_price"]
+    tiny_padded = deepcopy(tiny)
+    tiny_padded["limit_price"] = tiny["limit_price"] + "00"
+    assert compute_order_hash(tiny) == compute_order_hash(tiny_padded)

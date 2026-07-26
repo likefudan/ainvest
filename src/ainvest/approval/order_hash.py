@@ -72,13 +72,14 @@ def _canonical_decimal(value: Decimal | str | int) -> str:
     ``Decimal.normalize()`` rounds to ``getcontext().prec`` (default 28), which
     collides distinct protected values. Strip trailing zeros via ``as_tuple()``
     so semantically equal encodings (``2`` / ``2.0``) match while >28-digit
-    significands stay exact. Exponent/digit bounds are enforced before any
-    zero-repetition allocation so compact scientific inputs cannot amplify.
+    significands stay exact. Bounds are enforced on the trailing-zero-stripped
+    canonical tuple (via ``parse_decimal``) before any zero-repetition
+    allocation so compact scientific inputs cannot amplify.
     """
     if isinstance(value, bool):
         raise TypeError("boolean is not a valid decimal")
-    # parse_decimal rejects scientific notation strings and out-of-range exponents
-    # before this formatter expands them into fixed-point text.
+    # parse_decimal rejects scientific notation strings and out-of-range
+    # canonical exponents before this formatter expands them into fixed-point text.
     decimal_value = parse_decimal(value)
     sign, digits, exp = decimal_value.as_tuple()
     if not isinstance(exp, int):
@@ -89,7 +90,7 @@ def _canonical_decimal(value: Decimal | str | int) -> str:
         exp += 1
     if not digs:
         return "0"
-    # Trailing-zero stripping can raise the exponent; fail closed before repetition.
+    # Defense in depth: refuse before repetition even if a caller bypasses parse.
     if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
         raise ValueError("decimal exponent exceeds maximum magnitude")
     coefficient = "".join(str(digit) for digit in digs)

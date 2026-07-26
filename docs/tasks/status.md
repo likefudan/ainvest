@@ -103,9 +103,10 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/schemas/orders.py`,
   `src/ainvest/schemas/risk.py`, `src/ainvest/schemas/approval.py`,
-  `src/ainvest/schemas/broker.py`, `src/ainvest/schemas/__init__.py`,
-  `src/ainvest/approval/`, `tests/unit/schemas/**`,
-  `tests/unit/approval/**`, `docs/tasks/status.md`, `README.md`
+  `src/ainvest/schemas/broker.py`, `src/ainvest/schemas/common.py`,
+  `src/ainvest/schemas/__init__.py`, `src/ainvest/approval/`,
+  `tests/unit/schemas/**`, `tests/unit/approval/**`, `docs/tasks/status.md`,
+  `README.md`
 - **Safety posture:** domain schemas, hash helpers, and unit tests only; Paper
   remains the default; no broker write capability, credentials, AI calls,
   Telegram runtime, or live trading are introduced
@@ -113,7 +114,11 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Handoff notes:** Added money-moving schemas (`CandidateOrder`,
   `OrderProposal`, risk/approval/broker/cancel types) with telegram+paper and
   webauthn+live enforcement, plus canonical `sha256:` order/cancel digests and
-  fixed vectors. `./scripts/dev verify` passed (149 tests; 84.65% coverage);
+  fixed vectors. Extended the shared Decimal contract in
+  `src/ainvest/schemas/common.py` (reject scientific notation; bound
+  significand/exponent/rendered length after trailing-zero canonicalization;
+  keep raw input maxLength) so hashing and exact order checks cannot amplify
+  memory/CPU. `./scripts/dev verify` passed (159 tests; 84.83% coverage);
   `./scripts/dev audit` clean.
 - **Next after merge:** Batch B — Part 4 (B4) — `P02-T5`
 
