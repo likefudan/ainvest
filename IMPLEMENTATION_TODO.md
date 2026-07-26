@@ -1,28 +1,28 @@
-# ainvest 可执行实施 TODO
+# ainvest Executable Implementation Plan
 
-> 基于：`likefudan/ainvest` 的 `design.md`（PR #1，2026-07-24 已合并）
+> Based on `design.md` in `likefudan/ainvest`, including the architecture merged in PR #1 on 2026-07-24 and the safety, model, approval, and data-source decisions accepted afterward.
 >
-> 文档用途：将 ainvest 从“只有架构设计”推进到 Paper Trading、研究、审批、Robinhood 只读接入和受控实盘。每张任务卡都可以交给独立 Codex sub-agent、Cursor Agent 或其他 AI 工具执行。
+> Purpose: move ainvest from an architecture-only repository to Paper Trading, research, human approval, read-only Robinhood integration, and eventually tightly controlled live execution. Every task card is written so that it can be assigned to an independent Codex sub-agent, Cursor Agent, or another AI coding tool.
 >
-> 安全原则：除非任务卡明确属于 Phase 5，并且所有实盘门禁已经通过，否则所有实现必须保持 `TRADING_MODE=paper`、`LIVE_TRADING_ENABLED=false`、`REQUIRE_HUMAN_APPROVAL=true`。
+> Safety baseline: unless a task explicitly belongs to Phase 07 and all live-trading gates have passed, every implementation must keep `TRADING_MODE=paper`, `LIVE_TRADING_ENABLED=false`, and `REQUIRE_HUMAN_APPROVAL=true`. The first release also fixes `REGULAR_TRADING_HOURS_ONLY=true` and `REQUIRE_COMPLETE_RISK_LIMITS=true`.
 
-## 0. 当前基线
+## 0. Repository Baseline
 
-- 仓库：`likefudan/ainvest`，默认分支 `main`，私有仓库。
-- 已有文件：`README.md`、`.gitignore`、`design.md`。
-- `README.md` 明确写明 implementation has not started。
-- 尚无 `pyproject.toml`、应用代码、测试、数据库迁移、CI 或部署配置。
-- `design.md` 已确定总体架构、安全边界、五阶段路线、数据协议样例和核心依赖。
-- 本 TODO 不改变设计中的产品边界：首版只支持美股/ETF、限价单优先、默认 Paper Trading、实盘逐笔人工审批。
+- Repository: `likefudan/ainvest`; default branch: `main`; visibility: private.
+- Existing source files at the time this plan was written: `README.md`, `.gitignore`, and `design.md`.
+- `README.md` states that implementation has not started.
+- There is no `pyproject.toml`, application code, test suite, database migration, CI workflow, or deployment configuration yet.
+- `design.md` defines the target architecture, security boundaries, phased delivery path, sample data contracts, and primary dependencies.
+- This plan does not expand the product boundary: the first release supports US-listed stocks and ETFs only, prefers limit orders, defaults to Paper Trading, and requires per-order human approval for live trading.
 
-## 1. 所有执行 Agent 必须继承的上下文
+## 1. Context Every Execution Agent Must Inherit
 
-### 1.1 系统目标
+### 1.1 System Goal
 
-ainvest 是一个 AI 辅助研究、确定性 Python 策略决策、独立风控、人工审批、Broker 执行的交易框架。主流程是：
+ainvest is a trading framework that combines AI-assisted research, deterministic Python strategy decisions, independent risk controls, human approval, and broker execution. The primary flow is:
 
 ```text
-外部数据
+External data
   -> Research Agent
   -> ResearchPacket
   -> Strategy Engine
@@ -30,1280 +30,1445 @@ ainvest 是一个 AI 辅助研究、确定性 Python 策略决策、独立风控
   -> Position Sizer
   -> Risk Engine
   -> OrderProposal
-  -> Telegram 通知
-  -> HTTPS + Passkey 审批
-  -> 下单前二次风控
-  -> Robinhood MCP / Paper Broker
-  -> 成交核对
-  -> 追加式审计
+  -> Telegram approval for Paper / HTTPS + Passkey approval for Live
+  -> Pre-trade risk re-evaluation
+  -> Robinhood MCP or Paper Broker
+  -> Fill reconciliation
+  -> Append-only audit trail
 ```
 
-### 1.2 不可破坏的架构约束
+### 1.2 Non-Negotiable Architecture and Safety Constraints
 
-1. AI 只能研究和解释，不能产生可直接提交给 Broker 的订单。
-2. 策略只能产生 `TradeSignal`，不能决定最终股数、持有 Broker 凭据或调用 Broker。
-3. Position Sizer 只产生候选订单，Risk Engine 拥有无条件否决权。
-4. 所有资金相关计算使用 `Decimal`；JSON 中金额和数量使用十进制字符串。
-5. 时间统一为带时区的 UTC ISO 8601；禁止使用 naive datetime。
-6. 模块间只传递带 `schema_version` 的 Pydantic 模型。
-7. 缺数据、旧数据、异常、超时、状态冲突和无法确认下单结果时必须 fail closed。
-8. 审批绑定规范化订单哈希。标的、方向、数量、订单类型、限价、有效期或策略版本变化后，原审批立即失效。
-9. Telegram 只是通知通道，不是身份验证或最终授权边界。
-10. Execution Service 是唯一可以获得交易工具访问权的组件。
-11. `SUBMIT_UNKNOWN` 时禁止直接重试下单，必须先核对幂等键、客户端订单 ID 和 Broker 历史。
-12. Research、Strategy、Risk、Approval 和 Execution 的输入、输出、版本和状态迁移都要可重放、可审计。
-13. 策略插件是任意 Python 代码，必须在独立进程中运行；无凭据、默认无网络、只读文件系统、有限 CPU/内存/时间。
-14. 不得使用要求 Robinhood 用户名/密码或非官方接口的 Broker 库。
-15. 任何 agent 都不得把真实 token、账户号、Passkey 私钥或 `.env` 内容写入代码、测试快照或日志。
+1. AI may research and explain; it must never produce an order that can be submitted directly to a broker.
+2. A strategy may only produce a `TradeSignal`. It must not decide final share quantity, hold broker credentials, or call a broker.
+3. The Position Sizer creates candidate orders only. The Risk Engine has unconditional veto authority.
+4. All money-related calculations use `Decimal`; money and quantity values in JSON use decimal strings.
+5. All timestamps use timezone-aware UTC ISO 8601. Naive datetimes are prohibited.
+6. Module boundaries exchange only versioned Pydantic models containing `schema_version`.
+7. Missing or stale data, exceptions, timeouts, state conflicts, and uncertain submission outcomes must fail closed.
+8. Approval is bound to a canonical order hash. Any change to symbol, side, quantity, order type, limit, time in force, expiry, account scope, or strategy version invalidates the approval.
+9. Telegram may approve a first-release Paper proposal only. A successful event must use `approval_method=telegram` and `approval_scope=paper`; Telegram is never the final authorization boundary for live trading.
+10. The Execution Service is the only component allowed to receive broker write-tool access.
+11. A `SUBMIT_UNKNOWN` result must never cause an immediate resubmission. Reconcile the idempotency key, client order ID, and broker history first.
+12. Inputs, outputs, versions, and state transitions for Research, Strategy, Risk, Approval, and Execution must be replayable and auditable.
+13. Strategy plugins are arbitrary Python code and must run in separate processes with no credentials, no network by default, a read-only file system, and bounded CPU, memory, and wall time.
+14. Do not use broker libraries that require a Robinhood username/password or depend on unofficial Robinhood APIs.
+15. No agent may write real tokens, account numbers, Passkey private keys, or `.env` contents into source code, fixtures, snapshots, logs, or audit records.
+16. The first release may create or execute orders only during the US regular trading session. Pre-market, after-hours, overnight, holidays, and times after an early close are non-trading periods.
+17. If any required risk limit is missing, empty, malformed, out of range, or otherwise invalid, trading must be rejected. There are no implicit tradable limit defaults.
+18. When Robinhood MCP officially provides a read capability and it passes contract tests, that capability must be accessed through the Robinhood Read Gateway instead of introducing a duplicate default provider.
+19. Live quotes must come only from Robinhood MCP `get_equity_quotes`; spread and book data must come from `get_equity_price_book`. If MCP fails, is stale, omits required fields, or conflicts internally, reject the trade. Do not fall back to Alpaca, yfinance, or another quote source.
+20. The Research Agent and Strategy Engine may consume only versioned schemas returned by read-only gateways. They must not receive a raw MCP session, OAuth token, or write tool.
+21. SEC EDGAR with EdgarTools supplies primary filing evidence. News and event discovery uses GDELT, SEC 8-K/Form 4 filings, and company Investor Relations sources. yfinance is an optional development/offline adapter only; Alpaca is not a default first-release dependency.
+22. The first-release AI model is OpenAI `gpt-5.6-sol`, called through Pydantic AI and the Responses API with `reasoning_effort=medium`, `store=false`, and strict structured output. Built-in web search and automatic cross-model fallback are disabled.
+23. An AI failure, timeout, refusal, invalid schema, or unsupported evidence must not produce a complete `ResearchPacket` usable by a strategy. Retry at most once and only for an explicitly transient error.
+24. Staging and production use separate Telegram Bots. Identity is authorized only by numeric `user_id`, numeric private `chat_id`, and `chat.type=private`; usernames are not authorization identifiers.
+25. The first Paper release uses one active Telegram long-polling instance and one-time callback buttons bound to a proposal and order hash. Plain `approve` text is not accepted. A public domain and Passkey are not required for Paper.
+26. The Paper Broker may consume only `approval_scope=paper`. The Robinhood write path accepts only `approval_method=webauthn` with `approval_scope=live`. Enforce this in the schema, approval handoff, live guard, and Execution Service.
+27. A fixed HTTPS origin, closed Passkey bootstrap, and at least two recovery-capable credentials are prerequisites for any live broker write. They are not part of the first Paper release.
+28. A ticker symbol alone is never a broker instrument identity. Every tradeable object must bind a canonical instrument ID, symbol, exchange, currency, asset type, and broker tradability metadata.
+29. Kill-switch changes, manual-review resolution, cancellation requests, audit access, and live-start confirmation are privileged operations. They require an authenticated operator identity, explicit authorization, a reason, idempotency, and an audit event.
+30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
+31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 
-### 1.3 首版非目标
+### 1.3 First-Release Non-Goals
 
-- 高频/低延迟交易。
-- 无人值守全自动实盘。
-- 期权、期货、加密货币、保证金、裸卖空。
-- 多租户、代客理财或对第三方提供投资建议。
-- 用自然语言作为下单协议。
-- 用回测结果承诺未来收益。
-- 在 Telegram 内完成不可撤销授权。
+- High-frequency or low-latency trading.
+- Unattended, fully autonomous live trading.
+- Options, futures, cryptocurrency, margin, or naked short selling.
+- Multi-tenancy, managed accounts, or investment advice for third parties.
+- Natural language as an order protocol.
+- Representing backtest performance as a promise of future returns.
+- Irreversible live authorization inside Telegram.
 
-### 1.4 固定技术方向
+### 1.4 Fixed Technical Direction
 
-- Python package：`src/ainvest` 布局。
-- 数据协议与配置：Pydantic。
-- 策略插件：pluggy + Python `entry_points` + `StrategyRegistry`。
-- HTTP API：FastAPI。
-- 数据库：SQLAlchemy + Alembic；开发/MVP 为 SQLite，部署后可切 PostgreSQL。
-- 状态机：transitions。
-- Telegram：python-telegram-bot。
-- Passkey：py_webauthn。
-- 调度：APScheduler 3.11.x。
-- Robinhood：官方 Trading MCP + MCP Python SDK。
-- 测试：pytest、Hypothesis、HTTPX mock。
-- 日志/监控：structlog、OpenTelemetry、Prometheus。
+- Package layout: Python with `src/ainvest`.
+- Data contracts and configuration: Pydantic.
+- Strategy plugins: pluggy, Python `entry_points`, and `StrategyRegistry`.
+- HTTP API: FastAPI.
+- Persistence: SQLAlchemy and Alembic; SQLite for local/MVP use, with PostgreSQL compatibility for deployment.
+- State machine: transitions.
+- AI: OpenAI `gpt-5.6-sol` through Pydantic AI and Responses API; `medium`, `store=false`, strict structured output.
+- Telegram: python-telegram-bot; single-instance long polling and Paper-only bound approval in the first release.
+- Passkey: py_webauthn; deferred for Paper and mandatory before live trading.
+- Scheduling: APScheduler 3.11.x.
+- Robinhood: official Trading MCP and MCP Python SDK.
+- Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
+- Testing: pytest, Hypothesis, and HTTPX mocks.
+- Logging and monitoring: structlog, OpenTelemetry, and Prometheus.
 
-### 1.5 Agent 工作协议
+### 1.5 Agent Working Agreement
 
-每次只领取一张任务卡，或一组明确标注可连续完成的任务卡。开始前：
+An agent should claim exactly one task card, or one explicitly listed serial group. Before implementation:
 
-1. 阅读 `design.md`、本文件、当前 `README.md` 和目标目录已有代码。
-2. 检查当前分支和未提交改动，不覆盖其他 agent 的工作。
-3. 复述本任务的输入、输出、允许修改的目录和依赖。
-4. 若依赖尚未合并，不自行复制另一任务的实现；使用最小接口桩或停止并报告。
-5. 先写/更新测试，再实现到测试通过；安全任务需要失败路径测试。
-6. 不做任务卡之外的大规模重构，不顺手启用实盘。
-7. 提交前运行本任务要求的格式化、静态检查和测试。
-8. 最终报告：修改文件、行为变化、测试证据、未解决风险、需要下游注意的接口。
+1. Read `design.md`, this file, the current `README.md`, and all existing code in the target area.
+2. Inspect the current branch and uncommitted changes. Preserve other agents' work.
+3. Restate the task inputs, outputs, allowed paths, and dependencies.
+4. If a dependency has not merged, do not copy its implementation. Use the smallest interface stub permitted by the task or stop and report the dependency.
+5. Add or update tests before implementation. Security-sensitive cards require explicit failure-path tests.
+6. Avoid broad refactors outside the card. Never enable live trading as a side effect.
+7. Run the card's formatting, static analysis, and test requirements before handoff.
+8. Report changed files, behavior, verification evidence, unresolved risks, and interface notes for downstream tasks.
+9. If an owner decision is still proposed/deferred, implement only the fail-closed abstraction and tests. Do not create accounts, purchase services, select production identity providers, authorize Robinhood, or submit a real order.
+10. Stop and escalate if the task would require weakening a safety rule, editing an unowned high-conflict interface, or using a dependency artifact that does not match the recorded commit.
 
-建议分支命名：`task/<task-id>-<short-name>`。建议一个任务卡一个 PR；同一文件的任务按依赖顺序串行，避免并行冲突。
+Recommended branch name: `task/<task-id>-<short-name>`. Prefer one task card per PR. Serialize tasks that edit the same high-conflict file.
 
-### 1.6 通用 Definition of Done
+### 1.6 Global Definition of Done
 
-除任务卡另有说明外，每项任务必须同时满足：
+Unless a card states stricter requirements, it is complete only when:
 
-- 代码有类型注解，公共接口有简短 docstring。
-- 新增行为有正向、边界和失败关闭测试。
-- `ruff`、类型检查和目标测试通过。
-- 不出现 float 金额、naive datetime、明文凭据、真实账户数据。
-- 错误使用稳定的机器可读 code，不依赖错误文本做控制流。
-- 外部调用均有超时；重试只用于确定可安全重试的只读操作。
-- 日志带 correlation ID，且敏感数据已脱敏。
-- 新配置有安全默认值、校验、`.env.example` 或 example YAML。
-- 若新增公共 schema/API，提供序列化样例和向后兼容说明。
-- 若改变状态，事务与审计事件在同一原子边界内完成，或明确使用 outbox。
+- Code has type annotations and public interfaces have concise docstrings.
+- New behavior has positive, boundary, and fail-closed tests.
+- Ruff, the configured type checker, and targeted tests pass.
+- There is no float-based money, naive datetime, plaintext credential, or real account data.
+- Errors use stable machine-readable codes; control flow does not parse error messages.
+- External calls have timeouts. Retries are limited to read-only operations that are demonstrably safe to retry.
+- Logs include correlation IDs and redact sensitive values.
+- New configuration has safe defaults, validation, and an `.env.example` or example YAML entry.
+- New public schemas or APIs include serialized examples and compatibility notes.
+- State changes and audit events share one atomic boundary, or use an explicit transactional outbox.
 
-## 2. 推荐的总体执行顺序
+### 1.7 Source Precedence and Task Dispatch Contract
+
+Use the following authority order:
+
+1. Accepted ADRs and accepted entries in the decision register.
+2. Non-negotiable safety and product constraints in `design.md`.
+3. The current task card in this implementation plan.
+4. Existing public interfaces, tests, and implementation.
+
+If two levels conflict, an agent must stop and report the conflict instead of silently choosing one. Existing code is evidence of repository state, not authority to weaken a higher-level safety rule.
+
+Before dispatching a task, record this execution envelope in `docs/tasks/status.md` or the issue/PR:
+
+- task ID, title, status, owner/agent, and branch;
+- base commit and dependency PR/commit IDs;
+- exact design sections and ADRs that apply;
+- dependency artifacts and public interfaces expected to exist;
+- allowed production-code paths and corresponding test/documentation paths;
+- files that must not be modified;
+- canonical verification commands established by P01-T2;
+- owner-provided values or credentials required, without copying secret values;
+- blockers, assumptions, handoff notes, and resulting PR.
+
+The `Primary files` field on a card is the default production-code write scope. Matching tests, fixtures, generated schemas, example configuration, and task-specific documentation are also allowed. Any other production path requires an explicit handoff note and prior coordination with its owner.
+
+## 2. Phase and Gate Sequence
 
 ```mermaid
 flowchart TD
-    G0["M0 决策与工程基线"] --> G1["M1 领域协议、持久化、状态机"]
-    G1 --> G2["M2 策略、Sizer、风控、Paper Broker"]
-    G2 --> P1["Gate 1: 固定 ResearchPacket -> 模拟成交"]
-    P1 --> G3["M3 数据与 Research Agent"]
-    P1 --> G4["M4 Telegram + Passkey 审批"]
-    G3 --> P2["Gate 2: 结构化研究"]
-    G4 --> P3["Gate 3: 安全审批"]
-    P2 --> G5["M5 Robinhood 只读"]
-    P3 --> G5
-    G5 --> P4["Gate 4: 真实组合 + Paper Trading"]
-    P4 --> G6["M6 受控实盘"]
-    G0 --> X["贯穿任务：安全、观测、文档、CI"]
-    X --> G1
-    X --> G2
-    X --> G3
-    X --> G4
-    X --> G5
-    X --> G6
+    P01["Phase 01: Decisions and engineering baseline"] --> P02["Phase 02: Domain contracts, persistence, and workflow"]
+    P02 --> P03["Phase 03: Strategy, sizing, risk, and Paper loop"]
+    P03 --> G1["Gate 1: Fixed ResearchPacket to deterministic simulated fill"]
+    G1 --> P04["Phase 04: Data, research, and backtesting"]
+    G1 --> P05["Phase 05: Telegram Paper approval"]
+    P04 --> G2["Gate 2: Structured and traceable research"]
+    P05 --> G3["Gate 3: Paper-only secure approval"]
+    G2 --> P06["Phase 06: Robinhood read-only integration"]
+    G3 --> P06
+    P06 --> G4["Gate 4: Real portfolio data with Paper execution"]
+    G4 --> P07["Phase 07: Controlled live execution"]
+    P07 --> G5["Gate 5: Minimal controlled live exercise"]
+    P01 --> P08["Phase 08: Parallel assurance workstream"]
 ```
 
-可以并行的主要工作流：
+Primary parallelization opportunities:
 
-- 完成 M0 后，领域 schema、CI、威胁模型可以并行。
-- schema 稳定后，持久化、策略协议、Paper Broker 接口、状态机可以分给不同 agent。
-- Gate 1 后，Research track 与 Approval track 可以并行。
-- Robinhood 只读必须等领域模型、持久化和基本观测完成。
-- 任何写单代码必须等 Gate 1–4、安全测试和实盘决策全部完成。
+- After Phase 01 foundations exist, domain schemas, CI, and the threat model can proceed in parallel.
+- After schemas stabilize, persistence, the strategy protocol, the Paper Broker interface, and the workflow state machine can be assigned independently.
+- After Gate 1, the Research and Paper Approval tracks can run in parallel.
+- Robinhood read-only work waits for domain models, persistence, and baseline observability.
+- No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
+- Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
-## 3. 任务索引
+## 3. Task Index
 
-| Milestone | 目标 | 任务 |
+| Phase | Outcome | Task cards |
 |---|---|---|
-| M0 | 决策、威胁模型、项目基线 | GOV-001～002, FND-001～004 |
-| M1 | Schema、数据库、审计、状态机 | DOM-001～006, DB-001～003, WF-001～002 |
-| M2 | 策略、Sizer、风控、Paper 闭环 | STR-001～006, SIZ-001～002, RSK-001～005, PAP-001～003, ORC-001 |
-| Gate 1 | 固定输入到可重复模拟成交 | REL-001 |
-| M3 | 数据、Research Agent、回测 | DAT-001～005, RES-001～004, BKT-001～003 |
-| Gate 2 | 研究输出可验证、可追溯 | REL-002 |
-| M4 | Telegram、HTTPS、Passkey | APR-001～007, DEP-001 |
-| Gate 3 | 重放/篡改全部失败关闭 | REL-003 |
-| M5 | Robinhood 官方 MCP 只读 | RHB-001～003 |
-| Gate 4 | 真实组合驱动 Paper Trading | REL-004 |
-| M6 | 受控写单与核对 | EXE-001～005 |
-| Gate 5 | 极小额实盘演练 | REL-005 |
-| 贯穿 | 运行模式、观测、安全、文档 | OPS-001～003, OBS-001～003, SEC-001～002, DOC-001～004, QAT-001～003 |
+| Phase 01 | Decisions, threat model, and engineering baseline | P01-T0 through P01-T5 |
+| Phase 02 | Schemas, database, audit, and workflow state | P02-T0 through P02-T10 |
+| Phase 03 | Strategies, sizing, risk, deterministic Paper loop, Gate 1 | P03-T0 through P03-T17 |
+| Phase 04 | Data, Research Agent, backtesting, Gate 2 | P04-T0 through P04-T12 |
+| Phase 05 | Telegram Paper approval, deferred live approval preparation, Gate 3 | P05-T0 through P05-T8 |
+| Phase 06 | Official Robinhood MCP read path and Gate 4 | P06-T0 through P06-T3 |
+| Phase 07 | Controlled live execution, cancellation, reconciliation, and Gate 5 | P07-T0 through P07-T6 |
+| Phase 08 | Parallel runtime, observability, security, documentation, and test assurance | P08-T0 through P08-T15 |
+
+### 3.1 Minimum Design Traceability
+
+The dispatcher should narrow these ranges to the exact subsections relevant to a card and add any accepted ADRs from P01-T0.
+
+| Task cards | Minimum `design.md` references |
+|---|---|
+| P01-T0 | §16–§17 |
+| P01-T1 | §3–§5, §7–§9, §11 |
+| P01-T2 through P01-T5 | §10–§14 |
+| P02-T0 through P02-T5 | §3.2, §3.4, §6 |
+| P02-T6 through P02-T8 | §3.6, §9 |
+| P02-T9 through P02-T10 | §5.6–§5.7, §8–§9 |
+| P03-T0 through P03-T5 | §5.3, §10 |
+| P03-T6 through P03-T7 | §5.3.4 |
+| P03-T8 through P03-T12 | §3.3–§3.5, §5.4 |
+| P03-T13 through P03-T16 | §5.6, §8–§9 |
+| P03-T17 | §14, §15 Phase 1 |
+| P04-T0 through P04-T8 | §5.1–§5.2, §10.1, §14 |
+| P04-T9 through P04-T11 | §14.2 |
+| P04-T12 | §15 Phase 2 |
+| P05-T0 through P05-T8 | §3.4–§3.5, §5.5, §7, §15 Phase 3 |
+| P06-T0 through P06-T3 | §5.1, §5.6, §10.1, §15 Phase 4 |
+| P07-T0 through P07-T6 | §3.3–§3.5, §5.6–§5.7, §8, §14.4, §15 Phase 5 |
+| P08-T0 through P08-T15 | §3.5–§3.6, §5.7, §9, §11–§14 |
 
 ---
 
-## 4. M0：决策与工程基线
+## 4. Phase 01 — Decisions and Engineering Baseline
 
-### GOV-001 — 建立决策登记册与 ADR
+### P01-T0 — Create the Decision Register and ADR Process
 
-- **目标**：把设计中“实现前仍需确定”的选项变成可追踪、不会被 agent 随意猜测的决策。
-- **依赖**：无。
-- **建议文件**：`docs/decisions/README.md`、`docs/adr/0001-*.md` 模板。
-- **执行清单**：
-  - 建立状态：`proposed / accepted / superseded`。
-  - 为以下问题各建条目：行情供应商、新闻供应商、基本面供应商、AI 模型、审批域名/部署、Telegram 身份、首版策略、风险额度、交易时段、数据保留期。
-  - 记录 owner、deadline、默认安全行为和受影响 milestone。
-  - 未决项必须有 fail-closed 默认值；例如无实盘报价供应商则禁止实盘。
-- **验收**：
-  - 所有未决项都有唯一 ID。
-  - 代码配置可以引用这些 ID，但不得把未决选择硬编码成“已确定”。
-  - README 链接到决策登记册。
+- **Objective:** Turn every unresolved implementation choice into a tracked decision that an agent cannot silently guess.
+- **Dependencies:** None.
+- **Primary files:** `docs/decisions/README.md`, ADR template under `docs/adr/`, `docs/tasks/status.md`.
+- **Implementation checklist:**
+  - Define decision states: `proposed`, `accepted`, and `superseded`.
+  - Create entries for the OpenAI API monthly budget, actual Telegram Bot and allowed identity values, first strategy and parameters, numeric risk limits, data-retention periods, and backup RPO/RTO.
+  - Mark domain/deployment, Passkey bootstrap/recovery, Robinhood live budget, production operator-authentication method, and automatic kill-switch cancellation policy as `deferred_until_live`.
+  - Record the accepted regular-session-only policy, complete-risk-limits policy, Robinhood-MCP-first data policy, OpenAI model/API settings, Telegram Paper-only approval, mandatory Passkey live approval, no in-place order replacement, and no automatic cancellation before an explicit owner decision.
+  - Record owner, deadline, safe default, and affected phase for each item.
+  - Give every unresolved item a fail-closed default. For example, missing live quote authorization disables live trading.
+  - Maintain `docs/tasks/status.md` with task status, owner, branch, base commit, dependency commits/PRs, blockers, and handoff PR.
+- **Acceptance criteria:**
+  - Every unresolved choice has one stable decision ID.
+  - Configuration and code can cite those IDs; agents implement accepted decisions and never invent external credentials or numeric limits.
+  - `README.md` links to the decision register.
 
-### GOV-002 — 编写信任边界与威胁模型
+### P01-T1 — Document Trust Boundaries and Threat Model
 
-- **目标**：在写审批和 Broker 代码前固定资产、攻击面和控制措施。
-- **依赖**：GOV-001。
-- **建议文件**：`docs/security/threat-model.md`、`docs/security/data-flow.md`。
-- **执行清单**：
-  - 列出资产：资金、Broker token、Telegram token、WebAuthn credential、公私账户数据、审批令牌、策略包、审计记录。
-  - 列出主体和信任域：数据、研究、策略 worker、风控、审批 API、Execution、数据库、用户 iPhone、外部供应商。
-  - 覆盖 STRIDE 类威胁：策略逃逸、依赖投毒、审批重放、订单篡改、SSRF、Webhook 伪造、重复下单、日志泄密、时钟偏差、MCP 超时。
-  - 把每个控制措施映射到本 TODO 的任务 ID 和测试。
-  - 明确剩余风险与实盘前必须关闭的 high/critical 项。
-- **验收**：至少包含数据流图、信任边界、威胁表、控制表、残余风险表；安全测试可以反向追踪到威胁 ID。
+- **Objective:** Fix assets, attack surfaces, trust domains, and required controls before approval or broker code is written.
+- **Dependencies:** P01-T0.
+- **Primary files:** `docs/security/threat-model.md`, `docs/security/data-flow.md`.
+- **Implementation checklist:**
+  - Inventory funds, broker/OpenAI/Telegram tokens, WebAuthn credentials, account data, approval tokens, strategy packages, and audit records.
+  - Identify the Data, Research, Strategy Worker, Risk, Approval API, Execution, Database, user-device, and external-provider trust domains.
+  - Cover strategy escape, dependency poisoning, approval replay, order tampering, Telegram account/Bot compromise, long-poll offset loss, SSRF, webhook forgery, Paper-to-Live scope escalation, duplicate orders, operator/control-plane takeover, unauthorized audit access, unsafe cancel/replace, log leakage, clock skew, and MCP timeout/schema drift.
+  - Map every control to task IDs and tests in this plan.
+  - Record residual risk; every high/critical live risk must be resolved or explicitly accepted before Phase 07.
+- **Acceptance criteria:** The document includes data-flow and trust-boundary diagrams, threat and control tables, residual risk, and traceability from each security test to a threat ID.
 
-### FND-001 — 初始化 Python 项目与依赖分组
+### P01-T2 — Initialize the Python Project and Dependency Groups
 
-- **目标**：建立可安装、可测试、默认安全的 `src` layout。
-- **依赖**：无，可与 GOV-001 并行。
-- **建议文件**：`pyproject.toml`、`src/ainvest/__init__.py`、`tests/conftest.py`、`.python-version`、lock file。
-- **执行清单**：
-  - 选择并记录 Python 最低版本；优先当前受支持版本，不使用 EOL Python。
-  - 建立 core、research、approval、broker、observability、dev/test 等 dependency groups，避免研究进程默认安装交易依赖。
-  - 配置 pytest、ruff、类型检查、coverage。
-  - 固定 APScheduler 为设计指定的 3.11.x；其他依赖使用兼容范围并生成带哈希锁文件。
-  - 增加最小 import/smoke test。
-- **验收**：全新环境能安装；`python -c "import ainvest"`、lint、type-check、pytest 均通过；默认依赖不包含任何非官方 Robinhood 库。
+- **Objective:** Establish an installable, testable, secure-by-default `src` layout.
+- **Dependencies:** None; may run in parallel with P01-T0.
+- **Primary files:** `pyproject.toml`, `src/ainvest/__init__.py`, `tests/conftest.py`, `.python-version`, lock file, canonical developer command wrapper.
+- **Implementation checklist:**
+  - Select and document a supported minimum Python version; do not use an EOL release.
+  - Define core, research, approval, broker, observability, and dev/test dependency groups so research workers do not install trading dependencies by default.
+  - Configure pytest, Ruff, type checking, and coverage.
+  - Pin APScheduler to the design-required 3.11.x line; use compatible bounds elsewhere and generate a hash-locked dependency file.
+  - Expose stable repository-level commands for setup, formatting check, lint, type-check, unit, contract, integration, and full verification. Document them once so later task prompts do not invent tool-specific commands.
+  - Add minimal import and smoke tests.
+- **Acceptance criteria:** A clean environment installs successfully; import, lint, type-check, and pytest commands pass; default dependencies contain no unofficial Robinhood client.
 
-### FND-002 — 建立包目录、依赖方向与架构测试
+### P01-T3 — Create Package Boundaries and Architecture Tests
 
-- **目标**：创建设计中的包边界，并防止研究/策略越权依赖执行模块。
-- **依赖**：FND-001。
-- **建议目录**：`src/ainvest/{agents,data,schemas,strategies,risk,approval,execution,portfolio,audit,api}`。
-- **执行清单**：
-  - 每个 package 只建立最小 `__init__` 和公共接口出口。
-  - 记录允许依赖方向，例如 schemas 可被所有层使用，execution 不得被 strategies/agents 导入。
-  - 添加架构测试扫描 imports；禁止 `strategies -> execution`、`agents -> execution`、`risk -> approval` 等逆向耦合。
-  - 区分 domain models 与 ORM models，禁止把 ORM 实例跨层传递。
-- **验收**：目录存在；架构测试能用故意违规 fixture 证明会失败；无循环依赖。
+- **Objective:** Create the designed package boundaries and prevent Research or Strategy from depending on Execution.
+- **Dependencies:** P01-T2.
+- **Primary paths:** `src/ainvest/{agents,data,schemas,strategies,risk,approval,execution,portfolio,audit,api}`.
+- **Implementation checklist:**
+  - Add only minimal package exports and interfaces.
+  - Document allowed dependency direction; schemas are shared, while `execution` cannot be imported by `strategies` or `agents`.
+  - Add architecture tests that reject `strategies -> execution`, `agents -> execution`, `risk -> approval`, and other reverse dependencies.
+  - Separate domain models from ORM models; never pass ORM instances across layers.
+- **Acceptance criteria:** The package structure exists, an intentionally invalid fixture proves architecture tests fail correctly, and no import cycle exists.
 
-### FND-003 — 配置加载与安全默认值
+### P01-T4 — Implement Configuration Loading and Safe Defaults
 
-- **目标**：统一 YAML、环境变量和运行模式，不允许 agent 各自读取 `os.getenv`。
-- **依赖**：FND-001。
-- **建议文件**：`src/ainvest/config.py`、`config/risk.example.yaml`、`config/strategies.example.yaml`、`.env.example`。
-- **执行清单**：
-  - 建立 Pydantic Settings；集中定义 `TRADING_MODE`、`LIVE_TRADING_ENABLED`、`REQUIRE_HUMAN_APPROVAL`。
-  - 默认值固定为 paper/false/true。
-  - 配置来源优先级明确；生产拒绝未知字段和不安全组合。
-  - YAML 使用安全 loader，禁止任意对象、`eval`、lambda 和表达式。
-  - secret 字段 `repr=False`，错误消息不得回显值。
-- **验收**：缺配置可安全启动 Paper；任何试图在无完整门禁时启用 live 的配置都在启动阶段失败；测试覆盖未知字段、坏类型、危险组合和 secret 脱敏。
+- **Objective:** Centralize YAML, environment variables, and runtime modes; individual modules must not read arbitrary environment variables.
+- **Dependencies:** P01-T2.
+- **Primary files:** `src/ainvest/config.py`, `config/risk.example.yaml`, `config/strategies.example.yaml`, `.env.example`.
+- **Implementation checklist:**
+  - Use Pydantic Settings for `TRADING_MODE`, `LIVE_TRADING_ENABLED`, `REQUIRE_HUMAN_APPROVAL`, `REGULAR_TRADING_HOURS_ONLY`, and `REQUIRE_COMPLETE_RISK_LIMITS`.
+  - Fix defaults to paper/false/true/true/true. The first release rejects attempts to set either of the last two flags to false.
+  - Fix AI defaults to OpenAI, `gpt-5.6-sol`, Responses API, `medium`, `store=false`, built-in web search off, model fallback off, and at most two total attempts.
+  - Separate staging and production Telegram Bot settings. Allowlists accept only 64-bit numeric `user_id` and private `chat_id`; first-release transport is long polling and approval scope is Paper.
+  - Live configuration requires a fixed WebAuthn origin and RP ID, at least two credentials, `approval_method=webauthn`, and `approval_scope=live`; otherwise startup fails.
+  - Specify configuration precedence. Production rejects unknown fields and unsafe combinations.
+  - Use a safe YAML loader; prohibit arbitrary objects, `eval`, lambda expressions, and executable configuration.
+  - Mark secrets with `repr=False` and never echo values in validation errors.
+- **Acceptance criteria:** Missing optional configuration starts safely in Paper mode; every incomplete live combination fails during startup; tests cover unknown fields, invalid types, dangerous combinations, and secret redaction.
 
-### FND-004 — CI、提交质量门禁与依赖安全
+### P01-T5 — Add CI, Commit Quality Gates, and Dependency Security
 
-- **目标**：让每个 agent 的 PR 有一致验证标准。
-- **依赖**：FND-001。
-- **建议文件**：`.github/workflows/ci.yml`、`.pre-commit-config.yaml`、`CODEOWNERS`、依赖更新配置。
-- **执行清单**：
-  - CI 运行 lint、format check、type-check、unit tests、coverage、schema snapshot check。
-  - 加入 secret scan、dependency audit、lock file consistency。
-  - 安全/执行目录要求 owner review；实盘相关测试不能被普通标记跳过。
-  - CI 不注入真实 Broker/Telegram 凭据。
-- **验收**：空白 PR 与故意失败测试能正确阻断；CI 产物不包含 `.env`、token 或账户数据。
-
----
-
-## 5. M1：领域协议、持久化与状态机
-
-### DOM-001 — 通用领域基础类型
-
-- **目标**：建立所有 schema 共用的严格类型和序列化规则。
-- **依赖**：FND-001～003。
-- **建议文件**：`src/ainvest/schemas/common.py`、`tests/unit/schemas/test_common.py`。
-- **执行清单**：
-  - 定义 `SchemaVersion`、UTC datetime 校验、symbol、currency、source、quality flag、稳定 ID 类型。
-  - 定义金额、价格、数量、权重、比例的 `Decimal` 约束。
-  - 禁止 NaN、Infinity、负数金额和多余字段；明确允许负数的 P&L 类型。
-  - 统一 JSON encoder：Decimal -> string，datetime -> UTC ISO 8601。
-- **验收**：float、naive datetime、未知字段、非法 symbol、越界比例均拒绝；round-trip 后值与类型不变。
-
-### DOM-002 — 市场、研究与证据 Schema
-
-- **目标**：实现 `ResearchPacket` 及其来源、时效、质量结构。
-- **依赖**：DOM-001。
-- **建议文件**：`src/ainvest/schemas/market.py`、`research.py`。
-- **执行清单**：
-  - 建模 quote、OHLCV、technical indicators、fundamentals、event、evidence citation、thesis。
-  - 每条外部数据含 `source/observed_at/received_at/timezone/is_delayed/quality_flags`。
-  - `ResearchPacket` 包含 `research_id/symbol/as_of/market/technical/portfolio/thesis/evidence`。
-  - 不允许把无来源自然语言当证据；关键数值标记计算来源。
-- **验收**：实现 design 示例；旧行情和 received-before-observed 等异常能标记或拒绝；生成 JSON Schema 和 golden fixture。
-
-### DOM-003 — 组合、策略上下文与交易信号 Schema
-
-- **目标**：定义策略唯一允许读取和返回的协议。
-- **依赖**：DOM-001～002。
-- **建议文件**：`src/ainvest/schemas/portfolio.py`、`strategy.py`。
-- **执行清单**：
-  - 定义账户 scope、buying power、cash、positions、exposure、open orders 的只读快照。
-  - 定义 `StrategyContext`：`as_of`、ResearchPacket、组合快照、显式策略状态；对象不可变。
-  - 定义 `TradeSignal`：intent、strength、target_weight、生成/过期时间、reason_codes、策略版本、research_id。
-  - `strength` 限制在 -1～1，明确不是成功概率；HOLD 不能转为订单。
-- **验收**：策略上下文无法原地修改；未来时间、过期信号、越界 strength、缺 strategy version 都失败。
-
-### DOM-004 — 候选订单、风控、审批与 Broker Schema
-
-- **目标**：把策略意图之后的所有资金动作标准化。
-- **依赖**：DOM-001、DOM-003。
-- **建议文件**：`src/ainvest/schemas/{orders,risk,approval,broker}.py`。
-- **执行清单**：
-  - 定义 `CandidateOrder`、`OrderProposal`、`RiskDecision`、`RiskViolation`。
-  - 定义 Approval challenge/event、Broker order/fill、reconciliation result。
-  - 首版 enum 只允许 equity/ETF、BUY/SELL、LIMIT、DAY；明确拒绝 short、margin、options。
-  - OrderProposal 包含 maximum_notional、risk_decision_id、created/expires、order_hash。
-- **验收**：设计样例可 round-trip；非法资产/订单类型无法构造；所有结果都有机器可读 reason/rule code。
-
-### DOM-005 — 规范化订单序列化与哈希
-
-- **目标**：生成跨 API、数据库和进程稳定一致的审批绑定摘要。
-- **依赖**：DOM-004。
-- **建议文件**：`src/ainvest/approval/order_hash.py`、`tests/unit/approval/test_order_hash.py`。
-- **执行清单**：
-  - 明确哈希字段、字段顺序、Decimal 规范、时间格式、Unicode 和空值处理。
-  - 使用 canonical JSON + SHA-256；输出带算法前缀。
-  - 哈希必须覆盖 symbol、side、quantity、type、limit、TIF、maximum_notional、expires、strategy name/version、account scope。
-  - 不把 display text、数据库自增 ID、可变化的 UI 文案混入摘要。
-- **验收**：相同语义不同输入格式得到相同哈希；任一关键字段变化哈希变化；提供固定测试向量供其他语言/UI 使用。
-
-### DOM-006 — Schema 版本与兼容性策略
-
-- **目标**：避免多个团队的策略插件因隐式 schema 变化失效。
-- **依赖**：DOM-001～005。
-- **建议文件**：`docs/schema-versioning.md`、`schemas/json/*.json`、`tests/contract/`。
-- **执行清单**：
-  - 定义 major/minor 兼容规则、弃用窗口、未知字段策略和 migration 边界。
-  - 导出核心 JSON Schema 并纳入版本控制。
-  - 添加 snapshot/contract test，破坏性变化必须显式批准。
-  - 为每个 schema 保存至少一个有效和多个无效 fixture。
-- **验收**：CI 能识别无意的破坏性 schema 变化；插件可声明支持的 Strategy API 范围。
-
-### DB-001 — SQLAlchemy 模型、连接与首版 Alembic 迁移
-
-- **目标**：实现设计列出的持久化记录，支持 SQLite 和 PostgreSQL。
-- **依赖**：DOM-001～004、FND-003。
-- **建议文件**：`src/ainvest/db/`、`migrations/`。
-- **执行清单**：
-  - 建表：research_runs/packets、strategy_runs、signals、risk_decisions、proposals、approval_challenges/events、broker_orders/fills、portfolio_snapshots、audit_events。
-  - JSON payload 与可查询索引字段分离；保留 schema/version/code hash。
-  - 时间全为 UTC；金额保存为定点数或规范十进制字符串，不使用 binary float。
-  - 增加唯一约束：signal/proposal/idempotency/client_order_id/token_hash 等。
-- **验收**：空库 upgrade/downgrade/upgrade；SQLite 集成测试通过；PostgreSQL 类型兼容测试可在 CI 服务中运行。
-
-### DB-002 — Repository、Unit of Work 与并发控制
-
-- **目标**：让业务层不直接操作 ORM，并为审批一次消费和状态迁移提供事务边界。
-- **依赖**：DB-001。
-- **建议文件**：`src/ainvest/db/repositories.py`、`uow.py`。
-- **执行清单**：
-  - 为 proposal、approval、broker order、audit 提供最小 repository。
-  - 定义 Unit of Work；业务操作一次 commit，异常 rollback。
-  - 对一次性审批使用条件更新/行锁/版本列，保证并发点击只成功一次。
-  - 对幂等请求使用唯一键后读取已有结果，不以捕获文本错误判断。
-- **验收**：并发测试证明只创建一个审批/执行请求；rollback 不留下半完成状态。
-
-### DB-003 — 追加式审计事件与脱敏
-
-- **目标**：所有关键决策可重放，同时不泄露 secret。
-- **依赖**：DB-001～002。
-- **建议文件**：`src/ainvest/audit/`。
-- **执行清单**：
-  - 定义事件 envelope：event_id/time/correlation/causation/actor/type/input-output digest/versions/state before-after/error。
-  - 审计只追加，不提供业务删除/更新接口。
-  - 建立递归脱敏器，覆盖 token、cookie、authorization、account number、approval raw token。
-  - 定义 payload 大小限制和外部大对象 digest。
-- **验收**：关键流程每次状态变更都有审计；secret corpus 测试确保日志/审计不出现明文；审计可按 proposal_id 还原时间线。
-
-### WF-001 — 订单状态机与非法迁移保护
-
-- **目标**：实现 design 第 8 节的完整状态图。
-- **依赖**：DOM-004、DB-002～003。
-- **建议文件**：`src/ainvest/execution/state_machine.py`。
-- **执行清单**：
-  - 实现所有状态和唯一允许的边。
-  - 迁移包含 expected-current-state，防止陈旧 worker 覆盖新状态。
-  - 每次迁移原子写业务状态与 audit event。
-  - 终态不可继续迁移；`SUBMIT_UNKNOWN -> RECONCILING` 是唯一恢复入口。
-- **验收**：测试覆盖所有合法边和代表性非法边；乱序/重复事件幂等；禁止 `SUBMIT_UNKNOWN -> SUBMITTING`。
-
-### WF-002 — 领域命令、事件与关联 ID
-
-- **目标**：为 orchestrator、worker 和 API 建立稳定的内部命令接口。
-- **依赖**：WF-001、DB-003。
-- **建议文件**：`src/ainvest/workflow/`。
-- **执行清单**：
-  - 定义命令：evaluate_strategy、size_order、evaluate_risk、create_proposal、approve、execute、reconcile。
-  - 定义对应结果/事件；每个对象携带 correlation/causation/idempotency ID。
-  - 区分可安全重试的纯函数、只读外部调用和不可盲重试的写单。
-  - 先采用进程内 dispatcher；接口允许未来替换为持久队列/Temporal。
-- **验收**：重复命令返回同一业务结果；不依赖 in-memory hidden state；trace 可串起完整工作流。
+- **Objective:** Give every agent PR one consistent validation standard.
+- **Dependencies:** P01-T2.
+- **Primary files:** `.github/workflows/ci.yml`, `.pre-commit-config.yaml`, `CODEOWNERS`, dependency-update configuration.
+- **Implementation checklist:**
+  - Run lint, formatting checks, type checking, unit tests, coverage, and schema snapshots.
+  - Add secret scanning, dependency auditing, and lock-file consistency checks.
+  - Require owner review for security and execution paths; live-safety tests cannot be skipped with an ordinary marker.
+  - Never inject real OpenAI, broker, or Telegram credentials into CI.
+- **Acceptance criteria:** A deliberately failing test or policy violation blocks the PR; CI artifacts contain no `.env`, token, or account data.
 
 ---
 
-## 6. M2：策略、Position Sizer、风控与 Paper Broker
+## 5. Phase 02 — Domain Contracts, Persistence, and Workflow
 
-### STR-001 — Strategy API、Definition 与 Hook 规范
+### P02-T0 — Define Common Domain Types
 
-- **目标**：实现多团队策略共享的最小稳定接口。
-- **依赖**：DOM-003、DOM-006、FND-002。
-- **建议文件**：`src/ainvest/strategies/{api,hooks,definitions}.py`。
-- **执行清单**：
-  - 定义 Strategy Protocol、Pydantic params model、StrategyDefinition、plugin metadata。
-  - metadata 包含 plugin_id/version、Strategy API range、strategy name/version、source commit、owner/repo。
-  - Hook `strategy_definitions()` 只返回声明，不在 import 时执行策略。
-  - 明确 `evaluate(context) -> StrategyResult`；结果含 signals、next_state、diagnostics。
-- **验收**：最小第三方包可实现接口；缺元数据、错误参数模型、不兼容 API 被拒绝。
+- **Objective:** Establish strict shared types and serialization rules for every schema.
+- **Dependencies:** P01-T2 through P01-T4.
+- **Primary files:** `src/ainvest/schemas/common.py`, `tests/unit/schemas/test_common.py`.
+- **Implementation checklist:**
+  - Define `SchemaVersion`, timezone-aware UTC validation, symbols, currency, source, quality flags, and stable ID types.
+  - Define a canonical `InstrumentIdentity` containing stable provider/broker instrument ID, display symbol, exchange/MIC, currency, asset type, and identity-as-of metadata. A display symbol alone cannot identify a tradeable instrument.
+  - Define `Decimal` constraints for money, price, quantity, weight, and ratio.
+  - Reject NaN, Infinity, negative money where invalid, and extra fields; define separate P&L types where negative values are valid.
+  - Standardize JSON serialization: Decimal to string and datetime to UTC ISO 8601.
+- **Acceptance criteria:** Floats, naive datetimes, unknown fields, invalid symbols, and out-of-range ratios are rejected; a round trip preserves values and types.
 
-### STR-002 — pluggy 加载与 StrategyRegistry
+### P02-T1 — Define Market, Research, and Evidence Schemas
 
-- **目标**：从 `ainvest.strategies` entry point 安全发现、验证和列举插件。
-- **依赖**：STR-001。
-- **建议文件**：`src/ainvest/strategies/registry.py`。
-- **执行清单**：
-  - 配置 PluginManager、hookspec、entry point 加载。
-  - 冲突的 plugin_id、entry point、strategy name 必须使启动失败。
-  - 支持配置 allowlist、固定版本和禁用列表；live 模式强制 allowlist。
-  - registry 对外只暴露验证后的不可变 definition。
-- **验收**：测试包覆盖多插件、冲突、API 不兼容、未知策略、被禁用策略；不得静默覆盖。
+- **Objective:** Implement `ResearchPacket` and its provenance, freshness, and quality model.
+- **Dependencies:** P02-T0.
+- **Primary files:** `src/ainvest/schemas/market.py`, `src/ainvest/schemas/research.py`.
+- **Implementation checklist:**
+  - Model quotes, OHLCV, technical indicators, fundamentals, events, evidence citations, and thesis structures.
+  - Every external datum includes `source`, `observed_at`, `received_at`, `timezone`, `is_delayed`, and `quality_flags`.
+  - `ResearchPacket` includes `research_id`, `symbol`, `as_of`, market, technical, portfolio, thesis, and evidence sections.
+  - Unsupported natural-language assertions cannot become evidence; important numeric values cite their deterministic calculation source.
+- **Acceptance criteria:** The design example validates; stale data and invalid time ordering are rejected or explicitly flagged; JSON Schema and golden fixtures are generated.
 
-### STR-003 — 策略 YAML 实例配置
+### P02-T2 — Define Portfolio, Strategy Context, and TradeSignal Schemas
 
-- **目标**：把策略代码定义与运行实例配置分离。
-- **依赖**：STR-001～002、FND-003。
-- **建议文件**：`src/ainvest/strategies/config.py`、`config/strategies.example.yaml`。
-- **执行清单**：
-  - 支持 id/plugin/enabled/universe/parameters/schedule/constraints。
-  - 用 definition.params_model 验证 parameters。
-  - 校验 symbols、timeframe、research_max_age、signal_ttl。
-  - 禁止重复实例 ID、未知参数、可执行 YAML 和 live 下的浮动插件版本。
-- **验收**：design 示例可加载；坏配置在启动时失败且不泄露 secret；配置归一化结果可审计。
+- **Objective:** Define the only protocol that a strategy may read and return.
+- **Dependencies:** P02-T0 and P02-T1.
+- **Primary files:** `src/ainvest/schemas/portfolio.py`, `src/ainvest/schemas/strategy.py`.
+- **Implementation checklist:**
+  - Define account scope, buying power, cash, positions, exposure, and open-order snapshots.
+  - Define immutable `StrategyContext` with `as_of`, `ResearchPacket`, portfolio snapshot, and explicit strategy state.
+  - Define `TradeSignal` intent, strength, target weight, creation/expiry, reason codes, strategy version, and `research_id`.
+  - Bound strength to -1 through 1 and document that it is not a success probability. HOLD cannot become an order.
+- **Acceptance criteria:** Context objects cannot be modified in place; future timestamps, expired signals, invalid strength, and missing strategy versions fail validation.
 
-### STR-004 — 参考移动平均策略插件
+### P02-T3 — Define Candidate Order, Risk, Approval, and Broker Schemas
 
-- **目标**：提供一个不含 Broker/网络访问的完整示例，验证 API 能用。
-- **依赖**：STR-001～003、DOM-002～003。
-- **建议文件**：`examples/strategies/moving_average/` 或独立 workspace package。
-- **执行清单**：
-  - 实现 fast/slow window、target_weight 参数。
-  - 只使用 context.as_of 和提供的历史数据；不得读取系统当前时间。
-  - 输出 BUY/SELL/HOLD 与稳定 reason_codes。
-  - 提供 entry point、metadata、tests、README。
-- **验收**：相同输入重复运行字节级相同；无未来数据；能被 Registry 从已安装 package 发现。
+- **Objective:** Standardize every money-moving object after strategy intent.
+- **Dependencies:** P02-T0 and P02-T2.
+- **Primary files:** `src/ainvest/schemas/{orders,risk,approval,broker}.py`.
+- **Implementation checklist:**
+  - Define `CandidateOrder`, `OrderProposal`, `RiskDecision`, and `RiskViolation`.
+  - Define approval challenge/event, broker order/fill, and reconciliation result types.
+  - Define `CancelCommand`, `CancelResult`, and cancellation idempotency fields separately from order submission; do not model an in-place replace operation.
+  - Approval events include method, scope, proposal ID, order hash, approval timestamp, and stable approver identity.
+  - Schema validation permits only telegram+paper and webauthn+live method/scope combinations.
+  - Initial enums allow equity/ETF, BUY/SELL, LIMIT, and DAY only; explicitly reject short, margin, options, and unsupported assets.
+  - `OrderProposal` includes canonical instrument identity, maximum notional, risk decision ID, creation/expiry, price/quantity increment metadata, and order hash.
+- **Acceptance criteria:** Design examples round-trip; invalid asset/order types and telegram+live approvals cannot be constructed; every outcome has a stable reason or rule code.
 
-### STR-005 — 独立策略 Worker 与资源边界
+### P02-T4 — Implement Canonical Order Serialization and Hashing
 
-- **目标**：让策略异常或恶意行为不能接触主进程 secret 和交易能力。
-- **依赖**：STR-001～003、DB-003。
-- **建议文件**：`src/ainvest/strategies/worker/`。
-- **执行清单**：
-  - 主进程以版本化 JSON 传入/出，不传 ORM、socket、credential。
-  - 独立进程设置 wall timeout、CPU/内存限制；捕获 crash/timeout/invalid-output。
-  - 运行环境清理敏感 env，工作目录只读；默认网络隔离方案需按目标 OS/容器记录。
-  - 记录 package version、source commit、params digest、input digest、duration。
-  - worker 失败只影响本策略本次运行。
-- **验收**：测试策略尝试超时、OOM、读 secret、联网、返回坏 schema 时均失败关闭；主调度仍可继续其他策略。
+- **Objective:** Create a stable approval-binding digest across APIs, databases, and processes.
+- **Dependencies:** P02-T3.
+- **Primary files:** `src/ainvest/approval/order_hash.py`, `tests/unit/approval/test_order_hash.py`.
+- **Implementation checklist:**
+  - Specify hash fields, order, Decimal normalization, timestamp form, Unicode normalization, and null handling.
+  - Use canonical JSON plus SHA-256 and return an algorithm-prefixed digest.
+  - Cover canonical instrument ID, symbol, exchange, currency, asset type, side, quantity, order type, limit, time in force, maximum notional, expiry, strategy name/version, and account scope.
+  - Define a separate canonical cancel-command digest. A replacement order always receives a new proposal and order hash; an earlier order approval cannot authorize it.
+  - Exclude display text, database auto-increment IDs, and mutable UI copy.
+- **Acceptance criteria:** Semantically identical inputs yield identical hashes; every protected-field change changes the hash; fixed test vectors are available to UI and other-language consumers.
 
-### STR-006 — strategy-conformance 测试套件
+### P02-T5 — Establish Schema Versioning and Compatibility Rules
 
-- **目标**：让独立团队在自己的 CI 验证插件。
-- **依赖**：STR-001～005、PAP-001。
-- **建议文件**：`src/ainvest/strategy_conformance/`、CLI entry point。
-- **执行清单**：
-  - 检查 Hook/metadata/API range/参数/信号 schema。
-  - 用固定 clock/input 重复运行检查确定性。
-  - 检查无未来数据、timeout、异常、Paper 示例。
-  - 提供网络/Broker/secret 访问探针。
-  - 输出机器可读 JSON 和人类可读报告。
-- **验收**：参考策略通过；多个故意违规插件分别失败并给稳定 code；文档包含第三方 CI 示例。
+- **Objective:** Prevent implicit schema changes from breaking independently developed strategy plugins.
+- **Dependencies:** P02-T0 through P02-T4.
+- **Primary files:** `docs/schema-versioning.md`, `schemas/json/*.json`, `tests/contract/`.
+- **Implementation checklist:**
+  - Define major/minor compatibility, deprecation windows, unknown-field policy, and migration boundaries.
+  - Export core JSON Schemas into version control.
+  - Add snapshots and contract tests; breaking changes require explicit approval.
+  - Store at least one valid and multiple invalid fixtures per schema.
+- **Acceptance criteria:** CI detects unintended breaking changes, and plugins can declare a supported Strategy API version range.
 
-### SIZ-001 — 单策略 Position Sizer
+### P02-T6 — Create SQLAlchemy Models and the Initial Alembic Migration
 
-- **目标**：把 target_weight 意图转换为整股候选订单。
-- **依赖**：DOM-003～004、FND-003。
-- **建议文件**：`src/ainvest/portfolio/sizer.py`。
-- **执行清单**：
-  - 输入 signal、最新 quote、portfolio snapshot、sizing config。
-  - 计算目标市值、当前差额、现金保留、整股向安全方向取整、min/max notional。
-  - HOLD、过期 signal、缺价格、零/负购买力返回 no-order + reason。
-  - 不在这里做最终风险批准。
-- **验收**：全部使用 Decimal；Hypothesis 覆盖边界；候选金额不超过配置/购买力；输出可重复。
+- **Objective:** Persist the designed records on SQLite while retaining PostgreSQL compatibility.
+- **Dependencies:** P02-T0 through P02-T3 and P01-T4.
+- **Primary paths:** `src/ainvest/db/`, `migrations/`.
+- **Implementation checklist:**
+  - Add research runs/packets, strategy runs, signals, risk decisions, proposals, approval challenges/events, broker orders/fills, portfolio snapshots, and audit events.
+  - Separate JSON payloads from indexed query columns and retain schema, code, and configuration versions.
+  - Store UTC timestamps and fixed-point/normalized decimal values, never binary floats.
+  - Add uniqueness for signal/proposal/idempotency/client order ID/token hash as appropriate.
+- **Acceptance criteria:** Empty-database upgrade/downgrade/upgrade succeeds; SQLite integration tests pass; PostgreSQL-compatible type tests run in CI.
 
-### SIZ-002 — 多策略同标的信号合并策略
+### P02-T7 — Implement Repositories, Unit of Work, and Concurrency Control
 
-- **目标**：明确冲突信号如何变成至多一个候选订单，避免重复/对敲。
-- **依赖**：SIZ-001。
-- **建议文件**：`src/ainvest/portfolio/signal_aggregation.py`、ADR。
-- **执行清单**：
-  - 先通过 ADR 固定首版规则；安全默认建议冲突即不交易/NEEDS_REVIEW。
-  - 按 symbol、as_of、有效期和策略版本分组。
-  - 禁止未经明确规则的 strength 加权或把 strength 当概率。
-  - 记录每个输入 signal 及最终 reason code。
-- **验收**：BUY/SELL 冲突、重复 signal、不同 as_of、过期混合均有确定结果；不会产生同标的双向订单。
+- **Objective:** Keep business code away from direct ORM operations and provide transactional boundaries for one-time approval and state transitions.
+- **Dependencies:** P02-T6.
+- **Primary files:** `src/ainvest/db/repositories.py`, `src/ainvest/db/uow.py`.
+- **Implementation checklist:**
+  - Provide minimal repositories for proposals, approvals, broker orders, and audit records.
+  - Define a Unit of Work with one commit per business operation and rollback on failure.
+  - Use conditional updates, row locks, or version columns so concurrent approval clicks can succeed only once.
+  - Enforce idempotency with unique keys and read the existing result after a conflict; never parse database error text.
+- **Acceptance criteria:** Concurrency tests create one approval/execution request only, and rollback leaves no partial state.
 
-### RSK-001 — 风控规则框架与决策聚合
+### P02-T8 — Implement Append-Only Audit Events and Redaction
 
-- **目标**：建立纯 Python、可组合、可解释的 Risk Engine。
-- **依赖**：DOM-004、DB-003。
-- **建议文件**：`src/ainvest/risk/{engine,rules,models}.py`。
-- **执行清单**：
-  - 规则接口只接收不可变 RiskContext，返回 rule code/severity/decision/reason/evidence。
-  - 聚合优先级：任何 hard reject -> REJECTED；review-only -> NEEDS_REVIEW；否则 APPROVED。
-  - 缺输入、规则异常、未知规则均 fail closed。
-  - 决策记录 rule set/config/code versions 和 input digest。
-- **验收**：规则顺序不改变最终结果；异常规则无法被吞掉后批准；每个结果可解释、可审计。
+- **Objective:** Make every critical decision replayable without leaking secrets.
+- **Dependencies:** P02-T6 and P02-T7.
+- **Primary paths:** `src/ainvest/audit/`.
+- **Implementation checklist:**
+  - Define an event envelope containing event/time/correlation/causation/actor/type, input/output digests, versions, before/after state, and errors.
+  - Expose append operations only; business code receives no update/delete API for audit events.
+  - Implement recursive redaction for tokens, cookies, authorization headers, account numbers, and raw approval tokens.
+  - Define payload-size limits and store digests for large external objects.
+- **Acceptance criteria:** Every critical state change creates an audit event; secret-corpus tests find no plaintext value; a proposal timeline can be reconstructed.
 
-### RSK-002 — 金额、仓位、行业与现金规则
+### P02-T9 — Implement the Order State Machine and Illegal-Transition Guards
 
-- **目标**：实现资金暴露类硬限制。
-- **依赖**：RSK-001、SIZ-001。
-- **建议文件**：`src/ainvest/risk/rules/exposure.py`。
-- **执行清单**：
-  - 单笔最大名义金额、单标的最大权重、单行业最大暴露。
-  - 单日最大成交额、最低现金保留、单日已实现/未实现亏损。
-  - 计算 post-trade 状态，不只检查当前状态。
-  - 无行业映射、P&L 不完整、账户净值异常时拒绝或 NEEDS_REVIEW，不默认通过。
-- **验收**：阈值等于/略超边界测试；买卖两侧和负 P&L；Decimal property tests。
+- **Objective:** Implement the complete state graph in design §8.
+- **Dependencies:** P02-T3, P02-T7, and P02-T8.
+- **Primary file:** `src/ainvest/execution/state_machine.py`.
+- **Implementation checklist:**
+  - Implement every order-lifecycle state and the exact allowed edges.
+  - Implement cancellation as a separate, correlated command state machine so fills can continue while cancellation is pending. Include REQUESTED, CONFIRMED, REJECTED/NOT_APPLIED, UNKNOWN, RECONCILING, and MANUAL_REVIEW outcomes.
+  - Require expected-current-state on transitions so a stale worker cannot overwrite newer state.
+  - Atomically persist business state and its audit event.
+  - Terminal states cannot transition; `SUBMIT_UNKNOWN -> RECONCILING` and `CANCEL_UNKNOWN -> CANCEL_RECONCILING` are the only recovery entries for ambiguous broker writes.
+- **Acceptance criteria:** Tests cover every legal edge and representative illegal edges; duplicate/out-of-order events are idempotent; neither uncertain submit nor uncertain cancel can transition directly to another broker write.
 
-### RSK-003 — 资产、白名单、方向与交易时段规则
+### P02-T10 — Define Domain Commands, Events, and Correlation IDs
 
-- **目标**：把首版产品范围变成不可绕过的硬规则。
-- **依赖**：RSK-001、DAT-004 可后补真实日历，先用接口/fake。
-- **建议文件**：`src/ainvest/risk/rules/eligibility.py`。
-- **执行清单**：
-  - 只允许配置白名单内普通美股/ETF。
-  - 拒绝 options、crypto、margin、short、leveraged/inverse ETF。
-  - 校验 regular session、节假日、提前收市和交易 halt。
-  - 元数据缺失时拒绝。
-- **验收**：每一类禁用资产有测试；非交易时段/节假日/提前收市失败关闭。
-
-### RSK-004 — 行情时效、点差、波动与滑点规则
-
-- **目标**：禁止使用过期或异常价格批准订单。
-- **依赖**：RSK-001、DOM-002。
-- **建议文件**：`src/ainvest/risk/rules/market_quality.py`。
-- **执行清单**：
-  - quote 最大年龄、delayed flag、bid/ask 完整性。
-  - 最大 spread bps、异常短期波动、最大允许 limit/market reference 偏移。
-  - 区分 proposal-time 和 pre-trade-time 阈值。
-  - 时钟偏差、零/负价格、crossed market 都失败关闭。
-- **验收**：边界和 stale-clock tests；报价更新后旧批准不能自动沿用超限价格。
-
-### RSK-005 — 重复订单、未完成冲突、Kill Switch 与二次风控
-
-- **目标**：防止重复下单和在账户状态变化后执行旧批准。
-- **依赖**：RSK-001～004、DB-002、WF-001。
-- **建议文件**：`src/ainvest/risk/rules/orders.py`、`kill_switch.py`、`pretrade.py`。
-- **执行清单**：
-  - 以 proposal hash、symbol/side/window、client order ID 检测重复。
-  - 检测同标的相反/重叠未完成订单。
-  - Kill switch 支持配置、数据库/运营开关，任何来源 active 即拒绝新订单。
-  - pre-trade 重新获取 quote/account/positions/open orders 并运行完整规则集。
-  - 二次风控不得复用旧 APPROVED 结论。
-- **验收**：重复 webhook/worker、旧快照、kill switch、已有 open order 均阻止执行；测试证明所有 hard rules 在执行前再次运行。
-
-### PAP-001 — Broker Port 与错误分类
-
-- **目标**：用同一领域接口支持 Paper 和 Robinhood，业务层不依赖 MCP 细节。
-- **依赖**：DOM-004。
-- **建议文件**：`src/ainvest/execution/broker.py`。
-- **执行清单**：
-  - 定义只读方法：account、positions、quotes、orders、fills。
-  - 定义写方法：submit/cancel；写能力用单独 protocol/capability，避免只读进程获得它。
-  - 定义稳定错误：auth、timeout、rate limit、invalid order、rejected、unknown outcome。
-  - submit 必须要求 idempotency/client order ID。
-- **验收**：Paper adapter contract tests；只读类型无法调用 submit；unknown outcome 与明确 rejected 可区分。
-
-### PAP-002 — 确定性 Paper Broker 与成交模拟
-
-- **目标**：建立无真实资金的订单生命周期。
-- **依赖**：PAP-001、WF-001、DB-001～003。
-- **建议文件**：`src/ainvest/execution/paper.py`。
-- **执行清单**：
-  - 账户现金/仓位、提交、取消、部分成交、成交、拒绝。
-  - limit fill 仅依据注入的 market events；时钟与随机数可注入/固定。
-  - 模拟手续费、点差和滑点；不得暗含零成本。
-  - 相同 idempotency key 返回同一订单。
-- **验收**：相同事件序列得到相同结果；不会超卖/透支；重复 submit 不重复扣款；部分成交记账正确。
-
-### PAP-003 — Paper 核对与组合记账
-
-- **目标**：从 Broker order/fill 重建内部状态，发现不一致。
-- **依赖**：PAP-002、DB-001～003。
-- **建议文件**：`src/ainvest/execution/reconciliation.py`、`portfolio/ledger.py`。
-- **执行清单**：
-  - 拉取 orders/fills，与本地 client order ID、数量、价格、状态比较。
-  - 处理重复、乱序和迟到 fill。
-  - 差异进入 MANUAL_REVIEW 并告警，不静默修正资金事实。
-  - 生成 portfolio snapshot 和 P&L 基础数据。
-- **验收**：重复/乱序事件幂等；缺失订单、数量差异和未知 fill 能被识别；账本守恒测试通过。
-
-### ORC-001 — 固定 ResearchPacket 的完整 Paper Orchestrator
-
-- **目标**：把已有模块串成第一个端到端闭环，不包含 AI/Telegram/Robinhood。
-- **依赖**：STR-001～006、SIZ-001～002、RSK-001～005、PAP-001～003、WF-002。
-- **建议文件**：`src/ainvest/orchestrator.py`、CLI、`tests/integration/test_paper_flow.py`。
-- **执行清单**：
-  - 输入固定 ResearchPacket + portfolio + strategy config。
-  - 执行 strategy -> size -> risk -> proposal -> 测试审批 stub -> Paper submit -> fill -> reconcile。
-  - 支持 dry-run 展示每步输出；默认不自动“批准”，测试必须显式注入 approval。
-  - 每步落库并写关联审计。
-- **验收**：正常、风控拒绝、审批过期、Broker unknown、部分成交五条流程可重放；相同 fixture 产生相同决策和摘要。
-
-### REL-001 — Gate 1：Phase 1 模拟闭环验收
-
-- **目标**：冻结首个可用领域内核。
-- **依赖**：M0、M1、M2 全部任务。
-- **执行清单**：
-  - 运行全套 unit/contract/integration/safety tests。
-  - 从空 SQLite migration 到固定输入模拟成交并导出 audit timeline。
-  - 验证策略进程无凭据/网络、Risk fail closed、Paper 幂等、状态机无非法边。
-  - 记录性能基线和未解决缺陷；high/critical 缺陷必须清零。
-- **验收**：满足 design Phase 1“固定 ResearchPacket 到模拟成交可重复、可测试”；生成 `docs/releases/phase-1-acceptance.md`。
+- **Objective:** Provide stable internal command interfaces for orchestrators, workers, and APIs.
+- **Dependencies:** P02-T9 and P02-T8.
+- **Primary paths:** `src/ainvest/workflow/`.
+- **Implementation checklist:**
+  - Define commands for strategy evaluation, sizing, risk evaluation, proposal creation, approval, execution, cancellation, manual-review resolution, and reconciliation.
+  - Define corresponding results/events with correlation, causation, and idempotency IDs.
+  - Distinguish retryable pure operations, read-only external calls, and broker writes that must never be blindly retried.
+  - Begin with an in-process dispatcher while preserving an interface that can later support a durable queue or Temporal.
+- **Acceptance criteria:** Repeated commands return the same business result, no command depends on hidden in-memory state, and one trace connects the full workflow.
 
 ---
 
-## 7. M3：数据、Research Agent 与回测
+## 6. Phase 03 — Strategies, Position Sizing, Risk, and Paper Broker
 
-### DAT-001 — 数据适配器 Ports 与测试替身
+### P03-T0 — Define the Strategy API, Definitions, and Hook Contract
 
-- **目标**：统一 quote、OHLCV、fundamentals、news/events 和 instrument metadata。
-- **依赖**：DOM-002、PAP-001。
-- **建议文件**：`src/ainvest/data/{ports,models,fakes}.py`。
-- **执行清单**：
-  - 为每类数据定义 async 或 sync 一致接口，明确请求/返回、超时、分页和错误。
-  - 所有返回值补齐 provenance、observed/received time、timezone、delayed、quality flags。
-  - 建立 deterministic fake provider 与 fixture dataset。
-  - 禁止上层直接 import 第三方供应商 SDK。
-- **验收**：各 provider 共享 contract tests；缺时间/来源的数据无法进入 ResearchPacket。
+- **Objective:** Create the smallest stable interface shared by independent strategy teams.
+- **Dependencies:** P02-T2, P02-T5, and P01-T3.
+- **Primary files:** `src/ainvest/strategies/{api,hooks,definitions}.py`.
+- **Implementation checklist:**
+  - Define the Strategy Protocol, Pydantic parameter model, `StrategyDefinition`, and plugin metadata.
+  - Metadata includes plugin ID/version, Strategy API range, strategy name/version, source commit, owner, and repository.
+  - `strategy_definitions()` returns declarations only and never executes strategy logic during import.
+  - Define `evaluate(context) -> StrategyResult`, with signals, next state, and diagnostics.
+- **Acceptance criteria:** A minimal third-party package implements the contract; missing metadata, invalid parameter models, and incompatible API versions are rejected.
 
-### DAT-002 — 开发/Paper 行情与 OHLCV 适配器
+### P03-T1 — Load pluggy Plugins into StrategyRegistry
 
-- **目标**：为本地研究和回测接入开发数据源，首选设计指定的 yfinance。
-- **依赖**：DAT-001、GOV-001 的行情决策。
-- **建议文件**：`src/ainvest/data/providers/yahoo.py`。
-- **执行清单**：
-  - 实现 quote、历史 OHLCV、corporate actions 的薄适配。
-  - 明确调整价/未调整价、交易所时区、延迟属性和供应商限制。
-  - 网络超时、空响应、rate limit 转为稳定错误；缓存必须保留原 observed_at。
-  - 代码和文档显式标注“不可作为实盘唯一报价”。
-- **验收**：使用录制/伪造响应的测试不依赖公网；拆股/分红、缺 bar、时区、重复索引均覆盖。
+- **Objective:** Discover, validate, and list strategies from the `ainvest.strategies` entry-point group.
+- **Dependencies:** P03-T0.
+- **Primary file:** `src/ainvest/strategies/registry.py`.
+- **Implementation checklist:**
+  - Configure PluginManager, hook specifications, and entry-point loading.
+  - Fail startup on duplicate plugin IDs, entry points, or strategy names.
+  - Support configuration allowlists, pinned versions, and disabled plugins; live mode requires an allowlist.
+  - Expose immutable, validated definitions only.
+- **Acceptance criteria:** Test packages cover multiple plugins, conflicts, incompatible APIs, unknown/disabled strategies, and prove there is no silent override.
 
-### DAT-003 — SEC/基本面与财报事件适配器
+### P03-T2 — Implement Strategy Instance YAML Configuration
 
-- **目标**：使用 EdgarTools 获取可引用的公司申报和财报日历基础信息。
-- **依赖**：DAT-001、GOV-001 的基本面决策。
-- **建议文件**：`src/ainvest/data/providers/sec.py`。
-- **执行清单**：
-  - 支持公司映射、10-K/10-Q/8-K/Form 4 metadata 和选定 XBRL 指标。
-  - 尊重 SEC user-agent/rate limit；缓存原文引用位置和 accession。
-  - 数值单位、期间、币种显式，不静默混合年度/季度。
-  - 将“下一财报日期”的确定性与来源质量标记清楚。
-- **验收**：固定 filing fixtures 可生成证据和基础面字段；缺单位/期间的数据不被默认为可比。
+- **Objective:** Separate strategy code definitions from runtime instances.
+- **Dependencies:** P03-T0, P03-T1, and P01-T4.
+- **Primary files:** `src/ainvest/strategies/config.py`, `config/strategies.example.yaml`.
+- **Implementation checklist:**
+  - Support instance ID, plugin, enabled flag, universe, parameters, schedule, and constraints.
+  - Validate parameters through `definition.params_model`.
+  - Validate symbols, timeframe, `research_max_age`, and `signal_ttl`.
+  - Reject duplicate IDs, unknown parameters, executable YAML, and unpinned plugin versions in live mode.
+- **Acceptance criteria:** The design example loads; invalid configuration fails at startup without exposing secrets; normalized configuration is auditable.
 
-### DAT-004 — 新闻、宏观事件与交易日历
+### P03-T3 — Build a Reference Moving-Average Strategy Plugin
 
-- **目标**：接入选定新闻/事件供应商，并提供可靠美股交易时段。
-- **依赖**：DAT-001、GOV-001 的新闻决策、RSK-003。
-- **建议文件**：`src/ainvest/data/providers/news.py`、`calendar.py`。
-- **执行清单**：
-  - 新闻统一 title/url/publisher/published_at/received_at/symbols/license/quality。
-  - 去重只合并同一事件引用，不丢失多个来源。
-  - 使用 pandas-market-calendars 处理节假日和提前收市。
-  - 新闻供应商未决定时先完成 port/fake，不私自选付费服务。
-- **验收**：时区、DST、提前收市、重复新闻和未来 published_at 测试通过；Risk Engine 使用同一 calendar service。
+- **Objective:** Prove the Strategy API with a complete example that has no network or broker dependency.
+- **Dependencies:** P03-T0 through P03-T2 and P02-T1 through P02-T2.
+- **Primary path:** `examples/strategies/moving_average/` or a separate workspace package.
+- **Implementation checklist:**
+  - Implement fast/slow windows and target-weight parameters.
+  - Use only `context.as_of` and supplied historical data; never read the system clock.
+  - Return BUY/SELL/HOLD with stable reason codes.
+  - Include entry point, metadata, tests, and README.
+- **Acceptance criteria:** Identical input produces byte-identical output, no future data is used, and the registry discovers the installed package.
 
-### DAT-005 — 指标、数据质量、缓存与快照
+### P03-T4 — Isolate Strategy Workers and Enforce Resource Boundaries
 
-- **目标**：让重要数值由确定性工具计算，并保存可重放输入。
-- **依赖**：DAT-001～004、DOM-002。
-- **建议文件**：`src/ainvest/data/{indicators,quality,cache,snapshots}.py`。
-- **执行清单**：
-  - 通过 TA-Lib 封装 SMA/RSI/ATR 等；统一 warm-up 和缺失值规则。
-  - 检测 stale、gap、duplicate、out-of-order、currency/adjustment mismatch。
-  - 缓存 key 包含 provider、symbol、timeframe、adjustment 和 as_of。
-  - 保存原始响应 digest、归一化版本和计算参数。
-- **验收**：指标与固定参考值一致；不足窗口不输出伪值；同一快照可离线重建 ResearchPacket。
+- **Objective:** Prevent faulty or malicious strategy code from reaching main-process secrets or trading capabilities.
+- **Dependencies:** P03-T0 through P03-T2 and P02-T8.
+- **Primary path:** `src/ainvest/strategies/worker/`.
+- **Implementation checklist:**
+  - Exchange versioned JSON only; never pass ORM objects, sockets, or credentials.
+  - Enforce wall timeout and CPU/memory limits; classify crashes, timeouts, and invalid output.
+  - Remove sensitive environment variables, use a read-only working tree, and document network isolation for target OS/container environments.
+  - Record package version, source commit, parameter/input digests, and duration.
+  - A worker failure affects one strategy run only.
+- **Acceptance criteria:** Test plugins attempting timeout, OOM, secret access, network access, or invalid output all fail closed while other strategies continue.
 
-### RES-001 — Research Agent 的确定性工具层
+### P03-T5 — Publish the Strategy Conformance Test Suite
 
-- **目标**：把金额、指标、组合分析从模型推理中移出。
-- **依赖**：DAT-001～005、DOM-002～003。
-- **建议文件**：`src/ainvest/agents/tools/`。
-- **执行清单**：
-  - 工具覆盖 quote/history/indicators/filings/news/portfolio concentration/buying power。
-  - 输入输出均为 Pydantic schema，设置超时和最大返回量。
-  - 工具返回证据 ID，模型只能引用现有证据。
-  - 工具层不持有 Broker 写权限。
-- **验收**：工具错误、超时、旧数据进入 quality flags 并阻止错误的“完整研究”；数值可独立单测。
+- **Objective:** Let independent teams validate plugins in their own CI.
+- **Dependencies:** P03-T0 through P03-T4 and P03-T13.
+- **Primary paths:** `src/ainvest/strategy_conformance/`, CLI entry point.
+- **Implementation checklist:**
+  - Check hooks, metadata, API range, parameters, and signal schemas.
+  - Repeat runs with fixed clocks and inputs to verify determinism.
+  - Check no future data, timeout behavior, exceptions, and a Paper example.
+  - Include network, broker, and secret-access probes.
+  - Emit machine-readable JSON and a human-readable report.
+- **Acceptance criteria:** The reference strategy passes; deliberately invalid plugins fail with stable codes; documentation contains a third-party CI example.
 
-### RES-002 — Pydantic AI Research Agent
+### P03-T6 — Implement the Single-Strategy Position Sizer
 
-- **目标**：生成结构化 bull case、bear case、risks 和待验证事项，而不是交易指令。
-- **依赖**：RES-001、GOV-001 的模型决策。
-- **建议文件**：`src/ainvest/agents/research_agent.py`、`prompts/`。
-- **执行清单**：
-  - 使用 Pydantic AI 结构化输出，模型响应直接验证为中间 research narrative。
-  - system prompt 明确禁止 BUY/SELL、数量、获利承诺和无来源数值。
-  - 限制工具集合、轮数、token、耗时和并发。
-  - 模型/提示词/工具 schema 都版本化。
-- **验收**：模型输出坏 schema、有交易指令、无来源断言、超时均失败关闭；fake model 测试可离线运行。
+- **Objective:** Convert target-weight intent into a whole-share candidate order.
+- **Dependencies:** P02-T2, P02-T3, and P01-T4.
+- **Primary file:** `src/ainvest/portfolio/sizer.py`.
+- **Implementation checklist:**
+  - Accept a signal, latest quote, portfolio snapshot, and sizing configuration.
+  - Calculate target value, current difference, cash reserve, safe-direction whole-share rounding, broker quantity increment, price tick normalization, and min/max notional.
+  - Return no order with a stable reason for HOLD, expired signal, missing price, missing/invalid tick or quantity metadata, or zero/negative buying power.
+  - Do not perform final risk approval here.
+- **Acceptance criteria:** All arithmetic uses Decimal; property tests cover boundaries and price/quantity increments; output never exceeds configured limits or buying power, never rounds a price in a less-safe direction, and is deterministic.
 
-### RES-003 — ResearchPacket Builder 与证据一致性
+### P03-T7 — Define Multi-Strategy Signal Aggregation
 
-- **目标**：把确定性数值和模型解释组合成最终 `ResearchPacket`。
-- **依赖**：RES-001～002、DB-001～003。
-- **建议文件**：`src/ainvest/agents/research_builder.py`。
-- **执行清单**：
-  - 市场/技术/组合字段只接受工具结果；模型只能填 thesis 文本结构。
-  - 验证每个 thesis claim 引用 evidence ID；引用必须属于本次 run。
-  - 写 research_run、raw/tool digests、prompt/model version、final packet。
-  - 数据不完整时明确 quality flags；不得自动补猜。
-- **验收**：固定工具与 fake model 得到稳定 packet；伪造证据 ID、跨 run 引用、旧报价被拒绝。
+- **Objective:** Convert conflicting signals for one symbol into at most one candidate order without duplicate or self-crossing trades.
+- **Dependencies:** P03-T6.
+- **Primary files:** `src/ainvest/portfolio/signal_aggregation.py`, ADR.
+- **Implementation checklist:**
+  - Accept a first-release rule through an ADR; the safe default is conflict -> no trade or `NEEDS_REVIEW`.
+  - Group by symbol, `as_of`, expiry, and strategy version.
+  - Do not weight strength or treat it as probability without an explicit approved rule.
+  - Preserve every input signal and the final reason code.
+- **Acceptance criteria:** BUY/SELL conflicts, duplicates, differing `as_of`, and mixed expiry produce deterministic results and never create opposing orders for one symbol.
 
-### RES-004 — Research 安全、质量评测与成本预算
+### P03-T8 — Build the Risk Rule Framework and Decision Aggregator
 
-- **目标**：建立在更换模型/提示词时可重复运行的评测。
-- **依赖**：RES-002～003。
-- **建议文件**：`tests/evals/research/`、`scripts/run_research_evals.py`。
-- **执行清单**：
-  - 数据集覆盖正常、冲突来源、旧新闻、缺财报、极端行情、prompt injection。
-  - 指标：schema 成功率、证据覆盖率、无来源 claim、数字一致性、延迟、token/cost。
-  - 新闻/网页中的提示词视为不可信数据，不能改变 agent 权限。
-  - 设定 release threshold；低于阈值禁止进入 Paper schedule。
-- **验收**：eval 报告机器可读且可比较版本；注入语料不能让模型调用执行或改变配置。
+- **Objective:** Create a composable, explainable, pure-Python Risk Engine.
+- **Dependencies:** P02-T3 and P02-T8.
+- **Primary files:** `src/ainvest/risk/{engine,rules,models}.py`.
+- **Implementation checklist:**
+  - A rule receives immutable `RiskContext` and returns code, severity, decision, reason, and evidence.
+  - Aggregate as: any hard reject -> REJECTED; review-only -> NEEDS_REVIEW; otherwise APPROVED.
+  - Missing input, a missing required limit, rule exceptions, and unknown rules all fail closed.
+  - Persist rule-set, configuration, code versions, and input digest.
+- **Acceptance criteria:** Rule order cannot change the final result, exceptions cannot be swallowed into approval, and every decision is explainable and auditable.
 
-### BKT-001 — 策略回放与回测适配层
+### P03-T9 — Implement Notional, Position, Sector, and Cash Rules
 
-- **目标**：让同一 Strategy 实现用于历史回测、Paper 和未来 live。
-- **依赖**：STR-001～006、DAT-005、PAP-002。
-- **建议文件**：`src/ainvest/backtest/runner.py`。
-- **执行清单**：
-  - 每个历史时点只构造当时可见的 StrategyContext。
-  - 注入 as_of clock、历史组合状态和策略状态。
-  - 复用 Position Sizer 和 Risk Engine；不写“回测专用捷径”绕过它们。
-  - 可选择 bt 做组合调度，但保持 ainvest 领域接口为权威。
-- **验收**：同一时点 context 在回测/Paper 产生同一 signal；证明未来 bar 不可访问。
+- **Objective:** Enforce hard exposure limits.
+- **Dependencies:** P03-T8 and P03-T6.
+- **Primary file:** `src/ainvest/risk/rules/exposure.py`.
+- **Implementation checklist:**
+  - Enforce maximum order notional, symbol weight, sector exposure, daily turnover, minimum cash reserve, and daily realized/unrealized loss.
+  - Require explicit, range-validated configuration for every mandatory limit. Missing or invalid limits return REJECTED; no tradable defaults exist.
+  - Evaluate projected post-trade state, not current state alone.
+  - Missing sector metadata, incomplete P&L, or invalid account equity rejects or requires review according to an explicit safe policy.
+- **Acceptance criteria:** Tests cover equality and just-over-threshold boundaries, buy/sell directions, negative P&L, and Decimal properties.
 
-### BKT-002 — 费用、滑点、复权与 Walk-forward
+### P03-T10 — Enforce Asset Eligibility, Allowlist, Side, and Trading Session
 
-- **目标**：避免过度乐观和数据泄漏。
-- **依赖**：BKT-001。
-- **建议文件**：`src/ainvest/backtest/{costs,validation}.py`。
-- **执行清单**：
-  - 模拟 commission、spread、slippage、partial fill、成交量限制。
-  - 明确 total-return/adjusted 数据用途，避免价格与股数双重复权。
-  - 区分 in-sample/out-of-sample，支持 rolling/walk-forward。
-  - 检测 lookahead、survivorship 和财报发布日期泄漏。
-- **验收**：故意泄漏策略被测试捕获；零成本只允许显式测试模式；参数与数据快照可重放。
+- **Objective:** Make the first-release product boundary impossible to bypass.
+- **Dependencies:** P03-T8.
+- **Primary files:** `src/ainvest/risk/rules/eligibility.py`, `src/ainvest/data/calendar_port.py`.
+- **Implementation checklist:**
+  - Allow only configured ordinary US stocks and ETFs.
+  - Reject options, crypto, margin, short sales, and leveraged/inverse ETFs.
+  - Require an unambiguous canonical instrument identity and matching symbol, exchange, currency, asset type, broker tradability, tick-size, and quantity-increment metadata.
+  - Define the minimal `MarketCalendar` port and deterministic fake. P04-T3 later implements that port and is not a prerequisite for this card.
+  - Permit regular session only; validate holidays, early close, and trading halts with no extended-hours switch.
+  - Reject missing instrument metadata.
+- **Acceptance criteria:** Every prohibited asset class has a test; off-hours, holidays, and post-early-close attempts fail closed.
 
-### BKT-003 — 绩效报告与免责声明
+### P03-T11 — Enforce Quote Freshness, Spread, Volatility, and Slippage
 
-- **目标**：用 QuantStats 或等价输出可比较但不误导的报告。
-- **依赖**：BKT-001～002。
-- **建议文件**：`src/ainvest/backtest/reporting.py`。
-- **执行清单**：
-  - 报告收益、波动、最大回撤、换手、成本、基准对比、样本区间。
-  - 同时显示 gross/net、in/out-of-sample。
-  - 输出 config/strategy/data/code digest。
-  - 页面包含“不代表未来表现”的明确说明。
-- **验收**：同一结果重复生成指标一致；缺基准或数据区间时不伪造比较。
+- **Objective:** Prevent approval based on stale or anomalous prices.
+- **Dependencies:** P03-T8 and P02-T1.
+- **Primary file:** `src/ainvest/risk/rules/market_quality.py`.
+- **Implementation checklist:**
+  - Enforce maximum quote age, delayed flags, and bid/ask completeness.
+  - Enforce maximum spread bps, abnormal short-term volatility, and maximum limit/reference-price deviation.
+  - Separate proposal-time and pre-trade-time thresholds.
+  - Fail closed on clock skew, zero/negative price, or crossed markets.
+- **Acceptance criteria:** Boundary and stale-clock tests pass; a newer quote that violates limits cannot reuse an old approval.
 
-### REL-002 — Gate 2：结构化研究验收
+### P03-T12 — Prevent Duplicate Orders and Re-run Risk Before Execution
 
-- **目标**：证明研究输出符合 schema，关键数字均来自确定性工具。
-- **依赖**：DAT-001～005、RES-001～004；BKT-001～003 可并行但应在 Phase 2 结束前完成。
-- **执行清单**：
-  - 对固定和录制数据生成 ResearchPacket。
-  - 逐字段追踪 market/technical/portfolio 到工具结果。
-  - 运行 prompt injection、旧数据、供应商超时和无证据测试。
-  - 将 packet 接到 Gate 1 Paper flow。
-- **验收**：达到 design Phase 2 标准；生成 `docs/releases/phase-2-acceptance.md`。
+- **Objective:** Prevent duplicate submissions and execution of stale approvals after account state changes.
+- **Dependencies:** P03-T8 through P03-T11, P02-T7, and P02-T9.
+- **Primary files:** `src/ainvest/risk/rules/orders.py`, `src/ainvest/risk/kill_switch.py`, `src/ainvest/risk/pretrade.py`.
+- **Implementation checklist:**
+  - Detect duplicates by proposal hash, symbol/side/time window, and client order ID.
+  - Detect opposing or overlapping open orders.
+  - Support configured and operational kill switches; any active source rejects new orders.
+  - Re-fetch quotes, account, positions, and open orders and re-run the full rule set before execution.
+  - Never reuse a prior APPROVED result for the pre-trade decision.
+- **Acceptance criteria:** Duplicate delivery, stale snapshots, active kill switch, and existing open orders block execution; tests prove every hard rule runs again.
 
----
+### P03-T13 — Define the Broker Port and Error Taxonomy
 
-## 8. M4：Telegram、HTTPS 与 Passkey 审批
+- **Objective:** Support Paper and Robinhood through one domain interface without leaking MCP details into business logic.
+- **Dependencies:** P02-T3.
+- **Primary file:** `src/ainvest/execution/broker.py`.
+- **Implementation checklist:**
+  - Define read methods for account, positions, quotes, orders, and fills.
+  - Place submit/cancel in a separate write protocol/capability so read-only processes cannot receive it.
+  - Define stable auth, timeout, rate-limit, invalid-order, rejected, and unknown-outcome errors.
+  - Require an idempotency/client order ID for submit and a distinct idempotency/cancel request ID for cancel.
+  - Do not expose a replace method. Replacement is cancel plus a separately approved new proposal.
+- **Acceptance criteria:** Paper adapter contract tests exist, the read-only type cannot call submit/cancel, submit and cancel unknown outcomes are distinguishable from confirmed rejection, and no in-place replace operation exists.
 
-### APR-001 — OrderProposal 与一次性审批令牌服务
+### P03-T14 — Build the Deterministic Paper Broker and Fill Simulator
 
-- **目标**：安全创建提案和短时、单次使用的 opaque token。
-- **依赖**：DOM-004～005、DB-001～003、WF-001。
-- **建议文件**：`src/ainvest/approval/service.py`、`tokens.py`。
-- **执行清单**：
-  - 令牌使用 CSPRNG，至少 256 bit；数据库只存带域分离的哈希。
-  - TTL 配置限制在设计的 60–120 秒范围；服务端 clock 可注入。
-  - 创建 proposal 时冻结规范化订单、order_hash 和 risk decision。
-  - token 状态 PENDING/APPROVED/REJECTED/EXPIRED/CONSUMED；原子迁移。
-- **验收**：数据库/日志看不到 raw token；过期、重复、并发消费只有第一次成功；变更订单后 token 无效。
+- **Objective:** Implement a no-real-money order lifecycle.
+- **Dependencies:** P03-T13, P02-T9, and P02-T6 through P02-T8.
+- **Primary file:** `src/ainvest/execution/paper.py`.
+- **Implementation checklist:**
+  - Model cash/positions, submit, cancel, partial fill, full fill, and rejection.
+  - Fill limit orders only from injected market events; inject/fix clocks and randomness.
+  - Simulate fees, spread, and slippage; never assume zero costs implicitly.
+  - Return the same order for the same idempotency key.
+- **Acceptance criteria:** Identical market events yield identical outcomes; no overselling or overdraft occurs; repeated submit does not double-charge; partial-fill accounting is correct.
 
-### APR-002 — FastAPI 审批 API 与只读订单详情页
+### P03-T15 — Reconcile Paper Orders and Maintain the Portfolio Ledger
 
-- **目标**：从服务端加载订单详情，不信任 URL 参数。
-- **依赖**：APR-001、FND-003。
-- **建议文件**：`src/ainvest/api/app.py`、`routes/approval.py`、templates/static。
-- **执行清单**：
-  - URL 只携带 opaque token；symbol/qty/price 等均从数据库读取。
-  - 页面显示标的、方向、数量、LIMIT、限价、最坏金额、到期时间、策略/版本、理由、Risk 结果。
-  - 设置 HTTPS-only cookie（如需要）、CSP、HSTS、frame-ancestors、no-store、Referrer-Policy。
-  - 错误响应不区分“有效 proposal 不存在”和 token 猜测细节。
-- **验收**：修改 query/path 不能改变订单；过期页不能发起验证；安全 header 和缓存测试通过。
+- **Objective:** Reconstruct internal state from broker orders/fills and expose discrepancies.
+- **Dependencies:** P03-T14 and P02-T6 through P02-T8.
+- **Primary files:** `src/ainvest/execution/reconciliation.py`, `src/ainvest/portfolio/ledger.py`.
+- **Implementation checklist:**
+  - Compare orders/fills against local client order IDs, quantities, prices, and states.
+  - Handle duplicate, out-of-order, and late fills.
+  - Route discrepancies to `MANUAL_REVIEW` with alerts; never silently rewrite money facts.
+  - Generate portfolio snapshots and foundational P&L data.
+- **Acceptance criteria:** Duplicate/out-of-order events are idempotent; missing orders, quantity differences, and unknown fills are detected; ledger conservation properties hold.
 
-### APR-003 — Passkey 注册流程
+### P03-T16 — Orchestrate a Full Paper Flow from a Fixed ResearchPacket
 
-- **目标**：为账户持有人注册 iPhone Face ID/Passkey credential。
-- **依赖**：APR-002、GOV-001 的域名/部署决策。
-- **建议文件**：`src/ainvest/approval/webauthn.py`、API registration routes、DB migration。
-- **执行清单**：
-  - 用 py_webauthn 生成/验证 registration options。
-  - 固定 RP ID、origin、user handle；生产只接受批准的 HTTPS origin。
-  - 保存 credential public key、credential ID、sign count/备份标志，不保存私钥。
-  - 注册必须通过单独的管理员/bootstrap 身份验证，不可用 Telegram user_id 代替。
-- **验收**：origin/RP/challenge mismatch、重复 credential、过期 challenge 均拒绝；测试无私钥落库。
+- **Objective:** Create the first end-to-end loop without AI, Telegram, or Robinhood.
+- **Dependencies:** P03-T0 through P03-T15 and P02-T10.
+- **Primary files:** `src/ainvest/orchestrator.py`, CLI, `tests/integration/test_paper_flow.py`.
+- **Implementation checklist:**
+  - Accept a fixed ResearchPacket, portfolio, and strategy configuration.
+  - Run strategy -> sizing -> risk -> proposal -> explicit test approval stub -> Paper submit -> fill -> reconciliation.
+  - Provide dry-run output for every step. Never auto-approve; tests inject approval explicitly.
+  - Persist every step with correlated audit events.
+- **Acceptance criteria:** Success, risk rejection, expired approval, unknown broker outcome, and partial-fill flows are replayable; the same fixture yields the same decisions and digests.
 
-### APR-004 — Passkey Assertion 与订单哈希绑定
+### P03-T17 — Gate 1: Accept the Deterministic Simulated Trading Loop
 
-- **目标**：用户签署的挑战与具体 OrderProposal 一一对应。
-- **依赖**：APR-001、APR-003、DOM-005。
-- **建议文件**：`src/ainvest/approval/assertion.py`、API verify route。
-- **执行清单**：
-  - challenge 服务端生成并绑定 token hash、proposal_id、order_hash、expiry、credential/user。
-  - 验证 origin、RP ID、challenge、credential、UV flag、counter/backup semantics。
-  - 验证成功后在同一事务原子写 APPROVED event；原 assertion 重放失败。
-  - 执行服务只接收 proposal ID/批准事件，不接收浏览器传来的订单字段。
-- **验收**：篡改 qty/limit/strategy version、跨 proposal challenge、跨用户 credential、重复 assertion 全部拒绝。
-
-### APR-005 — Telegram 私聊通知
-
-- **目标**：发送订单/风险摘要和安全审批链接，不直接授权交易。
-- **依赖**：APR-001～002、GOV-001 的 Bot/user/chat 决策。
-- **建议文件**：`src/ainvest/approval/telegram.py`。
-- **执行清单**：
-  - 只向配置中的私聊 user_id/chat_id 发送。
-  - 消息显示最少必要账户信息；不含 token 之外的敏感参数和任何 Broker 凭据。
-  - 审批按钮只打开 HTTPS 页面；不存在 callback 直接 submit。
-  - 记录发送 message ID/status，不记录完整链接/raw token。
-- **验收**：错误 chat/user 配置失败关闭；Telegram 不可用/消息未送达不自动交易；snapshot 证明消息无敏感字段。
-
-### APR-006 — Telegram Webhook 验证与状态更新
-
-- **目标**：安全接收 Telegram webhook，并向同一消息更新最终状态。
-- **依赖**：APR-005、FND-003。
-- **建议文件**：`src/ainvest/api/routes/telegram.py`。
-- **执行清单**：
-  - HTTPS webhook 验证 Telegram secret token、允许的 update/chat/user。
-  - 限制 body size/rate；重复 update_id 幂等。
-  - 用户可表达“拒绝/查看”，但批准仍只走 Passkey。
-  - 成交/拒绝/过期消息更新不携带新审批能力。
-- **验收**：伪造 secret、群聊、非白名单用户、重复 webhook 均不会改变批准状态。
-
-### APR-007 — 批准事件到 Execution 的单次交接
-
-- **目标**：批准只产生一次可消费执行请求，并保留二次风控。
-- **依赖**：APR-004、DB-002、WF-002、RSK-005。
-- **建议文件**：`src/ainvest/approval/handoff.py`。
-- **执行清单**：
-  - 在批准事务中写 outbox/command，避免“批准已写但执行事件丢失”。
-  - 消费方以 approval/proposal idempotency key 去重。
-  - handoff 不携带 raw token；Execution 重新从服务端读取 proposal。
-  - expired/rejected/already-consumed 状态不生成执行命令。
-- **验收**：崩溃恢复、重复 outbox delivery、并发批准测试只产生一个 execution attempt。
-
-### DEP-001 — 审批服务 HTTPS 部署基线
-
-- **目标**：为 WebAuthn 提供稳定、安全的生产 origin。
-- **依赖**：APR-002～004、GOV-001 部署决策、SEC-001。
-- **建议文件**：部署清单/IaC、`docs/runbooks/approval-deploy.md`。
-- **执行清单**：
-  - 独立服务身份、最小网络权限、TLS、域名、健康检查。
-  - 数据库和 secret manager 权限与 Research/Strategy 隔离。
-  - CSRF/origin/rate limit/WAF 或反向代理限制。
-  - staging 与 production RP ID/credential 分离。
-- **验收**：staging iPhone Passkey 测试通过；HTTP 被重定向/拒绝；安全扫描无 high/critical。
-
-### REL-003 — Gate 3：安全审批验收
-
-- **目标**：证明 Telegram 点击不等于交易授权，Passkey 重放和订单篡改全部失败关闭。
-- **依赖**：APR-001～007、DEP-001、SEC-001～002、QAT-002。
-- **执行清单**：
-  - 运行 token expiry、双击/并发、WebAuthn replay、origin mismatch、order tamper、Telegram spoof 测试。
-  - 审核数据库和日志无 raw token/credential private key。
-  - 暂时将 Execution 接到 Paper Broker，完成 iPhone -> Paper fill 演练。
-- **验收**：design Phase 3 标准全部通过；生成 `docs/releases/phase-3-acceptance.md`。
+- **Objective:** Freeze the first usable domain kernel.
+- **Dependencies:** P01-T0 through P01-T5, P02-T0 through P02-T10, and P03-T0 through P03-T16.
+- **Primary file:** `docs/releases/phase-1-acceptance.md`.
+- **Implementation checklist:**
+  - Run all unit, contract, integration, and safety tests available at this phase.
+  - Start from an empty SQLite database, migrate it, process a fixed input to a simulated fill, and export the audit timeline.
+  - Verify the strategy process has no credentials/network, Risk fails closed, Paper is idempotent, and the state machine rejects illegal transitions.
+  - Record performance baseline and unresolved defects; high/critical defects must be zero.
+- **Acceptance criteria:** The design Phase 1 criterion—fixed ResearchPacket to repeatable and testable simulated fill—is met, and `docs/releases/phase-1-acceptance.md` is produced.
 
 ---
 
-## 9. M5：Robinhood 官方 MCP 只读接入
+## 7. Phase 04 — Data, Research Agent, and Backtesting
 
-### RHB-001 — MCP 连接、认证与只读 Client
+### P04-T0 — Define Data Adapter Ports and Deterministic Fakes
 
-- **目标**：连接官方 `https://agent.robinhood.com/mcp/trading`，只暴露读取能力。
-- **依赖**：PAP-001、FND-003、SEC-002、GOV-001 授权决策。
-- **建议文件**：`src/ainvest/execution/robinhood/read_client.py`。
-- **执行清单**：
-  - 使用官方 MCP endpoint 和 MCP Python SDK；认证 token 只来自 secret provider。
-  - 初始化时发现/校验工具 schema，建立只读 allowlist。
-  - 对 account/positions/buying power/orders/history 调用设置 timeout、稳定错误和 trace。
-  - 日志只记录工具名、耗时、结果摘要，不记录 token/完整账户号。
-- **验收**：fake MCP contract tests；未知/写工具不可调用；认证、timeout、schema drift 均 fail closed。
+- **Objective:** Unify quote, price-book, OHLCV, fundamental, news/event, and instrument-metadata access behind provider-independent interfaces.
+- **Dependencies:** P02-T1 and P03-T13.
+- **Primary files:** `src/ainvest/data/{ports,models,fakes}.py`.
+- **Implementation checklist:**
+  - Define consistent async or sync interfaces per data class, including request/response shape, timeout, pagination, and stable errors.
+  - Every result includes provenance, observed/received time, timezone, delayed status, and quality flags.
+  - Add a deterministic fake provider and fixture data set.
+  - Prohibit upper layers from importing third-party provider SDKs directly.
+- **Acceptance criteria:** Providers share contract tests; data without source/time cannot enter a `ResearchPacket`; the live quote port exposes no cross-provider automatic fallback.
 
-### RHB-002 — Robinhood 数据规范化与组合快照
+### P04-T1 — Add the Optional Development/Offline Market Adapter
 
-- **目标**：将 MCP 账户数据映射为 ainvest 的 versioned schemas。
-- **依赖**：RHB-001、DOM-002～004、DB-001。
-- **建议文件**：`src/ainvest/execution/robinhood/mappers.py`。
-- **执行清单**：
-  - 映射 account scope、cash/buying power、positions、open orders、order history。
-  - 验证必须是预期 Agentic Account；非 Agentic/无法确定 scope 时标记不可交易。
-  - Decimal、symbol、时区、状态映射不允许静默 fallback。
-  - 保存原响应 digest 和 normalized snapshot。
-- **验收**：录制/合成 payload contract tests；未知 enum、缺账户 scope、金额不一致失败关闭。
+- **Objective:** Use yfinance for local development, backtesting, and offline research when Robinhood is unavailable, while excluding it from all live risk decisions.
+- **Dependencies:** P04-T0.
+- **Primary file:** `src/ainvest/data/providers/yahoo.py`.
+- **Implementation checklist:**
+  - Implement thin quote, historical OHLCV, and corporate-action adapters.
+  - Make adjusted/unadjusted prices, exchange timezone, delay status, and provider restrictions explicit.
+  - Convert network timeouts, empty responses, and rate limits into stable errors; cached results retain original `observed_at`.
+  - Mark code, types, and documentation `development_only`; live mode cannot construct or call this adapter.
+- **Acceptance criteria:** Recorded/fake tests require no public network; cover splits/dividends, missing bars, timezone, and duplicate indexes; live configuration referencing the adapter fails at startup.
 
-### RHB-003 — 只读运行时强制与真实组合 Paper 模式
+### P04-T2 — Implement SEC Filing and Fundamental Event Adapters
 
-- **目标**：Phase 4 进程在技术上无法调用实盘下单。
-- **依赖**：RHB-001～002、ORC-001、OPS-001。
-- **建议文件**：只读 service entry point、部署权限、integration tests。
-- **执行清单**：
-  - 使用只读 protocol、只读 MCP 工具 allowlist 和独立服务身份。
-  - 将真实组合 snapshot 注入 Strategy/Sizer/Risk，但 broker 仍固定 PaperBroker。
-  - 启动日志和 health 明示 `read_only=true`、`execution=paper`。
-  - 测试尝试调用 submit 时在客户端/配置/部署权限至少两层失败。
-- **验收**：真实数据可驱动 Paper proposal；任何代码路径都无法到 Robinhood 写工具。
+- **Objective:** Retrieve citable primary filings and regulatory events through SEC EDGAR/EdgarTools, complementing Robinhood's normalized fundamentals.
+- **Dependencies:** P04-T0.
+- **Primary file:** `src/ainvest/data/providers/sec.py`.
+- **Implementation checklist:**
+  - Support company mapping, 10-K/10-Q/8-K/Form 4 metadata, and selected XBRL facts.
+  - Respect SEC user-agent and rate-limit guidance; cache accession numbers and original citation locations.
+  - Keep units, periods, and currency explicit; never silently mix annual and quarterly facts.
+  - Represent earnings-date certainty and source quality explicitly.
+- **Acceptance criteria:** Fixed filing fixtures produce evidence and fundamental fields; facts without units or periods are never assumed comparable.
 
-### REL-004 — Gate 4：Robinhood 只读验收
+### P04-T3 — Implement News, Macro Events, and the US Trading Calendar
 
-- **目标**：证明真实账户状态可用于 Paper，且实盘写路径不存在。
-- **依赖**：RHB-001～003、REL-001～003、OBS-001～002。
-- **执行清单**：
-  - 读取 account/positions/buying power/orders 并生成快照。
-  - 用快照跑完整 Paper workflow 和审批。
-  - 进行权限/工具 allowlist 审核与写调用负面测试。
-  - 对比 MCP 与内部 snapshot 金额/仓位。
-- **验收**：达到 design Phase 4 标准；生成 `docs/releases/phase-4-acceptance.md`，明确“无实盘下单能力”。
+- **Objective:** Integrate GDELT, SEC 8-K/Form 4, company Investor Relations announcements, and a reliable US market calendar.
+- **Dependencies:** P04-T0, P04-T2, and P03-T10.
+- **Primary files:** `src/ainvest/data/providers/news.py`, `src/ainvest/data/calendar.py`.
+- **Implementation checklist:**
+  - Normalize news title, URL, publisher, publication/receipt times, symbols, license, and quality.
+  - Deduplicate the same event while preserving multiple source citations.
+  - Use GDELT for discovery; mark SEC and company announcements as higher-trust primary evidence. Preserve licensing and quotation restrictions.
+  - Implement the `MarketCalendar` port defined by P03-T10 with pandas-market-calendars for holidays and early closes; do not create a second calendar abstraction.
+- **Acceptance criteria:** Timezone, DST, early-close, duplicate-news, and future-`published_at` tests pass; the Risk Engine consumes the shared calendar port.
 
----
+### P04-T4 — Compute Indicators and Persist Quality-Controlled Data Snapshots
 
-## 10. M6：受控实盘、核对与恢复
+- **Objective:** Compute important numbers deterministically and retain replayable inputs.
+- **Dependencies:** P04-T0 through P04-T3 and P02-T1.
+- **Primary files:** `src/ainvest/data/{indicators,quality,cache,snapshots}.py`.
+- **Implementation checklist:**
+  - Wrap TA-Lib indicators such as SMA, RSI, and ATR with fixed warm-up and missing-value behavior.
+  - Detect stale, gapped, duplicate, out-of-order, currency-mismatched, and adjustment-mismatched data.
+  - Include provider, symbol, timeframe, adjustment, and `as_of` in cache keys.
+  - Retain raw-response digest, normalization version, and calculation parameters.
+- **Acceptance criteria:** Indicators match fixed references; insufficient windows do not emit fabricated values; one snapshot can rebuild a `ResearchPacket` offline.
 
-### EXE-001 — Robinhood 写 Client（编译/部署级隔离）
+### P04-T5 — Build the Research Agent's Deterministic Tool Layer
 
-- **目标**：实现最薄的官方 MCP submit/cancel 适配，仅供 Execution Service。
-- **依赖**：REL-004、PAP-001、RHB-001～002、GOV-001 风险/账户决策。
-- **建议文件**：`src/ainvest/execution/robinhood/write_client.py`，独立 dependency/deployment target。
-- **执行清单**：
-  - 写 client 不被 research/strategy/api 通用进程安装或导入。
-  - submit 输入只能是已验证内部 broker command，包含 client order/idempotency ID。
-  - 原样保留 Broker order ID/status/time；错误区分明确失败与 outcome unknown。
-  - 首版只支持白名单 equity/ETF 的 DAY LIMIT。
-- **验收**：架构测试阻止越权 import；非 Agentic Account/非 LIMIT/非白名单被本地拒绝；mock MCP contract tests 通过。
+- **Objective:** Move money, indicator, and portfolio calculations out of model reasoning.
+- **Dependencies:** P04-T0 through P04-T4 and P02-T1 through P02-T2.
+- **Primary path:** `src/ainvest/agents/tools/`.
+- **Implementation checklist:**
+  - Provide quote, price book, history, indicators, filings, news, portfolio concentration, and buying-power tools. Robinhood capabilities are accessible only through the Read Gateway.
+  - Use Pydantic inputs/outputs, timeouts, and bounded result sizes.
+  - Return evidence IDs; the model may cite only evidence that the tools returned.
+  - Do not grant the tool layer broker-write capability.
+- **Acceptance criteria:** Tool errors, timeouts, and stale data set quality flags and prevent an invalid “complete” research result; all calculations are unit-testable without a model.
 
-### EXE-002 — 实盘 Execution Service 与下单前二次风控
+### P04-T6 — Implement the Pydantic AI Research Agent
 
-- **目标**：消费一次性批准事件，在最新账户状态上安全提交一次订单。
-- **依赖**：EXE-001、APR-007、RSK-005、WF-001～002、DB-001～003。
-- **建议文件**：`src/ainvest/execution/service.py`。
-- **执行清单**：
-  - 原子 claim approval；验证未过期、未消费、order hash 匹配。
-  - 重新读取 quote/buying power/positions/open orders。
-  - 完整运行 pre-trade Risk Engine；价格偏移超限则 PRE_TRADE_REJECTED。
-  - 进入 SUBMITTING 后使用稳定 client order ID 提交。
-  - 成功保存 Broker ID -> SUBMITTED；明确拒绝 -> REJECTED；超时/断连 -> SUBMIT_UNKNOWN。
-- **验收**：状态/事务/审计完整；重复 delivery 不重复 submit；测试证明无二次风控就无法调用 client。
+- **Objective:** Produce structured bull case, bear case, risks, and open questions—not trade instructions.
+- **Dependencies:** P04-T5 and the accepted model decision in P01-T0.
+- **Primary files:** `src/ainvest/agents/research_agent.py`, `prompts/`.
+- **Implementation checklist:**
+  - Call OpenAI Responses through Pydantic AI with model `gpt-5.6-sol`, `reasoning_effort=medium`, `store=false`, and strict JSON Schema for the intermediate narrative.
+  - Build independent context for each run; do not depend on `previous_response_id` or long-lived server conversation state.
+  - The system prompt prohibits BUY/SELL directions, quantities, performance promises, and unsupported numeric claims.
+  - Disable built-in OpenAI web search. Expose only ainvest read-only deterministic tools and Read Gateway wrappers, never a raw MCP session.
+  - Bound tool set, turns, tokens, duration, and concurrency. Retry once only for explicitly transient network/rate-limit failures; never switch models automatically.
+  - Version the model, prompt, and tool schemas. Record model ID, OpenAI request ID, token usage, and input/output digests.
+- **Acceptance criteria:** Tests assert the fixed model/API/effort/store settings; invalid schema, trade instructions, unsupported claims, timeout, or exhausted retry fails closed without a complete `ResearchPacket`; fake-model tests run offline.
 
-### EXE-003 — SUBMIT_UNKNOWN 核对与人工复核
+### P04-T7 — Assemble ResearchPackets and Verify Evidence Consistency
 
-- **目标**：处理“请求可能到达 Broker，但客户端没收到结果”的最高风险场景。
-- **依赖**：EXE-002、PAP-003、OBS-003。
-- **建议文件**：`src/ainvest/execution/reconciler.py`、manual review API/runbook。
-- **执行清单**：
-  - `SUBMIT_UNKNOWN -> RECONCILING`，查询 client order ID/idempotency key/时间窗口/订单历史。
-  - 唯一匹配则链接 Broker ID 并转 SUBMITTED；零/多/冲突匹配转 MANUAL_REVIEW。
-  - 任何路径都禁止自动重新 submit。
-  - 告警包含 proposal ID 和脱敏摘要，提供人工检查/关闭 runbook。
-- **验收**：超时但已创建、超时未创建、重复候选、历史 API 不可用四种测试；代码中不存在 unknown 后 submit 重试。
+- **Objective:** Combine deterministic numbers and model explanations into the final `ResearchPacket`.
+- **Dependencies:** P04-T5, P04-T6, and P02-T6 through P02-T8.
+- **Primary file:** `src/ainvest/agents/research_builder.py`.
+- **Implementation checklist:**
+  - Market, technical, and portfolio fields accept tool outputs only; the model fills thesis text structures only.
+  - Every thesis claim cites an evidence ID from the same run.
+  - Persist research run, raw/tool digests, prompt/model version, and final packet.
+  - Express incomplete data with quality flags; never guess missing facts.
+- **Acceptance criteria:** Fixed tools plus a fake model yield a stable packet; forged evidence IDs, cross-run citations, and stale required quotes are rejected.
 
-### EXE-004 — 成交、部分成交、取消与组合核对
+### P04-T8 — Add Research Safety, Quality, and Cost Evaluations
 
-- **目标**：跟踪 Broker 到终态，并保持内部账本与真实账户一致。
-- **依赖**：EXE-002～003、PAP-003、DB-001。
-- **建议文件**：`src/ainvest/execution/order_monitor.py`。
-- **执行清单**：
-  - 查询/事件更新幂等映射 SUBMITTED/PARTIALLY_FILLED/FILLED/CANCELLED/REJECTED。
-  - fill 以 Broker fill ID 去重；检查累计数量/金额。
-  - 差异转 MANUAL_REVIEW，不擅自改写批准订单。
-  - 更新 portfolio snapshot 和 Telegram 状态通知。
-- **验收**：乱序/重复 fill、部分后取消、Broker correction、内部差异测试通过；最终审计可还原。
+- **Objective:** Provide repeatable evaluations for model or prompt changes.
+- **Dependencies:** P04-T6 and P04-T7.
+- **Primary paths:** `tests/evals/research/`, `scripts/run_research_evals.py`.
+- **Implementation checklist:**
+  - Cover ordinary inputs, conflicting sources, old news, missing filings, extreme markets, and prompt injection.
+  - Measure schema success, evidence coverage, unsupported claims, numeric consistency, latency, tokens, and cost.
+  - Treat instructions found in news or pages as untrusted data that cannot change agent permissions.
+  - Run and approve the full evaluation before model/prompt upgrades or moving routine work to `gpt-5.6-terra`; runtime model downgrade remains prohibited.
+  - Define release thresholds. Falling below them prevents scheduled Paper research.
+- **Acceptance criteria:** Evaluation reports are machine-readable and version-comparable; injection cannot expose Execution or mutate configuration; exceeding the budget pauses new research and alerts instead of switching models.
 
-### EXE-005 — 多重实盘门禁与 Kill Switch 操作
+### P04-T9 — Build the Strategy Replay and Backtest Adapter
 
-- **目标**：实盘不能由单一环境变量或单个 agent 意外开启。
-- **依赖**：EXE-001～004、OPS-001、SEC-001～002、QAT-003。
-- **建议文件**：`src/ainvest/execution/live_guard.py`、部署策略、runbook。
-- **执行清单**：
-  - 同时要求：mode=live、显式 enabled、human approval、Agentic Account ID match、Gate 1–4 attestations、风险配置签名/版本、kill switch healthy、启动人工确认。
-  - 限制极小预算、标的白名单、LIMIT、regular session。
-  - 启动确认不得持久化为长期绕过；重启需重新确认。
-  - Kill switch 可阻止新单，取消已有订单是否执行必须有明确策略，避免盲目操作。
-- **验收**：去掉任一门禁都无法启动写服务；kill switch 在提交前最后一刻激活可阻断；门禁状态审计完整。
+- **Objective:** Use the same Strategy implementation for historical replay, Paper, and future live execution.
+- **Dependencies:** P03-T0 through P03-T5, P04-T4, and P03-T14.
+- **Primary file:** `src/ainvest/backtest/runner.py`.
+- **Implementation checklist:**
+  - Construct each historical `StrategyContext` with data available at that time only.
+  - Inject `as_of` clock, historical portfolio state, and strategy state.
+  - Reuse Position Sizer and Risk Engine; do not create backtest shortcuts around them.
+  - bt may schedule portfolio evaluation, but ainvest domain contracts remain authoritative.
+- **Acceptance criteria:** The same context yields the same signal in replay and Paper; tests prove future bars are inaccessible.
 
-### REL-005 — Gate 5：极小额受控实盘验收
+### P04-T10 — Model Costs, Adjustments, and Walk-Forward Validation
 
-- **目标**：仅在所有安全条件满足后完成一次可审计的小额端到端演练。
-- **依赖**：所有前置 milestone、QAT-001～003、SEC high/critical 清零、用户明确授权实盘。
-- **执行清单**：
-  - 预演：Paper 同配置通过，备份/恢复与 kill switch 演练通过。
-  - 使用专用 Agentic Account、极小预算、单一白名单标的、常规交易时段、DAY LIMIT。
-  - 每笔 iPhone Passkey 审批；下单前截取最新快照和二次风控结果。
-  - 跟踪到终态并核对 Broker/内部账本/Telegram/审计。
-  - 实盘演练后默认切回 paper，复盘所有事件。
-- **验收**：design Phase 5 标准；生成 `docs/releases/phase-5-acceptance.md` 和脱敏审计包。没有用户对真实下单的明确授权时，此任务只能完成 dry-run，不能提交订单。
+- **Objective:** Prevent optimistic performance and data leakage.
+- **Dependencies:** P04-T9.
+- **Primary files:** `src/ainvest/backtest/{costs,validation}.py`.
+- **Implementation checklist:**
+  - Model commissions, spread, slippage, partial fills, and volume limits.
+  - Make total-return/adjusted-data use explicit and avoid double-adjusting prices and share counts.
+  - Separate in-sample and out-of-sample periods; support rolling/walk-forward validation.
+  - Detect lookahead, survivorship, and filing-publication-date leakage.
+- **Acceptance criteria:** A deliberately leaking strategy is caught; zero cost exists only in an explicit test mode; parameters and data snapshots are replayable.
 
----
+### P04-T11 — Generate Performance Reports and Disclosures
 
-## 11. 贯穿所有阶段的任务
+- **Objective:** Produce comparable, non-misleading reports through QuantStats or an equivalent library.
+- **Dependencies:** P04-T9 and P04-T10.
+- **Primary file:** `src/ainvest/backtest/reporting.py`.
+- **Implementation checklist:**
+  - Report return, volatility, maximum drawdown, turnover, cost, benchmark comparison, and sample interval.
+  - Show gross/net and in/out-of-sample results together.
+  - Include configuration, strategy, data, and code digests.
+  - Display a clear statement that historical results do not predict future performance.
+- **Acceptance criteria:** Repeated generation from one result yields identical metrics; missing benchmarks or intervals do not produce fabricated comparisons.
 
-### OPS-001 — 三种运行模式与启动门禁
+### P04-T12 — Gate 2: Accept Structured and Traceable Research
 
-- **目标**：统一 Research-only、Paper、Live 的能力矩阵。
-- **依赖**：FND-003、PAP-001；Live 部分依赖 EXE-005。
-- **建议文件**：`src/ainvest/runtime.py`、`docs/runtime-modes.md`。
-- **执行清单**：
-  - 明确每个模式允许加载的 package、secret、Broker capability 和 scheduler job。
-  - Research-only 不加载 Strategy execution/approval/Broker write。
-  - Paper 可读取真实账户但写 Broker 固定为 Paper。
-  - Live 才能构建 write client，且需 EXE-005 全部门禁。
-- **验收**：能力矩阵有自动测试；错误模式组合启动失败；health endpoint 显示脱敏后的模式/能力。
-
-### OPS-002 — APScheduler 调度与市场时钟
-
-- **目标**：按市场日历运行研究/策略/核对任务，避免重复调度。
-- **依赖**：DAT-004、ORC-001、OPS-001。
-- **建议文件**：`src/ainvest/scheduler.py`。
-- **执行清单**：
-  - 使用 APScheduler 3.11.x；定义 research、strategy、expiry、order monitor、reconciliation jobs。
-  - schedule 使用 exchange timezone，执行时转换 UTC；处理 DST/节假日/提前收市。
-  - 多实例用 job store/leader/唯一运行锁防重复。
-  - misfire/coalesce/max_instances 使用安全值；错过窗口不得补发旧交易。
-- **验收**：模拟 DST、重启、重复实例、延迟 30 分钟；过期信号不因 misfire 被执行。
-
-### OPS-003 — 数据备份、保留、恢复与删除边界
-
-- **目标**：满足可审计与最小数据保留，支持 SQLite/Postgres 恢复。
-- **依赖**：DB-001～003、GOV-001 保留决策。
-- **建议文件**：`docs/runbooks/backup-restore.md`、maintenance scripts。
-- **执行清单**：
-  - 为 audit、订单、研究原始数据分别定义保留期。
-  - 备份加密、访问受限、恢复演练；secret 不随数据库备份明文扩散。
-  - 审计追加性和合法删除/匿名化需求分离。
-  - 恢复后默认 paper，禁止自动恢复 live writer。
-- **验收**：staging 恢复演练可重建 proposal timeline；过期数据清理不破坏必要的 referential integrity。
-
-### OBS-001 — 结构化日志、Correlation 与脱敏
-
-- **目标**：建立统一日志事件，不泄露交易/认证 secret。
-- **依赖**：FND-001、DB-003。
-- **建议文件**：`src/ainvest/observability/logging.py`。
-- **执行清单**：
-  - structlog JSON；统一 service/env/version/correlation/causation/proposal/strategy run IDs。
-  - 敏感字段 allow/deny policy；异常对象和 HTTP header 同样脱敏。
-  - 禁止记录 raw model prompts 中的 secret、approval link、MCP auth。
-  - 日志级别和采样不能丢失安全/资金事件。
-- **验收**：secret corpus 和异常堆栈测试；跨流程可以用 correlation ID 串联。
-
-### OBS-002 — Metrics、Tracing 与健康检查
-
-- **目标**：覆盖 design 第 13 节的监控指标。
-- **依赖**：OBS-001；各组件实现时逐步接入。
-- **建议文件**：`src/ainvest/observability/{metrics,tracing,health}.py`。
-- **执行清单**：
-  - 指标：数据延迟/错误、agent 成功/耗时/token、策略异常、风控拒绝、审批延迟/过期、MCP 错误、订单状态、P&L 阈值。
-  - OpenTelemetry spans 不带 secret/full payload；只保留 digest/IDs。
-  - readiness 检查依赖与模式；liveness 不因暂时外部失败造成重启风暴。
-  - 避免 symbol/proposal_id 等高基数 Prometheus labels。
-- **验收**：本地/测试可抓 metrics；关键 workflow 有 trace；health 能区分 degraded/read-only/not-ready。
-
-### OBS-003 — 资金安全告警与值班 Runbook
-
-- **目标**：对需要立即人工关注的状态发送可靠告警。
-- **依赖**：OBS-002、WF-001、EXE-003。
-- **建议文件**：`src/ainvest/observability/alerts.py`、`docs/runbooks/incidents/`。
-- **执行清单**：
-  - 告警：SUBMIT_UNKNOWN、订单哈希不一致、重复订单、账户/仓位不一致、kill switch、意外 live 启动。
-  - 告警去重但不吞掉状态升级；包含脱敏定位 ID、当前状态、下一步。
-  - 每类 critical alert 有 runbook、owner 和 acknowledge/resolve 流程。
-  - Telegram 交易 Bot 不应成为唯一的 critical alert 通道。
-- **验收**：故障注入能触发且恢复能关闭；告警不含 raw token/账户号；无 alert storm。
-
-### SEC-001 — 安全控制落地与定期审计
-
-- **目标**：把 GOV-002 威胁模型中的控制变成可验证检查。
-- **依赖**：GOV-002，贯穿后续所有阶段。
-- **建议文件**：`docs/security/control-matrix.md`、安全测试/CI jobs。
-- **执行清单**：
-  - 每个 threat -> preventive/detective control -> code/task -> test -> owner。
-  - 跟踪依赖漏洞、SAST、secret scan、container/IaC scan。
-  - 特别审计策略 sandbox、WebAuthn、outbox/idempotency、MCP tool allowlist。
-  - 实盘前独立 review，不由实现同一任务的 agent 自我批准。
-- **验收**：control matrix 无未映射 critical threat；release gate 自动检查必要证据。
-
-### SEC-002 — Secret 管理、身份与最小权限
-
-- **目标**：隔离 Telegram、WebAuthn、数据供应商、数据库和 MCP 凭据。
-- **依赖**：FND-003、GOV-002。
-- **建议文件**：`src/ainvest/secrets.py`、部署身份/IAM、`docs/security/secrets.md`。
-- **执行清单**：
-  - 开发可用未提交 `.env`；生产只用 secret manager/workload identity。
-  - Research、Approval、Read Broker、Write Broker 使用不同身份和 secret scope。
-  - 支持 rotation，不把 secret 缓存到审计/trace。
-  - 启动验证只检查存在性/权限，不打印值。
-- **验收**：策略 worker 环境不含任何 secret；服务拿不到不属于自身的 token；rotation 演练不要求改代码。
-
-### DOC-001 — README 与安全 Quickstart
-
-- **目标**：让新开发者只启动 Research/Paper，不误开 live。
-- **依赖**：FND-001～003、REL-001 后补完整流程。
-- **建议文件**：`README.md`。
-- **执行清单**：
-  - 架构简介、非目标、安装、配置、migration、测试、Paper demo。
-  - 明示投资风险、默认 paper、实盘尚不可用/启用条件。
-  - 链接 design、决策、插件开发、安全和 runbook。
-- **验收**：新环境按 README 可运行固定 fixture Paper demo；无需任何真实 token。
-
-### DOC-002 — Strategy 插件开发者指南
-
-- **目标**：让其他团队在独立 repo 开发合规策略。
-- **依赖**：STR-001～006。
-- **建议文件**：`docs/strategy-plugin-guide.md`、starter template。
-- **执行清单**：
-  - API/metadata/entry point/params/YAML/状态协议。
-  - 禁止行为、确定性、as_of、无未来数据、无 Broker/secret/network。
-  - 本地 conformance、CI、版本/升级/allowlist 流程。
-  - 完整参考插件和常见失败示例。
-- **验收**：在临时独立 package 中只按文档即可被发现并通过 conformance。
-
-### DOC-003 — 运营与事故 Runbooks
-
-- **目标**：让人工在风险场景中采取确定步骤。
-- **依赖**：OBS-003、OPS-003、EXE-003～005。
-- **建议目录**：`docs/runbooks/`。
-- **执行清单**：
-  - kill switch、SUBMIT_UNKNOWN、仓位不一致、Telegram outage、WebAuthn outage、MCP auth/rate limit、DB restore。
-  - 每份包含触发条件、立即动作、禁止动作、证据收集、恢复标准、升级联系人。
-  - 明确“不要重试 submit”场景。
-- **验收**：桌面演练至少覆盖 unknown submit 和 kill switch；参与者无需读源码。
-
-### DOC-004 — API、Schema 与审计查询文档
-
-- **目标**：为 agent/团队提供稳定集成契约。
-- **依赖**：DOM-006、WF-002、APR-002。
-- **建议文件**：`docs/api/`、生成 OpenAPI/JSON Schema artifacts。
-- **执行清单**：
-  - 发布核心 schema、状态机、错误 code、内部 command/event。
-  - 说明版本兼容、幂等键、时间/Decimal 规范。
-  - 审批 API 只记录必要端点，不暴露内部执行接口。
-  - 提供按 proposal/correlation ID 查询脱敏审计时间线的方法。
-- **验收**：CI 检查生成物与代码一致；第三方可用 artifacts 验证 payload。
-
-### QAT-001 — 单元、性质与 Contract 测试矩阵
-
-- **目标**：系统性覆盖领域正确性，不依赖少量 happy path。
-- **依赖**：随各模块推进。
-- **建议文件**：`tests/{unit,property,contract}/`、`docs/testing.md`。
-- **执行清单**：
-  - schema/Decimal、每条 Risk rule、hash、token、state transition、idempotency。
-  - Hypothesis 生成金额/比例/时间边界。
-  - Data/Broker/Strategy plugin contract suites。
-  - 测试 clock、ID、random、market data 都可注入。
-- **验收**：测试矩阵映射 design 要求；关键资金模块 branch coverage 目标高于普通模块，且不能靠排除失败路径达标。
-
-### QAT-002 — 集成、并发与故障注入
-
-- **目标**：验证网络、DB、Webhook 和 worker 异常下 fail closed。
-- **依赖**：DB、WF、PAP、APR 相关任务。
-- **建议文件**：`tests/integration/`、`tests/faults/`。
-- **执行清单**：
-  - fake market/news/Telegram/MCP。
-  - timeout、connection reset、rate limit、DB rollback、重复 webhook、乱序 event、进程 crash。
-  - 并发 approval、重复 scheduler、outbox redelivery、partial fill。
-  - 每个故障检查最终状态、审计和是否产生资金动作。
-- **验收**：无故障会导致默认交易；unknown outcome 进入核对而非重试。
-
-### QAT-003 — 实盘前 Safety Gate 套件
-
-- **目标**：把 design 第 14.4 节变成不可跳过的自动门禁。
-- **依赖**：REL-001～004、EXE-001～005。
-- **建议文件**：`tests/safety/`、独立 CI workflow。
-- **执行清单**：
-  - 审批过期；改数量/限价/策略版本；双击；MCP timeout；kill switch；非白名单 Telegram；非 Agentic Account。
-  - 增加 stale quote、account mismatch、open-order conflict、write tool schema drift、live config 单门禁缺失。
-  - Safety suite 只用 mock/sandbox，不提交真实订单。
-  - 生成带 commit/config/test digest 的 attestation，供 live guard 验证。
-- **验收**：任一 safety test 失败则无法构建/部署 write service；attestation 与当前 commit/config 不一致时 live guard 拒绝启动。
+- **Objective:** Prove that research output conforms to schemas and every important number comes from a deterministic tool.
+- **Dependencies:** P04-T0 through P04-T11. Research and backtesting cards may run in parallel, but every card must complete before this gate.
+- **Primary file:** `docs/releases/phase-2-acceptance.md`.
+- **Implementation checklist:**
+  - Generate `ResearchPacket` objects from fixed and recorded provider data.
+  - Trace market, technical, and portfolio fields back to tool output.
+  - Run prompt-injection, stale-data, provider-timeout, and unsupported-evidence tests.
+  - Feed the packet into the Gate 1 Paper flow.
+- **Acceptance criteria:** The design Phase 2 criteria pass and `docs/releases/phase-2-acceptance.md` is produced.
 
 ---
 
-## 12. 建议的 Agent 分工与并行批次
+## 8. Phase 05 — Telegram Paper Approval and Deferred Live Approval
 
-### Batch A：可以立即并行
+### P05-T0 — Implement OrderProposal and One-Time Approval Challenges
 
-| Agent | 任务 | 允许主要修改范围 | 备注 |
+- **Objective:** Safely create proposals and short-lived, single-use opaque nonces while distinguishing Paper and Live approval at the domain layer.
+- **Dependencies:** P02-T3, P02-T4, P02-T6 through P02-T9.
+- **Primary files:** `src/ainvest/approval/service.py`, `src/ainvest/approval/tokens.py`.
+- **Implementation checklist:**
+  - Generate at least 256 bits of nonce entropy with a CSPRNG. Persist only a domain-separated hash.
+  - Constrain configurable TTL to the designed 60–120 second range and inject the server clock.
+  - Freeze the canonical order, order hash, and risk decision when creating the proposal.
+  - Model PENDING, APPROVED, REJECTED, EXPIRED, and CONSUMED challenge states; every approval event records method and scope.
+  - Accept only telegram+paper or webauthn+live; reject every other combination in schema and service logic.
+- **Acceptance criteria:** Raw nonces never appear in database/logs; expiry, repeat, and concurrent consumption allow one success only; changing an order invalidates its nonce; telegram+live cannot be created.
+
+### P05-T1 — Handle Telegram Paper Approval Callbacks
+
+- **Objective:** Let an authorized private-chat user approve one specific Paper proposal without creating any live privilege.
+- **Dependencies:** P05-T0, P01-T4, P02-T3, and P02-T4.
+- **Primary file:** `src/ainvest/approval/telegram_approval.py`.
+- **Implementation checklist:**
+  - Callback data contains an opaque nonce only. Read symbol, quantity, and price from the server-side proposal.
+  - Validate numeric `from.id`, private `chat.id`, `chat.type=private`, original `message_id`, update/callback ID, nonce, expiry, PENDING state, and order hash.
+  - Reject username allowlists, plain `approve` text, groups/channels, forwarded messages, wrong message ID, and identities outside the allowlist.
+  - Atomically persist `approval_method=telegram`, `approval_scope=paper`, stable approver ID, timestamp, audit event, and outbox record.
+- **Acceptance criteria:** One valid callback creates one Paper approval; tampered, expired, repeated, concurrent, wrong-user/chat/message, and plain-text requests fail closed; no path creates a live approval.
+
+### P05-T2 — Register Passkeys Before Live Trading
+
+- **Objective:** Before live enablement, register iPhone Face ID/Passkey credentials for the account owner. This card does not block the first Paper release.
+- **Dependencies:** P05-T0, P08-T14, and the deployment decisions in P01-T0 marked `deferred_until_live`.
+- **Primary files:** `src/ainvest/approval/webauthn.py`, registration API routes, database migration.
+- **Implementation checklist:**
+  - Generate and verify registration options with py_webauthn.
+  - Fix RP ID, origin, and user handle; production accepts only the approved HTTPS origin.
+  - Store credential public key, credential ID, sign count, and backup flags; never store a private key.
+  - Require a separate administrator/bootstrap authentication. Telegram identity cannot bootstrap Passkeys.
+  - Close bootstrap automatically after the first credential and require at least two recovery-capable credentials before live startup.
+- **Acceptance criteria:** Origin/RP/challenge mismatch, duplicate credential, and expired challenge are rejected; no private key is stored; the live guard rejects fewer than two recovery credentials.
+
+### P05-T3 — Build the HTTPS Approval Page and Passkey Assertion Binding
+
+- **Objective:** Display server-owned order data at a fixed HTTPS origin and sign a challenge bound one-to-one with a live `OrderProposal`. This card does not block Paper.
+- **Dependencies:** P05-T0, P05-T2, P02-T4, and P05-T7.
+- **Primary files:** `src/ainvest/api/app.py`, `src/ainvest/api/routes/approval.py`, templates/static assets, `src/ainvest/approval/assertion.py`.
+- **Implementation checklist:**
+  - The URL contains an opaque token only. The page loads symbol, quantity, LIMIT price, worst-case amount, expiry, strategy/version, reasons, and Risk result from the server.
+  - Use HTTPS-only cookies where needed, CSP, HSTS, `frame-ancestors`, `no-store`, and Referrer-Policy.
+  - Bind the server-generated challenge to token hash, proposal ID, order hash, expiry, credential, and user.
+  - Verify origin, RP ID, challenge, credential, UV flag, counter, and backup semantics.
+  - In one transaction, write an APPROVED event with `approval_method=webauthn` and `approval_scope=live`; replay of the assertion fails.
+  - Execution receives proposal/approval IDs only, never client-supplied order fields.
+- **Acceptance criteria:** URL changes cannot alter an order; quantity/limit/strategy tampering, origin mismatch, cross-proposal challenge, cross-user credential, and repeated assertion all fail.
+
+### P05-T4 — Configure Telegram Bots and Send Private Notifications
+
+- **Objective:** Use separate staging/production Bots to show order/risk summaries and provide either a Paper callback or a Live HTTPS link.
+- **Dependencies:** P05-T0, the accepted identity policy in P01-T0, and account-owner supplied Bot/user/chat values.
+- **Primary file:** `src/ainvest/approval/telegram.py`.
+- **Implementation checklist:**
+  - Use separate Bot tokens and numeric user/chat allowlists. Call `getMe` at startup to validate environment and Bot identity.
+  - Disable groups; send only to configured numeric private user/chat IDs. A username is display-only.
+  - Show minimal account detail, full order summary, expiry, and a prominent PAPER or LIVE label; never include broker credentials.
+  - Paper notifications carry a callback button bound to the opaque nonce. Live notifications contain only a fixed-origin HTTPS approval link.
+  - Record message ID/status but not the full link or raw token.
+- **Acceptance criteria:** Incorrect Bot/chat/user/environment configuration fails closed; delivery failure cannot trade; message snapshots make scope unmistakable and contain no sensitive values.
+
+### P05-T5 — Operate Idempotent Telegram Long Polling and Preserve a Webhook Boundary
+
+- **Objective:** Receive first-release updates without a public endpoint and retain a safe future webhook adapter.
+- **Dependencies:** P05-T4 and P01-T4.
+- **Primary files:** `src/ainvest/approval/telegram_updates.py`, future `src/ainvest/api/routes/telegram.py`.
+- **Implementation checklist:**
+  - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset.
+  - Enable only required `allowed_updates`; validate Bot identity, private chat, and user/chat allowlists before dispatch.
+  - Route Paper callbacks to P05-T1. Plain text may query/reject status only and never approve.
+  - A future webhook validates HTTPS secret token, body/rate limits, and the same identity rules; configuration forbids simultaneous polling and webhook modes.
+  - Fill/rejection/expiry message updates grant no new approval capability.
+- **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, groups, unapproved users, and forged callbacks cannot duplicate or elevate approval; tests prove the first release needs no public domain.
+
+### P05-T6 — Hand Off an Approval to Execution Exactly Once
+
+- **Objective:** Convert approval into one consumable execution request, preserve pre-trade risk, and enforce method/scope authorization at the handoff layer.
+- **Dependencies:** P05-T0, P05-T1, P02-T7, P02-T10, and P03-T12. The live branch additionally requires P05-T2 and P05-T3.
+- **Primary file:** `src/ainvest/approval/handoff.py`.
+- **Implementation checklist:**
+  - Write the outbox/command in the approval transaction so an approved event cannot be lost before delivery.
+  - Deduplicate consumption by approval/proposal idempotency key.
+  - Carry no raw token; Execution reloads proposal, approval method/scope, and order hash from trusted storage.
+  - Route Paper handoff only to Paper Broker. Live handoff accepts webauthn+live only; telegram+live or missing scope is rejected and audited.
+  - Expired, rejected, or already-consumed records create no execution command.
+- **Acceptance criteria:** Crash recovery, repeated outbox delivery, and concurrent approval create one execution attempt; a forged telegram+live event cannot reach a write client.
+
+### P05-T7 — Deploy the HTTPS Baseline Required for Live Approval
+
+- **Objective:** Before live enablement, provide a stable, secure production origin for WebAuthn. This card does not block Paper.
+- **Dependencies:** Deployment choices in P01-T0 and P08-T6.
+- **Primary files:** deployment manifest/IaC, `docs/runbooks/approval-deploy.md`.
+- **Implementation checklist:**
+  - Use an independent service identity, minimal network access, TLS, fixed domain, and health checks.
+  - Isolate database and secret-manager permissions from Research and Strategy.
+  - Enforce CSRF/origin checks, rate limits, and WAF or reverse-proxy limits.
+  - Separate staging and production RP IDs and credentials.
+- **Acceptance criteria:** Staging iPhone Passkey validation succeeds; HTTP is redirected or rejected; deployment scanning reports no high/critical finding.
+
+### P05-T8 — Gate 3: Accept Paper-Only Secure Approval
+
+- **Objective:** Prove Telegram can approve only the bound Paper proposal and cannot create or reach a live execution request.
+- **Dependencies:** P05-T0, P05-T1, P05-T4 through P05-T6, P08-T6, P08-T7, and P08-T13. P05-T2, P05-T3, and P05-T7 are not required.
+- **Primary file:** `docs/releases/phase-3-acceptance.md`.
+- **Implementation checklist:**
+  - Test nonce expiry, double-click/concurrency, order tampering, plain approval text, wrong message, groups, wrong user/chat, spoofing, poller restart, and repeated updates.
+  - Assert every successful event is telegram+paper; bind Execution to Paper Broker and rehearse iPhone-to-Paper-fill.
+  - Verify database/logs contain no raw nonce or Bot token and the Paper deployment contains no public approval route or Robinhood write client.
+- **Acceptance criteria:** The design Phase 3 criteria pass; no Telegram input can create live scope or call a write broker; `docs/releases/phase-3-acceptance.md` is produced.
+
+---
+
+## 9. Phase 06 — Official Robinhood MCP Read-Only Integration
+
+### P06-T0 — Connect to MCP and Expose a Read-Only Robinhood Client
+
+- **Objective:** Connect to the official `https://agent.robinhood.com/mcp/trading` endpoint and expose only a fixed allowlist through the Robinhood Read Gateway.
+- **Dependencies:** P03-T13, P01-T4, P08-T7, and the authorization decision in P01-T0.
+- **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
+- **Implementation checklist:**
+  - Use the official MCP endpoint and Python SDK; obtain authentication only from the secret provider.
+  - Discover and validate tool schemas. The allowlist covers accepted quote, price book, historical, fundamental, financial, technical, earnings, index, account, portfolio, position, order, and tradability read tools.
+  - Default-deny all other tools. New or incompatible schemas never expand permission automatically.
+  - Research/Strategy receive gateway output only, never raw MCP session, OAuth token, or write tool.
+  - Add timeouts, stable errors, and tracing. Log tool name, duration, and result digest only.
+- **Acceptance criteria:** Fake-MCP contract tests pass; unknown/write tools cannot be called; auth failure, timeout, and schema drift fail closed.
+
+### P06-T1 — Normalize Robinhood Market, Fundamental, and Portfolio Data
+
+- **Objective:** Map MCP results into versioned ainvest schemas.
+- **Dependencies:** P06-T0, P02-T1 through P02-T3, and P02-T6.
+- **Primary file:** `src/ainvest/execution/robinhood/mappers.py`.
+- **Implementation checklist:**
+  - Map quotes, price book, historicals, fundamentals, financials, account scope, cash/buying power, positions, open orders, and order history.
+  - Map the canonical Robinhood instrument ID and verify its symbol, exchange, currency, asset type, tradability, price tick, and quantity increment. Reject ambiguous or inconsistent identity mappings.
+  - A live-eligible quote includes symbol, last/bid/ask, server or observation time, source, and session; otherwise mark it unusable for live.
+  - Confirm the expected Agentic Account. An unknown or non-Agentic scope is non-tradable.
+  - Never silently fall back on Decimal, symbol, timezone, or status mapping errors.
+  - Store raw-response digests and normalized snapshots.
+- **Acceptance criteria:** Recorded/synthetic contracts cover unknown enum, missing account scope, amount mismatch, missing bid/ask/time, and stale quotes; all fail closed.
+
+### P06-T2 — Enforce Read-Only Runtime and Real-Portfolio Paper Mode
+
+- **Objective:** Make it technically impossible for a Phase 06 process to submit a live order.
+- **Dependencies:** P06-T0, P06-T1, P03-T16, and P08-T0.
+- **Primary files:** read-only service entry point, deployment permissions, integration tests.
+- **Implementation checklist:**
+  - Use the read protocol, read-only MCP tool allowlist, and an independent service identity.
+  - Inject Robinhood quotes, fundamentals, and real portfolio snapshots into Strategy/Sizer/Risk while fixing the broker to PaperBroker.
+  - Startup logs and health state show `read_only=true` and `execution=paper`.
+  - Reject a trade when an MCP quote fails; never construct an Alpaca/yfinance fallback.
+  - Make submit attempts fail at two or more of client, configuration, and deployment-permission layers.
+- **Acceptance criteria:** Real data drives a Paper proposal, and no code path reaches a Robinhood write tool.
+
+### P06-T3 — Gate 4: Accept Robinhood Read-Only Paper Trading
+
+- **Objective:** Prove real account state can drive Paper while no live write path exists.
+- **Dependencies:** P06-T0 through P06-T2, P03-T17, P04-T12, P05-T8, P08-T3, and P08-T4.
+- **Primary file:** `docs/releases/phase-4-acceptance.md`.
+- **Implementation checklist:**
+  - Read quotes, price book, historicals, fundamentals, account, positions, buying power, and orders into snapshots.
+  - Run the full Paper workflow and approval from those snapshots.
+  - Audit permission/tool allowlists and execute negative write-call tests.
+  - Compare MCP values to internal snapshots and validate freshness, bid/ask, and schema-drift behavior.
+  - Inject quote timeout, missing fields, and conflicting results; assert no alternative provider is called and the order is rejected.
+- **Acceptance criteria:** The design Phase 4 criteria pass; `docs/releases/phase-4-acceptance.md` explicitly records no live-order capability and no live quote fallback.
+
+---
+
+## 10. Phase 07 — Controlled Live Execution, Reconciliation, and Recovery
+
+### P07-T0 — Build an Isolated Robinhood Write Client
+
+- **Objective:** Implement the thinnest official MCP submit/cancel adapter for the Execution Service only.
+- **Dependencies:** P06-T3, P03-T13, P06-T0, P06-T1, P05-T2, P05-T3, P05-T7, P08-T14, and the risk/account decisions in P01-T0.
+- **Primary file:** `src/ainvest/execution/robinhood/write_client.py`; separate dependency/deployment target.
+- **Implementation checklist:**
+  - Research, Strategy, and general API processes cannot install or import the write client.
+  - Submit accepts only a validated internal broker command with client order/idempotency ID.
+  - Reload and require `approval_method=webauthn`, `approval_scope=live`, and matching order hash before any MCP call. Reject Telegram/Paper/missing scope locally.
+  - Revalidate canonical instrument ID, symbol/exchange/currency/asset type, tradability, tick size, quantity increment, and minimum notional against the latest Read Gateway metadata.
+  - Preserve broker order ID, status, and time exactly. Distinguish confirmed failure from unknown outcome.
+  - Initially support DAY LIMIT orders for allowlisted stocks/ETFs only.
+- **Acceptance criteria:** Architecture tests block unauthorized imports; non-Agentic accounts, ambiguous/mismatched instruments, invalid increments, non-LIMIT orders, and non-allowlisted symbols are rejected before MCP; mock-MCP contracts pass.
+
+### P07-T1 — Execute Live Orders with Fresh Pre-Trade Risk
+
+- **Objective:** Consume a one-time live approval and submit exactly one order against current account state.
+- **Dependencies:** P07-T0, P05-T6, P03-T12, P02-T9, P02-T10, and P02-T6 through P02-T8.
+- **Primary file:** `src/ainvest/execution/service.py`.
+- **Implementation checklist:**
+  - Atomically claim the approval; validate unexpired/unconsumed state, matching hash, `approval_method=webauthn`, and `approval_scope=live`.
+  - Reload quote, price book, buying power, positions, and open orders through the Robinhood Read Gateway. Any market-data failure becomes `PRE_TRADE_REJECTED` with no provider switch.
+  - Run the full pre-trade Risk Engine; reject price drift beyond limits.
+  - Enter SUBMITTING and use a stable client order ID.
+  - Save broker ID and SUBMITTED on success, REJECTED on confirmed rejection, and SUBMIT_UNKNOWN on timeout/disconnect.
+- **Acceptance criteria:** State, transaction, and audit records are complete; repeated delivery cannot repeat submit; telegram+paper, missing scope, missing Passkey, or absent second risk check cannot call the client.
+
+### P07-T2 — Reconcile SUBMIT_UNKNOWN and Route Ambiguity to Human Review
+
+- **Objective:** Safely resolve the highest-risk case where the broker may have received the request but the client did not receive a result.
+- **Dependencies:** P07-T1, P03-T15, P08-T5, and P08-T14.
+- **Primary files:** `src/ainvest/execution/reconciler.py`, manual-review API/runbook.
+- **Implementation checklist:**
+  - Transition `SUBMIT_UNKNOWN -> RECONCILING` and query client order ID, idempotency key, time window, and order history.
+  - Link a unique match and move to SUBMITTED. Move zero, multiple, or conflicting matches to MANUAL_REVIEW.
+  - Never automatically resubmit in any branch.
+  - Alert with proposal ID and redacted summary plus a manual inspection/closure runbook.
+- **Acceptance criteria:** Cover timeout-created, timeout-not-created, multiple candidates, and unavailable history; static and behavioral tests prove no submit retry follows an unknown outcome.
+
+### P07-T3 — Monitor Fills, Cancellations, and Real Portfolio Reconciliation
+
+- **Objective:** Track broker state to a terminal result while keeping the internal ledger aligned with the real account.
+- **Dependencies:** P07-T1, P07-T2, P03-T15, and P02-T6.
+- **Primary file:** `src/ainvest/execution/order_monitor.py`.
+- **Implementation checklist:**
+  - Idempotently map updates to SUBMITTED, PARTIALLY_FILLED, FILLED, CANCELLED, and REJECTED.
+  - Deduplicate by broker fill ID and verify cumulative quantity/notional.
+  - Route discrepancies to MANUAL_REVIEW; do not rewrite the approved order.
+  - Update portfolio snapshots and Telegram status notifications.
+- **Acceptance criteria:** Out-of-order/duplicate fills, partial-then-cancel, broker corrections, and internal differences are covered; the final audit trail reconstructs the lifecycle.
+
+### P07-T4 — Enforce Independent Live Gates and Operational Kill Switch
+
+- **Objective:** Ensure no single environment variable or agent can accidentally enable live trading.
+- **Dependencies:** P07-T0 through P07-T3, P08-T0, P08-T6, P08-T7, and P08-T14.
+- **Primary files:** `src/ainvest/execution/live_guard.py`, deployment policy, runbook.
+- **Implementation checklist:**
+  - Require live mode, explicit enablement, fixed HTTPS origin/RP ID, two recovery-capable Passkeys, webauthn+live approval, matching Agentic Account, Gates 1–4 attestations, signed/versioned risk configuration, healthy kill switch, and an authenticated/audited startup confirmation through P08-T14.
+  - Enforce very small budget, symbol allowlist, LIMIT only, and regular session.
+  - Startup confirmation cannot become a permanent bypass and must repeat after restart.
+  - Define and test the safety-attestation verification interface with fixed fixtures. P08-T15 later produces the release attestation and is not a prerequisite for implementing this guard.
+  - The default kill switch blocks new submissions and alerts but does not automatically cancel existing orders. Any future automatic-cancel mode remains disabled until its owner decision is accepted and its tests pass.
+- **Acceptance criteria:** Removing any one gate prevents write-service startup; missing/invalid test attestation fails closed; a kill switch activated immediately before submission blocks it; gate state is fully audited.
+
+### P07-T5 — Implement Authenticated Cancellation and Cancel Reconciliation
+
+- **Objective:** Cancel an existing live order through an authenticated, idempotent workflow without turning an uncertain result into repeated broker writes.
+- **Dependencies:** P07-T0 through P07-T4, P02-T3, P02-T9, P02-T10, P08-T5, P08-T14, and the cancellation decision entry in P01-T0.
+- **Primary files:** `src/ainvest/execution/cancellation.py`, cancellation reconciliation tests and runbook.
+- **Implementation checklist:**
+  - Accept cancellation commands only from the authenticated operator control plane and bind actor, reason, broker order ID, cancel-command digest, and cancel idempotency ID.
+  - Reject in-place replace. A replacement must complete a new proposal, risk decision, order hash, and approval workflow independently of the cancellation.
+  - Persist the cancellation command and audit event before calling the broker; return the same result for a repeated idempotency ID.
+  - Distinguish confirmed cancel, already terminal, rejected cancel, and uncertain cancel outcomes.
+  - Reconcile uncertain cancellation against broker order/fill history before any further cancel attempt; route zero, multiple, or conflicting matches to `CANCEL_MANUAL_REVIEW` while the order lifecycle continues to follow broker fill facts.
+  - Keep kill-switch automatic cancellation disabled unless its P01-T0 owner decision has been accepted and a separately versioned policy defines eligible orders, partial fills, ordering, and recovery.
+- **Acceptance criteria:** Unauthorized cancellation cannot reach the write client; repeated requests create one broker call; uncertain cancel never retries blindly; replacement requires a new approval; partial-fill and cancel-race tests preserve ledger truth.
+
+### P07-T6 — Gate 5: Conduct a Minimal Controlled Live Exercise
+
+- **Objective:** Only after every safety condition passes, execute one auditable minimal-value end-to-end exercise.
+- **Dependencies:** P03-T17, P04-T12, P05-T8, P06-T3, P07-T0 through P07-T5, P08-T2, P08-T5 through P08-T7, P08-T10, and P08-T12 through P08-T15; zero unaccepted high/critical security risk; explicit user authorization for the real order.
+- **Primary file:** `docs/releases/phase-5-acceptance.md` and a redacted audit bundle.
+- **Implementation checklist:**
+  - First pass the same configuration in Paper and complete backup/restore and kill-switch drills.
+  - Use the dedicated Agentic Account, minimal budget, one allowlisted symbol, regular session, and DAY LIMIT order.
+  - Require iPhone Passkey approval and assert the audit event is webauthn+live; capture fresh snapshot and second risk decision before submit.
+  - Inject one valid Telegram Paper approval and prove rejection at live handoff, live guard, and Execution Service.
+  - Follow the order to terminal state and reconcile broker, internal ledger, Telegram, and audit data.
+  - Return to Paper mode after the exercise and complete a retrospective.
+- **Acceptance criteria:** The design Phase 5 criteria pass; `docs/releases/phase-5-acceptance.md` and a redacted audit bundle are produced. Without explicit user authorization, complete dry-run only and submit no real order.
+
+---
+
+## 11. Phase 08 — Parallel Safety, Operations, Observability, Documentation, and QA
+
+Phase 08 is a parallel assurance phase. Its cards support multiple delivery phases, and their numeric placement does not mean they should wait until Phase 07. Dispatch each card only when its own dependencies are satisfied and complete it before the gate that cites it.
+
+### P08-T0 — Define Runtime Modes and Startup Capability Gates
+
+- **Objective:** Provide one capability matrix for Research-only, Paper, and Live modes.
+- **Dependencies:** P01-T4 and P03-T13.
+- **Primary files:** `src/ainvest/runtime.py`, `docs/runtime-modes.md`.
+- **Implementation checklist:**
+  - Specify packages, secrets, broker capabilities, and scheduler jobs allowed in each mode.
+  - Research-only does not load Strategy execution, Approval, or broker write components.
+  - Paper may read a real account but always writes to PaperBroker; it allows telegram+paper and does not load WebAuthn or the Robinhood write client.
+  - Define a `LiveGuard` interface and a default implementation that always rejects. P07-T4 later supplies the production guard; P08-T0 does not depend on it.
+  - Live alone may construct the write-client capability, and only through the rejecting-by-default `LiveGuard` interface.
+- **Acceptance criteria:** Automated tests cover the capability matrix; invalid mode combinations and missing production LiveGuard fail startup; health output shows redacted mode/capabilities.
+
+### P08-T1 — Schedule Work with the Exchange Calendar
+
+- **Objective:** Run research, strategy, expiry, monitoring, and reconciliation jobs on the market calendar without duplicate scheduling.
+- **Dependencies:** P04-T3, P03-T16, and P08-T0.
+- **Primary file:** `src/ainvest/scheduler.py`.
+- **Implementation checklist:**
+  - Use APScheduler 3.11.x for research, strategy, expiry, order-monitor, and reconciliation jobs.
+  - Define schedules in exchange timezone and execute with UTC timestamps; account for DST, holidays, and early closes.
+  - Prevent duplicates across instances through durable job storage, leadership, or a unique execution lock.
+  - Use safe `misfire`, coalescing, and maximum-instance policies. Missing a trading window never causes a stale trade to run later.
+- **Acceptance criteria:** Simulations cover DST, restart, duplicate instances, and a 30-minute delay; expired signals do not execute after a misfire.
+
+### P08-T2 — Define Backup, Retention, Restore, and Deletion Boundaries
+
+- **Objective:** Preserve auditability with minimal retention and reliable SQLite/PostgreSQL recovery.
+- **Dependencies:** P02-T6 through P02-T8 and the retention decision in P01-T0.
+- **Primary files:** `docs/runbooks/backup-restore.md`, maintenance scripts.
+- **Implementation checklist:**
+  - Set separate retention policies for audit, order, and raw research data.
+  - Record owner-approved RPO and RTO per data class and environment; missing production recovery objectives block deployment rather than selecting implicit values.
+  - Encrypt and restrict backups and rehearse restores; plaintext secrets must not spread through backups.
+  - Separate append-only audit requirements from lawful deletion/anonymization.
+  - A restored environment always starts in Paper and never automatically restores a live writer.
+- **Acceptance criteria:** A staging restore reconstructs a proposal timeline within the approved RPO/RTO; expiry cleanup preserves required referential integrity.
+
+### P08-T3 — Add Structured Logging, Correlation, and Redaction
+
+- **Objective:** Produce unified log events without exposing trading or authentication secrets.
+- **Dependencies:** P01-T2 and P02-T8.
+- **Primary file:** `src/ainvest/observability/logging.py`.
+- **Implementation checklist:**
+  - Use structlog JSON with service, environment, version, correlation, causation, proposal, and strategy-run IDs.
+  - Apply allow/deny policies to fields, exception objects, and HTTP headers.
+  - Do not log secrets in model prompts, approval links, or MCP authorization.
+  - Logging level and sampling must preserve safety and funds-related events.
+- **Acceptance criteria:** Secret-corpus and exception-stack tests pass; correlation IDs connect the full workflow.
+
+### P08-T4 — Add Metrics, Tracing, and Health Checks
+
+- **Objective:** Cover the monitoring requirements in design §13.
+- **Dependencies:** P08-T3; integrate each component as it is implemented.
+- **Primary files:** `src/ainvest/observability/{metrics,tracing,health}.py`.
+- **Implementation checklist:**
+  - Measure data freshness/errors, agent success/duration/tokens, strategy failures, risk rejection, approval latency/expiry, MCP errors, order state, and P&L thresholds.
+  - OpenTelemetry spans contain no secret or full payload; retain only digests and stable IDs.
+  - Readiness reflects dependencies and runtime mode. Temporary external failure must not turn liveness into a restart storm.
+  - Avoid high-cardinality Prometheus labels such as symbol and proposal ID.
+- **Acceptance criteria:** Tests/local runtime expose metrics; critical workflows have traces; health distinguishes degraded, read-only, and not-ready.
+
+### P08-T5 — Implement Funds-Safety Alerts and Incident Runbooks
+
+- **Objective:** Reliably notify humans about states that need immediate attention.
+- **Dependencies:** P08-T4 and P02-T9.
+- **Primary files:** `src/ainvest/observability/alerts.py`, `docs/runbooks/incidents/`.
+- **Implementation checklist:**
+  - Define the alert port and generic state-event handlers. P07-T2 later emits and integration-tests real reconciliation events and is not a prerequisite for this card.
+  - Alert on SUBMIT_UNKNOWN, uncertain cancellation, order-hash mismatch, duplicates, account/position differences, kill switch, and unexpected live startup.
+  - Deduplicate without suppressing state escalation; include redacted IDs, current state, and next action.
+  - Give every critical alert an owner and acknowledge/resolve procedure.
+  - Do not make the Telegram trading Bot the only critical-alert channel.
+- **Acceptance criteria:** Fault injection triggers and recovery resolves alerts; no raw token/account number appears; alert storms are controlled.
+
+### P08-T6 — Implement and Audit Security Controls
+
+- **Objective:** Turn the P01-T1 threat model into verifiable controls.
+- **Dependencies:** P01-T1; continues throughout all later phases.
+- **Primary files:** `docs/security/control-matrix.md`, security tests, CI jobs.
+- **Implementation checklist:**
+  - Map each threat to preventive/detective controls, code/task, test, and owner.
+  - Track dependency vulnerabilities, SAST, secret scans, and container/IaC scans.
+  - Specifically audit strategy sandboxing, WebAuthn, outbox/idempotency, and MCP tool allowlists.
+  - Require an independent live review; the implementation agent cannot self-approve its own live control.
+- **Acceptance criteria:** No critical threat lacks a mapped control, and release gates automatically verify required evidence.
+
+### P08-T7 — Isolate Secrets, Identities, and Least-Privilege Access
+
+- **Objective:** Separate OpenAI, Telegram, WebAuthn, database, provider, and MCP credentials.
+- **Dependencies:** P01-T4 and P01-T1.
+- **Primary files:** `src/ainvest/secrets.py`, deployment identity/IAM configuration, `docs/security/secrets.md`.
+- **Implementation checklist:**
+  - Development may use an uncommitted `.env`; production uses a secret manager or workload identity only.
+  - Research, Approval, Read Broker, and Write Broker use distinct identities and secret scopes. Only Research can read the OpenAI key.
+  - Support credential rotation without placing secrets in audit or traces.
+  - Startup checks presence/permission only and never prints values.
+- **Acceptance criteria:** Strategy workers contain no secrets; services cannot read credentials outside their role; rotation needs no code change.
+
+### P08-T8 — Rewrite README as a Safe Quickstart
+
+- **Objective:** Let a new developer start Research/Paper without accidentally enabling Live.
+- **Dependencies:** P01-T2 through P01-T4; expand after P03-T17.
+- **Primary file:** `README.md`.
+- **Implementation checklist:**
+  - Cover architecture, non-goals, installation, configuration, migration, tests, and a Paper demo.
+  - Clearly state investment risk, Paper defaults, and live unavailability/requirements.
+  - Link design, decisions, plugin development, security, and runbooks.
+- **Acceptance criteria:** A clean environment follows README to run the fixed-fixture Paper demo without any real token.
+
+### P08-T9 — Publish the Strategy Plugin Developer Guide
+
+- **Objective:** Enable teams to build compliant strategies in separate repositories.
+- **Dependencies:** P03-T0 through P03-T5.
+- **Primary files:** `docs/strategy-plugin-guide.md`, starter template.
+- **Implementation checklist:**
+  - Explain API, metadata, entry point, parameters, YAML, and state protocol.
+  - Document prohibited behavior, determinism, `as_of`, no-future-data rules, and no broker/secret/network access.
+  - Document local conformance, CI, versions, upgrades, and allowlists.
+  - Include a full reference plugin and common invalid examples.
+- **Acceptance criteria:** A temporary external package built from the guide is discovered and passes conformance.
+
+### P08-T10 — Write Operations and Incident Runbooks
+
+- **Objective:** Give operators deterministic responses to safety-critical events.
+- **Dependencies:** P08-T5, P08-T2, P08-T14, and P07-T2 through P07-T5.
+- **Primary path:** `docs/runbooks/`.
+- **Implementation checklist:**
+  - Cover kill switch, SUBMIT_UNKNOWN, uncertain cancellation, position mismatch, Telegram outage, WebAuthn outage, MCP auth/rate limit, and database restore.
+  - Each runbook includes trigger, immediate action, prohibited action, evidence collection, recovery criteria, and escalation owner.
+  - Explicitly mark every situation where submit or cancel must not be retried.
+- **Acceptance criteria:** Tabletop drills cover unknown submit, unknown cancel, and kill switch; participants do not need to read source code.
+
+### P08-T11 — Publish API, Schema, State, and Audit Query Documentation
+
+- **Objective:** Give agents and teams stable integration contracts.
+- **Dependencies:** P02-T5, P02-T10, and P05-T1.
+- **Primary paths:** `docs/api/`, generated OpenAPI and JSON Schema artifacts.
+- **Implementation checklist:**
+  - Publish core schemas, state machine, error codes, commands, and events.
+  - Explain version compatibility, idempotency keys, UTC time, and Decimal serialization.
+  - Document only required approval endpoints; do not expose internal execution APIs.
+  - Provide a redacted audit-timeline query by proposal or correlation ID.
+- **Acceptance criteria:** CI verifies generated artifacts match code; third parties can validate payloads with published artifacts.
+
+### P08-T12 — Build Unit, Property, and Contract Test Matrices
+
+- **Objective:** Systematically cover domain correctness beyond happy paths.
+- **Dependencies:** Incremental alongside each module.
+- **Primary paths:** `tests/{unit,property,contract}/`, `docs/testing.md`.
+- **Implementation checklist:**
+  - Cover schema/Decimal, every Risk rule, order hash, nonce, transitions, and idempotency.
+  - Use Hypothesis for money, ratio, and time boundaries.
+  - Publish contract suites for Data, Broker, and Strategy plugins.
+  - Inject clocks, IDs, randomness, and market data.
+- **Acceptance criteria:** The matrix maps to design requirements; funds-related modules have a higher branch-coverage target without excluding failure paths.
+
+### P08-T13 — Add Integration, Concurrency, and Fault-Injection Tests
+
+- **Objective:** Prove network, database, Telegram, and worker failures remain fail closed.
+- **Dependencies:** P02-T6 through P02-T10, P03-T13 through P03-T15, P05-T0, P05-T1, and P05-T4 through P05-T6.
+- **Primary paths:** `tests/integration/`, `tests/faults/`.
+- **Implementation checklist:**
+  - Provide fake market, news, Telegram, and MCP services.
+  - Inject timeout, reset, rate limit, rollback, repeated update/webhook, out-of-order event, and process crash.
+  - Test concurrent approval, duplicate scheduler, outbox redelivery, partial fill, and uncertain cancel.
+  - For each fault, assert final state, audit output, and whether any funds action occurred.
+- **Acceptance criteria:** No fault defaults to trading; unknown outcomes enter reconciliation and never automatic retry.
+
+### P08-T14 — Secure the Operator Control Plane and Privileged Actions
+
+- **Objective:** Ensure administrative and funds-safety actions cannot be reached through an unauthenticated or weakly authorized endpoint.
+- **Dependencies:** P01-T1, P01-T4, P02-T8, P02-T10, and P08-T7.
+- **Primary files:** `src/ainvest/admin/{auth,service}.py`, privileged FastAPI routes or CLI adapter, `docs/security/operator-access.md`.
+- **Implementation checklist:**
+  - Inventory privileged actions: kill-switch activate/release, live-start confirmation, cancellation request, manual-review resolution, reconciliation trigger, approval bootstrap, and audit access.
+  - Define an operator identity and authorization interface with least-privilege roles. Telegram identity, a username, possession of a callback nonce, or network location alone is never operator authentication.
+  - Keep non-sensitive liveness narrowly public; require authenticated authorization for readiness detail, audit queries, and every state-changing administrative action.
+  - For browser sessions, enforce HTTPS, secure/HttpOnly/SameSite cookies, CSRF protection, origin checks, bounded session/reauthentication lifetime, and rate limits. For CLI/service calls, use short-lived credentials from the secret/identity provider.
+  - Require actor, role, reason, correlation ID, idempotency key, previous state, and resulting state in an atomic audit event.
+  - Separate staging and production identities. A production operator endpoint and Live startup both fail until the P01-T0 operator-authentication decision is accepted and configured; this does not block a local Paper process with no remote privileged endpoint.
+  - Add deny-by-default tests for missing/expired credentials, wrong role, replay, CSRF, cross-environment identity, and attempts by Research/Strategy/Telegram credentials.
+- **Acceptance criteria:** No privileged route or command is anonymous; every unauthorized case fails before state change or broker access; every successful privileged action is attributable and replay-safe; operator credentials are absent from logs and strategy workers.
+
+### P08-T15 — Build the Mandatory Pre-Live Safety Gate
+
+- **Objective:** Convert design §14.4 into an unskippable automated gate.
+- **Dependencies:** P03-T17, P04-T12, P05-T8, P06-T3, P05-T7, P05-T2, P05-T3, P07-T0 through P07-T5, and P08-T14.
+- **Primary paths:** `tests/safety/`, independent CI workflow.
+- **Implementation checklist:**
+  - Test approval expiry, changed quantity/limit/strategy version, double-click, MCP timeout, kill switch, unapproved Telegram identity, and non-Agentic account.
+  - Test wrong Telegram user/chat/message, plain approval text, duplicate/out-of-order updates, poller restart, and attempted telegram+live scope elevation.
+  - Test Passkey origin/RP/challenge/hash/UV mismatch, fewer than two recovery credentials, and a valid telegram+paper event attempting to enter live.
+  - Test stale/missing/conflicting MCP quotes, account mismatch, open-order conflict, read/write schema drift, and every single missing live gate.
+  - Test ambiguous instrument identity, symbol/instrument mismatch, invalid price/quantity increments, unauthorized privileged actions, in-place replacement attempts, cancel replay, and uncertain-cancel no-retry behavior.
+  - Assert live code contains no Alpaca/yfinance fallback and no alternate quote provider is called after MCP failure.
+  - Use mocks/sandboxes only; never submit a real order.
+  - Generate a commit/config/test digest attestation for the live guard.
+- **Acceptance criteria:** Any failed safety test blocks write-service build/deployment; an attestation that differs from current commit/config prevents live startup.
+
+---
+
+## 12. Recommended Agent Assignment and Parallel Batches
+
+### Batch A — Start Immediately
+
+| Agent | Task cards | Primary write scope | Coordination note |
 |---|---|---|---|
-| A1 | GOV-001 + GOV-002 | `docs/decisions`, `docs/adr`, `docs/security` | 不写应用代码 |
-| A2 | FND-001 + FND-004 | `pyproject.toml`, lock, CI/tool config | 与 A3 协调 pyproject |
-| A3 | FND-002 + FND-003 | `src/ainvest` skeleton, config, example YAML | 不提前定义领域 schema |
+| A1 | P01-T0 + P01-T1 | `docs/decisions`, `docs/adr`, `docs/security` | Documentation only |
+| A2 | P01-T2 + P01-T5 | `pyproject.toml`, lock file, CI/tool configuration | Coordinate `pyproject.toml` with A3 |
+| A3 | P01-T3 + P01-T4 | `src/ainvest` skeleton, configuration, example YAML | Do not predefine domain schemas |
 
-### Batch B：FND 合并后
+### Batch B — After the Foundation Merges
 
-| Agent | 任务 | 允许主要修改范围 | 合并顺序 |
+| Agent | Task cards | Primary write scope | Merge order |
 |---|---|---|---|
-| B1 | DOM-001 + DOM-002 | `schemas/common.py`, `market.py`, `research.py` | 最先 |
-| B2 | DOM-003 | `schemas/portfolio.py`, `strategy.py` | DOM-001/002 后 |
-| B3 | DOM-004 + DOM-005 | `schemas/orders/risk/approval/broker`, `approval/order_hash.py` | DOM-001/003 后 |
-| B4 | DOM-006 | JSON Schema artifacts/contract tests/docs | DOM-001～005 后 |
+| B1 | P02-T0 + P02-T1 | `schemas/common.py`, `market.py`, `research.py` | First |
+| B2 | P02-T2 | `schemas/portfolio.py`, `strategy.py` | After B1 |
+| B3 | P02-T3 + P02-T4 | order/risk/approval/broker schemas and order hash | After P02-T0/P02-T2 |
+| B4 | P02-T5 | JSON Schema artifacts, contract tests, docs | After P02-T0 through P02-T4 |
 
-### Batch C：Schema 稳定后
+### Batch C — After Schemas Stabilize
 
-| Agent | 任务 | 允许主要修改范围 | 可并行关系 |
+| Agent | Task cards | Primary write scope | Parallelization |
 |---|---|---|---|
-| C1 | DB-001～003 | `db`, `audit`, `migrations` | 与 C2/C3 并行 |
-| C2 | STR-001～004 | `strategies`, reference plugin | STR-005 前 |
-| C3 | PAP-001～002 | `execution/broker.py`, `paper.py` | DB 完成后接持久化 |
-| C4 | RSK-001～004 | `risk` | Sizer 接口确定后联调 |
+| C1 | P02-T6 through P02-T8 | `db`, `audit`, `migrations` | Parallel with C2/C3 |
+| C2 | P03-T0 through P03-T3 | `strategies`, reference plugin | Before P03-T4 |
+| C3 | P03-T13 + P03-T14 | `execution/broker.py`, `paper.py` | Connect persistence after C1 |
+| C4 | P03-T8 through P03-T11 | `risk` | Integrate after sizer interface |
 
-### Batch D：Gate 1 收口
+### Batch D — Close Gate 1
 
-| Agent | 任务 | 说明 |
+| Agent | Task cards | Coordination note |
 |---|---|---|
-| D1 | STR-005～006 | worker 隔离与 conformance；建议安全经验较强的 agent |
-| D2 | SIZ-001～002 + RSK-005 | 共享 order/risk schema，串行处理 |
-| D3 | WF-001～002 + PAP-003 | 状态与核对共享较多，串行更安全 |
-| D4 | ORC-001 + REL-001 | 只做集成，不重写前面模块 |
+| D1 | P03-T4 + P03-T5 | Worker isolation and conformance; assign strong sandboxing experience |
+| D2 | P03-T6 + P03-T7 + P03-T12 | Shared order/risk schemas; complete serially |
+| D3 | P02-T9 + P02-T10 + P03-T15 | State and reconciliation overlap; serialize |
+| D4 | P03-T16 + P03-T17 | Integration only; do not rewrite preceding modules |
 
-### Batch E：Gate 1 后两条主线并行
+### Batch E — Parallel Tracks After Gate 1
 
-- Research line：DAT-001～005 -> RES-001～004 -> BKT-001～003 -> REL-002。
-- Approval line：APR-001～007 -> DEP-001 -> REL-003。
-- Cross-cutting line：OBS-001～002、SEC-001～002、QAT-001～002、DOC-001～002。
+- Research: P04-T0 through P04-T8 -> P04-T9 through P04-T11 -> P04-T12.
+- Paper approval: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 -> P05-T8.
+- Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
+- Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 
-### Batch F：最后串行推进 Broker
+### Batch F — Serialize Broker Work
 
-1. RHB-001～003。
-2. REL-004，只读权限审核。
-3. EXE-001～005。
-4. QAT-003 与独立安全 review。
-5. REL-005；只有用户明确授权真实下单后才执行 live step。
+1. P06-T0 through P06-T2.
+2. P06-T3 read-only permission audit.
+3. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
+4. P07-T0 through P07-T5.
+5. P08-T15 plus an independent security review.
+6. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
 
-### 并行冲突提醒
+### Parallel-Edit Warnings
 
-- `pyproject.toml`、`config.py`、核心 schemas、Alembic head、`README.md` 是高冲突文件，指定单一 owner。
-- 多个迁移 agent 并行时为各自创建分支 migration，合并前由 DB owner 统一 rebase/merge heads。
-- Risk 规则可按文件并行，但 `engine.py` 和 rule registry 由 RSK-001 owner 管理。
-- 不让 Approval agent 自行修改 Execution submit；只通过 WF command/event contract 对接。
-- 不让 Robinhood agent 为“方便测试”把 write 方法放进 read client。
+- `pyproject.toml`, `config.py`, core schemas, the Alembic head, and `README.md` are high-conflict files and should have one owner at a time.
+- If migration agents work in parallel, create separate branch migrations and let the database owner reconcile Alembic heads before merge.
+- Risk rule files may be parallelized, but the P03-T8 owner controls `engine.py` and the rule registry.
+- Approval agents must not edit broker submission logic directly; integrate through P02-T10 commands/events.
+- Robinhood agents must not put write methods into the read client for test convenience.
 
 ---
 
-## 13. 可直接复制给 Sub-agent / Cursor 的任务提示模板
+## 13. Reusable Prompt for a Sub-Agent or Cursor
 
 ```text
-你正在 likefudan/ainvest 仓库实现任务：<TASK_ID> — <TASK_TITLE>。
+You are implementing this task in the likefudan/ainvest repository:
+<TASK_ID> — <TASK_TITLE>
 
-先完整阅读：
+Execution envelope:
+- Task status/owner: <STATUS_AND_OWNER>
+- Base commit: <BASE_COMMIT>
+- Dependency PRs/commits and required artifacts: <DEPENDENCY_ARTIFACTS>
+- Design sections and accepted ADRs: <DESIGN_AND_ADR_REFERENCES>
+- Allowed production paths: <ALLOWED_PATHS>
+- Paths that must not be modified: <FORBIDDEN_PATHS>
+- Canonical verification commands: <VERIFY_COMMANDS>
+
+Read completely before changing code:
 1. design.md
-2. IMPLEMENTATION_TODO.md 中“所有执行 Agent 必须继承的上下文”
-3. <TASK_ID> 的完整任务卡
-4. 当前目标目录、现有测试和 git 状态
+2. Section 1, "Context Every Execution Agent Must Inherit," in IMPLEMENTATION_TODO.md
+3. The complete <TASK_ID> task card
+4. The current target directory, existing tests, and git status
 
-当前系统硬约束：
-- 默认 TRADING_MODE=paper、LIVE_TRADING_ENABLED=false、REQUIRE_HUMAN_APPROVAL=true。
-- AI/策略不能直接下单；Risk Engine 有最终否决权；Execution 是唯一写 Broker 的组件。
-- 金额/数量使用 Decimal，JSON 为十进制字符串；时间为 UTC aware datetime。
-- 缺数据、异常、超时、状态冲突必须 fail closed。
-- 不写入或打印任何真实 token、账户号、审批 raw token 或 Passkey 私钥。
+Hard system constraints:
+- Defaults remain TRADING_MODE=paper, LIVE_TRADING_ENABLED=false, and REQUIRE_HUMAN_APPROVAL=true.
+- AI and strategies cannot submit orders. The Risk Engine has final veto authority. Execution is the only broker-write component.
+- AI uses OpenAI gpt-5.6-sol through Pydantic AI and Responses API with medium reasoning, store=false, strict structured output, no built-in web search, and no automatic model fallback.
+- Telegram can approve Paper proposals only; successful events are telegram+paper. Every Live path accepts webauthn+live only.
+- Money and quantity use Decimal and serialize as decimal strings. Time uses timezone-aware UTC datetimes.
+- A ticker symbol alone is not an instrument identity; broker writes require canonical instrument metadata and valid price/quantity increments.
+- Privileged operations require an authenticated, authorized, audited operator. There is no in-place order replacement and no blind retry after an uncertain submit or cancel.
+- Missing data, errors, timeouts, and state conflicts fail closed.
+- Never write or print a real token, account number, raw approval token, or Passkey private key.
 
-你的范围：
-- 只实现 <TASK_ID>。
-- 允许主要修改：<PATHS>。
-- 前置依赖：<DEPENDENCIES>。
-- 不要顺手实现后续任务，不要启用实盘，不要绕过未完成接口。
+Scope:
+- Implement <TASK_ID> only.
+- Primary paths you may edit: <ALLOWED_PATHS>.
+- Dependencies: <DEPENDENCIES>.
+- Do not implement later cards, enable Live, or bypass an unfinished interface.
 
-工作要求：
-1. 先检查依赖是否已经存在；如接口轻微不匹配，报告后做最小兼容修改。
-2. 为正常、边界和失败关闭路径添加测试。
-3. 实现任务卡执行清单。
-4. 运行该任务要求的 lint、type-check、unit/integration tests。
-5. 检查 diff 不包含任务外重构和 secret。
+Execution requirements:
+1. Confirm HEAD matches <BASE_COMMIT> or stop and report the mismatch. Confirm all dependency artifacts exist.
+2. Add tests for success, boundaries, and fail-closed behavior.
+3. Complete every checklist item in the task card.
+4. Run <VERIFY_COMMANDS> plus every task-specific test.
+5. Inspect the final diff for unrelated refactors and secrets.
 
-交付报告必须包含：
-- 修改文件列表
-- 核心行为/接口
-- 测试命令和结果
-- 未解决风险或假设
-- 下游任务需要知道的兼容信息
+Your handoff report must include:
+- Changed files
+- Base commit, final commit, branch, and PR
+- Core behavior and public interfaces
+- Verification commands and results
+- Unresolved risks or assumptions
+- Compatibility notes for downstream tasks
 
-完成标准以任务卡“验收”和全局 Definition of Done 为准。
+Completion is governed by the card's acceptance criteria and the global Definition of Done.
 ```
 
-## 14. 每个 PR 的交接清单
+## 14. PR Handoff Checklist
 
 ```markdown
 ## Task
 - ID:
+- Status/owner:
+- Base commit:
+- Final commit/branch/PR:
 - Design sections:
+- Accepted ADRs:
 - Dependencies confirmed:
+- Dependency artifacts/commits:
 
 ## Scope
+- Allowed production paths:
+- Forbidden paths:
 - Files changed:
-- Public interfaces added/changed:
+- Public interfaces added or changed:
 - Out-of-scope items intentionally untouched:
 
 ## Safety
 - [ ] Paper defaults unchanged
-- [ ] No Broker capability added outside Execution
-- [ ] No float money / naive datetime
-- [ ] No secret or real account data
+- [ ] No broker capability outside Execution
+- [ ] No float money or naive datetime
+- [ ] No secrets or real account data
 - [ ] Failure paths fail closed
-- [ ] Idempotency/state transition behavior tested
+- [ ] Idempotency and state transitions tested
+- [ ] Canonical instrument identity and price/quantity increments validated where applicable
+- [ ] Privileged actions require authenticated authorization and audit
+- [ ] No in-place replacement or blind submit/cancel retry
 
 ## Verification
 - Lint:
@@ -1314,40 +1479,60 @@ flowchart TD
 
 ## Handoff
 - Schema/API compatibility notes:
-- Migration/config notes:
+- Migration/configuration notes:
 - Known limitations:
 - Recommended next task:
 ```
 
-## 15. 完整项目完成判定
+## 15. Whole-Project Completion Criteria
 
-只有以下全部成立，才可以认为实现完整：
+The implementation is complete only when all of the following are true:
 
-1. Gate 1–4 已通过并留下与当前 commit/config 对应的验收记录。
-2. 研究中的关键数字可追踪到确定性工具和数据来源。
-3. 第三方策略通过 conformance，并在无 secret/网络/Broker 的隔离 worker 运行。
-4. 所有风控在 proposal 和执行前都运行，缺数据默认拒绝。
-5. Telegram 不能批准；Passkey assertion 与规范化订单哈希绑定且只能消费一次。
-6. Paper 与 Robinhood 都满足 Broker contract，真实账户只通过官方 MCP。
-7. `SUBMIT_UNKNOWN` 只核对、不重试，并可进入人工处理。
-8. 状态、订单、fill、组合和审计可按 correlation/proposal ID 完整还原。
-9. 观测、告警、备份恢复、kill switch 和事故 runbook 均演练通过。
-10. Safety Gate 无失败，威胁模型 high/critical 残余风险清零或由用户明确接受。
-11. 即使实现了 live，部署和仓库默认仍为 Paper；真实写单必须有用户逐笔明确授权。
-12. Gate 5 完成后已切回 Paper，并保存脱敏复盘。
+1. Gates 1–4 have passed with acceptance records matching the current commit and configuration.
+2. Every important research number traces to a deterministic tool and source.
+3. Third-party strategies pass conformance and run in isolated workers with no secret, network, or broker access.
+4. All risk rules run at proposal and pre-execution time, and missing inputs reject by default.
+5. Telegram approval can create only telegram+paper events for Paper Broker. Live accepts only a single-use webauthn+live assertion bound to the canonical order hash.
+6. Paper and Robinhood implementations pass Broker contracts; real account access uses official MCP only.
+7. `SUBMIT_UNKNOWN` reconciles without retry and can enter human review.
+8. Uncertain cancellation reconciles without retry; in-place replacement is unavailable and every replacement order receives a new proposal, risk decision, hash, and approval.
+9. Broker writes use an unambiguous canonical instrument identity and validated tradability, price tick, and quantity increment; symbol-only routing is impossible.
+10. Every privileged administrative action is authenticated, authorized, idempotent, attributable, and audited.
+11. State, orders, fills, portfolio, and audit can be reconstructed by correlation/proposal ID.
+12. Observability, alerts, backup/restore, kill switch, and incident runbooks have passed drills.
+13. The Safety Gate passes, and threat-model high/critical residual risks are zero or explicitly accepted by the user.
+14. Repository and deployment defaults remain Paper even after live code exists; each real order still requires explicit user approval.
+15. After Gate 5, the system returns to Paper and stores a redacted retrospective.
+16. Live market data comes only from the Robinhood Read Gateway. MCP failure rejects the trade, and no Alpaca/yfinance automatic fallback exists.
+17. The Research Agent uses the accepted OpenAI Responses configuration. Invalid schema, model failure, or cost-limit breach never switches models or creates a complete `ResearchPacket`.
 
-## 16. 暂不应交给 Agent 自行决定的事项
+## 16. Decision Authority Boundary
 
-以下项目需要产品/账户持有人做最终选择。Agent 可以调研、提出 ADR 选项和实现抽象，但不能自行开通、购买或启用：
+The following safety decisions are accepted. Every agent must implement them directly and must not turn them back into optional behavior:
 
-- 实盘行情、新闻和基本面供应商及其许可。
-- AI 模型供应商、预算和数据保留条款。
-- 公网域名、云环境、TLS 和 secret manager。
-- Telegram Bot 创建、允许的 user_id/chat_id。
-- WebAuthn bootstrap 身份验证方式。
-- Robinhood Agentic Account 授权和预算。
-- 首版策略参数。
-- 单笔/单股/行业/单日/回撤阈值。
-- 是否仅常规交易时段。
-- 审计和市场原始数据保留期。
-- 任何真实订单的最终提交。
+- Create and execute new orders only during the US regular trading session.
+- Reject trading whenever a required risk limit is missing or invalid.
+- Prefer officially supported, contract-tested Robinhood MCP capabilities and isolate them behind the Read Gateway.
+- Use Robinhood MCP as the only live quote source; reject on failure with no Alpaca/yfinance fallback.
+- Use SEC EDGAR/EdgarTools for primary filing evidence; use GDELT, SEC, and company announcements for news/events; keep yfinance development/offline only.
+- Use OpenAI `gpt-5.6-sol` through Pydantic AI and Responses API with medium reasoning, `store=false`, strict structured output, built-in web search off, and no automatic model switch.
+- Use separate staging/production Telegram Bots; authorize numeric user/private-chat IDs only; use long polling and a bound telegram+paper callback in the first release.
+- Do not require a public domain or Passkey for Paper. Require a fixed HTTPS origin, independent bootstrap, at least two recovery credentials, and webauthn+live approval before any live broker write.
+- Never route a broker write by ticker symbol alone; require canonical instrument identity and current tradability/precision metadata.
+- Do not support in-place live order replacement. A replacement is a new order and requires the complete proposal, risk, hash, and approval workflow.
+- Until an explicit automatic-cancellation policy is accepted, the kill switch blocks new submissions and alerts but does not blindly cancel open orders.
+
+The following choices require the product/account owner. Agents may research them, draft ADR options, and implement abstractions, but must not purchase, create, authorize, or enable them:
+
+- OpenAI API project credentials and monthly budget.
+- Actual staging/production Telegram Bot creation, token secrets, and numeric allowed `user_id`/`chat_id` values.
+- Public domain, cloud environment, TLS, database, and secret manager before Live.
+- Production operator-authentication provider/method and privileged-role assignment before exposing a remote control plane or enabling Live.
+- WebAuthn bootstrap authentication and recovery process before Live.
+- Robinhood Agentic Account authorization and budget.
+- Initial strategy and parameter values.
+- Per-order, per-symbol, sector, daily turnover/loss, and drawdown limits.
+- Retention periods for audit and raw market/research data.
+- Backup RPO/RTO by data class and environment.
+- Whether a future kill-switch mode may automatically cancel open orders and, if so, its eligible-order, partial-fill, ordering, and recovery policy.
+- Final submission of any real order.
