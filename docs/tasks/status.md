@@ -82,9 +82,9 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | complete (merged) |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | complete (merged) |
 | Batch B complete | Batch B | all of the above | complete |
-| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | next (critical path; parallel with C2/C3a) |
-| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | next (parallel with C1/C3a) |
-| Batch C — Part 3a (C3a) | Batch C | `P03-T13` | next (parallel with C1/C2) |
+| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | in_progress (critical path) |
+| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | in_progress (parallel) |
+| Batch C — Part 3a (C3a) | Batch C | `P03-T13` | in_progress (parallel) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
@@ -93,13 +93,101 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claims (parallel after Batch B): **C1** (critical path:
-`P02-T6`–`P02-T8`), **C2** (`P03-T0`–`P03-T3`), and **C3a** (`P03-T13` only).
-Do **not** claim **C3b** (`P03-T14`) until C1 and Batch D `P02-T9` land.
-After C1, **C4a** (`P03-T8`/`T10`/`T11`) may start; **C4b** (`P03-T9`) waits
-on the Batch D sizer (`P03-T6`). Coordinators must claim each part here from
-current `main` before implementation begins. See `IMPLEMENTATION_TODO.md`
-section 12 Batch C for the corrected unlock table.
+Parallel Batch C launch (base `55c6660`). **C1 is the critical path.** Do not
+claim C3b/C4b. Coordinators own `docs/tasks/status.md` updates for handoff;
+implementation agents must not rewrite another track's allowed paths.
+
+### Batch C — Part 1 (C1)
+
+- **Batch:** Batch C — Part 1 (C1) — SQLAlchemy models, Alembic, repositories,
+  UoW, append-only audit (`P02-T6`, `P02-T7`, `P02-T8`)
+- **Plan batch:** Batch C (critical path)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress`
+- **Owner/agent:** cursor-subagent-c1
+- **Integration branch:** `task/batch-c1-db-audit`
+- **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Dependencies:** Batch B complete (`P02-T0`–`P02-T5`)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/db/**`, `migrations/**`, `alembic.ini` (if
+  needed), `src/ainvest/audit/**`, `tests/unit/db/**`, `tests/unit/audit/**`,
+  `tests/integration/db/**`, `tests/integration/audit/**`, `pyproject.toml` /
+  `uv.lock` only for db/audit tooling if required, `docs/tasks/status.md`
+  (handoff notes for C1 only), `README.md` (status line only if needed)
+- **Forbidden:** `src/ainvest/strategies/**`, `examples/strategies/**`,
+  `src/ainvest/execution/**` (except no edits), `src/ainvest/risk/**`, broker
+  write enablement, credentials, live trading
+- **Safety posture:** Paper remains default; persistence and audit only; no
+  broker write capability or live trading
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Next after merge:** C4a (`P03-T8`/`T10`/`T11`) may start; C3b still needs
+  `P02-T9`
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T6` | Create SQLAlchemy Models and the Initial Alembic Migration | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T0`–`P02-T3`, `P01-T4` | TBD |
+| `P02-T7` | Implement Repositories, Unit of Work, and Concurrency Control | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T6` | TBD |
+| `P02-T8` | Implement Append-Only Audit Events and Redaction | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T6`, `P02-T7` | TBD |
+
+### Batch C — Part 2 (C2)
+
+- **Batch:** Batch C — Part 2 (C2) — Strategy API, registry, YAML instances,
+  reference MA plugin (`P03-T0`–`P03-T3`)
+- **Plan batch:** Batch C (parallel with C1/C3a)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress`
+- **Owner/agent:** cursor-subagent-c2
+- **Integration branch:** `task/batch-c2-strategy-api`
+- **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Dependencies:** `P02-T2`, `P02-T5`, `P01-T3`, `P01-T4` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/strategies/**`, `examples/strategies/**`,
+  `config/strategies.example.yaml`, `tests/unit/strategies/**`,
+  `tests/integration/strategies/**`, `pyproject.toml` / `uv.lock` only for
+  strategy entry points / plugin packaging, `docs/tasks/status.md` (C2 handoff
+  only), `README.md` (status line only if needed)
+- **Forbidden:** `src/ainvest/db/**`, `migrations/**`, `src/ainvest/audit/**`,
+  `src/ainvest/execution/**`, broker credentials, network in reference strategy,
+  live trading
+- **Safety posture:** Strategy declarations and offline reference plugin only;
+  Paper remains default; no broker access
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Next after merge:** Feeds later worker isolation (P03-T4) and Gate 1
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T0` | Define the Strategy API, Definitions, and Hook Contract | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T2`, `P02-T5`, `P01-T3` | TBD |
+| `P03-T1` | Load pluggy Plugins into StrategyRegistry | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0` | TBD |
+| `P03-T2` | Implement Strategy Instance YAML Configuration | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0`, `P03-T1`, `P01-T4` | TBD |
+| `P03-T3` | Build a Reference Moving-Average Strategy Plugin | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0`–`T2`, `P02-T1`–`T2` | TBD |
+
+### Batch C — Part 3a (C3a)
+
+- **Batch:** Batch C — Part 3a (C3a) — Broker read/write port and error
+  taxonomy (`P03-T13` only)
+- **Plan batch:** Batch C (parallel with C1/C2)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress`
+- **Owner/agent:** cursor-subagent-c3a
+- **Integration branch:** `task/batch-c3a-broker-port`
+- **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Dependencies:** `P02-T3` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/execution/broker.py`,
+  `src/ainvest/execution/__init__.py`, `tests/unit/execution/**`,
+  `tests/contract/execution/**` (if needed), `docs/tasks/status.md` (C3a
+  handoff only)
+- **Forbidden:** `src/ainvest/execution/paper.py`, Robinhood MCP client,
+  credentials, replace-order APIs, `src/ainvest/db/**`,
+  `src/ainvest/strategies/**`, live trading enablement
+- **Safety posture:** Interface + taxonomy + contract tests only; no Paper
+  simulator and no real broker writes
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Next after merge:** C3b Paper waits for C1 + `P02-T9`
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T13` | Define the Broker Port and Error Taxonomy | `in_progress` | cursor-subagent-c3a | `task/batch-c3a-broker-port` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T3` | TBD |
 
 ## Completed batches
 
