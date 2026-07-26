@@ -40,6 +40,18 @@ class EvidenceKind(StrEnum):
     CALCULATED = "CALCULATED"
 
 
+# Deterministic locator for P04 evidence reconciliation: scheme + non-empty reference.
+# Examples: tool:ainvest.indicators.sma#run1, filing:sec.edgar/0000320193-24-000001#Item8
+EVIDENCE_LOCATOR_PATTERN = (
+    r"^(tool|filing|quote|ohlcv|technical|fundamental|event|calc):"
+    r"[A-Za-z0-9][A-Za-z0-9._/#:-]{0,500}$"
+)
+EvidenceLocator = Annotated[
+    str,
+    StringConstraints(pattern=EVIDENCE_LOCATOR_PATTERN, min_length=3, max_length=512),
+]
+
+
 class EvidenceCitation(DomainModel):
     """Provenanced citation for a research claim.
 
@@ -52,7 +64,7 @@ class EvidenceCitation(DomainModel):
     kind: EvidenceKind
     summary: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
     provenance: Provenance
-    locator: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+    locator: EvidenceLocator
     numeric_value: PnL | None = None
     calculation_source: SourceId | None = None
 
@@ -158,6 +170,10 @@ class ResearchPacket(DomainModel):
                 self.as_of,
             )
 
+        evidence_ids = [citation.evidence_id for citation in self.evidence]
+        if len(evidence_ids) != len(set(evidence_ids)):
+            raise ValueError("evidence_id values must be unique within a research packet")
+
         for index, citation in enumerate(self.evidence):
             _reject_after_as_of(
                 f"evidence[{index}].provenance.observed_at",
@@ -170,17 +186,30 @@ class ResearchPacket(DomainModel):
                 self.as_of,
             )
 
-        stale_flags = set(self.quality_flags) | set(self.market.provenance.quality_flags)
-        if self.market.provenance.is_delayed and QualityFlag.DELAYED not in stale_flags:
-            raise ValueError("delayed market data must set DELAYED quality flag")
+        if self._any_delayed_provenance() and QualityFlag.DELAYED not in self._aggregated_flags():
+            raise ValueError("delayed research data must set DELAYED quality flag")
         return self
 
+    def _embedded_provenances(self) -> tuple[Provenance, ...]:
+        provenances: list[Provenance] = [self.market.provenance]
+        if self.technical is not None:
+            provenances.append(self.technical.provenance)
+        provenances.extend(citation.provenance for citation in self.evidence)
+        return tuple(provenances)
+
+    def _aggregated_flags(self) -> set[QualityFlag]:
+        flags = set(self.quality_flags)
+        for provenance in self._embedded_provenances():
+            flags.update(provenance.quality_flags)
+        return flags
+
+    def _any_delayed_provenance(self) -> bool:
+        return any(provenance.is_delayed for provenance in self._embedded_provenances())
+
     def flagged_stale(self) -> bool:
-        """True when the packet or market provenance marks stale/delayed data."""
-        flags = set(self.quality_flags) | set(self.market.provenance.quality_flags)
-        return (
-            bool(flags & {QualityFlag.STALE, QualityFlag.DELAYED})
-            or self.market.provenance.is_delayed
+        """True when packet, market, technical, or evidence marks stale/delayed data."""
+        return bool(self._aggregated_flags() & {QualityFlag.STALE, QualityFlag.DELAYED}) or (
+            self._any_delayed_provenance()
         )
 
 
@@ -264,8 +293,10 @@ def assert_time_ordering(
 
 
 __all__ = [
+    "EVIDENCE_LOCATOR_PATTERN",
     "EvidenceCitation",
     "EvidenceKind",
+    "EvidenceLocator",
     "ResearchPacket",
     "ThesisSection",
     "assert_time_ordering",

@@ -154,6 +154,61 @@ def test_stale_or_delayed_data_is_explicitly_flagged() -> None:
 
 
 @pytest.mark.unit
+def test_flagged_stale_aggregates_technical_and_evidence_provenance() -> None:
+    payload = _example()
+    technical = payload["technical"]
+    assert isinstance(technical, dict)
+    tech_prov = technical["provenance"]
+    assert isinstance(tech_prov, dict)
+    tech_prov["is_delayed"] = True
+    with pytest.raises(ValidationError, match="DELAYED"):
+        parse_research_packet(payload)
+
+    tech_prov["quality_flags"] = ["DELAYED"]
+    packet = parse_research_packet(payload)
+    assert packet.flagged_stale()
+
+    payload = _example()
+    payload["evidence"] = [
+        {
+            "evidence_id": "evd_01STALE0001",
+            "kind": "QUOTE",
+            "summary": "Delayed quote citation",
+            "locator": "quote:robinhood.mcp.quotes#AAPL",
+            "provenance": {
+                "source": "robinhood.mcp.quotes",
+                "observed_at": "2026-07-24T18:29:58Z",
+                "received_at": "2026-07-24T18:30:00Z",
+                "timezone": "UTC",
+                "is_delayed": False,
+                "quality_flags": ["STALE"],
+            },
+        }
+    ]
+    packet = parse_research_packet(payload)
+    assert packet.flagged_stale()
+
+
+@pytest.mark.unit
+def test_rejects_duplicate_evidence_ids() -> None:
+    payload = _example()
+    citation = {
+        "evidence_id": "evd_01DUP000001",
+        "kind": "QUOTE",
+        "summary": "quote evidence",
+        "locator": "quote:robinhood.mcp.quotes#AAPL",
+        "provenance": {
+            "source": "robinhood.mcp.quotes",
+            "observed_at": "2026-07-24T18:29:58Z",
+            "received_at": "2026-07-24T18:30:00Z",
+        },
+    }
+    payload["evidence"] = [citation, {**citation, "summary": "same id again"}]
+    with pytest.raises(ValidationError, match="evidence_id"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
 def test_natural_language_without_locator_cannot_become_evidence() -> None:
     with pytest.raises(ValidationError):
         EvidenceCitation.model_validate(
@@ -168,6 +223,28 @@ def test_natural_language_without_locator_cannot_become_evidence() -> None:
                 },
             }
         )
+
+
+@pytest.mark.unit
+def test_rejects_pseudo_and_unstructured_evidence_locators() -> None:
+    base = {
+        "evidence_id": "evd_01NARRATIVE01",
+        "kind": EvidenceKind.FUNDAMENTAL,
+        "summary": "Unsupported narrative claim",
+        "provenance": {
+            "source": "analyst.note",
+            "observed_at": "2026-07-24T18:00:00Z",
+            "received_at": "2026-07-24T18:01:00Z",
+        },
+    }
+    for locator in ("x", "http://example.com/note", "tool:", "notes:freeform", "TOOL:aapl"):
+        with pytest.raises(ValidationError):
+            EvidenceCitation.model_validate({**base, "locator": locator})
+
+    citation = EvidenceCitation.model_validate(
+        {**base, "locator": "filing:sec.edgar/0000320193-24-000001#Item8"}
+    )
+    assert citation.locator.startswith("filing:")
 
 
 @pytest.mark.unit
@@ -312,6 +389,30 @@ def test_fundamental_snapshot_uses_typed_immutable_facts() -> None:
 
 
 @pytest.mark.unit
+def test_fundamental_snapshot_rejects_received_after_as_of() -> None:
+    with pytest.raises(ValidationError, match="received_at"):
+        FundamentalSnapshot.model_validate(
+            {
+                "symbol": "AAPL",
+                "as_of": "2026-07-24T18:30:00Z",
+                "facts": [
+                    {
+                        "key": "net_income",
+                        "kind": "DECIMAL",
+                        "decimal_value": "1.00",
+                        "unit": "USD",
+                    }
+                ],
+                "provenance": {
+                    "source": "sec.edgar",
+                    "observed_at": "2026-07-24T18:00:00Z",
+                    "received_at": "2026-07-24T19:00:00Z",
+                },
+            }
+        )
+
+
+@pytest.mark.unit
 def test_market_event_time_order() -> None:
     event = MarketEvent.model_validate(
         {
@@ -343,6 +444,22 @@ def test_market_event_time_order() -> None:
                 },
             }
         )
+    # occurred before received but after observed must still fail
+    with pytest.raises(ValidationError, match="occurred_at"):
+        MarketEvent.model_validate(
+            {
+                "event_id": "evt_01_8k",
+                "symbol": "AAPL",
+                "event_type": "SEC_8K",
+                "headline": "Item 2.02 results",
+                "occurred_at": "2026-07-24T18:00:00Z",
+                "provenance": {
+                    "source": "sec.edgar",
+                    "observed_at": "2026-07-24T17:00:00Z",
+                    "received_at": "2026-07-24T18:30:00Z",
+                },
+            }
+        )
 
 
 @pytest.mark.unit
@@ -356,9 +473,12 @@ def test_unknown_fields_rejected_on_research_packet() -> None:
 @pytest.mark.unit
 def test_json_schema_can_be_emitted_for_research_packet() -> None:
     """P02-T1 requires schema generation; versioned export lands in P02-T5."""
+    from ainvest.schemas.research import EVIDENCE_LOCATOR_PATTERN
+
     schema = ResearchPacket.model_json_schema()
     assert schema["title"] == "ResearchPacket"
     assert "research_id" in schema["properties"]
     evidence = schema["$defs"]["EvidenceCitation"]["properties"]
     assert "provenance" in evidence
     assert evidence["locator"]["type"] == "string"
+    assert evidence["locator"]["pattern"] == EVIDENCE_LOCATOR_PATTERN

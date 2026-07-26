@@ -149,8 +149,11 @@ class FundamentalSnapshot(DomainModel):
         keys = [fact.key for fact in self.facts]
         if len(keys) != len(set(keys)):
             raise ValueError("fundamental fact keys must be unique")
-        if self.as_of < self.provenance.observed_at:
-            raise ValueError("fundamentals as_of must be >= provenance.observed_at")
+        # as_of is the snapshot knowledge cutoff: no observation may arrive after it.
+        if self.provenance.observed_at > self.as_of:
+            raise ValueError("fundamentals provenance.observed_at must be <= as_of")
+        if self.provenance.received_at > self.as_of:
+            raise ValueError("fundamentals provenance.received_at must be <= as_of")
         return self
 
 
@@ -167,8 +170,10 @@ class MarketEvent(DomainModel):
 
     @model_validator(mode="after")
     def _event_time_order(self) -> MarketEvent:
-        if self.occurred_at > self.provenance.received_at:
-            raise ValueError("occurred_at must be <= provenance.received_at")
+        if self.occurred_at > self.provenance.observed_at:
+            raise ValueError("occurred_at must be <= provenance.observed_at")
+        if self.provenance.observed_at > self.provenance.received_at:
+            raise ValueError("provenance.observed_at must be <= provenance.received_at")
         return self
 
 
