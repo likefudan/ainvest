@@ -82,34 +82,36 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-### Batch A remediation
-
-- **Status/owner:** `in_review` — `/root`
-- **Branch/base:** `agent/fix-batch-a-review` at
-  `93e644406f97750cc5132242b62230a9cff3a73d`
-- **Scope:** Correct review findings in P01-T3 through P01-T5: configuration
-  source precedence, strict WebAuthn prerequisites, relative-import and ORM
-  boundary enforcement, PR secret-scan permissions, immutable CI action
-  references, complete dependency-profile auditing, and Batch terminology.
-- **Safety posture:** Paper remains the default. No broker write capability,
-  credentials, external deployment, or live-trading enablement is introduced.
-- **Verification:** task-specific regression tests and the complete local merge
-  gate pass; the all-profile audit command requires network access and is also
-  enforced by CI.
-- **Repository protection:** GitHub ruleset `Protect main` (`19761285`) is
-  active on the default branch with no bypass actors. It requires a PR, squash
-  merge, resolved review conversations, a branch current with `main`, and
-  successful `Verify`, `Secret scan`, and `Dependency audit` checks. It also
-  enforces linear history and blocks deletion and force pushes.
-
-After this remediation merges, the next claim is **Batch B** (`P02-T0` through
-`P02-T5`) — domain schemas, market/research/portfolio/strategy/order/risk/
-approval/broker contracts, canonical order hashing, and schema versioning.
-Prefer the merge order in `IMPLEMENTATION_TODO.md` section 12
-(B1 → B2 → B3 → B4). A coordinator must claim Batch B here before dispatching
-those tasks.
+None. Next claim: **Batch B** (`P02-T0` through `P02-T5`) — domain schemas,
+market/research/portfolio/strategy/order/risk/approval/broker contracts,
+canonical order hashing, and schema versioning. Prefer the merge order in
+`IMPLEMENTATION_TODO.md` section 12 (B1 → B2 → B3 → B4). A coordinator must
+claim Batch B here before dispatching those tasks.
 
 ## Completed batches
+
+### Batch A review remediation
+
+- **Status/owner:** `merged` — `/root`
+- **Integration:** [PR #16](https://github.com/likefudan/ainvest/pull/16),
+  squash merged into `main`
+- **Branch/base:** `agent/fix-batch-a-review` from
+  `93e644406f97750cc5132242b62230a9cff3a73d`
+- **Scope:** Corrected configuration source precedence, strict WebAuthn
+  prerequisites, relative-import and ORM boundary enforcement, PR secret-scan
+  permissions, immutable CI action references, complete dependency-profile
+  auditing, and Batch terminology.
+- **Verification:** `./scripts/dev verify` passed (89 tests; 85.83% coverage);
+  `./scripts/dev audit` found no known vulnerabilities; all pre-commit checks
+  passed, including Gitleaks.
+- **Safety posture:** Paper remains the default. No broker write capability,
+  credentials, external deployment, or live-trading enablement was introduced.
+- **Repository protection:** GitHub ruleset
+  [`Protect main`](https://github.com/likefudan/ainvest/rules/19761285) is active
+  on the default branch with no bypass actors. It requires a current PR,
+  squash merge, resolved review conversations, and successful `Verify`,
+  `Secret scan`, and `Dependency audit` checks; it also enforces linear history
+  and blocks deletion and force pushes.
 
 ### Batch A — Part 2
 
