@@ -60,6 +60,29 @@ def test_critical_state_change_creates_audit_event(
 
 
 @pytest.mark.unit
+def test_error_detail_is_redacted(session_factory: sessionmaker[Session]) -> None:
+    token = "123456789:AAHdqTcvCH1vGWJxfSeofSAs0K5PALDsaw"
+    with UnitOfWork(session_factory) as uow:
+        audit = AuditService.from_uow(uow)
+        row = audit.append(
+            AuditEventEnvelope(
+                event_id="aud_01HZYTEST0000099",
+                event_type=AuditEventType.GENERIC,
+                occurred_at=datetime.now(UTC),
+                actor_type=ActorType.SYSTEM,
+                actor_id="tester",
+                subject_type="order_proposal",
+                subject_id="ordp_01HZYTEST0000001",
+                error_code="BROKER_AUTH",
+                error_detail=f"upstream failed with bot token {token}",
+                payload={},
+            )
+        )
+        assert token not in (row.error_detail or "")
+        assert "***REDACTED***" in (row.error_detail or "")
+
+
+@pytest.mark.unit
 def test_audit_has_no_update_delete_api() -> None:
     assert not hasattr(AuditService, "update")
     assert not hasattr(AuditService, "delete")

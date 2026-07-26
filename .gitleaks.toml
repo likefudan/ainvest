@@ -1,0 +1,10 @@
+title = "ainvest"
+
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Synthetic DB fixture values; domain column name idempotency_key trips generic-api-key"
+paths = [
+  '''(^|/)tests/unit/db/''',
+]

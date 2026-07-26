@@ -264,7 +264,8 @@ class BrokerOrderRow(
     )
 
     id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
-    broker_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
+    # Nullable so SUBMIT_UNKNOWN can persist before a broker id is known.
+    broker_order_id: Mapped[str | None] = mapped_column(String(128), nullable=True)
     client_order_id: Mapped[str] = mapped_column(String(128), nullable=False)
     proposal_id: Mapped[str] = mapped_column(
         String(160),

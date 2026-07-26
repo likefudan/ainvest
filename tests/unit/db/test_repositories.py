@@ -207,3 +207,35 @@ def test_broker_order_client_order_id_idempotent(
         )
         assert created_again is False
         assert second.broker_order_id == first.broker_order_id
+
+
+@pytest.mark.unit
+def test_broker_order_allows_null_broker_order_id(
+    session_factory: sessionmaker[Session],
+) -> None:
+    created = utc()
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None and uow.broker_orders is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+        row, created_flag = uow.broker_orders.create_idempotent(
+            BrokerOrderRow(
+                broker_order_id=None,
+                client_order_id="client_ord_unknown",
+                proposal_id="ordp_01HZYTEST0000001",
+                order_hash=ORDER_HASH,
+                account_scope="paper",
+                side="BUY",
+                status="SUBMIT_UNKNOWN",
+                submitted_at=created,
+                broker_updated_at=created,
+                idempotency_key="idem_broker_unknown",
+                payload_json={},
+                version=1,
+            ),
+            find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
+                "client_ord_unknown"
+            ),
+        )
+        assert created_flag is True
+        assert row.broker_order_id is None
+        assert row.status == "SUBMIT_UNKNOWN"

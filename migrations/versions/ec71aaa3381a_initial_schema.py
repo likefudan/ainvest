@@ -402,7 +402,7 @@ def upgrade() -> None:
     op.create_table(
         "broker_orders",
         sa.Column("id", sa.Integer(), autoincrement=True, nullable=False),
-        sa.Column("broker_order_id", sa.String(length=128), nullable=False),
+        sa.Column("broker_order_id", sa.String(length=128), nullable=True),
         sa.Column("client_order_id", sa.String(length=128), nullable=False),
         sa.Column("proposal_id", sa.String(length=160), nullable=False),
         sa.Column("order_hash", sa.String(length=71), nullable=False),

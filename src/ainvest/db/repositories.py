@@ -17,7 +17,11 @@ from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
-from ainvest.db.errors import ConcurrentModificationError, ConflictError, NotFoundError
+from ainvest.db.errors import (
+    ConcurrentModificationError,
+    NotFoundError,
+    PersistenceError,
+)
 from ainvest.db.models import (
     ApprovalChallengeRow,
     ApprovalEventRow,
@@ -26,12 +30,6 @@ from ainvest.db.models import (
     BrokerOrderRow,
     OrderProposalRow,
 )
-
-
-def _is_integrity_conflict(exc: IntegrityError) -> bool:
-    """Treat IntegrityError as a uniqueness conflict without parsing dialect text."""
-    del exc
-    return True
 
 
 class ProposalRepository:
@@ -70,12 +68,10 @@ class ProposalRepository:
                 self._session.add(row)
                 self._session.flush()
             return row, True
-        except IntegrityError as exc:
-            if not _is_integrity_conflict(exc):
-                raise
+        except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("proposal conflict without existing row") from None
+                raise PersistenceError("proposal conflict without existing row") from None
             return existing, False
 
     def update_status_if_version(
@@ -157,7 +153,7 @@ class ApprovalRepository:
         except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("challenge conflict without existing row") from None
+                raise PersistenceError("challenge conflict without existing row") from None
             return existing, False
 
     def consume_challenge_once(
@@ -227,7 +223,7 @@ class ApprovalRepository:
         except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("approval event conflict without existing row") from None
+                raise PersistenceError("approval event conflict without existing row") from None
             return existing, False
 
 
@@ -273,7 +269,7 @@ class BrokerOrderRepository:
         except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("broker order conflict without existing row") from None
+                raise PersistenceError("broker order conflict without existing row") from None
             return existing, False
 
     def update_status_if_version(
@@ -324,7 +320,7 @@ class BrokerOrderRepository:
         except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("broker fill conflict without existing row") from None
+                raise PersistenceError("broker fill conflict without existing row") from None
             return existing, False
 
     def get_fill(self, fill_id: str) -> BrokerFillRow | None:
@@ -362,7 +358,7 @@ class AuditRepository:
         except IntegrityError:
             existing = find_existing()
             if existing is None:
-                raise ConflictError("audit event conflict without existing row") from None
+                raise PersistenceError("audit event conflict without existing row") from None
             return existing, False
 
     def append_fields_idempotent(

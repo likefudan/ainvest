@@ -10,6 +10,8 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping, Sequence
+from datetime import date, datetime
+from decimal import Decimal
 from typing import Any, Final
 
 REDACTED: Final[str] = "***REDACTED***"
@@ -125,6 +127,15 @@ def redact(value: Any, *, _parent_sensitive: bool = False) -> Any:
 
     if isinstance(value, (bytes, bytearray)):
         return REDACTED if _parent_sensitive else f"<bytes:{len(value)}>"
+
+    if isinstance(value, Decimal):
+        return format(value, "f")
+
+    if isinstance(value, datetime):
+        return value.isoformat()
+
+    if isinstance(value, date):
+        return value.isoformat()
 
     # Unknown objects become a type placeholder (fail closed).
     return f"<{type(value).__name__}>"

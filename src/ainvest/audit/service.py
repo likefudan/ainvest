@@ -87,7 +87,7 @@ def envelope_to_fields(
         "before_state": safe_before,
         "after_state": safe_after,
         "error_code": envelope.error_code,
-        "error_detail": envelope.error_detail,
+        "error_detail": (None if envelope.error_detail is None else redact(envelope.error_detail)),
         "retry_count": envelope.retry_count,
         "payload_truncated": truncated,
         "payload_json": payload,

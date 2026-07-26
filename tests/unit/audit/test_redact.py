@@ -57,3 +57,17 @@ def test_digest_is_stable() -> None:
     assert digest_json({"b": 1, "a": 2}) == digest_json({"a": 2, "b": 1})
     assert sha256_digest("abc").startswith("sha256:")
     assert MAX_AUDIT_PAYLOAD_BYTES == 16_384
+
+
+@pytest.mark.unit
+def test_redact_preserves_decimal_and_datetime() -> None:
+    from datetime import UTC, datetime
+    from decimal import Decimal
+
+    payload = {
+        "qty": Decimal("2.50"),
+        "when": datetime(2026, 7, 24, 18, 30, tzinfo=UTC),
+    }
+    redacted = redact(payload)
+    assert redacted["qty"] == "2.50"
+    assert redacted["when"] == "2026-07-24T18:30:00+00:00"

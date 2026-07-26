@@ -17,3 +17,5 @@ dist/
 *.egg-info/
 /data/
 /logs/
+.ainvest-alembic-check.db
+.ainvest-alembic-check.db-*
