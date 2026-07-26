@@ -4,7 +4,12 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Initial repository setup. Implementation has not started.
+Phase 01 foundation work is in progress. Real-money trading remains disabled.
+
+Project coordination:
+
+- [Decision register](docs/decisions/README.md)
+- [Implementation task status](docs/tasks/status.md)
 
 ## Intended workflow
 
