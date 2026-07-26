@@ -90,7 +90,8 @@ flowchart LR
     RE -- "拒绝" --> AU["Audit Log"]
     RE -- "通过" --> OP["Order Proposal"]
     OP --> TG["Telegram 通知"]
-    TG --> AP["HTTPS 审批页"]
+    TG -- "Paper：绑定订单的一次性批准" --> EX
+    TG -- "实盘：打开 HTTPS 审批页" --> AP["HTTPS 审批页"]
     AP --> PK["iPhone Face ID / Passkey"]
     PK --> EX["Execution Service"]
     EX --> RM
@@ -159,6 +160,25 @@ Research Agent 负责：
 Research Agent 的输出是 `ResearchPacket`，而不是 `BUY` 或 `SELL` 指令。
 
 Research Agent 访问 Robinhood 数据时只能调用 Read Gateway，不能看到 MCP OAuth token、原始 MCP session 或任何创建/修改订单的工具。
+
+首版 AI 调用固定为：
+
+- 供应商和模型：OpenAI `gpt-5.6-sol`
+- 调用接口：OpenAI Responses API，通过 Pydantic AI 适配
+- 推理强度：`medium`
+- 状态策略：每次研究任务独立调用并设置 `store=false`，不依赖服务端长对话状态
+- 输出方式：使用严格 JSON Schema 生成研究叙事，再由 Pydantic 验证并组装 `ResearchPacket`
+- 工具策略：只允许调用 ainvest 的只读确定性工具；关闭模型内置网页搜索，不向模型暴露原始 Robinhood MCP
+- 降级策略：不自动切换到其他模型；只对明确的瞬时网络或限流错误最多重试一次
+
+模型超时、拒绝、输出不符合 schema、引用不存在的证据或达到重试上限时，本次研究运行失败，不产生可供策略使用的完整 `ResearchPacket`。每次调用必须记录模型 ID、请求 ID、prompt 版本、工具 schema 版本、token 用量和输入输出摘要；不得向模型发送账户号码、凭据或完成研究所不需要的个人信息。
+
+参考：
+
+- [OpenAI GPT-5.6 model guide](https://developers.openai.com/api/docs/guides/latest-model)
+- [OpenAI Responses API migration guide](https://developers.openai.com/api/docs/guides/migrate-to-responses)
+- [OpenAI Structured Outputs](https://developers.openai.com/api/docs/guides/structured-outputs)
+- [OpenAI API data controls](https://developers.openai.com/api/docs/guides/your-data#v1responses)
 
 ### 5.3 Strategy Engine
 
@@ -396,18 +416,22 @@ Risk Engine 返回：
 
 ### 5.5 Approval Service
 
-Approval Service 创建订单提案、生成一次性令牌并验证 Passkey。
+Approval Service 创建订单提案、冻结 `order_hash`，并根据执行范围验证一次性人工批准。审批事件必须显式包含：
 
-Telegram 只发送：
+- `approval_method`：首版 Paper 使用 `telegram`，实盘只能使用 `webauthn`
+- `approval_scope`：`paper` 或 `live`
+- `proposal_id`
+- `order_hash`
+- `approved_at`
+- 审批者的稳定标识
 
-- 订单摘要
-- 风险摘要
-- 有效期
-- 指向安全审批页面的 HTTPS 链接
+首版只运行 Paper Trading，可以暂不部署公网审批域名和 Passkey。Telegram 私聊消息必须显示订单与风险摘要、有效期和明显的 `PAPER` 标识，并提供与具体 proposal 绑定的一次性批准按钮。系统不得接受没有 proposal 标识的普通 `approve` 文本；Telegram callback 只携带不透明 nonce，订单字段仍从服务端读取。
 
-Telegram 不是身份验证或最终授权边界。单击聊天按钮不得直接调用 Robinhood。
+Telegram Paper 批准必须同时验证数值型 `user_id`、数值型私聊 `chat_id`、`chat.type == "private"`、原始 `message_id`、一次性 nonce、proposal 状态、`order_hash` 和有效期，并在同一事务中完成一次性状态迁移。Telegram username 只能显示，不能用作身份或授权依据。
 
-安全审批页面必须：
+Telegram 批准只能产生 `approval_method=telegram`、`approval_scope=paper` 的审批事件，只能交给 Paper Broker。Execution Service 的实盘路径必须拒绝任何不是 `approval_method=webauthn` 且 `approval_scope=live` 的审批事件。
+
+在启用任何真实下单前，必须部署固定 HTTPS origin 并启用 Passkey。实盘安全审批页面必须：
 
 1. 从服务端读取订单，不能相信 URL 中的订单参数。
 2. 显示标的、方向、数量、订单类型、限价和最坏金额。
@@ -528,7 +552,7 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 
 `order_hash` 使用规范化序列化后的关键订单字段计算，审批和执行都必须校验它。
 
-## 7. Telegram 与 iPhone 审批流程
+## 7. Telegram Paper 审批与 iPhone 实盘审批流程
 
 ```mermaid
 sequenceDiagram
@@ -537,34 +561,52 @@ sequenceDiagram
     participant U as "用户 iPhone"
     participant A as "Approval Service"
     participant E as "Execution Service"
-    participant R as "Robinhood MCP"
+    participant B as "Paper Broker / Robinhood MCP"
 
-    O->>A: "创建订单提案与一次性令牌"
-    A->>T: "发送订单摘要和 HTTPS 链接"
+    O->>A: "创建订单提案、order_hash 与一次性 nonce"
+    A->>T: "发送订单/风险摘要与绑定 proposal 的按钮"
     T->>U: "iOS 推送通知"
-    U->>A: "打开审批页"
-    A->>U: "显示服务端订单详情"
-    U->>A: "Face ID / Passkey 签署挑战"
-    A->>A: "验证用户、订单哈希和有效期"
-    A->>E: "发送一次性批准事件"
-    E->>E: "重新拉取数据并运行风控"
-    E->>R: "提交订单"
-    R-->>E: "订单 ID 和状态"
+    alt "Paper Trading"
+        U->>T: "点击 Paper Approve"
+        T->>A: "callback update"
+        A->>A: "验证 user/chat/message/nonce/hash/expiry"
+        A->>E: "telegram + paper 批准事件"
+    else "实盘"
+        U->>A: "打开固定 HTTPS origin"
+        A->>U: "显示服务端订单详情"
+        U->>A: "Face ID / Passkey 签署挑战"
+        A->>A: "验证 origin、用户、订单哈希和有效期"
+        A->>E: "webauthn + live 批准事件"
+    end
+    E->>E: "校验 method/scope、重新拉取数据并运行风控"
+    E->>B: "按 scope 提交模拟单或实盘单"
+    B-->>E: "订单 ID 和状态"
     E->>T: "更新为已提交/成交/失败"
 ```
 
 Telegram Bot 安全要求：
 
-- 仅允许配置中的 Telegram `user_id` 和私聊 `chat_id`
-- Webhook 使用 HTTPS 和 Telegram secret token
+- staging 和 production 分别创建独立 Bot、独立 token 和独立允许列表
+- 禁止 Bot 加入群组，仅允许配置中的数值型 Telegram `user_id` 和私聊 `chat_id`
+- username 不作为身份依据；ID 使用 64 位整数保存
+- 首版 Paper 可以使用单实例 `getUpdates` 长轮询，不要求公网域名；offset 必须持久化并按 `update_id` 幂等
+- 切换到 webhook 时必须使用 HTTPS 和 Telegram secret token，并限制 `allowed_updates`
 - Bot token 仅存放在 secrets manager 或受保护的环境变量中
 - 日志中不得记录 Bot token、完整审批令牌或账户号码
 - 消息不包含 Robinhood 凭据和不必要的完整账户数据
-- 审批链接至少使用 256 位随机令牌，数据库只保存令牌哈希
-- 链接 60–120 秒失效并只能消费一次
+- Paper 批准按钮只能携带与服务端 proposal 绑定的不透明 nonce；nonce 至少 256 位随机、数据库只保存哈希
+- Paper 批准 nonce 和实盘审批链接均在 60–120 秒内失效并只能消费一次
+- 普通 `approve` 文本、群聊消息、转发消息、错误 message ID、非白名单 ID 和重复 callback 均不能批准
 - Telegram 不可用、消息未送达或用户未响应时，一律不交易
 
-Passkey 参考：[Apple Passkeys](https://developer.apple.com/passkeys/)
+首版不实现 Passkey。实盘前必须确定固定域名和部署环境，通过独立的非 Telegram bootstrap 注册首个 Passkey，并至少登记两个可恢复凭据；Telegram 不得注册或重置 Passkey。
+
+参考：
+
+- [Telegram Bot API：getUpdates](https://core.telegram.org/bots/api#getupdates)
+- [Telegram Bot API dialog IDs](https://core.telegram.org/api/bots/ids)
+- [Apple Passkeys](https://developer.apple.com/passkeys/)
+- [W3C WebAuthn](https://www.w3.org/TR/webauthn-3/)
 
 ## 8. 状态机
 
@@ -595,6 +637,8 @@ stateDiagram-v2
 ```
 
 `SUBMIT_UNKNOWN` 发生时绝不能盲目重试下单。系统必须先根据幂等键、客户端订单 ID 和 Robinhood 订单历史进行核对。
+
+`APPROVED` 状态本身不代表具备实盘权限。每个批准事件必须保存 `approval_method` 和 `approval_scope`；Paper Broker 只接受 `scope=paper`，Robinhood 写路径只接受 `method=webauthn` 且 `scope=live`。这个检查必须同时存在于 schema、状态交接和 Execution live guard 中。
 
 ## 9. 存储与审计
 
@@ -632,7 +676,7 @@ stateDiagram-v2
 
 | 能力 | 首选组件 | 说明 |
 |---|---|---|
-| Agent 与结构化输出 | [Pydantic AI](https://github.com/pydantic/pydantic-ai) | 模型无关、工具调用、MCP、结构化输出 |
+| Agent 与结构化输出 | [Pydantic AI](https://github.com/pydantic/pydantic-ai) + OpenAI Responses API | 首版固定 `gpt-5.6-sol`、`medium`、`store=false` 和严格结构化输出 |
 | 数据协议与配置 | [Pydantic](https://github.com/pydantic/pydantic) | 领域模型、验证与 JSON Schema |
 | 默认行情与标准化基本面 | Robinhood 官方 Trading MCP | 实盘唯一报价源；也优先复用官方历史行情、基本面、指标和账户工具 |
 | 原始申报与监管事件 | [EdgarTools](https://github.com/dgunning/edgartools) + SEC EDGAR | 10-K、10-Q、8-K、Form 4、XBRL 和可引用证据 |
@@ -644,8 +688,8 @@ stateDiagram-v2
 | 绩效分析 | [QuantStats](https://github.com/ranaroussi/quantstats) | 收益、波动、回撤和报告 |
 | 交易日历 | [pandas-market-calendars](https://github.com/rsheftel/pandas_market_calendars) | 节假日、提前收市和交易时段 |
 | HTTPS API | [FastAPI](https://github.com/fastapi/fastapi) | 审批和管理接口 |
-| Telegram | [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) | Bot API、Webhook 和消息按钮 |
-| Face ID/Passkey | [py_webauthn](https://github.com/duo-labs/py_webauthn) | WebAuthn 服务端挑战与验证 |
+| Telegram | [python-telegram-bot](https://github.com/python-telegram-bot/python-telegram-bot) | 首版使用私聊长轮询和绑定 proposal 的 Paper 批准按钮；实盘仅发送 HTTPS 链接 |
+| Face ID/Passkey | [py_webauthn](https://github.com/duo-labs/py_webauthn) | 首版暂缓；任何实盘前必须完成 WebAuthn 服务端挑战与验证 |
 | 状态机 | [transitions](https://github.com/pytransitions/transitions) | MVP 订单状态迁移 |
 | 数据库 | [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) + Alembic | 事务、持久化和迁移 |
 | 调度 | [APScheduler](https://github.com/agronholm/apscheduler) 3.11.x | 4.x 稳定前固定 3.x |
@@ -706,9 +750,12 @@ ainvest/
 - 允许标的
 - 交易时段
 - 数据新鲜度阈值
+- AI 模型 ID、推理强度、prompt 版本和 `store=false`
+- Telegram 允许的数值型 `user_id`/私聊 `chat_id` 与审批 scope
 
 敏感信息不得进入 Git：
 
+- OpenAI API key
 - Telegram Bot token
 - Telegram webhook secret
 - Passkey/WebAuthn 服务端密钥
@@ -795,16 +842,19 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 - 使用假的市场数据供应商
 - 使用假的 Telegram API
 - 使用 Paper Broker 或 Robinhood MCP mock
-- 测试网络超时、重复 webhook 和乱序事件
+- 测试长轮询 offset、网络超时、重复 update/webhook 和乱序事件
+- 验证 Telegram Paper 批准包含正确的 method/scope，且不能进入实盘 Execution
 
 ### 14.4 实盘前安全测试
 
 - 审批过期后不能下单
 - 修改数量或限价后审批失效
 - 重复点击只产生一个执行请求
+- 任意 `approval_method=telegram` 或 `approval_scope=paper` 的事件都不能进入 Robinhood 写路径
+- Passkey origin、RP ID、challenge、订单哈希或用户验证不匹配时不能下单
 - MCP 超时不会盲目重复订单
 - kill switch 阻止所有新订单
-- 非白名单 Telegram 用户不能审批
+- 非白名单 Telegram 用户不能批准 Paper proposal
 - 非 Agentic Account 不能交易
 - 任一必需风控额度未配置时不能交易
 - 非美股常规交易时段不能创建或执行新订单
@@ -834,14 +884,15 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 验收标准：研究输出完全符合 schema，关键数值由确定性工具生成。
 
-### Phase 3：Telegram 与安全审批
+### Phase 3：Telegram Paper 审批
 
-- Telegram Bot 私聊通知
-- HTTPS 审批页面
-- Passkey 注册与 Face ID 验证
-- 一次性审批令牌和订单哈希
+- staging/production 独立 Telegram Bot 配置和数值型 user/chat allowlist
+- 使用单实例长轮询接收私聊 update，无需公网域名
+- 显示完整 Paper 订单摘要并提供绑定 proposal/order_hash 的一次性批准按钮
+- 将审批固定标记为 `approval_method=telegram`、`approval_scope=paper`
+- 重复、过期、错误用户、群聊、普通 `approve` 文本和篡改回调全部失败关闭
 
-验收标准：Telegram 单击无法直接交易，重放和篡改测试全部失败关闭。
+验收标准：Telegram 批准只能驱动 Paper Broker；没有任何公网域名或 Passkey 也能完成可审计的 Paper 闭环；重放和篡改测试全部失败关闭。
 
 ### Phase 4：Robinhood 只读接入
 
@@ -854,13 +905,16 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ### Phase 5：受控实盘
 
+- 部署固定 HTTPS 审批域名和与研究/执行隔离的 Approval Service
+- 通过独立 bootstrap 注册 Passkey，并至少登记两个可恢复凭据
 - 专用 Agentic Account
 - 极小预算
 - 只允许白名单股票/ETF 和限价单
-- 每笔 Face ID 审批
+- 每笔 Face ID/Passkey 审批；Telegram 仅通知和打开审批页
+- 实盘只接受 `approval_method=webauthn`、`approval_scope=live`
 - 下单前二次风控与成交核对
 
-验收标准：完成小额端到端演练，审计记录可还原全部输入、批准和 Broker 响应。
+验收标准：Telegram Paper 审批无法进入实盘路径；完成小额端到端演练，审计记录可还原全部输入、Passkey 批准和 Broker 响应。
 
 ## 16. 已确定的产品决策
 
@@ -876,7 +930,12 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 | 策略输出 | 交易意图与目标仓位，不直接生成 Broker 订单 |
 | 策略隔离 | 独立工作进程、无凭据、默认无网络 |
 | 手机通知 | Telegram Bot 私聊 |
-| 最终授权 | HTTPS 审批页 + iPhone Face ID/Passkey |
+| AI 供应商和模型 | OpenAI `gpt-5.6-sol` |
+| AI 调用方式 | Pydantic AI + Responses API；`medium`、`store=false`、严格结构化输出、关闭内置网页搜索、不自动切换模型 |
+| 首版 Paper 审批 | Telegram 私聊中绑定 proposal/order_hash 的一次性按钮；`approval_method=telegram`、`approval_scope=paper` |
+| Telegram 身份 | staging/production 独立 Bot；只信任数值型 `user_id` 和私聊 `chat_id`，不以 username 鉴权 |
+| 首版审批部署 | 使用单实例长轮询；不要求公网审批域名或 Passkey |
+| 实盘最终授权 | 固定 HTTPS 审批页 + iPhone Face ID/Passkey；只接受 `approval_method=webauthn`、`approval_scope=live` |
 | 首版资产 | 美股和 ETF |
 | 首版订单 | 优先限价单 |
 | 首版执行模式 | 默认 Paper Trading |
@@ -893,11 +952,18 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ## 17. 实现前仍需确定
 
-- AI 模型与调用方式
-- 审批页面域名和部署环境
-- Telegram Bot 的创建与允许用户 ID
+首版 Paper Trading 开始前仍需由账户持有人提供或确定：
+
+- OpenAI API 项目凭据和月度预算上限
+- 创建 staging/production Telegram Bot，并提供对应的数值型 `user_id` 和私聊 `chat_id`；Bot token 只进入 secret 存储，不写入文档
 - 首版策略和具体参数
 - 单笔、单股、单日和最大回撤限制的具体数值
 - 数据和审计记录保留期限
 
-这些选择不影响总体架构，可以在各阶段开始前分别确定。
+启用任何实盘写单前另需确定：
+
+- 固定审批页面域名、云部署环境、TLS、数据库和 secret manager
+- 首个 Passkey 的独立 bootstrap 与恢复流程
+- Robinhood Agentic Account 授权和实盘预算
+
+这些值不影响已经确定的总体架构，可以在对应阶段开始前分别提供。没有实盘域名和 Passkey 时系统必须保持 Paper 模式。
