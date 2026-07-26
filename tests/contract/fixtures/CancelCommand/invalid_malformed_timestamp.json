@@ -1,0 +1,11 @@
+{
+  "account_scope": "paper",
+  "broker_order_id": "brk_ord_1",
+  "cancel_id": "cncl_01HZYEXAMPLE0001",
+  "idempotency_key": "cancel-key-0001",
+  "order_hash": "sha256:d1b50c5ba161bf21c22422d2f45b6dab5b01ce67583a66b089f7c3f1e3a77fe7",
+  "proposal_id": "ordp_01HZYEXAMPLE0001",
+  "reason_code": "USER_REQUESTED",
+  "requested_at": "2026-13-01T18:30:00Z",
+  "schema_version": "1.0"
+}

@@ -50,7 +50,9 @@ UTC_DATETIME_JSON_SCHEMA: Final[dict[str, object]] = {
 }
 
 # A v1 model must not silently accept a document claiming a different wire
-# contract. New major/minor versions receive their own explicit model line.
+# contract. When a backward-compatible v1.1 model is implemented, expand this
+# cumulatively to Literal["1.0", "1.1"] so the newer validator still accepts
+# every older v1 payload it claims to support.
 SchemaVersion = Literal["1.0"]
 
 Symbol = Annotated[

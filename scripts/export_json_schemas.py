@@ -140,6 +140,10 @@ def _fixture_documents(name: str) -> dict[str, dict[str, Any]]:
         _set_path(naive, timestamp_path, "2026-07-24T18:30:00")
         documents["invalid_naive_timestamp.json"] = naive
 
+        malformed = deepcopy(valid)
+        _set_path(malformed, timestamp_path, "2026-13-01T18:30:00Z")
+        documents["invalid_malformed_timestamp.json"] = malformed
+
     return documents
 
 

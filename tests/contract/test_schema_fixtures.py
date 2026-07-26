@@ -15,6 +15,7 @@ from ainvest.schemas.examples import example_payload
 from ainvest.schemas.export import EXPORTED_MODELS, render_model_json_schema
 
 FIXTURE_ROOT = Path(__file__).parent / "fixtures"
+JSON_FORMAT_CHECKER = FormatChecker()
 
 
 @pytest.mark.contract
@@ -30,7 +31,7 @@ def test_each_schema_has_valid_and_invalid_fixtures(model_name: str) -> None:
 
     json_schema_validator = Draft202012Validator(
         render_model_json_schema(model),
-        format_checker=FormatChecker(),
+        format_checker=JSON_FORMAT_CHECKER,
     )
     assert list(json_schema_validator.iter_errors(valid_payload)) == []
 
@@ -66,8 +67,17 @@ def test_v1_models_reject_unsupported_payload_versions(model_name: str) -> None:
         model.model_validate(payload)
 
     schema = render_model_json_schema(model)
-    validator = Draft202012Validator(schema, format_checker=FormatChecker())
+    validator = Draft202012Validator(schema, format_checker=JSON_FORMAT_CHECKER)
     assert list(validator.iter_errors(payload))
+
+
+@pytest.mark.contract
+def test_json_schema_date_time_format_checker_is_active() -> None:
+    """The optional RFC 3339 dependency must be installed, not silently skipped."""
+    assert "date-time" in JSON_FORMAT_CHECKER.checkers
+    assert JSON_FORMAT_CHECKER.conforms("2026-07-24T18:30:00Z", "date-time")
+    assert not JSON_FORMAT_CHECKER.conforms("fooZ", "date-time")
+    assert not JSON_FORMAT_CHECKER.conforms("2026-13-01T18:30:00Z", "date-time")
 
 
 @pytest.mark.contract

@@ -24,11 +24,18 @@ support Strategy API `1.x` while exchanging only payload `schema_version`
 
 Format: `MAJOR.MINOR` (two non-negative integers, no patch segment).
 
-Each generated model line accepts only the exact payload versions it implements.
-The current `v1` artifacts implement `schema_version="1.0"` and reject documents
-claiming another minor or major. Supporting a later version requires an explicit
-model/schema artifact and migration boundary; matching the `MAJOR.MINOR` text
-shape alone never makes a payload compatible.
+Each generated model line accepts only the payload versions it explicitly
+implements. The current `v1` artifacts implement only
+`schema_version="1.0"` and reject documents claiming another minor or major;
+matching the `MAJOR.MINOR` text shape alone never makes a payload compatible.
+
+Support within a major is cumulative. When a backward-compatible `1.1` model is
+implemented, its accepted version type becomes `Literal["1.0", "1.1"]` (or an
+equivalent explicit version dispatcher), and its contract tests must prove that
+every valid `1.0` fixture still validates. It must not replace the accepted set
+with only `Literal["1.1"]`. An older `1.0` validator may reject a `1.1` document;
+that is the forward-compatibility limitation described below. A new major uses
+new models/artifacts and the explicit migration boundary described later.
 
 Compatibility is evaluated under ainvest's fail-closed unknown-field policy
 (`extra="forbid"` / exported `additionalProperties: false`). That policy makes
@@ -123,8 +130,9 @@ There is no silent removal inside a minor line.
 - Checked by `./scripts/dev export-schemas --check` and contract tests (also
   part of `./scripts/dev verify` / CI)
 - Valid and invalid fixtures are checked with a standards-based JSON Schema
-  validator as well as the authoritative Pydantic model. UTC fields require an
-  explicit `Z` or numeric offset; naive timestamps fail both boundaries.
+  validator and its installed RFC 3339 `date-time` format checker, as well as
+  the authoritative Pydantic model. UTC fields require an explicit `Z` or
+  numeric offset; naive and malformed timestamps fail both boundaries.
 
 Intentional breaking or additive schema edits update the committed files in the
 same PR. Unintended diffs fail CI.
