@@ -82,21 +82,24 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | complete (merged) |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | complete (merged) |
 | Batch B complete | Batch B | all of the above | complete |
-| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | next |
-| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | next (parallel with C1/C3) |
-| Batch C — Part 3 (C3) | Batch C | `P03-T13`, `P03-T14` | next (after/with C1 persistence) |
-| Batch C — Part 4 (C4) | Batch C | `P03-T8`–`P03-T11` | after sizer interface |
+| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | next (critical path; parallel with C2/C3a) |
+| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | next (parallel with C1/C3a) |
+| Batch C — Part 3a (C3a) | Batch C | `P03-T13` | next (parallel with C1/C2) |
+| Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
+| Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
+| Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch C** (after schemas stabilize). Preferred first claims
-are **C1** (`P02-T6`–`P02-T8`, `db` / audit / migrations) and/or **C2**
-(`P03-T0`–`P03-T3`, Strategy API / registry / reference plugin). C1 and C2 may
-proceed in parallel on disjoint paths; C3 needs persistence coordination with
-C1; C4 waits on the sizer interface. A coordinator must claim a Batch C part
-here from current `main` before implementation begins.
+None. Next claims (parallel after Batch B): **C1** (critical path:
+`P02-T6`–`P02-T8`), **C2** (`P03-T0`–`P03-T3`), and **C3a** (`P03-T13` only).
+Do **not** claim **C3b** (`P03-T14`) until C1 and Batch D `P02-T9` land.
+After C1, **C4a** (`P03-T8`/`T10`/`T11`) may start; **C4b** (`P03-T9`) waits
+on the Batch D sizer (`P03-T6`). Coordinators must claim each part here from
+current `main` before implementation begins. See `IMPLEMENTATION_TODO.md`
+section 12 Batch C for the corrected unlock table.
 
 ## Completed batches
 

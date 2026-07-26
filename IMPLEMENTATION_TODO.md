@@ -1341,12 +1341,22 @@ Phase 08 is a parallel assurance phase. Its cards support multiple delivery phas
 
 ### Batch C — After Schemas Stabilize
 
-| Agent | Task cards | Primary write scope | Parallelization |
+Launch **C1**, **C2**, and **C3a** in parallel after Batch B. **C1 is the
+critical path.** Do not claim C3b / C4b until their card dependencies unlock.
+
+| Agent | Task cards | Primary write scope | Parallelization / unlock |
 |---|---|---|---|
-| C1 | P02-T6 through P02-T8 | `db`, `audit`, `migrations` | Parallel with C2/C3 |
-| C2 | P03-T0 through P03-T3 | `strategies`, reference plugin | Before P03-T4 |
-| C3 | P03-T13 + P03-T14 | `execution/broker.py`, `paper.py` | Connect persistence after C1 |
-| C4 | P03-T8 through P03-T11 | `risk` | Integrate after sizer interface |
+| C1 | P02-T6 through P02-T8 | `db`, `audit`, `migrations` | Critical path; parallel with C2 and C3a |
+| C2 | P03-T0 through P03-T3 | `strategies`, reference plugin | Parallel with C1/C3a; before P03-T4 |
+| C3a | P03-T13 | `execution/broker.py` | Parallel with C1/C2 (port + error taxonomy only) |
+| C3b | P03-T14 | `execution/paper.py` | After C1 **and** P02-T9 (Batch D state machine) |
+| C4a | P03-T8, P03-T10, P03-T11 | `risk` framework + eligibility/market-quality rules | After C1 (`P02-T8`); does **not** need the sizer |
+| C4b | P03-T9 | `risk/rules/exposure.py` | After C4a **and** P03-T6 (Batch D sizer) |
+
+Note: the older Batch C row that bundled `P03-T13`+`P03-T14` and put all of
+`P03-T8`–`P03-T11` behind the sizer was inconsistent with the task-card
+dependencies. Agents must follow the table above and each card's Dependencies
+line.
 
 ### Batch D — Close Gate 1
 
