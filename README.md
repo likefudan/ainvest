@@ -4,9 +4,9 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Batch B — Part 2 (B2) portfolio/strategy schemas are in review (`P02-T2`).
-Next after merge: Batch B — Part 3 (B3), `P02-T3` + `P02-T4`. Real-money
-trading remains disabled.
+Batch B — Part 2 (B2) portfolio/strategy schemas are complete (`P02-T2`).
+Next: Batch B — Part 3 (B3), `P02-T3` + `P02-T4`. Real-money trading remains
+disabled.
 
 Project coordination:
 
