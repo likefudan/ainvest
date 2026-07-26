@@ -78,8 +78,8 @@ plan batch complete only when every card in that section has merged.
 | Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
 | Batch A complete | Batch A | all of the above | complete |
 | Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | complete (merged) |
-| Batch B — Part 2 (B2) | Batch B | `P02-T2` | in_review |
-| Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | after B2 |
+| Batch B — Part 2 (B2) | Batch B | `P02-T2` | complete (merged) |
+| Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | next |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | after B3 |
 | Batch B complete | Batch B | all of the above | after B4 merges |
 
@@ -87,16 +87,26 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
+None. Next claim: **Batch B — Part 3 (B3)** (`P02-T3`, `P02-T4`) —
+candidate-order, risk, approval, and broker schemas plus canonical order
+serialization and hashing. Its coordinator must claim B3 here from current
+`main` before implementation begins.
+
+## Completed batches
+
 ### Batch B — Part 2 (B2)
 
 - **Batch:** Batch B — Part 2 (B2) — portfolio, strategy-context, and
   trade-signal schemas (`P02-T2`)
 - **Plan batch:** Batch B (partial; remaining parts B3–B4)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
-- **Integration:** [PR #23](https://github.com/likefudan/ainvest/pull/23)
-- **Integration branch:** `task/batch-b2-strategy-schemas`
+- **Status:** `merged`
+- **Integration:** [PR #23](https://github.com/likefudan/ainvest/pull/23),
+  squash merged into `main`
+- **Integration branch:** `task/batch-b2-strategy-schemas` (deleted after
+  squash merge)
 - **Base commit:** `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d`
+- **Implementation commit:** `ff8e5612703fb036a9cf7d3c8fb15682b4d3a0db`
 - **Dependency PRs/commits:** Batch B1 /
   [PR #21](https://github.com/likefudan/ainvest/pull/21) /
   [PR #22](https://github.com/likefudan/ainvest/pull/22)
@@ -107,7 +117,9 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Safety posture:** domain schemas and unit tests only; Paper remains the
   default; no broker write capability, credentials, AI calls, Telegram, or live
   trading are introduced
-- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Verification:** final `./scripts/dev verify` passed (138 tests; 84.10%
+  coverage); `./scripts/dev audit` found no known vulnerabilities; all required
+  PR checks passed
 - **Handoff notes:** Added frozen `PortfolioSnapshot` (account scope, cash,
   buying power, positions, exposure, open orders) plus immutable
   `StrategyContext` / `TradeSignal`. Strength is signed `[-1,1]` and not a
@@ -115,13 +127,11 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
   timestamps, inverted expiry windows, missing strategy versions, and
   inconsistent exposure fail closed. `./scripts/dev verify` passed (138 tests;
   84.10% coverage); `./scripts/dev audit` clean.
-- **Next after merge:** Batch B — Part 3 (B3) — `P02-T3` + `P02-T4`
+- **Next:** Batch B — Part 3 (B3) — `P02-T3` + `P02-T4`
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T2` | Define Portfolio, Strategy Context, and TradeSignal Schemas | `in_review` | cursor-agent | `task/batch-b2-strategy-schemas` | `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d` | `P02-T0`, `P02-T1` | [#23](https://github.com/likefudan/ainvest/pull/23) |
-
-## Completed batches
+| `P02-T2` | Define Portfolio, Strategy Context, and TradeSignal Schemas | `merged` | cursor-agent | `task/batch-b2-strategy-schemas` (deleted) | `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d` | `P02-T0`, `P02-T1` | [#23](https://github.com/likefudan/ainvest/pull/23) |
 
 ### Batch B — Part 1 (B1)
 
