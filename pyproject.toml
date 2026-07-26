@@ -54,6 +54,7 @@ dev = [
     "types-pyyaml>=6.0.12,<7",
 ]
 test = [
+    "ainvest-ma",
     "hypothesis>=6.130,<7",
     "httpx>=0.28,<1",
     "jsonschema[format]>=4.26,<5",
@@ -66,6 +67,8 @@ test = [
 [tool.uv]
 default-groups = ["dev", "test"]
 
+[tool.uv.sources]
+ainvest-ma = { path = "examples/strategies/moving_average", editable = true }
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainvest"]
 
@@ -95,7 +98,7 @@ skip_covered = true
 [tool.ruff]
 target-version = "py312"
 line-length = 100
-src = ["src", "tests"]
+src = ["src", "tests", "examples"]
 extend-exclude = ["*.md"]
 
 [tool.ruff.lint]
@@ -111,9 +114,14 @@ select = [
 
 [tool.ruff.lint.per-file-ignores]
 "tests/**/*.py" = ["S101"]
+"examples/**/*.py" = ["S101"]
 
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests"]
+files = ["src", "tests", "examples/strategies/moving_average/src"]
 warn_unreachable = true
+exclude = [
+    "(^|/)conftest\\.py$",
+    "(^|/)helpers\\.py$",
+]

@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ainvest-ma"
+version = "1.0.0"
+description = "Reference moving-average crossover strategy plugin for ainvest"
+requires-python = ">=3.12"
+dependencies = []
+
+[project.entry-points."ainvest.strategies"]
+moving_average = "ainvest_ma.plugin:plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ainvest_ma"]
