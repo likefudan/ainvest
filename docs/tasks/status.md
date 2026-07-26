@@ -94,7 +94,7 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Plan batch:** Batch B (completes Batch B when this part merges)
 - **Coordinator:** cursor-agent / local
 - **Status:** `in_review`
-- **Integration:** [PR TBD](https://github.com/likefudan/ainvest/pulls)
+- **Integration:** [PR #27](https://github.com/likefudan/ainvest/pull/27)
 - **Integration branch:** `task/batch-b4-schema-versioning`
 - **Base commit:** `c843aa198deb4fe362957ae01780b53450aae8ea`
 - **Dependency PRs/commits:** Batch B3 /
@@ -119,7 +119,7 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T5` | Establish Schema Versioning and Compatibility Rules | `in_review` | cursor-agent | `task/batch-b4-schema-versioning` | `c843aa198deb4fe362957ae01780b53450aae8ea` | `P02-T0`–`P02-T4` | TBD |
+| `P02-T5` | Establish Schema Versioning and Compatibility Rules | `in_review` | cursor-agent | `task/batch-b4-schema-versioning` | `c843aa198deb4fe362957ae01780b53450aae8ea` | `P02-T0`–`P02-T4` | [#27](https://github.com/likefudan/ainvest/pull/27) |
 
 ## Completed batches
 
