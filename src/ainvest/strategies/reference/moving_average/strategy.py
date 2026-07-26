@@ -14,6 +14,7 @@ from typing import ClassVar, Self
 
 from pydantic import Field, model_validator
 
+from ainvest.schemas.common import Weight
 from ainvest.schemas.strategy import (
     SignalIntent,
     StrategyContext,
@@ -39,7 +40,8 @@ class MovingAverageParams(StrategyParams):
 
     fast_window: int = Field(default=20, ge=2)
     slow_window: int = Field(default=50, ge=3)
-    target_weight: Decimal = Field(default=Decimal("0.10"), gt=0, le=1)
+    # Domain Weight so scientific notation / extreme exponents fail at bind time.
+    target_weight: Weight = Field(default=Decimal("0.10"), gt=0)
 
     @model_validator(mode="after")
     def _fast_slower_than_slow(self) -> Self:

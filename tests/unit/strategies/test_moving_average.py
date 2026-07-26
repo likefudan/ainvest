@@ -22,6 +22,12 @@ def test_params_require_fast_lt_slow() -> None:
 
 
 @pytest.mark.unit
+def test_params_reject_scientific_target_weight() -> None:
+    with pytest.raises(ValidationError):
+        MovingAverageParams.model_validate({"target_weight": "1E-50"})
+
+
+@pytest.mark.unit
 def test_buy_on_cross_above() -> None:
     strategy = MovingAverageStrategy(MovingAverageParams())
     result = strategy.evaluate(make_context(sma_20="210.00", sma_50="200.00"))
