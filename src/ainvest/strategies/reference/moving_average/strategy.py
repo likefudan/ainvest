@@ -12,7 +12,7 @@ from datetime import timedelta
 from decimal import Decimal
 from typing import ClassVar, Self
 
-from pydantic import Field, model_validator
+from pydantic import Field, field_validator, model_validator
 
 from ainvest.schemas.common import Weight
 from ainvest.schemas.strategy import (
@@ -24,6 +24,7 @@ from ainvest.schemas.strategy import (
     TradeSignal,
 )
 from ainvest.strategies import StrategyDiagnostics, StrategyParams, StrategyResult
+from ainvest.strategies.config import parse_duration
 
 _STATE_KEY_FAST_ABOVE: str = "fast_above_slow"
 _DEFAULT_SIGNAL_TTL: timedelta = timedelta(minutes=30)
@@ -42,11 +43,21 @@ class MovingAverageParams(StrategyParams):
     slow_window: int = Field(default=50, ge=3)
     # Domain Weight so scientific notation / extreme exponents fail at bind time.
     target_weight: Weight = Field(default=Decimal("0.10"), gt=0)
+    signal_ttl: timedelta = Field(default=_DEFAULT_SIGNAL_TTL)
+
+    @field_validator("signal_ttl", mode="before")
+    @classmethod
+    def _parse_signal_ttl(cls, value: object) -> object:
+        if isinstance(value, (str, timedelta)):
+            return parse_duration(value)
+        return value
 
     @model_validator(mode="after")
     def _fast_slower_than_slow(self) -> Self:
         if self.fast_window >= self.slow_window:
             raise ValueError("fast_window must be < slow_window")
+        if self.signal_ttl <= timedelta(0):
+            raise ValueError("signal_ttl must be positive")
         return self
 
 
@@ -181,7 +192,7 @@ class MovingAverageStrategy:
         target_weight: Decimal | None,
     ) -> TradeSignal:
         generated_at = context.as_of
-        expires_at = generated_at + _DEFAULT_SIGNAL_TTL
+        expires_at = generated_at + self._params.signal_ttl
         return TradeSignal(
             signal_id=self._signal_id(context, intent=intent, reason_codes=reason_codes),
             research_id=context.research.research_id,

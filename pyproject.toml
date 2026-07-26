@@ -123,5 +123,4 @@ files = ["src", "tests"]
 warn_unreachable = true
 exclude = [
     "(^|/)conftest\\.py$",
-    "(^|/)helpers\\.py$",
 ]

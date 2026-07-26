@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
+from datetime import timedelta
 from decimal import Decimal
 
 import pytest
-from helpers import context_payload, make_context
 from pydantic import ValidationError
+from strategy_fixtures import context_payload, make_context
 
 from ainvest.schemas.strategy import SignalIntent, parse_strategy_context
 from ainvest.strategies.reference.moving_average.strategy import (
@@ -25,6 +26,14 @@ def test_params_require_fast_lt_slow() -> None:
 def test_params_reject_scientific_target_weight() -> None:
     with pytest.raises(ValidationError):
         MovingAverageParams.model_validate({"target_weight": "1E-50"})
+
+
+@pytest.mark.unit
+def test_signal_ttl_from_params_controls_expiry() -> None:
+    strategy = MovingAverageStrategy(MovingAverageParams.model_validate({"signal_ttl": "15m"}))
+    context = make_context(sma_20="210.00", sma_50="200.00")
+    signal = strategy.evaluate(context).signals[0]
+    assert signal.expires_at - signal.generated_at == timedelta(minutes=15)
 
 
 @pytest.mark.unit

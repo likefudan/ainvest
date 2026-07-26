@@ -4,10 +4,11 @@ from __future__ import annotations
 
 from datetime import timedelta
 from pathlib import Path
+from typing import cast
 
 import pytest
 import yaml
-from helpers import DemoPlugin, make_metadata
+from strategy_fixtures import DemoPlugin, make_metadata
 
 from ainvest.config import TradingMode
 from ainvest.strategies import (
@@ -20,6 +21,7 @@ from ainvest.strategies import (
     load_strategy_instances_document,
     parse_duration,
 )
+from ainvest.strategies.reference.moving_average.strategy import MovingAverageParams
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_YAML = REPO_ROOT / "config" / "strategies.example.yaml"
@@ -206,3 +208,74 @@ def test_live_pin_mismatch_fails(tmp_path: Path) -> None:
     )
     with pytest.raises(StrategyError, match="does not match discovered"):
         load_and_bind_strategy_instances(yaml_path, registry, trading_mode=TradingMode.LIVE)
+
+
+@pytest.mark.unit
+def test_bind_injects_constraint_signal_ttl_into_ma_params(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "ma.yaml"
+    yaml_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1",
+                "strategies": [
+                    {
+                        "id": "aapl_sma_daily",
+                        "plugin": "moving_average",
+                        "strategy": "moving_average",
+                        "enabled": False,
+                        "universe": {"symbols": ["AAPL"], "timeframe": "1d"},
+                        "parameters": {
+                            "fast_window": 20,
+                            "slow_window": 50,
+                            "target_weight": "0.10",
+                        },
+                        "schedule": {"run_at": "market_close_minus_15m"},
+                        "constraints": {
+                            "research_max_age": "30m",
+                            "signal_ttl": "15m",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = StrategyRegistry.load(load_entry_points=True)
+    bound = load_and_bind_strategy_instances(yaml_path, registry)
+    params = cast(MovingAverageParams, bound[0].params)
+    assert params.signal_ttl == timedelta(minutes=15)
+
+
+@pytest.mark.unit
+def test_bind_rejects_signal_ttl_mismatch(tmp_path: Path) -> None:
+    yaml_path = tmp_path / "ma.yaml"
+    yaml_path.write_text(
+        yaml.safe_dump(
+            {
+                "schema_version": "1",
+                "strategies": [
+                    {
+                        "id": "aapl_sma_daily",
+                        "plugin": "moving_average",
+                        "strategy": "moving_average",
+                        "universe": {"symbols": ["AAPL"], "timeframe": "1d"},
+                        "parameters": {
+                            "fast_window": 20,
+                            "slow_window": 50,
+                            "target_weight": "0.10",
+                            "signal_ttl": "45m",
+                        },
+                        "schedule": {"run_at": "market_close_minus_15m"},
+                        "constraints": {
+                            "research_max_age": "30m",
+                            "signal_ttl": "15m",
+                        },
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+    registry = StrategyRegistry.load(load_entry_points=True)
+    with pytest.raises(StrategyError, match="must match"):
+        load_and_bind_strategy_instances(yaml_path, registry)

@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pytest
-from helpers import DemoPlugin, DemoStrategy, make_metadata
+from strategy_fixtures import DemoPlugin, DemoStrategy, make_metadata
 
 from ainvest.config import TradingMode
 from ainvest.strategies import (
@@ -86,6 +86,62 @@ def test_disabled_plugin_skipped() -> None:
         load_entry_points=False,
     )
     assert registry.list() == ()
+
+
+@pytest.mark.unit
+def test_allowlist_skips_entry_point_import(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Non-allowlisted entry points must not be imported (ep.load never called)."""
+    loads: list[str] = []
+
+    class FakeEp:
+        def __init__(self, name: str) -> None:
+            self.name = name
+            self.group = "ainvest.strategies"
+
+        def load(self) -> object:
+            loads.append(self.name)
+            raise AssertionError(f"unexpected load of {self.name}")
+
+    class FakeDist:
+        def __init__(self) -> None:
+            self.metadata = {"Name": "fake"}
+            self.version = "0.0.1"
+            self.entry_points = [FakeEp("other_plugin"), FakeEp("keep_me")]
+
+    import importlib.metadata
+
+    monkeypatch.setattr(
+        importlib.metadata,
+        "distributions",
+        lambda: [FakeDist()],
+    )
+
+    keep = DemoPlugin(make_metadata(plugin_id="keep_me", plugin_version="1.2.3"))
+
+    class KeepStrategy(DemoStrategy):
+        name: ClassVar[str] = "keep_strategy"
+
+    class KeepPlugin:
+        metadata = keep.metadata
+
+        @hookimpl
+        def strategy_definitions(self) -> list[StrategyDefinition]:
+            return [StrategyDefinition.from_type(KeepStrategy, metadata=keep.metadata)]
+
+    def load_keep(self: FakeEp) -> object:
+        loads.append(self.name)
+        if self.name != "keep_me":
+            raise AssertionError(f"non-allowlisted entry point loaded: {self.name}")
+        return KeepPlugin()
+
+    monkeypatch.setattr(FakeEp, "load", load_keep)
+
+    registry = StrategyRegistry.load(
+        RegistryLoadConfig(allowlist={"keep_me": "1.2.3"}),
+        load_entry_points=True,
+    )
+    assert loads == ["keep_me"]
+    assert [item.name for item in registry.list()] == ["keep_strategy"]
 
 
 @pytest.mark.unit

@@ -24,6 +24,9 @@ class RegistryLoadConfig:
 
     Live mode requires a non-empty allowlist of ``plugin_id -> pinned version``.
     Paper/research may omit the allowlist; when present it still restricts load.
+
+    Entry-point names must match ``plugin_id`` values used in ``allowlist`` /
+    ``disabled_plugins`` so non-selected packages are never imported.
     """
 
     trading_mode: TradingMode = TradingMode.PAPER
@@ -150,6 +153,12 @@ class StrategyRegistry:
         for dist in importlib.metadata.distributions():
             for ep in dist.entry_points:
                 if ep.group != config.entry_point_group:
+                    continue
+                # Entry-point name must match plugin_id for allowlist/disabled
+                # pre-filters so non-selected packages are never imported.
+                if ep.name in config.disabled_plugins:
+                    continue
+                if config.allowlist is not None and ep.name not in config.allowlist:
                     continue
                 if ep.name in self._entry_points:
                     raise StrategyError(

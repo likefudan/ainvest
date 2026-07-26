@@ -306,7 +306,25 @@ def bind_strategy_instances(
                     code="STRATEGY_VERSION_MISMATCH",
                 )
 
-        params = definition.validate_params(instance.parameters)
+        raw_params = dict(instance.parameters)
+        # When a params model opts into ``signal_ttl``, default it from instance
+        # constraints so YAML constraints and strategy expiry stay aligned.
+        if "signal_ttl" not in raw_params and "signal_ttl" in definition.params_model.model_fields:
+            raw_params["signal_ttl"] = format_duration(instance.constraints.signal_ttl)
+
+        params = definition.validate_params(raw_params)
+        if "signal_ttl" in definition.params_model.model_fields:
+            param_ttl = getattr(params, "signal_ttl", None)
+            if isinstance(param_ttl, timedelta) and param_ttl != instance.constraints.signal_ttl:
+                raise StrategyError(
+                    (
+                        f"instance {instance.id!r} parameters.signal_ttl "
+                        f"({format_duration(param_ttl)}) must match "
+                        f"constraints.signal_ttl "
+                        f"({format_duration(instance.constraints.signal_ttl)})"
+                    ),
+                    code="STRATEGY_SIGNAL_TTL_MISMATCH",
+                )
         bound.append(BoundStrategyInstance(config=instance, definition=definition, params=params))
     return tuple(bound)
 

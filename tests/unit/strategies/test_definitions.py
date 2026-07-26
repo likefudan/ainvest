@@ -5,8 +5,8 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pytest
-from helpers import DemoStrategy, make_metadata
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from strategy_fixtures import DemoStrategy, make_metadata
 
 from ainvest.strategies import (
     PluginMetadata,
