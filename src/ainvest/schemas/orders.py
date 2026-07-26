@@ -11,7 +11,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import StringConstraints, model_validator
+from pydantic import StringConstraints, field_validator, model_validator
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
@@ -61,6 +61,37 @@ class TimeInForce(StrEnum):
     DAY = "DAY"
 
 
+def _require_limit_order_economics(
+    *,
+    asset_type: AssetType,
+    order_type: OrderType,
+    time_in_force: TimeInForce,
+    created_at: Any,
+    expires_at: Any,
+    quantity: object,
+    quantity_increment: object,
+    limit_price: object,
+    price_increment: object,
+    maximum_notional: object,
+) -> None:
+    """Shared CandidateOrder / OrderProposal fail-closed economics checks."""
+    if asset_type not in {AssetType.EQUITY, AssetType.ETF}:
+        raise ValueError("only EQUITY and ETF are allowed")
+    if order_type is not OrderType.LIMIT:
+        raise ValueError("only LIMIT orders are allowed")
+    if time_in_force is not TimeInForce.DAY:
+        raise ValueError("only DAY time_in_force is allowed")
+    if expires_at <= created_at:
+        raise ValueError("expires_at must be > created_at")
+    if parse_decimal(quantity_increment) <= 0:
+        raise ValueError("quantity_increment must be > 0")
+    if parse_decimal(price_increment) <= 0:
+        raise ValueError("price_increment must be > 0")
+    _require_increment_multiple("quantity", quantity, quantity_increment)
+    _require_increment_multiple("limit_price", limit_price, price_increment)
+    _require_notional_within_limit(quantity, limit_price, maximum_notional)
+
+
 class CandidateOrder(DomainModel):
     """Sizer output before risk approval. Not yet approval-bound."""
 
@@ -87,23 +118,27 @@ class CandidateOrder(DomainModel):
     expires_at: UtcDateTime
     reason_codes: tuple[ReasonCode, ...] = ()
 
+    @field_validator("reason_codes", mode="before")
+    @classmethod
+    def _coerce_reason_codes(cls, value: object) -> object:
+        if value is None:
+            return ()
+        return value
+
     @model_validator(mode="after")
     def _candidate_consistency(self) -> CandidateOrder:
-        if self.asset_type not in {AssetType.EQUITY, AssetType.ETF}:
-            raise ValueError("only EQUITY and ETF are allowed")
-        if self.order_type is not OrderType.LIMIT:
-            raise ValueError("only LIMIT orders are allowed")
-        if self.time_in_force is not TimeInForce.DAY:
-            raise ValueError("only DAY time_in_force is allowed")
-        if self.expires_at <= self.created_at:
-            raise ValueError("expires_at must be > created_at")
-        if self.quantity_increment <= 0:
-            raise ValueError("quantity_increment must be > 0")
-        if self.price_increment <= 0:
-            raise ValueError("price_increment must be > 0")
-        _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
-        _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
-        _require_notional_within_limit(self.quantity, self.limit_price, self.maximum_notional)
+        _require_limit_order_economics(
+            asset_type=self.asset_type,
+            order_type=self.order_type,
+            time_in_force=self.time_in_force,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            quantity=self.quantity,
+            quantity_increment=self.quantity_increment,
+            limit_price=self.limit_price,
+            price_increment=self.price_increment,
+            maximum_notional=self.maximum_notional,
+        )
         return self
 
 
@@ -143,21 +178,18 @@ class OrderProposal(DomainModel):
 
     @model_validator(mode="after")
     def _proposal_consistency(self) -> OrderProposal:
-        if self.asset_type not in {AssetType.EQUITY, AssetType.ETF}:
-            raise ValueError("only EQUITY and ETF are allowed")
-        if self.order_type is not OrderType.LIMIT:
-            raise ValueError("only LIMIT orders are allowed")
-        if self.time_in_force is not TimeInForce.DAY:
-            raise ValueError("only DAY time_in_force is allowed")
-        if self.expires_at <= self.created_at:
-            raise ValueError("expires_at must be > created_at")
-        if self.quantity_increment <= 0:
-            raise ValueError("quantity_increment must be > 0")
-        if self.price_increment <= 0:
-            raise ValueError("price_increment must be > 0")
-        _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
-        _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
-        _require_notional_within_limit(self.quantity, self.limit_price, self.maximum_notional)
+        _require_limit_order_economics(
+            asset_type=self.asset_type,
+            order_type=self.order_type,
+            time_in_force=self.time_in_force,
+            created_at=self.created_at,
+            expires_at=self.expires_at,
+            quantity=self.quantity,
+            quantity_increment=self.quantity_increment,
+            limit_price=self.limit_price,
+            price_increment=self.price_increment,
+            maximum_notional=self.maximum_notional,
+        )
         return self
 
 

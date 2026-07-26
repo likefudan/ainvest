@@ -112,6 +112,18 @@ def test_candidate_and_proposal_enforce_price_and_quantity_increments() -> None:
 
 
 @pytest.mark.unit
+def test_candidate_reason_codes_treat_null_as_empty() -> None:
+    payload = _valid_proposal()
+    payload["candidate_id"] = "cand_01HZYEXAMPLE0001"
+    payload.pop("proposal_id", None)
+    payload.pop("risk_decision_id", None)
+    payload.pop("order_hash", None)
+    payload["reason_codes"] = None
+    candidate = CandidateOrder.model_validate(payload)
+    assert candidate.reason_codes == ()
+
+
+@pytest.mark.unit
 def test_large_significand_increment_and_notional_are_exact() -> None:
     """Default Decimal precision must not accept off-increment or over-notional."""
     payload = _valid_proposal()
