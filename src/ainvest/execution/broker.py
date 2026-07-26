@@ -19,11 +19,15 @@ from __future__ import annotations
 
 from collections.abc import Mapping
 from enum import StrEnum
-from typing import Annotated, Final, Literal, Protocol, runtime_checkable
+from typing import Annotated, ClassVar, Final, Literal, Protocol, runtime_checkable
 
 from pydantic import StringConstraints, model_validator
 
-from ainvest.schemas.approval import ApprovalEvent, ApprovalEventOutcome
+from ainvest.schemas.approval import (
+    ApprovalEvent,
+    ApprovalEventOutcome,
+    ApprovalScope,
+)
 from ainvest.schemas.broker import (
     BrokerFill,
     BrokerOrder,
@@ -55,15 +59,22 @@ BrokerErrorCode = Literal[
     "UNKNOWN_OUTCOME",
 ]
 
+# Paper approvals authorize paper accounts only. Live (webauthn) approvals
+# authorize the Robinhood agentic account scope (design.md §6.3 / rule 26).
+_APPROVAL_SCOPE_TO_ACCOUNT: Final[Mapping[ApprovalScope, AccountScope]] = {
+    ApprovalScope.PAPER: AccountScope.PAPER,
+    ApprovalScope.LIVE: AccountScope.AGENTIC,
+}
+
 
 class BrokerError(Exception):
     """Base broker failure with a stable machine-readable code.
 
     Control flow must branch on :attr:`code` (or exception subclass), never on
-    parsed human message text.
+    parsed human message text. Instantiate a concrete subclass — never this base.
     """
 
-    code: BrokerErrorCode
+    code: ClassVar[BrokerErrorCode]
     reason_code: MachineCode
 
     def __init__(
@@ -73,6 +84,8 @@ class BrokerError(Exception):
         reason_code: MachineCode,
         details: Mapping[str, str] | None = None,
     ) -> None:
+        if type(self) is BrokerError:
+            raise TypeError("BrokerError is abstract; instantiate a concrete subclass")
         super().__init__(message)
         self.reason_code = reason_code
         self.details: Mapping[str, str] = dict(details or {})
@@ -91,7 +104,7 @@ class BrokerError(Exception):
 class BrokerAuthError(BrokerError):
     """Authentication or authorization failure against the broker."""
 
-    code: BrokerErrorCode = "AUTH"
+    code: ClassVar[BrokerErrorCode] = "AUTH"
 
 
 class BrokerTimeoutError(BrokerError):
@@ -101,19 +114,19 @@ class BrokerTimeoutError(BrokerError):
     a result with outcome ``UNKNOWN``), never as a confirmed rejection.
     """
 
-    code: BrokerErrorCode = "TIMEOUT"
+    code: ClassVar[BrokerErrorCode] = "TIMEOUT"
 
 
 class BrokerRateLimitError(BrokerError):
     """Broker rate limit / back-pressure."""
 
-    code: BrokerErrorCode = "RATE_LIMIT"
+    code: ClassVar[BrokerErrorCode] = "RATE_LIMIT"
 
 
 class BrokerInvalidOrderError(BrokerError):
     """Locally invalid order or cancel request rejected before broker write."""
 
-    code: BrokerErrorCode = "INVALID_ORDER"
+    code: ClassVar[BrokerErrorCode] = "INVALID_ORDER"
 
 
 class BrokerRejectedError(BrokerError):
@@ -123,7 +136,7 @@ class BrokerRejectedError(BrokerError):
     a terminal negative result without reconciliation.
     """
 
-    code: BrokerErrorCode = "REJECTED"
+    code: ClassVar[BrokerErrorCode] = "REJECTED"
 
 
 class BrokerUnknownOutcomeError(BrokerError):
@@ -133,7 +146,7 @@ class BrokerUnknownOutcomeError(BrokerError):
     client order ID / cancel idempotency key and broker history first.
     """
 
-    code: BrokerErrorCode = "UNKNOWN_OUTCOME"
+    code: ClassVar[BrokerErrorCode] = "UNKNOWN_OUTCOME"
 
     def __init__(
         self,
@@ -191,6 +204,13 @@ class BrokerSubmitRequest(DomainModel):
             raise ValueError("approval.proposal_id must match proposal.proposal_id")
         if self.approval.order_hash != self.proposal.order_hash:
             raise ValueError("approval.order_hash must match proposal.order_hash")
+        expected_account = _APPROVAL_SCOPE_TO_ACCOUNT[self.approval.scope]
+        if self.proposal.account_scope is not expected_account:
+            raise ValueError(
+                "approval.scope "
+                f"{self.approval.scope.value!r} requires proposal.account_scope "
+                f"{expected_account.value!r}, got {self.proposal.account_scope.value!r}"
+            )
         return self
 
 

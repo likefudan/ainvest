@@ -12,6 +12,7 @@ from datetime import UTC, datetime
 
 import pytest
 
+from ainvest.approval.order_hash import attach_order_hash
 from ainvest.execution.broker import (
     FORBIDDEN_REPLACE_METHOD_NAMES,
     READ_METHOD_NAMES,
@@ -177,9 +178,20 @@ class _PaperBrokerFullStub(_PaperBrokerReadStub, _PaperBrokerWriteStub):
 
 
 def _submit_request() -> BrokerSubmitRequest:
+    payload = attach_order_hash({**order_proposal_valid(), "account_scope": "paper"})
+    proposal = OrderProposal.model_validate(payload)
+    approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": proposal.proposal_id,
+            "order_hash": proposal.order_hash,
+            "scope": "paper",
+            "method": "telegram",
+        }
+    )
     return BrokerSubmitRequest(
-        proposal=OrderProposal.model_validate(order_proposal_valid()),
-        approval=ApprovalEvent.model_validate(approval_event_example()),
+        proposal=proposal,
+        approval=approval,
         client_order_id="client_ord_1",
     )
 

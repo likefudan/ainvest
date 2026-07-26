@@ -1,0 +1,18 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ainvest-ma"
+version = "1.0.0"
+description = "Sample packaging surface for the ainvest reference MA strategy"
+requires-python = ">=3.12"
+dependencies = [
+    "ainvest",
+]
+
+[project.entry-points."ainvest.strategies"]
+moving_average = "ainvest_ma.plugin:plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ainvest_ma"]

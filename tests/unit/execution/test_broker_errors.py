@@ -7,6 +7,7 @@ from datetime import UTC, datetime
 import pytest
 from pydantic import ValidationError
 
+from ainvest.approval.order_hash import attach_order_hash
 from ainvest.execution.broker import (
     BrokerAuthError,
     BrokerError,
@@ -34,12 +35,35 @@ from ainvest.schemas.orders import OrderProposal
 _OBSERVED = datetime(2026, 7, 24, 18, 30, 20, tzinfo=UTC)
 
 
+def _paper_proposal_and_approval() -> tuple[OrderProposal, ApprovalEvent]:
+    """Paper approval bound to a paper proposal (matching order_hash)."""
+    payload = attach_order_hash({**order_proposal_valid(), "account_scope": "paper"})
+    proposal = OrderProposal.model_validate(payload)
+    approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": proposal.proposal_id,
+            "order_hash": proposal.order_hash,
+            "scope": "paper",
+            "method": "telegram",
+        }
+    )
+    return proposal, approval
+
+
 def _submit_request(*, client_order_id: str = "client_ord_1") -> BrokerSubmitRequest:
+    proposal, approval = _paper_proposal_and_approval()
     return BrokerSubmitRequest(
-        proposal=OrderProposal.model_validate(order_proposal_valid()),
-        approval=ApprovalEvent.model_validate(approval_event_example()),
+        proposal=proposal,
+        approval=approval,
         client_order_id=client_order_id,
     )
+
+
+@pytest.mark.unit
+def test_broker_error_base_is_abstract() -> None:
+    with pytest.raises(TypeError, match="abstract"):
+        BrokerError("x", reason_code="X")
 
 
 @pytest.mark.unit
@@ -150,24 +174,96 @@ def test_submit_request_requires_matching_approved_event() -> None:
     request = _submit_request()
     assert request.client_order_id == "client_ord_1"
     assert request.approval.order_hash == request.proposal.order_hash
+    assert request.proposal.account_scope.value == "paper"
+    assert request.approval.scope.value == "paper"
 
+    proposal, _approval = _paper_proposal_and_approval()
     bad_approval = approval_event_example()
     bad_approval["outcome"] = "DENIED"
+    bad_approval["order_hash"] = proposal.order_hash
+    bad_approval["proposal_id"] = proposal.proposal_id
     with pytest.raises(ValidationError):
         BrokerSubmitRequest(
-            proposal=OrderProposal.model_validate(order_proposal_valid()),
+            proposal=proposal,
             approval=ApprovalEvent.model_validate(bad_approval),
             client_order_id="client_ord_1",
         )
 
-    mismatched = approval_event_example()
-    mismatched["order_hash"] = "sha256:" + ("b" * 64)
+    mismatched = {
+        **approval_event_example(),
+        "proposal_id": proposal.proposal_id,
+        "order_hash": "sha256:" + ("b" * 64),
+        "scope": "paper",
+        "method": "telegram",
+    }
     with pytest.raises(ValidationError):
         BrokerSubmitRequest(
-            proposal=OrderProposal.model_validate(order_proposal_valid()),
+            proposal=proposal,
             approval=ApprovalEvent.model_validate(mismatched),
             client_order_id="client_ord_1",
         )
+
+
+@pytest.mark.unit
+def test_submit_request_rejects_paper_approval_for_agentic_proposal() -> None:
+    """Fail closed: telegram+paper must not authorize agentic/live submit."""
+    agentic = OrderProposal.model_validate(order_proposal_valid())
+    paper_approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": agentic.proposal_id,
+            "order_hash": agentic.order_hash,
+        }
+    )
+    with pytest.raises(ValidationError, match=r"requires proposal\.account_scope"):
+        BrokerSubmitRequest(
+            proposal=agentic,
+            approval=paper_approval,
+            client_order_id="client_ord_1",
+        )
+
+
+@pytest.mark.unit
+def test_submit_request_rejects_live_approval_for_paper_proposal() -> None:
+    proposal, _ = _paper_proposal_and_approval()
+    live_approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": proposal.proposal_id,
+            "order_hash": proposal.order_hash,
+            "method": "webauthn",
+            "scope": "live",
+            "approver_identity": "passkey_user_1",
+        }
+    )
+    with pytest.raises(ValidationError, match=r"requires proposal\.account_scope"):
+        BrokerSubmitRequest(
+            proposal=proposal,
+            approval=live_approval,
+            client_order_id="client_ord_1",
+        )
+
+
+@pytest.mark.unit
+def test_submit_request_accepts_live_approval_for_agentic_proposal() -> None:
+    agentic = OrderProposal.model_validate(order_proposal_valid())
+    live_approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": agentic.proposal_id,
+            "order_hash": agentic.order_hash,
+            "method": "webauthn",
+            "scope": "live",
+            "approver_identity": "passkey_user_1",
+        }
+    )
+    request = BrokerSubmitRequest(
+        proposal=agentic,
+        approval=live_approval,
+        client_order_id="client_ord_1",
+    )
+    assert request.proposal.account_scope.value == "agentic"
+    assert request.approval.scope.value == "live"
 
 
 @pytest.mark.unit
