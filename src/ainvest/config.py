@@ -7,8 +7,9 @@ Configuration precedence (later sources override earlier ones):
 
 1. Built-in fail-closed defaults defined on the Settings models
 2. Optional YAML files (``risk`` / ``strategies`` via :func:`load_yaml_mapping`)
-3. Environment variables and an optional ``.env`` file (Pydantic Settings)
-4. Explicit keyword overrides passed to :func:`load_settings`
+3. Optional ``.env`` file (Pydantic Settings)
+4. Environment variables
+5. Explicit keyword overrides passed to :func:`load_settings`
 
 Production (``AINVEST_ENV=production``) and all other environments reject unknown
 fields on Settings/YAML document models and reject unsafe mode combinations.
@@ -24,9 +25,11 @@ import os
 import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
+from contextvars import ContextVar
 from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final, Literal, Self
+from urllib.parse import urlsplit
 
 import yaml
 from pydantic import (
@@ -39,7 +42,8 @@ from pydantic import (
     field_validator,
     model_validator,
 )
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic.fields import FieldInfo
+from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
 # Signed 64-bit bounds for Telegram numeric identities (DEC-005).
 _INT64_MIN: Final[int] = -(2**63)
@@ -48,6 +52,12 @@ _INT64_MAX: Final[int] = 2**63 - 1
 _EXECUTABLE_YAML_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"(?:\beval\s*\(|\blambda\b|\b__import__\b|\bexec\s*\()",
     re.IGNORECASE,
+)
+
+_RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^(?=.{1,253}$)"
+    r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)"
+    r"(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
 )
 
 _SECRET_FIELD_NAMES: Final[frozenset[str]] = frozenset(
@@ -64,8 +74,14 @@ _SECRET_FIELD_NAMES: Final[frozenset[str]] = frozenset(
 CONFIG_PRECEDENCE: Final[tuple[str, ...]] = (
     "built-in fail-closed defaults",
     "optional YAML files (safe loader)",
-    "environment variables / .env",
+    "optional .env file",
+    "environment variables",
     "explicit load_settings overrides",
+)
+
+_YAML_SETTINGS_DATA: ContextVar[Mapping[str, Any] | None] = ContextVar(
+    "ainvest_yaml_settings_data",
+    default=None,
 )
 
 
@@ -326,15 +342,36 @@ class WebAuthnSettings(BaseModel):
             return (value,)
         return value
 
+    @field_validator("credential_ids")
+    @classmethod
+    def _validate_credentials(cls, value: tuple[str, ...]) -> tuple[str, ...]:
+        normalized = tuple(credential_id.strip() for credential_id in value)
+        if any(not credential_id for credential_id in normalized):
+            raise ValueError("WebAuthn credential IDs must be non-empty")
+        if len(set(normalized)) != len(normalized):
+            raise ValueError("WebAuthn recovery credentials must have distinct IDs")
+        return normalized
+
     @field_validator("origin")
     @classmethod
     def _validate_origin(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if not value.startswith("https://"):
-            raise ValueError("WebAuthn origin must be a fixed https:// URL (DEC-006)")
-        if value.rstrip("/") != value:
-            raise ValueError("WebAuthn origin must not include a trailing slash")
+        if value != value.strip():
+            raise ValueError("WebAuthn origin must not contain surrounding whitespace")
+        parsed = urlsplit(value)
+        try:
+            _ = parsed.port
+        except ValueError as exc:
+            raise ValueError("WebAuthn origin contains an invalid port") from exc
+        if parsed.scheme != "https" or parsed.hostname is None:
+            raise ValueError("WebAuthn origin must be an absolute fixed https:// origin (DEC-006)")
+        if parsed.username is not None or parsed.password is not None:
+            raise ValueError("WebAuthn origin must not contain user information")
+        if parsed.path or parsed.query or parsed.fragment:
+            raise ValueError("WebAuthn origin must not contain a path, query, or fragment")
+        if parsed.hostname.endswith("."):
+            raise ValueError("WebAuthn origin hostname must not have a trailing dot")
         return value
 
     @field_validator("rp_id")
@@ -342,9 +379,10 @@ class WebAuthnSettings(BaseModel):
     def _validate_rp_id(cls, value: str | None) -> str | None:
         if value is None:
             return None
-        if not value or "/" in value or "://" in value:
+        normalized = value.strip().lower()
+        if normalized != value.lower() or not _RP_ID_PATTERN.fullmatch(normalized):
             raise ValueError("WebAuthn rp_id must be a bare hostname")
-        return value
+        return normalized
 
     @model_validator(mode="after")
     def _lock_live_method_scope(self) -> Self:
@@ -352,6 +390,12 @@ class WebAuthnSettings(BaseModel):
             raise ValueError("Live WebAuthn approval_method must be webauthn (DEC-006)")
         if self.approval_scope is not ApprovalScope.LIVE:
             raise ValueError("Live WebAuthn approval_scope must be live (DEC-006)")
+        if self.origin is not None and self.rp_id is not None:
+            origin_host = urlsplit(self.origin).hostname
+            if origin_host is None or origin_host.lower() != self.rp_id:
+                raise ValueError(
+                    "First-release WebAuthn origin hostname must exactly match rp_id (DEC-006)"
+                )
         return self
 
     def is_complete_for_live(self) -> bool:
@@ -360,7 +404,8 @@ class WebAuthnSettings(BaseModel):
             self.origin is not None
             and self.rp_id is not None
             and len(self.credential_ids) >= 2
-            and all(credential_id.strip() for credential_id in self.credential_ids)
+            and len(set(self.credential_ids)) == len(self.credential_ids)
+            and all(self.credential_ids)
             and self.approval_method is ApprovalMethod.WEBAUTHN
             and self.approval_scope is ApprovalScope.LIVE
             and self.bootstrap_closed
@@ -400,6 +445,18 @@ class StrategiesDocument(BaseModel):
     def _reject_executable_strategy_values(self) -> Self:
         _reject_executable_yaml({"strategies": self.strategies})
         return self
+
+
+class _YamlSettingsSource(PydanticBaseSettingsSource):
+    """Provide validated risk/strategy YAML below dotenv/env priority."""
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        del field
+        yaml_data = _YAML_SETTINGS_DATA.get() or {}
+        return yaml_data.get(field_name), field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        return dict(_YAML_SETTINGS_DATA.get() or {})
 
 
 class Settings(BaseSettings):
@@ -455,6 +512,25 @@ class Settings(BaseSettings):
     database_password: SecretStr | None = Field(default=None, repr=False)
     robinhood_oauth_token: SecretStr | None = Field(default=None, repr=False)
 
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        """Apply explicit > env > dotenv > file-secret > YAML precedence."""
+        del cls
+        return (
+            init_settings,
+            env_settings,
+            dotenv_settings,
+            file_secret_settings,
+            _YamlSettingsSource(settings_cls),
+        )
+
     @field_validator("regular_trading_hours_only")
     @classmethod
     def _lock_regular_hours(cls, value: bool) -> bool:
@@ -508,16 +584,6 @@ class Settings(BaseSettings):
         return self.trading_mode is TradingMode.LIVE or self.live_trading_enabled
 
 
-def _merge_mapping(base: dict[str, Any], overlay: Mapping[str, Any]) -> dict[str, Any]:
-    merged = dict(base)
-    for key, value in overlay.items():
-        if key in merged and isinstance(merged[key], dict) and isinstance(value, Mapping):
-            merged[key] = _merge_mapping(merged[key], value)
-        else:
-            merged[key] = value
-    return merged
-
-
 @contextmanager
 def _temporary_environ(environ: Mapping[str, str]) -> Iterator[None]:
     previous = dict(os.environ)
@@ -554,12 +620,12 @@ def load_settings(
     overrides:
         Explicit keyword overrides applied last (highest precedence).
     """
-    data: dict[str, Any] = {}
+    yaml_data: dict[str, Any] = {}
 
     if risk_yaml is not None:
         risk_raw = load_yaml_mapping(risk_yaml)
         try:
-            data["risk"] = RiskLimitsDocument.model_validate(risk_raw).model_dump()
+            yaml_data["risk"] = RiskLimitsDocument.model_validate(risk_raw).model_dump()
         except ValidationError as exc:
             raise ConfigError(
                 _validation_error_message(exc),
@@ -569,27 +635,28 @@ def load_settings(
     if strategies_yaml is not None:
         strategies_raw = load_yaml_mapping(strategies_yaml)
         try:
-            data["strategies"] = StrategiesDocument.model_validate(strategies_raw).model_dump()
+            yaml_data["strategies"] = StrategiesDocument.model_validate(strategies_raw).model_dump()
         except ValidationError as exc:
             raise ConfigError(
                 _validation_error_message(exc),
                 code="CONFIG_STRATEGIES_INVALID",
             ) from exc
 
-    if overrides:
-        cleaned = {key: value for key, value in overrides.items() if value is not None}
-        data = _merge_mapping(data, cleaned)
+    init_data = dict(overrides)
 
     def _build(*, dotenv: Path | str | None) -> Settings:
+        yaml_token = _YAML_SETTINGS_DATA.set(yaml_data)
         try:
             if dotenv is not None:
-                return Settings(_env_file=dotenv, **data)  # type: ignore[call-arg]
-            return Settings(_env_file=None, **data)  # type: ignore[call-arg]
+                return Settings(_env_file=dotenv, **init_data)  # type: ignore[call-arg]
+            return Settings(_env_file=None, **init_data)  # type: ignore[call-arg]
         except ValidationError as exc:
             raise ConfigError(
                 _validation_error_message(exc),
                 code="CONFIG_INVALID",
             ) from exc
+        finally:
+            _YAML_SETTINGS_DATA.reset(yaml_token)
 
     if environ is not None:
         with _temporary_environ(environ):

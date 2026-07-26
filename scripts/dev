@@ -26,6 +26,7 @@ Commands:
   contract       Run contract tests
   integration    Run integration tests
   test           Run all tests with coverage
+  audit          Audit every locked dependency group and optional extra
   verify         Run every required local merge check
 EOF
 }
@@ -61,6 +62,22 @@ run_test() {
     --cov-fail-under=80
 }
 
+run_audit() (
+  local audit_file
+  audit_file="$(mktemp "${TMPDIR:-/tmp}/ainvest-audit.XXXXXX")"
+  trap 'rm -f -- "${audit_file}"' EXIT
+  uv export \
+    --quiet \
+    --locked \
+    --all-extras \
+    --all-groups \
+    --no-emit-project \
+    --output-file "${audit_file}"
+  uv run --locked pip-audit \
+    --disable-pip \
+    --requirement "${audit_file}"
+)
+
 case "${1:-}" in
   setup)
     uv sync --locked
@@ -95,6 +112,9 @@ case "${1:-}" in
     ;;
   test)
     run_test
+    ;;
+  audit)
+    run_audit
     ;;
   verify)
     uv lock --check

@@ -68,7 +68,7 @@ the dependency-change workflow.
 ## Batch naming
 
 Batch IDs match `IMPLEMENTATION_TODO.md` section 12 (`Batch A`, `Batch B`,
-…). When a plan batch is delivered in more than one merge wave, record parts as
+…). When a plan batch is delivered in more than one integration part, record parts as
 `Batch <Letter> — Part N`. Mark the plan batch complete only when every card in
 that section has merged. Current Batch A split:
 
@@ -78,7 +78,7 @@ that section has merged. Current Batch A split:
 | Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
 | Batch A complete | Batch A | all of the above | complete |
 
-Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
+Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
@@ -89,6 +89,29 @@ canonical order hashing, and schema versioning. Prefer the merge order in
 claim Batch B here before dispatching those tasks.
 
 ## Completed batches
+
+### Batch A review remediation
+
+- **Status/owner:** `merged` — `/root`
+- **Integration:** [PR #16](https://github.com/likefudan/ainvest/pull/16),
+  squash merged into `main`
+- **Branch/base:** `agent/fix-batch-a-review` from
+  `93e644406f97750cc5132242b62230a9cff3a73d`
+- **Scope:** Corrected configuration source precedence, strict WebAuthn
+  prerequisites, relative-import and ORM boundary enforcement, PR secret-scan
+  permissions, immutable CI action references, complete dependency-profile
+  auditing, and Batch terminology.
+- **Verification:** `./scripts/dev verify` passed (89 tests; 85.83% coverage);
+  `./scripts/dev audit` found no known vulnerabilities; all pre-commit checks
+  passed, including Gitleaks.
+- **Safety posture:** Paper remains the default. No broker write capability,
+  credentials, external deployment, or live-trading enablement was introduced.
+- **Repository protection:** GitHub ruleset
+  [`Protect main`](https://github.com/likefudan/ainvest/rules/19761285) is active
+  on the default branch with no bypass actors. It requires a current PR,
+  squash merge, resolved review conversations, and successful `Verify`,
+  `Secret scan`, and `Dependency audit` checks; it also enforces linear history
+  and blocks deletion and force pushes.
 
 ### Batch A — Part 2
 

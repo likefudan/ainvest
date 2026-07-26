@@ -1,0 +1,3 @@
+"""Intentional relative-import violation used only by architecture tests."""
+
+from .. import execution
