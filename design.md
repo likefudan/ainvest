@@ -76,6 +76,14 @@ ainvest 不自行实现通用基础设施。数据验证、插件发现、技术
 
 不得为了减少少量适配代码而采用一个同时持有 AI、数据、策略和 Broker 权限的第三方“全自动交易机器人”。
 
+### 3.8 标的身份与订单精度必须明确
+
+Ticker symbol 只能用于显示和查询，不能单独作为 Broker 写单标识。所有可交易对象必须绑定稳定的 Broker instrument ID、symbol、交易所、币种、资产类型、可交易状态、价格 tick 和数量 increment。映射缺失、歧义、冲突或过期时必须拒绝交易。
+
+### 3.9 管理操作也是资金安全边界
+
+Kill switch、人工复核结案、核对任务触发、取消订单、审计查询和实盘启动确认都属于特权操作。它们必须经过独立于 Telegram 的 operator 身份认证和最小权限授权，并记录操作人、理由、幂等键、前后状态和审计事件。健康检查之外不得暴露匿名管理接口。
+
 ## 4. 总体架构
 
 ```mermaid
@@ -94,13 +102,15 @@ flowchart LR
     TG -- "实盘：打开 HTTPS 审批页" --> AP["HTTPS 审批页"]
     AP --> PK["iPhone Face ID / Passkey"]
     PK --> EX["Execution Service"]
+    OC["Operator Control Plane"] -- "kill switch / cancel / manual review" --> EX
+    OC --> AU
     EX --> RM
     RM --> RC["订单与成交核对"]
     RC --> AU
     EX --> AU
 ```
 
-系统逻辑上分为六个信任域：
+系统逻辑上分为七个信任域：
 
 1. **数据域**：获取、清洗并缓存外部数据。
 2. **研究域**：运行 AI Agent，生成有证据的研究包。
@@ -108,6 +118,7 @@ flowchart LR
 4. **风险域**：校验仓位、资金、价格、时效和交易限制。
 5. **审批域**：通知用户并验证一次性人工授权。
 6. **执行域**：通过 Robinhood MCP 下单并核对最终状态。
+7. **运营控制域**：认证和授权特权操作，不持有研究或策略权限。
 
 ## 5. 主要组件
 
@@ -373,7 +384,7 @@ Position Sizer 将策略意图转换为候选订单数量，但不决定订单�
 
 - 目标仓位与当前仓位的差额
 - 可用购买力和最低现金保留
-- 股票价格和整股取整
+- 股票价格、整股取整、价格 tick 和数量 increment
 - 最小、最大订单金额
 - 多个策略对同一标的的信号合并
 
@@ -392,6 +403,7 @@ Risk Engine 是纯 Python、确定性、可单元测试的规则集合。它在�
 - 单日最大已实现与未实现亏损
 - 最低现金保留比例
 - 白名单标的
+- canonical instrument identity、交易所、币种、资产类型、可交易状态和订单精度一致性
 - 禁止期权、保证金、卖空和杠杆 ETF
 - 财报窗口限制
 - 行情最大允许年龄
@@ -458,6 +470,12 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 
 步骤 2 的实盘报价必须来自 Robinhood Read Gateway。`get_equity_quotes` 和 `get_equity_price_book` 的响应只有在包含风控所需的标的、bid、ask、时间和来源信息并通过新鲜度检查后才可使用；否则本次执行进入 `PRE_TRADE_REJECTED`，不得切换到其他行情供应商重试。
 
+提交前还必须用 Robinhood Read Gateway 重新验证 canonical instrument ID、symbol、交易所、币种、资产类型、可交易状态、价格 tick 和数量 increment。任何映射歧义、symbol/instrument 不一致或价格/数量精度不合法都在调用写工具前拒绝。
+
+首版不提供原地改单。任何 replacement 必须先按独立取消流程处理旧订单，再从新的 Research/Strategy/Risk 状态创建新 proposal、新 `order_hash` 和新审批；旧订单的审批不能授权 replacement。
+
+取消请求只能来自经过认证和授权的 Operator Control Plane，使用独立 cancel idempotency ID 并写审计。取消结果不确定时不得盲目重试，必须先根据 Broker 订单和成交历史核对。Kill switch 默认只阻止新订单并告警；在账户持有人明确批准自动取消策略之前，不自动取消现有订单。
+
 首版只允许在 Robinhood Agentic Account 中交易。Robinhood 官方文档说明，Trading MCP 可以读取授权账户数据，但交易仅能发生在 Agentic Account。
 
 参考：
@@ -465,6 +483,19 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 - [Robinhood Agentic Trading overview](https://robinhood.com/us/en/support/articles/agentic-trading-overview/)
 - [Robinhood Agentic Trading](https://robinhood.com/us/en/agentic-trading/)
 - MCP endpoint：`https://agent.robinhood.com/mcp/trading`
+
+### 5.7 Operator Control Plane
+
+Operator Control Plane 负责 kill switch、人工复核、核对触发、取消请求、审计查询和实盘启动确认，不负责研究或策略决策。
+
+要求：
+
+- Telegram `user_id`、username、callback nonce 或网络位置不能作为 operator 身份
+- 浏览器管理会话必须使用 HTTPS、安全 Cookie、CSRF/origin 校验、短会话和必要的重新认证
+- CLI/服务调用使用短期凭据和独立 service identity
+- staging 与 production 身份和权限分离
+- 每个特权动作携带 actor、role、reason、correlation ID 和 idempotency key
+- 未配置 production operator 认证方式时不得暴露远程管理端点或启动实盘
 
 ## 6. 核心数据协议
 
@@ -536,11 +567,17 @@ Execution Service 是唯一拥有交易工具访问权的组件。
   "proposal_id": "ordp_01...",
   "signal_id": "sig_01...",
   "account_scope": "agentic",
+  "instrument_id": "rh_inst_...",
   "symbol": "AAPL",
+  "exchange": "XNAS",
+  "currency": "USD",
+  "asset_type": "EQUITY",
   "side": "BUY",
   "quantity": "2",
+  "quantity_increment": "1",
   "order_type": "LIMIT",
   "limit_price": "214.50",
+  "price_increment": "0.01",
   "time_in_force": "DAY",
   "maximum_notional": "429.00",
   "created_at": "2026-07-24T18:30:12Z",
@@ -550,7 +587,7 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 }
 ```
 
-`order_hash` 使用规范化序列化后的关键订单字段计算，审批和执行都必须校验它。
+`order_hash` 使用规范化序列化后的关键订单字段计算，必须覆盖 canonical instrument identity、symbol、交易所、币种、资产类型、方向、数量、订单类型、限价、有效期、账户范围和策略版本，审批和执行都必须校验它。
 
 ## 7. Telegram Paper 审批与 iPhone 实盘审批流程
 
@@ -638,6 +675,22 @@ stateDiagram-v2
 
 `SUBMIT_UNKNOWN` 发生时绝不能盲目重试下单。系统必须先根据幂等键、客户端订单 ID 和 Robinhood 订单历史进行核对。
 
+取消使用与订单生命周期关联但相互独立的命令状态机，因为取消等待期间订单仍可能继续成交：
+
+```mermaid
+stateDiagram-v2
+    [*] --> CANCEL_REQUESTED
+    CANCEL_REQUESTED --> CANCEL_CONFIRMED
+    CANCEL_REQUESTED --> CANCEL_REJECTED
+    CANCEL_REQUESTED --> CANCEL_UNKNOWN
+    CANCEL_UNKNOWN --> CANCEL_RECONCILING
+    CANCEL_RECONCILING --> CANCEL_CONFIRMED
+    CANCEL_RECONCILING --> CANCEL_NOT_APPLIED
+    CANCEL_RECONCILING --> CANCEL_MANUAL_REVIEW
+```
+
+`CANCEL_UNKNOWN` 不能直接再次调用 cancel；系统先查询 Broker 最新订单与成交状态，唯一确认后再进入对应取消命令终态，否则进入 `CANCEL_MANUAL_REVIEW`。取消与提交使用不同的幂等键，订单本身继续按 Broker 的成交事实更新。
+
 `APPROVED` 状态本身不代表具备实盘权限。每个批准事件必须保存 `approval_method` 和 `approval_scope`；Paper Broker 只接受 `scope=paper`，Robinhood 写路径只接受 `method=webauthn` 且 `scope=live`。这个检查必须同时存在于 schema、状态交接和 Execution live guard 中。
 
 ## 9. 存储与审计
@@ -656,6 +709,8 @@ stateDiagram-v2
 - `approval_events`
 - `broker_orders`
 - `broker_fills`
+- `cancel_commands`
+- `operator_actions`
 - `portfolio_snapshots`
 - `audit_events`
 
@@ -752,12 +807,15 @@ ainvest/
 - 数据新鲜度阈值
 - AI 模型 ID、推理强度、prompt 版本和 `store=false`
 - Telegram 允许的数值型 `user_id`/私聊 `chat_id` 与审批 scope
+- Operator role、允许动作和短期会话策略（不包含凭据本身）
+- Instrument allowlist 使用 canonical instrument ID，并附 symbol、交易所、币种和资产类型
 
 敏感信息不得进入 Git：
 
 - OpenAI API key
 - Telegram Bot token
 - Telegram webhook secret
+- Operator authentication client secret 或 service credential
 - Passkey/WebAuthn 服务端密钥
 - 数据供应商 API key
 - Robinhood/MCP OAuth token
@@ -789,7 +847,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 - 已完成的 Robinhood Agentic Account 授权
 - 配置中的账户范围校验
-- 启动时人工确认
+- 通过 Operator Control Plane 完成的认证、授权和审计式启动确认
 - 通过预设安全测试
 - 有效 kill switch
 
@@ -858,6 +916,11 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 - 非 Agentic Account 不能交易
 - 任一必需风控额度未配置时不能交易
 - 非美股常规交易时段不能创建或执行新订单
+- ticker symbol 与 canonical instrument ID、交易所、币种或资产类型不一致时不能下单
+- 价格 tick、数量 increment 或 Broker tradability 缺失/无效时不能下单
+- 未认证或权限不足的 operator 不能操作 kill switch、人工复核、取消、审计查询或实盘启动
+- 原地 replacement 必须被拒绝；新订单必须重新生成 proposal、风控、哈希和审批
+- `CANCEL_UNKNOWN` 不得盲目重试 cancel
 
 ## 15. 分阶段实施
 
@@ -912,6 +975,8 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 - 只允许白名单股票/ETF 和限价单
 - 每笔 Face ID/Passkey 审批；Telegram 仅通知和打开审批页
 - 实盘只接受 `approval_method=webauthn`、`approval_scope=live`
+- 使用独立 Operator Control Plane 认证、授权和审计 kill switch、人工复核、取消与实盘启动确认
+- 不支持原地改单；取消使用独立幂等键和 unknown-outcome 核对，新订单重新审批
 - 下单前二次风控与成交核对
 
 验收标准：Telegram Paper 审批无法进入实盘路径；完成小额端到端演练，审计记录可还原全部输入、Passkey 批准和 Broker 响应。
@@ -949,6 +1014,10 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 | 基本面 | Robinhood MCP 用于标准化查询；SEC EDGAR + EdgarTools 用于原始申报和证据 |
 | 新闻与事件 | GDELT + SEC 8-K/Form 4 + 公司 Investor Relations 公告 |
 | 开发与离线行情 | yfinance 可选；Alpaca 不作为首版默认依赖 |
+| Broker 标的身份 | canonical instrument ID + symbol + 交易所 + 币种 + 资产类型；symbol 不能单独用于写单 |
+| 原地改单 | 首版不支持；replacement 必须作为取消旧订单和全新审批订单处理 |
+| Kill switch 默认行为 | 阻止新订单并告警；未明确批准自动取消策略前不自动取消现有订单 |
+| 特权管理操作 | 必须通过独立 Operator Control Plane 认证、授权并审计，Telegram 身份不能替代 |
 
 ## 17. 实现前仍需确定
 
@@ -959,11 +1028,14 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 - 首版策略和具体参数
 - 单笔、单股、单日和最大回撤限制的具体数值
 - 数据和审计记录保留期限
+- 备份 RPO/RTO
 
 启用任何实盘写单前另需确定：
 
 - 固定审批页面域名、云部署环境、TLS、数据库和 secret manager
+- production Operator Control Plane 的身份认证方式和角色授权
 - 首个 Passkey 的独立 bootstrap 与恢复流程
 - Robinhood Agentic Account 授权和实盘预算
+- 是否允许未来的 kill switch 自动取消现有订单；如允许，需要明确 eligible order、部分成交、顺序和恢复策略
 
 这些值不影响已经确定的总体架构，可以在对应阶段开始前分别提供。没有实盘域名和 Passkey 时系统必须保持 Paper 模式。

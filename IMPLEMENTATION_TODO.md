@@ -66,6 +66,10 @@ External data
 25. The first Paper release uses one active Telegram long-polling instance and one-time callback buttons bound to a proposal and order hash. Plain `approve` text is not accepted. A public domain and Passkey are not required for Paper.
 26. The Paper Broker may consume only `approval_scope=paper`. The Robinhood write path accepts only `approval_method=webauthn` with `approval_scope=live`. Enforce this in the schema, approval handoff, live guard, and Execution Service.
 27. A fixed HTTPS origin, closed Passkey bootstrap, and at least two recovery-capable credentials are prerequisites for any live broker write. They are not part of the first Paper release.
+28. A ticker symbol alone is never a broker instrument identity. Every tradeable object must bind a canonical instrument ID, symbol, exchange, currency, asset type, and broker tradability metadata.
+29. Kill-switch changes, manual-review resolution, cancellation requests, audit access, and live-start confirmation are privileged operations. They require an authenticated operator identity, explicit authorization, a reason, idempotency, and an audit event.
+30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
+31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 
 ### 1.3 First-Release Non-Goals
 
@@ -106,6 +110,8 @@ An agent should claim exactly one task card, or one explicitly listed serial gro
 6. Avoid broad refactors outside the card. Never enable live trading as a side effect.
 7. Run the card's formatting, static analysis, and test requirements before handoff.
 8. Report changed files, behavior, verification evidence, unresolved risks, and interface notes for downstream tasks.
+9. If an owner decision is still proposed/deferred, implement only the fail-closed abstraction and tests. Do not create accounts, purchase services, select production identity providers, authorize Robinhood, or submit a real order.
+10. Stop and escalate if the task would require weakening a safety rule, editing an unowned high-conflict interface, or using a dependency artifact that does not match the recorded commit.
 
 Recommended branch name: `task/<task-id>-<short-name>`. Prefer one task card per PR. Serialize tasks that edit the same high-conflict file.
 
@@ -124,6 +130,31 @@ Unless a card states stricter requirements, it is complete only when:
 - New public schemas or APIs include serialized examples and compatibility notes.
 - State changes and audit events share one atomic boundary, or use an explicit transactional outbox.
 
+### 1.7 Source Precedence and Task Dispatch Contract
+
+Use the following authority order:
+
+1. Accepted ADRs and accepted entries in the decision register.
+2. Non-negotiable safety and product constraints in `design.md`.
+3. The current task card in this implementation plan.
+4. Existing public interfaces, tests, and implementation.
+
+If two levels conflict, an agent must stop and report the conflict instead of silently choosing one. Existing code is evidence of repository state, not authority to weaken a higher-level safety rule.
+
+Before dispatching a task, record this execution envelope in `docs/tasks/status.md` or the issue/PR:
+
+- task ID, title, status, owner/agent, and branch;
+- base commit and dependency PR/commit IDs;
+- exact design sections and ADRs that apply;
+- dependency artifacts and public interfaces expected to exist;
+- allowed production-code paths and corresponding test/documentation paths;
+- files that must not be modified;
+- canonical verification commands established by P01-T2;
+- owner-provided values or credentials required, without copying secret values;
+- blockers, assumptions, handoff notes, and resulting PR.
+
+The `Primary files` field on a card is the default production-code write scope. Matching tests, fixtures, generated schemas, example configuration, and task-specific documentation are also allowed. Any other production path requires an explicit handoff note and prior coordination with its owner.
+
 ## 2. Phase and Gate Sequence
 
 ```mermaid
@@ -139,13 +170,8 @@ flowchart TD
     G3 --> P06
     P06 --> G4["Gate 4: Real portfolio data with Paper execution"]
     G4 --> P07["Phase 07: Controlled live execution"]
-    P01 --> P08["Phase 08: Cross-cutting safety, operations, observability, documentation, and QA"]
-    P08 --> P02
-    P08 --> P03
-    P08 --> P04
-    P08 --> P05
-    P08 --> P06
-    P08 --> P07
+    P07 --> G5["Gate 5: Minimal controlled live exercise"]
+    P01 --> P08["Phase 08: Parallel assurance workstream"]
 ```
 
 Primary parallelization opportunities:
@@ -155,6 +181,7 @@ Primary parallelization opportunities:
 - After Gate 1, the Research and Paper Approval tracks can run in parallel.
 - Robinhood read-only work waits for domain models, persistence, and baseline observability.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
+- Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
 ## 3. Task Index
 
@@ -166,8 +193,33 @@ Primary parallelization opportunities:
 | Phase 04 | Data, Research Agent, backtesting, Gate 2 | P04-T0 through P04-T12 |
 | Phase 05 | Telegram Paper approval, deferred live approval preparation, Gate 3 | P05-T0 through P05-T8 |
 | Phase 06 | Official Robinhood MCP read path and Gate 4 | P06-T0 through P06-T3 |
-| Phase 07 | Controlled live execution, reconciliation, and Gate 5 | P07-T0 through P07-T5 |
-| Phase 08 | Runtime, observability, security, documentation, and test gates | P08-T0 through P08-T14 |
+| Phase 07 | Controlled live execution, cancellation, reconciliation, and Gate 5 | P07-T0 through P07-T6 |
+| Phase 08 | Parallel runtime, observability, security, documentation, and test assurance | P08-T0 through P08-T15 |
+
+### 3.1 Minimum Design Traceability
+
+The dispatcher should narrow these ranges to the exact subsections relevant to a card and add any accepted ADRs from P01-T0.
+
+| Task cards | Minimum `design.md` references |
+|---|---|
+| P01-T0 | §16–§17 |
+| P01-T1 | §3–§5, §7–§9, §11 |
+| P01-T2 through P01-T5 | §10–§14 |
+| P02-T0 through P02-T5 | §3.2, §3.4, §6 |
+| P02-T6 through P02-T8 | §3.6, §9 |
+| P02-T9 through P02-T10 | §5.6–§5.7, §8–§9 |
+| P03-T0 through P03-T5 | §5.3, §10 |
+| P03-T6 through P03-T7 | §5.3.4 |
+| P03-T8 through P03-T12 | §3.3–§3.5, §5.4 |
+| P03-T13 through P03-T16 | §5.6, §8–§9 |
+| P03-T17 | §14, §15 Phase 1 |
+| P04-T0 through P04-T8 | §5.1–§5.2, §10.1, §14 |
+| P04-T9 through P04-T11 | §14.2 |
+| P04-T12 | §15 Phase 2 |
+| P05-T0 through P05-T8 | §3.4–§3.5, §5.5, §7, §15 Phase 3 |
+| P06-T0 through P06-T3 | §5.1, §5.6, §10.1, §15 Phase 4 |
+| P07-T0 through P07-T6 | §3.3–§3.5, §5.6–§5.7, §8, §14.4, §15 Phase 5 |
+| P08-T0 through P08-T15 | §3.5–§3.6, §5.7, §9, §11–§14 |
 
 ---
 
@@ -177,14 +229,15 @@ Primary parallelization opportunities:
 
 - **Objective:** Turn every unresolved implementation choice into a tracked decision that an agent cannot silently guess.
 - **Dependencies:** None.
-- **Primary files:** `docs/decisions/README.md`, ADR template under `docs/adr/`.
+- **Primary files:** `docs/decisions/README.md`, ADR template under `docs/adr/`, `docs/tasks/status.md`.
 - **Implementation checklist:**
   - Define decision states: `proposed`, `accepted`, and `superseded`.
-  - Create entries for the OpenAI API monthly budget, actual Telegram Bot and allowed identity values, first strategy and parameters, numeric risk limits, and data-retention periods.
-  - Mark domain/deployment, Passkey bootstrap/recovery, and Robinhood live budget decisions as `deferred_until_live`.
-  - Record the accepted regular-session-only policy, complete-risk-limits policy, Robinhood-MCP-first data policy, OpenAI model/API settings, Telegram Paper-only approval, and mandatory Passkey live approval.
+  - Create entries for the OpenAI API monthly budget, actual Telegram Bot and allowed identity values, first strategy and parameters, numeric risk limits, data-retention periods, and backup RPO/RTO.
+  - Mark domain/deployment, Passkey bootstrap/recovery, Robinhood live budget, production operator-authentication method, and automatic kill-switch cancellation policy as `deferred_until_live`.
+  - Record the accepted regular-session-only policy, complete-risk-limits policy, Robinhood-MCP-first data policy, OpenAI model/API settings, Telegram Paper-only approval, mandatory Passkey live approval, no in-place order replacement, and no automatic cancellation before an explicit owner decision.
   - Record owner, deadline, safe default, and affected phase for each item.
   - Give every unresolved item a fail-closed default. For example, missing live quote authorization disables live trading.
+  - Maintain `docs/tasks/status.md` with task status, owner, branch, base commit, dependency commits/PRs, blockers, and handoff PR.
 - **Acceptance criteria:**
   - Every unresolved choice has one stable decision ID.
   - Configuration and code can cite those IDs; agents implement accepted decisions and never invent external credentials or numeric limits.
@@ -198,7 +251,7 @@ Primary parallelization opportunities:
 - **Implementation checklist:**
   - Inventory funds, broker/OpenAI/Telegram tokens, WebAuthn credentials, account data, approval tokens, strategy packages, and audit records.
   - Identify the Data, Research, Strategy Worker, Risk, Approval API, Execution, Database, user-device, and external-provider trust domains.
-  - Cover strategy escape, dependency poisoning, approval replay, order tampering, Telegram account/Bot compromise, long-poll offset loss, SSRF, webhook forgery, Paper-to-Live scope escalation, duplicate orders, log leakage, clock skew, and MCP timeout/schema drift.
+  - Cover strategy escape, dependency poisoning, approval replay, order tampering, Telegram account/Bot compromise, long-poll offset loss, SSRF, webhook forgery, Paper-to-Live scope escalation, duplicate orders, operator/control-plane takeover, unauthorized audit access, unsafe cancel/replace, log leakage, clock skew, and MCP timeout/schema drift.
   - Map every control to task IDs and tests in this plan.
   - Record residual risk; every high/critical live risk must be resolved or explicitly accepted before Phase 07.
 - **Acceptance criteria:** The document includes data-flow and trust-boundary diagrams, threat and control tables, residual risk, and traceability from each security test to a threat ID.
@@ -207,12 +260,13 @@ Primary parallelization opportunities:
 
 - **Objective:** Establish an installable, testable, secure-by-default `src` layout.
 - **Dependencies:** None; may run in parallel with P01-T0.
-- **Primary files:** `pyproject.toml`, `src/ainvest/__init__.py`, `tests/conftest.py`, `.python-version`, lock file.
+- **Primary files:** `pyproject.toml`, `src/ainvest/__init__.py`, `tests/conftest.py`, `.python-version`, lock file, canonical developer command wrapper.
 - **Implementation checklist:**
   - Select and document a supported minimum Python version; do not use an EOL release.
   - Define core, research, approval, broker, observability, and dev/test dependency groups so research workers do not install trading dependencies by default.
   - Configure pytest, Ruff, type checking, and coverage.
   - Pin APScheduler to the design-required 3.11.x line; use compatible bounds elsewhere and generate a hash-locked dependency file.
+  - Expose stable repository-level commands for setup, formatting check, lint, type-check, unit, contract, integration, and full verification. Document them once so later task prompts do not invent tool-specific commands.
   - Add minimal import and smoke tests.
 - **Acceptance criteria:** A clean environment installs successfully; import, lint, type-check, and pytest commands pass; default dependencies contain no unofficial Robinhood client.
 
@@ -267,6 +321,7 @@ Primary parallelization opportunities:
 - **Primary files:** `src/ainvest/schemas/common.py`, `tests/unit/schemas/test_common.py`.
 - **Implementation checklist:**
   - Define `SchemaVersion`, timezone-aware UTC validation, symbols, currency, source, quality flags, and stable ID types.
+  - Define a canonical `InstrumentIdentity` containing stable provider/broker instrument ID, display symbol, exchange/MIC, currency, asset type, and identity-as-of metadata. A display symbol alone cannot identify a tradeable instrument.
   - Define `Decimal` constraints for money, price, quantity, weight, and ratio.
   - Reject NaN, Infinity, negative money where invalid, and extra fields; define separate P&L types where negative values are valid.
   - Standardize JSON serialization: Decimal to string and datetime to UTC ISO 8601.
@@ -304,10 +359,11 @@ Primary parallelization opportunities:
 - **Implementation checklist:**
   - Define `CandidateOrder`, `OrderProposal`, `RiskDecision`, and `RiskViolation`.
   - Define approval challenge/event, broker order/fill, and reconciliation result types.
+  - Define `CancelCommand`, `CancelResult`, and cancellation idempotency fields separately from order submission; do not model an in-place replace operation.
   - Approval events include method, scope, proposal ID, order hash, approval timestamp, and stable approver identity.
   - Schema validation permits only telegram+paper and webauthn+live method/scope combinations.
   - Initial enums allow equity/ETF, BUY/SELL, LIMIT, and DAY only; explicitly reject short, margin, options, and unsupported assets.
-  - `OrderProposal` includes maximum notional, risk decision ID, creation/expiry, and order hash.
+  - `OrderProposal` includes canonical instrument identity, maximum notional, risk decision ID, creation/expiry, price/quantity increment metadata, and order hash.
 - **Acceptance criteria:** Design examples round-trip; invalid asset/order types and telegram+live approvals cannot be constructed; every outcome has a stable reason or rule code.
 
 ### P02-T4 — Implement Canonical Order Serialization and Hashing
@@ -318,7 +374,8 @@ Primary parallelization opportunities:
 - **Implementation checklist:**
   - Specify hash fields, order, Decimal normalization, timestamp form, Unicode normalization, and null handling.
   - Use canonical JSON plus SHA-256 and return an algorithm-prefixed digest.
-  - Cover symbol, side, quantity, order type, limit, time in force, maximum notional, expiry, strategy name/version, and account scope.
+  - Cover canonical instrument ID, symbol, exchange, currency, asset type, side, quantity, order type, limit, time in force, maximum notional, expiry, strategy name/version, and account scope.
+  - Define a separate canonical cancel-command digest. A replacement order always receives a new proposal and order hash; an earlier order approval cannot authorize it.
   - Exclude display text, database auto-increment IDs, and mutable UI copy.
 - **Acceptance criteria:** Semantically identical inputs yield identical hashes; every protected-field change changes the hash; fixed test vectors are available to UI and other-language consumers.
 
@@ -376,11 +433,12 @@ Primary parallelization opportunities:
 - **Dependencies:** P02-T3, P02-T7, and P02-T8.
 - **Primary file:** `src/ainvest/execution/state_machine.py`.
 - **Implementation checklist:**
-  - Implement every state and the exact allowed edges.
+  - Implement every order-lifecycle state and the exact allowed edges.
+  - Implement cancellation as a separate, correlated command state machine so fills can continue while cancellation is pending. Include REQUESTED, CONFIRMED, REJECTED/NOT_APPLIED, UNKNOWN, RECONCILING, and MANUAL_REVIEW outcomes.
   - Require expected-current-state on transitions so a stale worker cannot overwrite newer state.
   - Atomically persist business state and its audit event.
-  - Terminal states cannot transition; `SUBMIT_UNKNOWN -> RECONCILING` is the only recovery entry.
-- **Acceptance criteria:** Tests cover every legal edge and representative illegal edges; duplicate/out-of-order events are idempotent; `SUBMIT_UNKNOWN -> SUBMITTING` is prohibited.
+  - Terminal states cannot transition; `SUBMIT_UNKNOWN -> RECONCILING` and `CANCEL_UNKNOWN -> CANCEL_RECONCILING` are the only recovery entries for ambiguous broker writes.
+- **Acceptance criteria:** Tests cover every legal edge and representative illegal edges; duplicate/out-of-order events are idempotent; neither uncertain submit nor uncertain cancel can transition directly to another broker write.
 
 ### P02-T10 — Define Domain Commands, Events, and Correlation IDs
 
@@ -388,7 +446,7 @@ Primary parallelization opportunities:
 - **Dependencies:** P02-T9 and P02-T8.
 - **Primary paths:** `src/ainvest/workflow/`.
 - **Implementation checklist:**
-  - Define commands for strategy evaluation, sizing, risk evaluation, proposal creation, approval, execution, and reconciliation.
+  - Define commands for strategy evaluation, sizing, risk evaluation, proposal creation, approval, execution, cancellation, manual-review resolution, and reconciliation.
   - Define corresponding results/events with correlation, causation, and idempotency IDs.
   - Distinguish retryable pure operations, read-only external calls, and broker writes that must never be blindly retried.
   - Begin with an in-process dispatcher while preserving an interface that can later support a durable queue or Temporal.
@@ -479,10 +537,10 @@ Primary parallelization opportunities:
 - **Primary file:** `src/ainvest/portfolio/sizer.py`.
 - **Implementation checklist:**
   - Accept a signal, latest quote, portfolio snapshot, and sizing configuration.
-  - Calculate target value, current difference, cash reserve, safe-direction whole-share rounding, and min/max notional.
-  - Return no order with a stable reason for HOLD, expired signal, missing price, or zero/negative buying power.
+  - Calculate target value, current difference, cash reserve, safe-direction whole-share rounding, broker quantity increment, price tick normalization, and min/max notional.
+  - Return no order with a stable reason for HOLD, expired signal, missing price, missing/invalid tick or quantity metadata, or zero/negative buying power.
   - Do not perform final risk approval here.
-- **Acceptance criteria:** All arithmetic uses Decimal; property tests cover boundaries; output never exceeds configured limits or buying power and is deterministic.
+- **Acceptance criteria:** All arithmetic uses Decimal; property tests cover boundaries and price/quantity increments; output never exceeds configured limits or buying power, never rounds a price in a less-safe direction, and is deterministic.
 
 ### P03-T7 — Define Multi-Strategy Signal Aggregation
 
@@ -523,11 +581,13 @@ Primary parallelization opportunities:
 ### P03-T10 — Enforce Asset Eligibility, Allowlist, Side, and Trading Session
 
 - **Objective:** Make the first-release product boundary impossible to bypass.
-- **Dependencies:** P03-T8; P04-T3 later supplies the production calendar behind an interface/fake.
-- **Primary file:** `src/ainvest/risk/rules/eligibility.py`.
+- **Dependencies:** P03-T8.
+- **Primary files:** `src/ainvest/risk/rules/eligibility.py`, `src/ainvest/data/calendar_port.py`.
 - **Implementation checklist:**
   - Allow only configured ordinary US stocks and ETFs.
   - Reject options, crypto, margin, short sales, and leveraged/inverse ETFs.
+  - Require an unambiguous canonical instrument identity and matching symbol, exchange, currency, asset type, broker tradability, tick-size, and quantity-increment metadata.
+  - Define the minimal `MarketCalendar` port and deterministic fake. P04-T3 later implements that port and is not a prerequisite for this card.
   - Permit regular session only; validate holidays, early close, and trading halts with no extended-hours switch.
   - Reject missing instrument metadata.
 - **Acceptance criteria:** Every prohibited asset class has a test; off-hours, holidays, and post-early-close attempts fail closed.
@@ -566,8 +626,9 @@ Primary parallelization opportunities:
   - Define read methods for account, positions, quotes, orders, and fills.
   - Place submit/cancel in a separate write protocol/capability so read-only processes cannot receive it.
   - Define stable auth, timeout, rate-limit, invalid-order, rejected, and unknown-outcome errors.
-  - Require an idempotency/client order ID for submit.
-- **Acceptance criteria:** Paper adapter contract tests exist, the read-only type cannot call submit, and an unknown outcome is distinguishable from a confirmed rejection.
+  - Require an idempotency/client order ID for submit and a distinct idempotency/cancel request ID for cancel.
+  - Do not expose a replace method. Replacement is cancel plus a separately approved new proposal.
+- **Acceptance criteria:** Paper adapter contract tests exist, the read-only type cannot call submit/cancel, submit and cancel unknown outcomes are distinguishable from confirmed rejection, and no in-place replace operation exists.
 
 ### P03-T14 — Build the Deterministic Paper Broker and Fill Simulator
 
@@ -608,7 +669,8 @@ Primary parallelization opportunities:
 ### P03-T17 — Gate 1: Accept the Deterministic Simulated Trading Loop
 
 - **Objective:** Freeze the first usable domain kernel.
-- **Dependencies:** All Phase 01, Phase 02, and Phase 03 implementation cards.
+- **Dependencies:** P01-T0 through P01-T5, P02-T0 through P02-T10, and P03-T0 through P03-T16.
+- **Primary file:** `docs/releases/phase-1-acceptance.md`.
 - **Implementation checklist:**
   - Run all unit, contract, integration, and safety tests available at this phase.
   - Start from an empty SQLite database, migrate it, process a fixed input to a simulated fill, and export the audit timeline.
@@ -665,8 +727,8 @@ Primary parallelization opportunities:
   - Normalize news title, URL, publisher, publication/receipt times, symbols, license, and quality.
   - Deduplicate the same event while preserving multiple source citations.
   - Use GDELT for discovery; mark SEC and company announcements as higher-trust primary evidence. Preserve licensing and quotation restrictions.
-  - Use pandas-market-calendars for holidays and early closes.
-- **Acceptance criteria:** Timezone, DST, early-close, duplicate-news, and future-`published_at` tests pass; the Risk Engine consumes the same calendar service.
+  - Implement the `MarketCalendar` port defined by P03-T10 with pandas-market-calendars for holidays and early closes; do not create a second calendar abstraction.
+- **Acceptance criteria:** Timezone, DST, early-close, duplicate-news, and future-`published_at` tests pass; the Risk Engine consumes the shared calendar port.
 
 ### P04-T4 — Compute Indicators and Persist Quality-Controlled Data Snapshots
 
@@ -770,7 +832,8 @@ Primary parallelization opportunities:
 ### P04-T12 — Gate 2: Accept Structured and Traceable Research
 
 - **Objective:** Prove that research output conforms to schemas and every important number comes from a deterministic tool.
-- **Dependencies:** P04-T0 through P04-T8. P04-T9 through P04-T11 may run in parallel but must finish before Phase 04 closes.
+- **Dependencies:** P04-T0 through P04-T11. Research and backtesting cards may run in parallel, but every card must complete before this gate.
+- **Primary file:** `docs/releases/phase-2-acceptance.md`.
 - **Implementation checklist:**
   - Generate `ResearchPacket` objects from fixed and recorded provider data.
   - Trace market, technical, and portfolio fields back to tool output.
@@ -810,7 +873,7 @@ Primary parallelization opportunities:
 ### P05-T2 — Register Passkeys Before Live Trading
 
 - **Objective:** Before live enablement, register iPhone Face ID/Passkey credentials for the account owner. This card does not block the first Paper release.
-- **Dependencies:** P05-T0 and the deployment decisions in P01-T0 marked `deferred_until_live`.
+- **Dependencies:** P05-T0, P08-T14, and the deployment decisions in P01-T0 marked `deferred_until_live`.
 - **Primary files:** `src/ainvest/approval/webauthn.py`, registration API routes, database migration.
 - **Implementation checklist:**
   - Generate and verify registration options with py_webauthn.
@@ -889,6 +952,7 @@ Primary parallelization opportunities:
 
 - **Objective:** Prove Telegram can approve only the bound Paper proposal and cannot create or reach a live execution request.
 - **Dependencies:** P05-T0, P05-T1, P05-T4 through P05-T6, P08-T6, P08-T7, and P08-T13. P05-T2, P05-T3, and P05-T7 are not required.
+- **Primary file:** `docs/releases/phase-3-acceptance.md`.
 - **Implementation checklist:**
   - Test nonce expiry, double-click/concurrency, order tampering, plain approval text, wrong message, groups, wrong user/chat, spoofing, poller restart, and repeated updates.
   - Assert every successful event is telegram+paper; bind Execution to Paper Broker and rehearse iPhone-to-Paper-fill.
@@ -919,6 +983,7 @@ Primary parallelization opportunities:
 - **Primary file:** `src/ainvest/execution/robinhood/mappers.py`.
 - **Implementation checklist:**
   - Map quotes, price book, historicals, fundamentals, financials, account scope, cash/buying power, positions, open orders, and order history.
+  - Map the canonical Robinhood instrument ID and verify its symbol, exchange, currency, asset type, tradability, price tick, and quantity increment. Reject ambiguous or inconsistent identity mappings.
   - A live-eligible quote includes symbol, last/bid/ask, server or observation time, source, and session; otherwise mark it unusable for live.
   - Confirm the expected Agentic Account. An unknown or non-Agentic scope is non-tradable.
   - Never silently fall back on Decimal, symbol, timezone, or status mapping errors.
@@ -942,6 +1007,7 @@ Primary parallelization opportunities:
 
 - **Objective:** Prove real account state can drive Paper while no live write path exists.
 - **Dependencies:** P06-T0 through P06-T2, P03-T17, P04-T12, P05-T8, P08-T3, and P08-T4.
+- **Primary file:** `docs/releases/phase-4-acceptance.md`.
 - **Implementation checklist:**
   - Read quotes, price book, historicals, fundamentals, account, positions, buying power, and orders into snapshots.
   - Run the full Paper workflow and approval from those snapshots.
@@ -957,15 +1023,16 @@ Primary parallelization opportunities:
 ### P07-T0 — Build an Isolated Robinhood Write Client
 
 - **Objective:** Implement the thinnest official MCP submit/cancel adapter for the Execution Service only.
-- **Dependencies:** P06-T3, P03-T13, P06-T0, P06-T1, P05-T2, P05-T3, P05-T7, and the risk/account decisions in P01-T0.
+- **Dependencies:** P06-T3, P03-T13, P06-T0, P06-T1, P05-T2, P05-T3, P05-T7, P08-T14, and the risk/account decisions in P01-T0.
 - **Primary file:** `src/ainvest/execution/robinhood/write_client.py`; separate dependency/deployment target.
 - **Implementation checklist:**
   - Research, Strategy, and general API processes cannot install or import the write client.
   - Submit accepts only a validated internal broker command with client order/idempotency ID.
   - Reload and require `approval_method=webauthn`, `approval_scope=live`, and matching order hash before any MCP call. Reject Telegram/Paper/missing scope locally.
+  - Revalidate canonical instrument ID, symbol/exchange/currency/asset type, tradability, tick size, quantity increment, and minimum notional against the latest Read Gateway metadata.
   - Preserve broker order ID, status, and time exactly. Distinguish confirmed failure from unknown outcome.
   - Initially support DAY LIMIT orders for allowlisted stocks/ETFs only.
-- **Acceptance criteria:** Architecture tests block unauthorized imports; non-Agentic accounts, non-LIMIT orders, and non-allowlisted symbols are rejected before MCP; mock-MCP contracts pass.
+- **Acceptance criteria:** Architecture tests block unauthorized imports; non-Agentic accounts, ambiguous/mismatched instruments, invalid increments, non-LIMIT orders, and non-allowlisted symbols are rejected before MCP; mock-MCP contracts pass.
 
 ### P07-T1 — Execute Live Orders with Fresh Pre-Trade Risk
 
@@ -983,7 +1050,7 @@ Primary parallelization opportunities:
 ### P07-T2 — Reconcile SUBMIT_UNKNOWN and Route Ambiguity to Human Review
 
 - **Objective:** Safely resolve the highest-risk case where the broker may have received the request but the client did not receive a result.
-- **Dependencies:** P07-T1, P03-T15, and P08-T5.
+- **Dependencies:** P07-T1, P03-T15, P08-T5, and P08-T14.
 - **Primary files:** `src/ainvest/execution/reconciler.py`, manual-review API/runbook.
 - **Implementation checklist:**
   - Transition `SUBMIT_UNKNOWN -> RECONCILING` and query client order ID, idempotency key, time window, and order history.
@@ -1010,16 +1077,32 @@ Primary parallelization opportunities:
 - **Dependencies:** P07-T0 through P07-T3, P08-T0, P08-T6, P08-T7, and P08-T14.
 - **Primary files:** `src/ainvest/execution/live_guard.py`, deployment policy, runbook.
 - **Implementation checklist:**
-  - Require live mode, explicit enablement, fixed HTTPS origin/RP ID, two recovery-capable Passkeys, webauthn+live approval, matching Agentic Account, Gates 1–4 attestations, signed/versioned risk configuration, healthy kill switch, and startup human confirmation.
+  - Require live mode, explicit enablement, fixed HTTPS origin/RP ID, two recovery-capable Passkeys, webauthn+live approval, matching Agentic Account, Gates 1–4 attestations, signed/versioned risk configuration, healthy kill switch, and an authenticated/audited startup confirmation through P08-T14.
   - Enforce very small budget, symbol allowlist, LIMIT only, and regular session.
   - Startup confirmation cannot become a permanent bypass and must repeat after restart.
-  - Define whether the kill switch cancels existing orders; avoid blind cancellation.
-- **Acceptance criteria:** Removing any one gate prevents write-service startup; a kill switch activated immediately before submission blocks it; gate state is fully audited.
+  - Define and test the safety-attestation verification interface with fixed fixtures. P08-T15 later produces the release attestation and is not a prerequisite for implementing this guard.
+  - The default kill switch blocks new submissions and alerts but does not automatically cancel existing orders. Any future automatic-cancel mode remains disabled until its owner decision is accepted and its tests pass.
+- **Acceptance criteria:** Removing any one gate prevents write-service startup; missing/invalid test attestation fails closed; a kill switch activated immediately before submission blocks it; gate state is fully audited.
 
-### P07-T5 — Gate 5: Conduct a Minimal Controlled Live Exercise
+### P07-T5 — Implement Authenticated Cancellation and Cancel Reconciliation
+
+- **Objective:** Cancel an existing live order through an authenticated, idempotent workflow without turning an uncertain result into repeated broker writes.
+- **Dependencies:** P07-T0 through P07-T4, P02-T3, P02-T9, P02-T10, P08-T5, P08-T14, and the cancellation decision entry in P01-T0.
+- **Primary files:** `src/ainvest/execution/cancellation.py`, cancellation reconciliation tests and runbook.
+- **Implementation checklist:**
+  - Accept cancellation commands only from the authenticated operator control plane and bind actor, reason, broker order ID, cancel-command digest, and cancel idempotency ID.
+  - Reject in-place replace. A replacement must complete a new proposal, risk decision, order hash, and approval workflow independently of the cancellation.
+  - Persist the cancellation command and audit event before calling the broker; return the same result for a repeated idempotency ID.
+  - Distinguish confirmed cancel, already terminal, rejected cancel, and uncertain cancel outcomes.
+  - Reconcile uncertain cancellation against broker order/fill history before any further cancel attempt; route zero, multiple, or conflicting matches to `CANCEL_MANUAL_REVIEW` while the order lifecycle continues to follow broker fill facts.
+  - Keep kill-switch automatic cancellation disabled unless its P01-T0 owner decision has been accepted and a separately versioned policy defines eligible orders, partial fills, ordering, and recovery.
+- **Acceptance criteria:** Unauthorized cancellation cannot reach the write client; repeated requests create one broker call; uncertain cancel never retries blindly; replacement requires a new approval; partial-fill and cancel-race tests preserve ledger truth.
+
+### P07-T6 — Gate 5: Conduct a Minimal Controlled Live Exercise
 
 - **Objective:** Only after every safety condition passes, execute one auditable minimal-value end-to-end exercise.
-- **Dependencies:** All preceding phases, P08-T12 through P08-T14, zero unaccepted high/critical security risk, and explicit user authorization for the real order.
+- **Dependencies:** P03-T17, P04-T12, P05-T8, P06-T3, P07-T0 through P07-T5, P08-T2, P08-T5 through P08-T7, P08-T10, and P08-T12 through P08-T15; zero unaccepted high/critical security risk; explicit user authorization for the real order.
+- **Primary file:** `docs/releases/phase-5-acceptance.md` and a redacted audit bundle.
 - **Implementation checklist:**
   - First pass the same configuration in Paper and complete backup/restore and kill-switch drills.
   - Use the dedicated Agentic Account, minimal budget, one allowlisted symbol, regular session, and DAY LIMIT order.
@@ -1031,21 +1114,22 @@ Primary parallelization opportunities:
 
 ---
 
-## 11. Phase 08 — Cross-Cutting Safety, Operations, Observability, Documentation, and QA
+## 11. Phase 08 — Parallel Safety, Operations, Observability, Documentation, and QA
 
-Phase 08 cards support multiple delivery phases. Their numeric placement does not mean they should wait until Phase 07; follow the dependency and batch sections below.
+Phase 08 is a parallel assurance phase. Its cards support multiple delivery phases, and their numeric placement does not mean they should wait until Phase 07. Dispatch each card only when its own dependencies are satisfied and complete it before the gate that cites it.
 
 ### P08-T0 — Define Runtime Modes and Startup Capability Gates
 
 - **Objective:** Provide one capability matrix for Research-only, Paper, and Live modes.
-- **Dependencies:** P01-T4 and P03-T13. The Live branch depends on P07-T4.
+- **Dependencies:** P01-T4 and P03-T13.
 - **Primary files:** `src/ainvest/runtime.py`, `docs/runtime-modes.md`.
 - **Implementation checklist:**
   - Specify packages, secrets, broker capabilities, and scheduler jobs allowed in each mode.
   - Research-only does not load Strategy execution, Approval, or broker write components.
   - Paper may read a real account but always writes to PaperBroker; it allows telegram+paper and does not load WebAuthn or the Robinhood write client.
-  - Live alone may construct the write client; it accepts webauthn+live only and requires every P07-T4 gate.
-- **Acceptance criteria:** Automated tests cover the capability matrix; invalid mode combinations fail startup; health output shows redacted mode/capabilities.
+  - Define a `LiveGuard` interface and a default implementation that always rejects. P07-T4 later supplies the production guard; P08-T0 does not depend on it.
+  - Live alone may construct the write-client capability, and only through the rejecting-by-default `LiveGuard` interface.
+- **Acceptance criteria:** Automated tests cover the capability matrix; invalid mode combinations and missing production LiveGuard fail startup; health output shows redacted mode/capabilities.
 
 ### P08-T1 — Schedule Work with the Exchange Calendar
 
@@ -1066,10 +1150,11 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 - **Primary files:** `docs/runbooks/backup-restore.md`, maintenance scripts.
 - **Implementation checklist:**
   - Set separate retention policies for audit, order, and raw research data.
+  - Record owner-approved RPO and RTO per data class and environment; missing production recovery objectives block deployment rather than selecting implicit values.
   - Encrypt and restrict backups and rehearse restores; plaintext secrets must not spread through backups.
   - Separate append-only audit requirements from lawful deletion/anonymization.
   - A restored environment always starts in Paper and never automatically restores a live writer.
-- **Acceptance criteria:** A staging restore reconstructs a proposal timeline; expiry cleanup preserves required referential integrity.
+- **Acceptance criteria:** A staging restore reconstructs a proposal timeline within the approved RPO/RTO; expiry cleanup preserves required referential integrity.
 
 ### P08-T3 — Add Structured Logging, Correlation, and Redaction
 
@@ -1098,10 +1183,11 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 ### P08-T5 — Implement Funds-Safety Alerts and Incident Runbooks
 
 - **Objective:** Reliably notify humans about states that need immediate attention.
-- **Dependencies:** P08-T4, P02-T9, and P07-T2.
+- **Dependencies:** P08-T4 and P02-T9.
 - **Primary files:** `src/ainvest/observability/alerts.py`, `docs/runbooks/incidents/`.
 - **Implementation checklist:**
-  - Alert on SUBMIT_UNKNOWN, order-hash mismatch, duplicates, account/position differences, kill switch, and unexpected live startup.
+  - Define the alert port and generic state-event handlers. P07-T2 later emits and integration-tests real reconciliation events and is not a prerequisite for this card.
+  - Alert on SUBMIT_UNKNOWN, uncertain cancellation, order-hash mismatch, duplicates, account/position differences, kill switch, and unexpected live startup.
   - Deduplicate without suppressing state escalation; include redacted IDs, current state, and next action.
   - Give every critical alert an owner and acknowledge/resolve procedure.
   - Do not make the Telegram trading Bot the only critical-alert channel.
@@ -1157,13 +1243,13 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 ### P08-T10 — Write Operations and Incident Runbooks
 
 - **Objective:** Give operators deterministic responses to safety-critical events.
-- **Dependencies:** P08-T5, P08-T2, and P07-T2 through P07-T4.
+- **Dependencies:** P08-T5, P08-T2, P08-T14, and P07-T2 through P07-T5.
 - **Primary path:** `docs/runbooks/`.
 - **Implementation checklist:**
-  - Cover kill switch, SUBMIT_UNKNOWN, position mismatch, Telegram outage, WebAuthn outage, MCP auth/rate limit, and database restore.
+  - Cover kill switch, SUBMIT_UNKNOWN, uncertain cancellation, position mismatch, Telegram outage, WebAuthn outage, MCP auth/rate limit, and database restore.
   - Each runbook includes trigger, immediate action, prohibited action, evidence collection, recovery criteria, and escalation owner.
-  - Explicitly mark every situation where submit must not be retried.
-- **Acceptance criteria:** Tabletop drills cover unknown submit and kill switch; participants do not need to read source code.
+  - Explicitly mark every situation where submit or cancel must not be retried.
+- **Acceptance criteria:** Tabletop drills cover unknown submit, unknown cancel, and kill switch; participants do not need to read source code.
 
 ### P08-T11 — Publish API, Schema, State, and Audit Query Documentation
 
@@ -1192,25 +1278,41 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 ### P08-T13 — Add Integration, Concurrency, and Fault-Injection Tests
 
 - **Objective:** Prove network, database, Telegram, and worker failures remain fail closed.
-- **Dependencies:** Relevant P02, P03, and P05 cards.
+- **Dependencies:** P02-T6 through P02-T10, P03-T13 through P03-T15, P05-T0, P05-T1, and P05-T4 through P05-T6.
 - **Primary paths:** `tests/integration/`, `tests/faults/`.
 - **Implementation checklist:**
   - Provide fake market, news, Telegram, and MCP services.
   - Inject timeout, reset, rate limit, rollback, repeated update/webhook, out-of-order event, and process crash.
-  - Test concurrent approval, duplicate scheduler, outbox redelivery, and partial fill.
+  - Test concurrent approval, duplicate scheduler, outbox redelivery, partial fill, and uncertain cancel.
   - For each fault, assert final state, audit output, and whether any funds action occurred.
 - **Acceptance criteria:** No fault defaults to trading; unknown outcomes enter reconciliation and never automatic retry.
 
-### P08-T14 — Build the Mandatory Pre-Live Safety Gate
+### P08-T14 — Secure the Operator Control Plane and Privileged Actions
+
+- **Objective:** Ensure administrative and funds-safety actions cannot be reached through an unauthenticated or weakly authorized endpoint.
+- **Dependencies:** P01-T1, P01-T4, P02-T8, P02-T10, and P08-T7.
+- **Primary files:** `src/ainvest/admin/{auth,service}.py`, privileged FastAPI routes or CLI adapter, `docs/security/operator-access.md`.
+- **Implementation checklist:**
+  - Inventory privileged actions: kill-switch activate/release, live-start confirmation, cancellation request, manual-review resolution, reconciliation trigger, approval bootstrap, and audit access.
+  - Define an operator identity and authorization interface with least-privilege roles. Telegram identity, a username, possession of a callback nonce, or network location alone is never operator authentication.
+  - Keep non-sensitive liveness narrowly public; require authenticated authorization for readiness detail, audit queries, and every state-changing administrative action.
+  - For browser sessions, enforce HTTPS, secure/HttpOnly/SameSite cookies, CSRF protection, origin checks, bounded session/reauthentication lifetime, and rate limits. For CLI/service calls, use short-lived credentials from the secret/identity provider.
+  - Require actor, role, reason, correlation ID, idempotency key, previous state, and resulting state in an atomic audit event.
+  - Separate staging and production identities. A production operator endpoint and Live startup both fail until the P01-T0 operator-authentication decision is accepted and configured; this does not block a local Paper process with no remote privileged endpoint.
+  - Add deny-by-default tests for missing/expired credentials, wrong role, replay, CSRF, cross-environment identity, and attempts by Research/Strategy/Telegram credentials.
+- **Acceptance criteria:** No privileged route or command is anonymous; every unauthorized case fails before state change or broker access; every successful privileged action is attributable and replay-safe; operator credentials are absent from logs and strategy workers.
+
+### P08-T15 — Build the Mandatory Pre-Live Safety Gate
 
 - **Objective:** Convert design §14.4 into an unskippable automated gate.
-- **Dependencies:** P03-T17, P04-T12, P05-T8, P06-T3, P05-T7, P05-T2, P05-T3, and P07-T0 through P07-T4.
+- **Dependencies:** P03-T17, P04-T12, P05-T8, P06-T3, P05-T7, P05-T2, P05-T3, P07-T0 through P07-T5, and P08-T14.
 - **Primary paths:** `tests/safety/`, independent CI workflow.
 - **Implementation checklist:**
   - Test approval expiry, changed quantity/limit/strategy version, double-click, MCP timeout, kill switch, unapproved Telegram identity, and non-Agentic account.
   - Test wrong Telegram user/chat/message, plain approval text, duplicate/out-of-order updates, poller restart, and attempted telegram+live scope elevation.
   - Test Passkey origin/RP/challenge/hash/UV mismatch, fewer than two recovery credentials, and a valid telegram+paper event attempting to enter live.
   - Test stale/missing/conflicting MCP quotes, account mismatch, open-order conflict, read/write schema drift, and every single missing live gate.
+  - Test ambiguous instrument identity, symbol/instrument mismatch, invalid price/quantity increments, unauthorized privileged actions, in-place replacement attempts, cancel replay, and uncertain-cancel no-retry behavior.
   - Assert live code contains no Alpaca/yfinance fallback and no alternate quote provider is called after MCP failure.
   - Use mocks/sandboxes only; never submit a real order.
   - Generate a commit/config/test digest attestation for the live guard.
@@ -1259,17 +1361,17 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 
 - Research: P04-T0 through P04-T8 -> P04-T9 through P04-T11 -> P04-T12.
 - Paper approval: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 -> P05-T8.
-- Deferred live approval: P05-T7 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0 and P08-T14.
-- Cross-cutting: P08-T3, P08-T4, P08-T6, P08-T7, P08-T12, P08-T13, P08-T8, and P08-T9.
+- Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
+- Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 
 ### Batch F — Serialize Broker Work
 
 1. P06-T0 through P06-T2.
 2. P06-T3 read-only permission audit.
-3. P05-T7 -> P05-T2 -> P05-T3 for fixed origin, Passkey bootstrap, and recovery credentials.
-4. P07-T0 through P07-T4.
-5. P08-T14 plus an independent security review.
-6. P07-T5. Perform the real-order step only after the user explicitly authorizes it.
+3. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
+4. P07-T0 through P07-T5.
+5. P08-T15 plus an independent security review.
+6. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
 
 ### Parallel-Edit Warnings
 
@@ -1287,6 +1389,15 @@ Phase 08 cards support multiple delivery phases. Their numeric placement does no
 You are implementing this task in the likefudan/ainvest repository:
 <TASK_ID> — <TASK_TITLE>
 
+Execution envelope:
+- Task status/owner: <STATUS_AND_OWNER>
+- Base commit: <BASE_COMMIT>
+- Dependency PRs/commits and required artifacts: <DEPENDENCY_ARTIFACTS>
+- Design sections and accepted ADRs: <DESIGN_AND_ADR_REFERENCES>
+- Allowed production paths: <ALLOWED_PATHS>
+- Paths that must not be modified: <FORBIDDEN_PATHS>
+- Canonical verification commands: <VERIFY_COMMANDS>
+
 Read completely before changing code:
 1. design.md
 2. Section 1, "Context Every Execution Agent Must Inherit," in IMPLEMENTATION_TODO.md
@@ -1299,24 +1410,27 @@ Hard system constraints:
 - AI uses OpenAI gpt-5.6-sol through Pydantic AI and Responses API with medium reasoning, store=false, strict structured output, no built-in web search, and no automatic model fallback.
 - Telegram can approve Paper proposals only; successful events are telegram+paper. Every Live path accepts webauthn+live only.
 - Money and quantity use Decimal and serialize as decimal strings. Time uses timezone-aware UTC datetimes.
+- A ticker symbol alone is not an instrument identity; broker writes require canonical instrument metadata and valid price/quantity increments.
+- Privileged operations require an authenticated, authorized, audited operator. There is no in-place order replacement and no blind retry after an uncertain submit or cancel.
 - Missing data, errors, timeouts, and state conflicts fail closed.
 - Never write or print a real token, account number, raw approval token, or Passkey private key.
 
 Scope:
 - Implement <TASK_ID> only.
-- Primary paths you may edit: <PATHS>.
+- Primary paths you may edit: <ALLOWED_PATHS>.
 - Dependencies: <DEPENDENCIES>.
 - Do not implement later cards, enable Live, or bypass an unfinished interface.
 
 Execution requirements:
-1. Confirm the dependencies exist. If a minor interface mismatch exists, report it and make the smallest compatible adjustment.
+1. Confirm HEAD matches <BASE_COMMIT> or stop and report the mismatch. Confirm all dependency artifacts exist.
 2. Add tests for success, boundaries, and fail-closed behavior.
 3. Complete every checklist item in the task card.
-4. Run the required lint, type-check, and unit/integration checks.
+4. Run <VERIFY_COMMANDS> plus every task-specific test.
 5. Inspect the final diff for unrelated refactors and secrets.
 
 Your handoff report must include:
 - Changed files
+- Base commit, final commit, branch, and PR
 - Core behavior and public interfaces
 - Verification commands and results
 - Unresolved risks or assumptions
@@ -1330,10 +1444,17 @@ Completion is governed by the card's acceptance criteria and the global Definiti
 ```markdown
 ## Task
 - ID:
+- Status/owner:
+- Base commit:
+- Final commit/branch/PR:
 - Design sections:
+- Accepted ADRs:
 - Dependencies confirmed:
+- Dependency artifacts/commits:
 
 ## Scope
+- Allowed production paths:
+- Forbidden paths:
 - Files changed:
 - Public interfaces added or changed:
 - Out-of-scope items intentionally untouched:
@@ -1345,6 +1466,9 @@ Completion is governed by the card's acceptance criteria and the global Definiti
 - [ ] No secrets or real account data
 - [ ] Failure paths fail closed
 - [ ] Idempotency and state transitions tested
+- [ ] Canonical instrument identity and price/quantity increments validated where applicable
+- [ ] Privileged actions require authenticated authorization and audit
+- [ ] No in-place replacement or blind submit/cancel retry
 
 ## Verification
 - Lint:
@@ -1371,13 +1495,16 @@ The implementation is complete only when all of the following are true:
 5. Telegram approval can create only telegram+paper events for Paper Broker. Live accepts only a single-use webauthn+live assertion bound to the canonical order hash.
 6. Paper and Robinhood implementations pass Broker contracts; real account access uses official MCP only.
 7. `SUBMIT_UNKNOWN` reconciles without retry and can enter human review.
-8. State, orders, fills, portfolio, and audit can be reconstructed by correlation/proposal ID.
-9. Observability, alerts, backup/restore, kill switch, and incident runbooks have passed drills.
-10. The Safety Gate passes, and threat-model high/critical residual risks are zero or explicitly accepted by the user.
-11. Repository and deployment defaults remain Paper even after live code exists; each real order still requires explicit user approval.
-12. After Gate 5, the system returns to Paper and stores a redacted retrospective.
-13. Live market data comes only from the Robinhood Read Gateway. MCP failure rejects the trade, and no Alpaca/yfinance automatic fallback exists.
-14. The Research Agent uses the accepted OpenAI Responses configuration. Invalid schema, model failure, or cost-limit breach never switches models or creates a complete `ResearchPacket`.
+8. Uncertain cancellation reconciles without retry; in-place replacement is unavailable and every replacement order receives a new proposal, risk decision, hash, and approval.
+9. Broker writes use an unambiguous canonical instrument identity and validated tradability, price tick, and quantity increment; symbol-only routing is impossible.
+10. Every privileged administrative action is authenticated, authorized, idempotent, attributable, and audited.
+11. State, orders, fills, portfolio, and audit can be reconstructed by correlation/proposal ID.
+12. Observability, alerts, backup/restore, kill switch, and incident runbooks have passed drills.
+13. The Safety Gate passes, and threat-model high/critical residual risks are zero or explicitly accepted by the user.
+14. Repository and deployment defaults remain Paper even after live code exists; each real order still requires explicit user approval.
+15. After Gate 5, the system returns to Paper and stores a redacted retrospective.
+16. Live market data comes only from the Robinhood Read Gateway. MCP failure rejects the trade, and no Alpaca/yfinance automatic fallback exists.
+17. The Research Agent uses the accepted OpenAI Responses configuration. Invalid schema, model failure, or cost-limit breach never switches models or creates a complete `ResearchPacket`.
 
 ## 16. Decision Authority Boundary
 
@@ -1391,15 +1518,21 @@ The following safety decisions are accepted. Every agent must implement them dir
 - Use OpenAI `gpt-5.6-sol` through Pydantic AI and Responses API with medium reasoning, `store=false`, strict structured output, built-in web search off, and no automatic model switch.
 - Use separate staging/production Telegram Bots; authorize numeric user/private-chat IDs only; use long polling and a bound telegram+paper callback in the first release.
 - Do not require a public domain or Passkey for Paper. Require a fixed HTTPS origin, independent bootstrap, at least two recovery credentials, and webauthn+live approval before any live broker write.
+- Never route a broker write by ticker symbol alone; require canonical instrument identity and current tradability/precision metadata.
+- Do not support in-place live order replacement. A replacement is a new order and requires the complete proposal, risk, hash, and approval workflow.
+- Until an explicit automatic-cancellation policy is accepted, the kill switch blocks new submissions and alerts but does not blindly cancel open orders.
 
 The following choices require the product/account owner. Agents may research them, draft ADR options, and implement abstractions, but must not purchase, create, authorize, or enable them:
 
 - OpenAI API project credentials and monthly budget.
 - Actual staging/production Telegram Bot creation, token secrets, and numeric allowed `user_id`/`chat_id` values.
 - Public domain, cloud environment, TLS, database, and secret manager before Live.
+- Production operator-authentication provider/method and privileged-role assignment before exposing a remote control plane or enabling Live.
 - WebAuthn bootstrap authentication and recovery process before Live.
 - Robinhood Agentic Account authorization and budget.
 - Initial strategy and parameter values.
 - Per-order, per-symbol, sector, daily turnover/loss, and drawdown limits.
 - Retention periods for audit and raw market/research data.
+- Backup RPO/RTO by data class and environment.
+- Whether a future kill-switch mode may automatically cancel open orders and, if so, its eligible-order, partial-fill, ordering, and recovery policy.
 - Final submission of any real order.
