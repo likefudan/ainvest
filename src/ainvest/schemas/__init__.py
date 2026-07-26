@@ -47,6 +47,7 @@ from ainvest.schemas.strategy import (
     TradeSignal,
     parse_strategy_context,
     parse_trade_signal,
+    parse_trade_signal_for_context,
     trade_signal_example,
 )
 
@@ -83,6 +84,7 @@ __all__ = [
     "parse_research_packet",
     "parse_strategy_context",
     "parse_trade_signal",
+    "parse_trade_signal_for_context",
     "research_packet_example",
     "trade_signal_example",
 ]

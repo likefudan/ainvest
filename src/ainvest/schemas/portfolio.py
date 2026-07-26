@@ -6,8 +6,9 @@ and Decimal/UTC-safe. Full order/risk objects remain in later P02 cards.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
-from typing import Annotated
+from typing import Annotated, Final
 
 from pydantic import Field, StringConstraints, model_validator
 
@@ -28,6 +29,9 @@ from ainvest.schemas.common import (
     UtcDateTime,
     Weight,
 )
+
+# Absolute tolerance for portfolio weights (4 decimal places).
+WEIGHT_TOLERANCE: Final[Decimal] = Decimal("0.0001")
 
 
 class AccountScope(StrEnum):
@@ -101,6 +105,10 @@ class ExposureSnapshot(DomainModel):
         return self
 
 
+def _weights_match(actual: Decimal, expected: Decimal) -> bool:
+    return abs(actual - expected) <= WEIGHT_TOLERANCE
+
+
 class PortfolioSnapshot(DomainModel):
     """Immutable account snapshot consumed by StrategyContext and sizing."""
 
@@ -133,17 +141,55 @@ class PortfolioSnapshot(DomainModel):
         if len(instrument_ids) != len(set(instrument_ids)):
             raise ValueError("position instrument_id values must be unique")
 
+        order_ids = [order.order_id for order in self.open_orders]
+        if len(order_ids) != len(set(order_ids)):
+            raise ValueError("open order_id values must be unique")
+
+        gross = sum((position.market_value for position in self.positions), Decimal("0"))
+        if self.exposure.gross_market_value != gross:
+            raise ValueError("exposure.gross_market_value must equal sum of position market_value")
+        # Long-only first release: net exposure equals gross long market value.
+        if self.exposure.net_market_value != gross:
+            raise ValueError("exposure.net_market_value must equal gross_market_value")
+        if self.equity != self.cash + gross:
+            raise ValueError("equity must equal cash + gross_market_value")
+
+        if not self.positions:
+            if self.exposure.largest_position_weight != Decimal("0"):
+                raise ValueError("empty portfolio largest_position_weight must be 0")
+        else:
+            largest = max(position.portfolio_weight for position in self.positions)
+            if not _weights_match(self.exposure.largest_position_weight, largest):
+                raise ValueError(
+                    "exposure.largest_position_weight must match max position weight "
+                    f"within {WEIGHT_TOLERANCE}"
+                )
+
         for position in self.positions:
             if position.currency != self.currency:
                 raise ValueError("position currency must match portfolio currency")
             if position.instrument.currency != self.currency:
                 raise ValueError("instrument currency must match portfolio currency")
+            if position.instrument.identity_as_of > self.as_of:
+                raise ValueError("position instrument.identity_as_of must be <= portfolio as_of")
+            if self.equity == 0:
+                if position.market_value != 0 or position.portfolio_weight != 0:
+                    raise ValueError("zero-equity portfolios require zero position value/weight")
+            else:
+                expected_weight = position.market_value / self.equity
+                if not _weights_match(position.portfolio_weight, expected_weight):
+                    raise ValueError(
+                        "position.portfolio_weight must equal market_value/equity "
+                        f"within {WEIGHT_TOLERANCE}"
+                    )
 
         for order in self.open_orders:
             if order.instrument.currency != self.currency:
                 raise ValueError("open order currency must match portfolio currency")
             if order.submitted_at > self.as_of:
                 raise ValueError("open order submitted_at must be <= portfolio as_of")
+            if order.instrument.identity_as_of > self.as_of:
+                raise ValueError("open order instrument.identity_as_of must be <= portfolio as_of")
 
         if self.provenance.observed_at > self.as_of:
             raise ValueError("portfolio provenance.observed_at must be <= as_of")
@@ -153,6 +199,7 @@ class PortfolioSnapshot(DomainModel):
 
 
 __all__ = [
+    "WEIGHT_TOLERANCE",
     "AccountScope",
     "ExposureSnapshot",
     "OpenOrderSide",

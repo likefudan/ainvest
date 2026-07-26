@@ -4,6 +4,10 @@ A strategy may only read an immutable :class:`StrategyContext` and return zero
 or more :class:`TradeSignal` intents. Signals are not broker orders: HOLD never
 becomes an order, and ``strength`` is an internal score in ``[-1, 1]``, not a
 success or profit probability.
+
+Downstream Strategy API / B3 sizing must consume signals only through
+:func:`parse_trade_signal` (requires ``as_of``) or
+:func:`parse_trade_signal_for_context`.
 """
 
 from __future__ import annotations
@@ -12,7 +16,7 @@ from datetime import datetime
 from enum import StrEnum
 from typing import Annotated, Any
 
-from pydantic import StringConstraints, field_validator, model_validator
+from pydantic import StrictBool, StrictInt, StringConstraints, field_validator, model_validator
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
@@ -24,6 +28,7 @@ from ainvest.schemas.common import (
     Symbol,
     UtcDateTime,
     Weight,
+    ensure_utc,
 )
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.research import ResearchPacket
@@ -67,14 +72,18 @@ class StrategyStateValueKind(StrEnum):
 
 
 class StrategyStateItem(DomainModel):
-    """One immutable key/value entry in strategy state."""
+    """One immutable key/value entry in strategy state.
+
+    Scalar fields use strict JSON types so BOOLEAN/INTEGER kinds cannot coerce
+    across each other (e.g. ``true`` must not become integer ``1``).
+    """
 
     key: StateKey
     kind: StrategyStateValueKind
     text_value: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
     decimal_value: PnL | None = None
-    boolean_value: bool | None = None
-    integer_value: int | None = None
+    boolean_value: StrictBool | None = None
+    integer_value: StrictInt | None = None
 
     @model_validator(mode="after")
     def _one_value_for_kind(self) -> StrategyStateItem:
@@ -145,6 +154,10 @@ class TradeSignal(DomainModel):
     ``strength`` is a signed internal score in ``[-1, 1]``. It is not a success
     probability, profit probability, or sizing weight. ``HOLD`` signals are
     informational only and must never become broker orders.
+
+    Structural construction via ``model_validate`` does not prove the signal is
+    active. Downstream consumers must use :func:`parse_trade_signal` or
+    :func:`parse_trade_signal_for_context`, which require an evaluation ``as_of``.
     """
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
@@ -195,7 +208,7 @@ class TradeSignal(DomainModel):
     def require_active(self, as_of: datetime) -> None:
         """Fail closed when the signal is not active at ``as_of``."""
         if as_of < self.generated_at:
-            raise ValueError("as_of is before signal generated_at")
+            raise ValueError("signal generated_at is in the future relative to as_of")
         if self.is_expired(as_of):
             raise ValueError("signal is expired")
 
@@ -243,9 +256,29 @@ def trade_signal_example() -> dict[str, Any]:
     }
 
 
-def parse_trade_signal(data: dict[str, Any]) -> TradeSignal:
-    """Validate and construct a TradeSignal from a mapping."""
-    return TradeSignal.model_validate(data)
+def parse_trade_signal(data: dict[str, Any], *, as_of: datetime | str) -> TradeSignal:
+    """Validate a TradeSignal and require it to be active at ``as_of``.
+
+    This is the mandatory public entry point for Strategy API / B3 consumers.
+    Structural-only construction via ``TradeSignal.model_validate`` must not be
+    used to accept signals for sizing or order generation.
+    """
+    signal = TradeSignal.model_validate(data)
+    signal.require_active(ensure_utc(as_of))
+    return signal
+
+
+def parse_trade_signal_for_context(
+    data: dict[str, Any],
+    context: StrategyContext,
+) -> TradeSignal:
+    """Validate a signal against a StrategyContext evaluation clock and identity."""
+    signal = parse_trade_signal(data, as_of=context.as_of)
+    if signal.symbol != context.symbol:
+        raise ValueError("signal.symbol must match strategy context symbol")
+    if signal.research_id != context.research.research_id:
+        raise ValueError("signal.research_id must match context research_id")
+    return signal
 
 
 def parse_strategy_context(data: dict[str, Any]) -> StrategyContext:
@@ -265,5 +298,6 @@ __all__ = [
     "TradeSignal",
     "parse_strategy_context",
     "parse_trade_signal",
+    "parse_trade_signal_for_context",
     "trade_signal_example",
 ]
