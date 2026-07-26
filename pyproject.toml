@@ -27,7 +27,7 @@ research = [
     "pydantic-ai-slim[openai]>=1,<2",
 ]
 offline-data = [
-    "yfinance>=0.2.65,<1",
+    "yfinance>=1.5.2,<2",
 ]
 approval = [
     "fastapi>=0.115,<1",
