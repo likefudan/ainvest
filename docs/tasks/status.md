@@ -65,15 +65,33 @@ Only `./scripts/dev lock` and `./scripts/dev format` intentionally modify
 tracked project artifacts. See `docs/development.md` for dependency profiles and
 the dependency-change workflow.
 
+## Batch naming
+
+Batch IDs match `IMPLEMENTATION_TODO.md` section 12 (`Batch A`, `Batch B`,
+…). When a plan batch is delivered in more than one merge wave, record parts as
+`Batch <Letter> — Part N`. Mark the plan batch complete only when every card in
+that section has merged. Current Batch A split:
+
+| Record | Plan section | Cards | Status |
+|---|---|---|---|
+| Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
+| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | next |
+| Batch A complete | Batch A | all of the above | after Part 2 merges |
+
+Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
+
 ## Active batch
 
-None. A coordinator must claim the next batch here before dispatching tasks.
+None. Next claim: **Batch A — Part 2** (`P01-T1`, `P01-T3`, `P01-T4`,
+`P01-T5`). A coordinator must claim it here before dispatching tasks.
 
 ## Completed batches
 
-### Batch 1A
+### Batch A — Part 1
 
-- **Batch:** 1A — decision/process baseline and Python project baseline
+- **Batch:** Batch A — Part 1 — decision/process baseline and Python project
+  baseline (`P01-T0`, `P01-T2`)
+- **Plan batch:** Batch A (partial; remaining cards are Batch A — Part 2)
 - **Coordinator:** `/root`
 - **Integration branch:** [PR #4 head branch](https://github.com/likefudan/ainvest/pull/4)
   (deleted after merge)
