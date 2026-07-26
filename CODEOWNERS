@@ -1,0 +1,9 @@
+# Owner review required for security and live-sensitive execution paths.
+# GitHub CODEOWNERS requests reviews when these paths change in a PR.
+
+/docs/security/ @likefudan
+/src/ainvest/execution/ @likefudan
+/src/ainvest/approval/ @likefudan
+/config/ @likefudan
+/.github/ @likefudan
+/CODEOWNERS @likefudan
