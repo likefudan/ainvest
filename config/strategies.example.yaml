@@ -1,0 +1,29 @@
+# Example strategy instance configuration (placeholders only).
+#
+# DEC-011: the first enabled strategy, universe, schedule, and parameters are
+#          an owner decision. Until accepted, no strategy instance is enabled.
+# YAML must not contain eval, lambda, or other executable expressions.
+#
+# Copy to an untracked file (for example config/strategies.yaml). Keep
+# enabled: false until DEC-011 is accepted. Do not commit production
+# parameters as if they were owner-approved.
+
+schema_version: "1"
+
+strategies:
+  - id: example_sma_daily
+    plugin: moving_average
+    # Owner must explicitly enable after DEC-011 acceptance.
+    enabled: false
+    universe:
+      symbols: ["PLACEHOLDER_SYMBOL_A", "PLACEHOLDER_SYMBOL_B"]
+      timeframe: 1d
+    parameters:
+      fast_window: 20
+      slow_window: 50
+      target_weight: "0.10"
+    schedule:
+      run_at: market_close_minus_15m
+    constraints:
+      research_max_age: 30m
+      signal_ttl: 30m
