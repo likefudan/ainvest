@@ -4,12 +4,15 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Phase 01 foundation work is in progress. Real-money trading remains disabled.
+Phase 01 Batch A is ready for merge (Part 2 in review). Real-money trading
+remains disabled.
 
 Project coordination:
 
 - [Decision register](docs/decisions/README.md)
 - [Implementation task status](docs/tasks/status.md)
+- [Threat model](docs/security/threat-model.md)
+- [Development commands](docs/development.md)
 
 ## Intended workflow
 

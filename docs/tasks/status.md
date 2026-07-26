@@ -75,12 +75,20 @@ that section has merged. Current Batch A split:
 | Record | Plan section | Cards | Status |
 |---|---|---|---|
 | Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
-| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | in progress |
+| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | in_review |
 | Batch A complete | Batch A | all of the above | after Part 2 merges |
 
 Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 
 ## Active batch
+
+None. Next claim: **Batch B** (`P02-T0` through `P02-T5`) — domain schemas,
+market/research/portfolio/strategy/order/risk/approval/broker contracts,
+canonical order hashing, and schema versioning. Prefer the merge order in
+`IMPLEMENTATION_TODO.md` section 12 (B1 → B2 → B3 → B4). A coordinator must
+claim Batch B here before dispatching those tasks.
+
+## Completed batches
 
 ### Batch A — Part 2
 
@@ -91,33 +99,29 @@ Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 - **Integration branch:** `task/batch-a-part-2`
 - **Base commit:** `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependency PRs/commits:** Batch A — Part 1 /
-  [PR #4](https://github.com/likefudan/ainvest/pull/4) /
-  `1d77146443e883f15475297e4858b7b705658d7d`; batch-naming /
-  [PR #5](https://github.com/likefudan/ainvest/pull/5) /
-  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+  [PR #4](https://github.com/likefudan/ainvest/pull/4);
+  batch-naming [PR #5](https://github.com/likefudan/ainvest/pull/5)
 - **Merge target:** `main`
+- **Implementation tip commit:** `921edbc` (integration HEAD before squash)
+- **Handoff PR:** pending (this branch)
 - **Safety posture:** documentation, package skeleton, fail-closed config, and
   CI only; Paper remains the default; no broker write capability, credentials,
   or live trading are introduced
-- **Path coordination:** disjoint ownership below; `docs/tasks/status.md` and
-  integration merge owned by the coordinator; `pyproject.toml` owned only by
-  `P01-T5` for markers/CI tooling; `src/ainvest/__init__.py` owned only by
-  `P01-T3`
+- **Verification:** `./scripts/dev verify` passed on the integration branch
+  (72 tests; coverage ≥80%)
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P01-T1` | Document Trust Boundaries and Threat Model | `in_progress` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | pending |
-| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_progress` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
-| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_progress` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
-| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_progress` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
-
-## Completed batches
+| `P01-T1` | Document Trust Boundaries and Threat Model | `in_review` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | pending |
+| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_review` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
+| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_review` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
+| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_review` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
 
 ### Batch A — Part 1
 
 - **Batch:** Batch A — Part 1 — decision/process baseline and Python project
   baseline (`P01-T0`, `P01-T2`)
-- **Plan batch:** Batch A (partial; remaining cards are Batch A — Part 2)
+- **Plan batch:** Batch A (partial; remaining cards were Batch A — Part 2)
 - **Coordinator:** `/root`
 - **Integration branch:** [PR #4 head branch](https://github.com/likefudan/ainvest/pull/4)
   (deleted after merge)
@@ -211,7 +215,7 @@ Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 ## Execution envelope: P01-T1
 
 - **Title:** Document Trust Boundaries and Threat Model
-- **Status/owner:** `in_progress` — `subagent/p01-t1`
+- **Status/owner:** `in_review` — `subagent/p01-t1`
 - **Branch/base:** `task/p01-t1-threat-model` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T0` (merged)
@@ -221,15 +225,17 @@ Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 - **Allowed paths:** `docs/security/**`
 - **Forbidden paths:** all application, test, CI, lock, and configuration
   runtime files; `docs/tasks/status.md` (coordinator-owned)
-- **Verification:** document completeness against the P01-T1 checklist;
-  diagrams and threat/control tables present; residual risks recorded
+- **Verification:** `docs/security/{README,threat-model,data-flow}.md` with
+  threats `T-001`–`T-016`, control/task mappings, residual risks, and diagrams
 - **Blockers:** None
-- **Handoff notes:** pending
+- **Handoff notes:** Integrated on `task/batch-a-part-2`. Threat IDs ready for
+  Phase 08 security-test traceability.
+- **Resulting commit:** `c5564a4041588a46bcdb57de2f0ea7046b69cb8c`
 
 ## Execution envelope: P01-T3
 
 - **Title:** Create Package Boundaries and Architecture Tests
-- **Status/owner:** `in_progress` — `subagent/p01-t3`
+- **Status/owner:** `in_review` — `subagent/p01-t3`
 - **Branch/base:** `task/p01-t3-package-boundaries` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
@@ -238,20 +244,22 @@ Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 - **Accepted decisions:** `DEC-001`–`DEC-008` apply where relevant
 - **Allowed paths:** `src/ainvest/{agents,data,schemas,strategies,risk,approval,execution,portfolio,audit,api}/**`,
   `src/ainvest/__init__.py`, `tests/unit/architecture/**`,
-  `docs/architecture/**` (optional package-boundary notes)
+  `docs/architecture/**`
 - **Forbidden paths:** `src/ainvest/config.py`, `config/**`, `.env.example`,
   `.github/**`, `.pre-commit-config.yaml`, `docs/security/**`,
-  `docs/tasks/status.md`, and unrelated dependency changes beyond imports
-  needed by architecture fixtures
-- **Canonical verification:** `./scripts/dev unit` and architecture-focused
-  checks; full `./scripts/dev verify` after integration
+  `docs/tasks/status.md`
+- **Canonical verification:** architecture unit tests plus integrated
+  `./scripts/dev verify`
 - **Blockers:** None
-- **Handoff notes:** pending
+- **Handoff notes:** Forbidden-edge matrix enforced via AST checker; intentional
+  violation fixtures under `tests/unit/architecture/fixtures/`. Coordinator
+  narrowed root `.gitignore` `data/`/`logs/` to `/data/`/`/logs/`.
+- **Resulting commit:** `0457680` / feature `5d30648`
 
 ## Execution envelope: P01-T4
 
 - **Title:** Implement Configuration Loading and Safe Defaults
-- **Status/owner:** `in_progress` — `subagent/p01-t4`
+- **Status/owner:** `in_review` — `subagent/p01-t4`
 - **Branch/base:** `task/p01-t4-config` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
@@ -262,28 +270,33 @@ Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
   `tests/unit/config/**`
 - **Forbidden paths:** package submodules owned by `P01-T3`, CI files owned by
   `P01-T5`, `docs/security/**`, `docs/tasks/status.md`, and `pyproject.toml`
-- **Canonical verification:** targeted config unit tests plus
-  `./scripts/dev unit` / type-check after integration
-- **Owner values/credentials:** None. Use placeholders only in `.env.example`.
+- **Canonical verification:** config unit tests; integrated
+  `./scripts/dev verify`
+- **Owner values/credentials:** None. Placeholders only in `.env.example`.
 - **Blockers:** None
-- **Handoff notes:** pending
+- **Handoff notes:** Paper defaults locked; live WebAuthn incomplete configs
+  fail closed; secrets use `repr=False`. Downstream schema tasks may load
+  settings through `ainvest.config` only.
+- **Resulting commit:** `4a808e79442a4d9ad4d6423c8af6b360ed1680bb`
 
 ## Execution envelope: P01-T5
 
 - **Title:** Add CI, Commit Quality Gates, and Dependency Security
-- **Status/owner:** `in_progress` — `subagent/p01-t5`
+- **Status/owner:** `in_review` — `subagent/p01-t5`
 - **Branch/base:** `task/p01-t5-ci` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
 - **Design and plan authority:** `docs/development.md`;
   `IMPLEMENTATION_TODO.md` sections 1 and 4 (`P01-T5`)
 - **Allowed paths:** `.github/**`, `.pre-commit-config.yaml`, `CODEOWNERS`,
-  `pyproject.toml` (markers / CI-related tooling only), `uv.lock` if a new
-  locked CI tool is required, and a short CI note in `docs/development.md`
-- **Forbidden paths:** `src/ainvest/**` application modules except as needed
-  for nothing (do not edit application code), `docs/security/**`,
-  `docs/tasks/status.md`, `config/**`, `.env.example`
-- **Canonical verification:** CI must invoke `./scripts/dev` commands; never
-  inject real credentials
+  `pyproject.toml` (markers / CI tooling), `uv.lock`, `docs/development.md`,
+  `tests/conftest.py`, `tests/unit/test_live_safety_marker.py`
+- **Forbidden paths:** application modules under `src/ainvest/**` except via
+  existing test surface, `docs/security/**`, `docs/tasks/status.md`,
+  `config/**`, `.env.example`
+- **Canonical verification:** CI invokes `./scripts/dev verify`; Gitleaks;
+  pip-audit; local `./scripts/dev verify` passed after integration
 - **Blockers:** None
-- **Handoff notes:** pending
+- **Handoff notes:** `live_safety` marker cannot use skip/skipif. CODEOWNERS
+  covers security/execution/approval/config/CI paths. No credentials in CI.
+- **Resulting commit:** `d83155de62ab76b31716c585bbbcf12194c064ce`
