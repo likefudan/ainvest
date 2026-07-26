@@ -19,7 +19,7 @@
       "type": "string"
     },
     "OrderSide": {
-      "description": "First-release order sides. Short selling is not permitted.",
+      "description": "Long-only BUY/SELL sides shared by orders and open-order snapshots.",
       "enum": [
         "BUY",
         "SELL"

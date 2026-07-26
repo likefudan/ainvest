@@ -79,6 +79,8 @@
       "type": "string"
     },
     "event_type": {
+      "maxLength": 64,
+      "minLength": 2,
       "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
       "title": "Event Type",
       "type": "string"

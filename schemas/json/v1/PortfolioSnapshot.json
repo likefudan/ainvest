@@ -142,15 +142,6 @@
       "title": "InstrumentIdentity",
       "type": "object"
     },
-    "OpenOrderSide": {
-      "description": "Sides allowed on open-order snapshots (long-only first release).",
-      "enum": [
-        "BUY",
-        "SELL"
-      ],
-      "title": "OpenOrderSide",
-      "type": "string"
-    },
     "OpenOrderSnapshot": {
       "additionalProperties": false,
       "description": "Outstanding broker order visible to strategies and pre-trade checks.",
@@ -187,7 +178,7 @@
           "type": "string"
         },
         "side": {
-          "$ref": "#/$defs/OpenOrderSide"
+          "$ref": "#/$defs/OrderSide"
         },
         "submitted_at": {
           "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
@@ -221,6 +212,15 @@
       ],
       "title": "OpenOrderSnapshot",
       "type": "object"
+    },
+    "OrderSide": {
+      "description": "Long-only BUY/SELL sides shared by orders and open-order snapshots.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "OrderSide",
+      "type": "string"
     },
     "PositionSnapshot": {
       "additionalProperties": false,

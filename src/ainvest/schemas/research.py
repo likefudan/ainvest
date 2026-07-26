@@ -279,19 +279,6 @@ def parse_research_packet(data: dict[str, Any]) -> ResearchPacket:
     return ResearchPacket.model_validate(data)
 
 
-def assert_time_ordering(
-    *,
-    observed_at: datetime,
-    received_at: datetime,
-    as_of: datetime | None = None,
-) -> None:
-    """Shared fail-closed time-order checks for research ingest paths."""
-    if received_at < observed_at:
-        raise ValueError("received_at must be >= observed_at")
-    if as_of is not None and (observed_at > as_of or received_at > as_of):
-        raise ValueError("observation times must be <= as_of")
-
-
 __all__ = [
     "EVIDENCE_LOCATOR_PATTERN",
     "EvidenceCitation",
@@ -299,7 +286,6 @@ __all__ = [
     "EvidenceLocator",
     "ResearchPacket",
     "ThesisSection",
-    "assert_time_ordering",
     "parse_research_packet",
     "research_packet_example",
 ]

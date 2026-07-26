@@ -19,7 +19,9 @@ from ainvest.schemas.common import (
     CurrencyCode,
     DomainModel,
     ExchangeMic,
+    MachineCode,
     Money,
+    OrderSide,
     PositiveDecimal,
     Price,
     SchemaVersion,
@@ -36,17 +38,7 @@ OrderHashDigest = Annotated[
     StringConstraints(pattern=r"^sha256:[a-f0-9]{64}$", min_length=71, max_length=71),
 ]
 
-ReasonCode = Annotated[
-    str,
-    StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$", min_length=2, max_length=64),
-]
-
-
-class OrderSide(StrEnum):
-    """First-release order sides. Short selling is not permitted."""
-
-    BUY = "BUY"
-    SELL = "SELL"
+ReasonCode = MachineCode
 
 
 class OrderType(StrEnum):

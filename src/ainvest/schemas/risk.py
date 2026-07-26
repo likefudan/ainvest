@@ -10,15 +10,13 @@ from pydantic import StringConstraints, field_validator, model_validator
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
     DomainModel,
+    MachineCode,
     SchemaVersion,
     StableId,
     UtcDateTime,
 )
 
-RuleCode = Annotated[
-    str,
-    StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$", min_length=2, max_length=64),
-]
+RuleCode = MachineCode
 
 
 class RiskSeverity(StrEnum):
