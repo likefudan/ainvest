@@ -80,13 +80,13 @@ def _canonical_decimal(value: Decimal | str | int) -> str:
 
 def _canonical_timestamp(value: object) -> str:
     moment = ensure_utc(value)  # type: ignore[arg-type]
-    # Drop sub-second noise for cross-language stability; seconds are required.
-    return moment.replace(microsecond=0).strftime("%Y-%m-%dT%H:%M:%SZ")
+    # Preserve full microsecond precision so protected-field changes never collide.
+    return moment.strftime("%Y-%m-%dT%H:%M:%S.%fZ")
 
 
-def _canonical_scalar(value: object, *, as_decimal: bool = False) -> str | None:
+def _canonical_scalar(value: object, *, as_decimal: bool = False) -> str:
     if value is None:
-        return None
+        raise ValueError("protected hash fields cannot be null")
     if isinstance(value, bool):
         raise TypeError("boolean values are not hashable order fields")
     if as_decimal or isinstance(value, (Decimal, int)):
@@ -98,7 +98,7 @@ def _canonical_scalar(value: object, *, as_decimal: bool = False) -> str | None:
         return _canonical_timestamp(value)
     if isinstance(value, str):
         # ISO timestamps from JSON dumps
-        if "T" in value and (value.endswith("Z") or "+" in value[10:]):
+        if "T" in value and (value.endswith("Z") or "+" in value[10:] or "-" in value[10:]):
             try:
                 return _canonical_timestamp(value)
             except ValueError:
@@ -117,10 +117,10 @@ def _extract_mapping(
 
 def canonical_order_payload(
     order: OrderProposal | CandidateOrder | Mapping[str, Any],
-) -> dict[str, str | None]:
+) -> dict[str, str]:
     """Return the protected-field mapping used for order digests."""
     data = _extract_mapping(order)
-    payload: dict[str, str | None] = {}
+    payload: dict[str, str] = {}
     for field in ORDER_HASH_FIELDS:
         if field not in data:
             raise KeyError(f"missing protected order hash field: {field}")
@@ -133,10 +133,10 @@ def canonical_order_payload(
 
 def canonical_cancel_payload(
     command: CancelCommand | Mapping[str, Any],
-) -> dict[str, str | None]:
+) -> dict[str, str]:
     """Return the protected-field mapping used for cancel digests."""
     data = command.model_dump(mode="python") if isinstance(command, CancelCommand) else command
-    payload: dict[str, str | None] = {}
+    payload: dict[str, str] = {}
     for field in CANCEL_HASH_FIELDS:
         if field not in data:
             raise KeyError(f"missing protected cancel hash field: {field}")
@@ -147,7 +147,7 @@ def canonical_cancel_payload(
     return payload
 
 
-def _digest_payload(payload: Mapping[str, str | None], *, domain: str) -> str:
+def _digest_payload(payload: Mapping[str, str], *, domain: str) -> str:
     document = {
         "domain": domain,
         "algorithm": ORDER_HASH_ALGORITHM,
@@ -185,6 +185,30 @@ def attach_order_hash(proposal_data: dict[str, Any]) -> dict[str, Any]:
     return payload
 
 
+def verify_order_hash(proposal: OrderProposal | Mapping[str, Any]) -> None:
+    """Fail closed when ``order_hash`` does not match protected fields."""
+    data = (
+        proposal.model_dump(mode="python")
+        if isinstance(proposal, OrderProposal)
+        else dict(proposal)
+    )
+    expected = compute_order_hash(data)
+    actual = data.get("order_hash")
+    if actual != expected:
+        raise ValueError("order_hash does not match protected proposal fields")
+
+
+def parse_order_proposal(data: dict[str, Any]) -> OrderProposal:
+    """Validate an OrderProposal and require a matching order_hash.
+
+    This is the mandatory construction path for approval and execution
+    consumers. ``OrderProposal.model_validate`` alone only checks structure.
+    """
+    proposal = OrderProposal.model_validate(data)
+    verify_order_hash(proposal)
+    return proposal
+
+
 __all__ = [
     "CANCEL_HASH_FIELDS",
     "ORDER_HASH_ALGORITHM",
@@ -195,4 +219,6 @@ __all__ = [
     "canonical_order_payload",
     "compute_cancel_hash",
     "compute_order_hash",
+    "parse_order_proposal",
+    "verify_order_hash",
 ]

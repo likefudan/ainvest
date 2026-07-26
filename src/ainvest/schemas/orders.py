@@ -99,10 +99,8 @@ class CandidateOrder(DomainModel):
             raise ValueError("quantity_increment must be > 0")
         if self.price_increment <= 0:
             raise ValueError("price_increment must be > 0")
-        # Whole-increment quantity check in Decimal space.
-        ratio = self.quantity / self.quantity_increment
-        if ratio != ratio.to_integral_value():
-            raise ValueError("quantity must be an integer multiple of quantity_increment")
+        _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
+        _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
         notional = self.quantity * self.limit_price
         if notional > self.maximum_notional:
             raise ValueError("quantity * limit_price must be <= maximum_notional")
@@ -110,7 +108,13 @@ class CandidateOrder(DomainModel):
 
 
 class OrderProposal(DomainModel):
-    """Risk-approved, hash-bound order intent (design.md §6.3)."""
+    """Risk-approved, hash-bound order intent (design.md §6.3).
+
+    Structural validation lives here. Consumers must construct proposals through
+    :func:`ainvest.approval.order_hash.parse_order_proposal` (or call
+    :func:`ainvest.approval.order_hash.verify_order_hash`) so the digest is
+    checked against protected fields before approval/execution.
+    """
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     proposal_id: StableId
@@ -147,13 +151,26 @@ class OrderProposal(DomainModel):
             raise ValueError("only DAY time_in_force is allowed")
         if self.expires_at <= self.created_at:
             raise ValueError("expires_at must be > created_at")
-        ratio = self.quantity / self.quantity_increment
-        if ratio != ratio.to_integral_value():
-            raise ValueError("quantity must be an integer multiple of quantity_increment")
+        if self.quantity_increment <= 0:
+            raise ValueError("quantity_increment must be > 0")
+        if self.price_increment <= 0:
+            raise ValueError("price_increment must be > 0")
+        _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
+        _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
         notional = self.quantity * self.limit_price
         if notional > self.maximum_notional:
             raise ValueError("quantity * limit_price must be <= maximum_notional")
         return self
+
+
+def _require_increment_multiple(label: str, value: object, increment: object) -> None:
+    from decimal import Decimal
+
+    amount = value if isinstance(value, Decimal) else Decimal(str(value))
+    step = increment if isinstance(increment, Decimal) else Decimal(str(increment))
+    ratio = amount / step
+    if ratio != ratio.to_integral_value():
+        raise ValueError(f"{label} must be an integer multiple of its increment")
 
 
 def order_proposal_example() -> dict[str, Any]:

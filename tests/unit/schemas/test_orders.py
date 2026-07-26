@@ -9,7 +9,11 @@ from typing import Any
 import pytest
 from pydantic import ValidationError
 
-from ainvest.approval.order_hash import attach_order_hash, compute_order_hash
+from ainvest.approval.order_hash import (
+    attach_order_hash,
+    compute_order_hash,
+    parse_order_proposal,
+)
 from ainvest.schemas.approval import ApprovalChallenge, ApprovalEvent
 from ainvest.schemas.broker import BrokerOrder, CancelCommand, ReconciliationResult
 from ainvest.schemas.orders import CandidateOrder, OrderProposal, order_proposal_example
@@ -23,13 +27,24 @@ def _valid_proposal() -> dict[str, Any]:
 @pytest.mark.unit
 def test_design_order_proposal_example_round_trips() -> None:
     payload = _valid_proposal()
-    proposal = OrderProposal.model_validate(payload)
+    proposal = parse_order_proposal(payload)
     assert proposal.symbol == "AAPL"
     assert proposal.order_hash == compute_order_hash(payload)
     raw = json.loads(proposal.model_dump_json())
-    again = OrderProposal.model_validate(raw)
+    again = parse_order_proposal(raw)
     assert again.order_hash == proposal.order_hash
     assert again.limit_price == proposal.limit_price
+
+
+@pytest.mark.unit
+def test_parse_order_proposal_rejects_stale_or_tampered_hash() -> None:
+    payload = _valid_proposal()
+    payload["order_hash"] = "sha256:" + ("0" * 64)
+    # Structural validate still accepts a syntactically valid digest...
+    OrderProposal.model_validate(payload)
+    # ...but the public construction path must reject the mismatch.
+    with pytest.raises(ValueError, match="order_hash"):
+        parse_order_proposal(payload)
 
 
 @pytest.mark.unit
@@ -56,7 +71,7 @@ def test_rejects_unsupported_order_shape() -> None:
 
 
 @pytest.mark.unit
-def test_candidate_order_enforces_notional_and_increments() -> None:
+def test_candidate_and_proposal_enforce_price_and_quantity_increments() -> None:
     payload = _valid_proposal()
     payload["candidate_id"] = "cand_01HZYEXAMPLE0001"
     payload.pop("proposal_id", None)
@@ -66,16 +81,41 @@ def test_candidate_order_enforces_notional_and_increments() -> None:
     candidate = CandidateOrder.model_validate(payload)
     assert candidate.side.value == "BUY"
 
-    bad = deepcopy(payload)
-    bad["quantity"] = "2.5"
-    bad["quantity_increment"] = "1"
-    with pytest.raises(ValidationError, match="quantity_increment"):
-        CandidateOrder.model_validate(bad)
+    bad_qty = deepcopy(payload)
+    bad_qty["quantity"] = "2.5"
+    bad_qty["quantity_increment"] = "1"
+    with pytest.raises(ValidationError, match="quantity"):
+        CandidateOrder.model_validate(bad_qty)
+
+    off_tick = deepcopy(payload)
+    off_tick["limit_price"] = "214.505"
+    off_tick["price_increment"] = "0.01"
+    with pytest.raises(ValidationError, match="limit_price"):
+        CandidateOrder.model_validate(off_tick)
+    proposal_off_tick = attach_order_hash(
+        {
+            **{k: v for k, v in off_tick.items() if k != "reason_codes"},
+            **_proposal_ids(),
+        }
+    )
+    with pytest.raises(ValidationError, match="limit_price"):
+        OrderProposal.model_validate(proposal_off_tick)
+    exact = deepcopy(payload)
+    exact["limit_price"] = "214.50"
+    exact["price_increment"] = "0.01"
+    CandidateOrder.model_validate(exact)
 
     oversized = deepcopy(payload)
     oversized["maximum_notional"] = "100.00"
     with pytest.raises(ValidationError, match="maximum_notional"):
         CandidateOrder.model_validate(oversized)
+
+
+def _proposal_ids() -> dict[str, str]:
+    return {
+        "proposal_id": "ordp_01HZYEXAMPLE0001",
+        "risk_decision_id": "risk_01HZYEXAMPLE0001",
+    }
 
 
 @pytest.mark.unit
@@ -110,7 +150,7 @@ def test_approval_rejects_telegram_live_and_webauthn_paper() -> None:
 
 
 @pytest.mark.unit
-def test_risk_decision_requires_stable_reason_and_hard_reject_rules() -> None:
+def test_risk_decision_requires_human_reason_and_outcome_consistency() -> None:
     approved = RiskDecision.model_validate(
         {
             "risk_decision_id": "risk_01HZYEXAMPLE0001",
@@ -120,26 +160,75 @@ def test_risk_decision_requires_stable_reason_and_hard_reject_rules() -> None:
             "rule_set_version": "1.0.0",
             "violations": [],
             "reason_code": "ALL_RULES_PASSED",
+            "reason": "all hard and review rules passed",
         }
     )
-    assert approved.outcome.value == "APPROVED"
+    assert approved.reason.startswith("all hard")
+
+    with pytest.raises(ValidationError, match="reason"):
+        RiskDecision.model_validate(
+            {
+                "risk_decision_id": "risk_01HZYEXAMPLE0002",
+                "candidate_id": "cand_01HZYEXAMPLE0001",
+                "outcome": "APPROVED",
+                "decided_at": "2026-07-24T18:30:11Z",
+                "rule_set_version": "1.0.0",
+                "violations": [],
+                "reason_code": "ALL_RULES_PASSED",
+            }
+        )
 
     with pytest.raises(ValidationError, match="HARD"):
         RiskDecision.model_validate(
             {
-                "risk_decision_id": "risk_01HZYEXAMPLE0002",
+                "risk_decision_id": "risk_01HZYEXAMPLE0003",
                 "candidate_id": "cand_01HZYEXAMPLE0001",
                 "outcome": "REJECTED",
                 "decided_at": "2026-07-24T18:30:11Z",
                 "rule_set_version": "1.0.0",
                 "violations": [],
                 "reason_code": "MISSING_LIMIT",
+                "reason": "missing required limit",
+            }
+        )
+
+    with pytest.raises(ValidationError, match="REVIEW"):
+        RiskDecision.model_validate(
+            {
+                "risk_decision_id": "risk_01HZYEXAMPLE0004",
+                "candidate_id": "cand_01HZYEXAMPLE0001",
+                "outcome": "NEEDS_REVIEW",
+                "decided_at": "2026-07-24T18:30:11Z",
+                "rule_set_version": "1.0.0",
+                "violations": [],
+                "reason_code": "EMPTY_REVIEW",
+                "reason": "empty needs review",
+            }
+        )
+
+    with pytest.raises(ValidationError, match="REVIEW"):
+        RiskDecision.model_validate(
+            {
+                "risk_decision_id": "risk_01HZYEXAMPLE0005",
+                "candidate_id": "cand_01HZYEXAMPLE0001",
+                "outcome": "NEEDS_REVIEW",
+                "decided_at": "2026-07-24T18:30:11Z",
+                "rule_set_version": "1.0.0",
+                "violations": [
+                    {
+                        "rule_code": "INFO_ONLY",
+                        "severity": "INFO",
+                        "reason": "informational note",
+                    }
+                ],
+                "reason_code": "INFO_ONLY",
+                "reason": "info only cannot become needs review",
             }
         )
 
     rejected = RiskDecision.model_validate(
         {
-            "risk_decision_id": "risk_01HZYEXAMPLE0003",
+            "risk_decision_id": "risk_01HZYEXAMPLE0006",
             "candidate_id": "cand_01HZYEXAMPLE0001",
             "outcome": "REJECTED",
             "decided_at": "2026-07-24T18:30:11Z",
@@ -152,9 +241,30 @@ def test_risk_decision_requires_stable_reason_and_hard_reject_rules() -> None:
                 }
             ],
             "reason_code": "MAX_ORDER_NOTIONAL",
+            "reason": "order notional exceeds configured maximum",
         }
     )
     assert rejected.violations[0].severity.value == "HARD"
+
+    needs_review = RiskDecision.model_validate(
+        {
+            "risk_decision_id": "risk_01HZYEXAMPLE0007",
+            "candidate_id": "cand_01HZYEXAMPLE0001",
+            "outcome": "NEEDS_REVIEW",
+            "decided_at": "2026-07-24T18:30:11Z",
+            "rule_set_version": "1.0.0",
+            "violations": [
+                {
+                    "rule_code": "SECTOR_NEAR_LIMIT",
+                    "severity": "REVIEW",
+                    "reason": "sector weight near configured soft limit",
+                }
+            ],
+            "reason_code": "SECTOR_NEAR_LIMIT",
+            "reason": "sector exposure requires manual review",
+        }
+    )
+    assert needs_review.outcome.value == "NEEDS_REVIEW"
 
 
 @pytest.mark.unit

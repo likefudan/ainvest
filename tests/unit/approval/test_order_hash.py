@@ -14,9 +14,10 @@ from ainvest.approval.order_hash import (
     attach_order_hash,
     compute_cancel_hash,
     compute_order_hash,
+    parse_order_proposal,
 )
 from ainvest.schemas.broker import CancelCommand
-from ainvest.schemas.orders import OrderProposal, order_proposal_example
+from ainvest.schemas.orders import order_proposal_example
 
 VECTORS = Path(__file__).parent / "fixtures" / "order_hash_vectors.json"
 
@@ -41,6 +42,10 @@ def test_fixed_order_hash_vectors() -> None:
     for case in vectors["cancel_cases"]:
         digest = compute_cancel_hash(case["input"])
         assert digest == case["expected_hash"], case["name"]
+
+    for case in vectors.get("error_cases", []):
+        with pytest.raises(ValueError, match="null"):
+            compute_order_hash(case["input"])
 
 
 @pytest.mark.unit
@@ -90,8 +95,26 @@ def test_unprotected_fields_do_not_change_hash() -> None:
 @pytest.mark.unit
 def test_attach_order_hash_round_trips_through_proposal() -> None:
     attached = attach_order_hash(_base_order())
-    proposal = OrderProposal.model_validate(attached)
+    proposal = parse_order_proposal(attached)
     assert proposal.order_hash == compute_order_hash(attached)
+
+
+@pytest.mark.unit
+def test_subsecond_expiry_changes_change_hash() -> None:
+    base = _base_order()
+    early = deepcopy(base)
+    early["expires_at"] = "2026-07-24T18:32:12.100000Z"
+    late = deepcopy(base)
+    late["expires_at"] = "2026-07-24T18:32:12.900000Z"
+    assert compute_order_hash(early) != compute_order_hash(late)
+
+
+@pytest.mark.unit
+def test_null_protected_field_is_rejected() -> None:
+    base = _base_order()
+    base["symbol"] = None
+    with pytest.raises(ValueError, match="null"):
+        compute_order_hash(base)
 
 
 @pytest.mark.unit

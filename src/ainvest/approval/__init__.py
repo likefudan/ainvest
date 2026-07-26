@@ -10,6 +10,8 @@ from ainvest.approval.order_hash import (
     attach_order_hash,
     compute_cancel_hash,
     compute_order_hash,
+    parse_order_proposal,
+    verify_order_hash,
 )
 
 __all__ = [
@@ -18,4 +20,6 @@ __all__ = [
     "attach_order_hash",
     "compute_cancel_hash",
     "compute_order_hash",
+    "parse_order_proposal",
+    "verify_order_hash",
 ]

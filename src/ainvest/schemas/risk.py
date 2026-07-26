@@ -47,7 +47,11 @@ class RiskViolation(DomainModel):
 
 
 class RiskDecision(DomainModel):
-    """Immutable risk outcome bound to a candidate or proposal."""
+    """Immutable risk outcome bound to a candidate or proposal.
+
+    Every decision carries both a machine-readable ``reason_code`` and a
+    human-readable ``reason`` (design.md §5.4).
+    """
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     risk_decision_id: StableId
@@ -58,6 +62,7 @@ class RiskDecision(DomainModel):
     rule_set_version: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     violations: tuple[RiskViolation, ...] = ()
     reason_code: RuleCode
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=512)]
 
     @field_validator("violations", mode="before")
     @classmethod
@@ -76,6 +81,8 @@ class RiskDecision(DomainModel):
             raise ValueError("REJECTED decisions require at least one HARD violation")
         if hard and self.outcome is not RiskOutcome.REJECTED:
             raise ValueError("HARD violations require REJECTED outcome")
+        if self.outcome is RiskOutcome.NEEDS_REVIEW and not review:
+            raise ValueError("NEEDS_REVIEW decisions require at least one REVIEW violation")
         if review and not hard and self.outcome is RiskOutcome.APPROVED:
             raise ValueError("REVIEW violations cannot yield APPROVED")
         if self.outcome is RiskOutcome.APPROVED and (hard or review):
