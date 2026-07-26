@@ -1,4 +1,4 @@
-# Example strategy instance configuration (placeholders only).
+# Example strategy instance configuration (design.md §5.3.1).
 #
 # DEC-011: the first enabled strategy, universe, schedule, and parameters are
 #          an owner decision. Until accepted, no strategy instance is enabled.
@@ -7,16 +7,22 @@
 # Copy to an untracked file (for example config/strategies.yaml). Keep
 # enabled: false until DEC-011 is accepted. Do not commit production
 # parameters as if they were owner-approved.
+#
+# Live mode additionally requires plugin_version pins matching the discovered
+# plugin package version (see StrategyRegistry allowlists).
 
 schema_version: "1"
 
 strategies:
-  - id: example_sma_daily
+  - id: aapl_sma_daily
     plugin: moving_average
+    strategy: moving_average
+    # Optional pin; required when TRADING_MODE=live.
+    # plugin_version: "1.0.0"
     # Owner must explicitly enable after DEC-011 acceptance.
     enabled: false
     universe:
-      symbols: ["PLACEHOLDER_SYMBOL_A", "PLACEHOLDER_SYMBOL_B"]
+      symbols: [AAPL, MSFT]
       timeframe: 1d
     parameters:
       fast_window: 20
