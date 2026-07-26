@@ -83,8 +83,8 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | complete (merged) |
 | Batch B complete | Batch B | all of the above | complete |
 | Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | complete (merged) |
-| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | in_review |
-| Batch C — Part 3a (C3a) | Batch C | `P03-T13` | in_progress (parallel) |
+| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | complete (merged) |
+| Batch C — Part 3a (C3a) | Batch C | `P03-T13` | in_review ([#36](https://github.com/likefudan/ainvest/pull/36)) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
@@ -93,10 +93,10 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-Parallel Batch C. **C1 is merged** (`6732046`). C4a may start. Do not claim
-C3b/C4b until their prerequisites land. Coordinators own `docs/tasks/status.md`
-updates for handoff; implementation agents must not rewrite another track's
-allowed paths.
+Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
+C4a may start. Do not claim C3b/C4b until their prerequisites land. Coordinators
+own `docs/tasks/status.md` updates for handoff; implementation agents must not
+rewrite another track's allowed paths.
 
 ### Batch C — Part 1 (C1)
 
@@ -132,32 +132,22 @@ allowed paths.
   reference MA plugin (`P03-T0`–`P03-T3`)
 - **Plan batch:** Batch C (parallel with C1/C3a)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-c2
-- **Integration branch:** `task/batch-c2-strategy-api`
+- **Integration branch:** `task/batch-c2-strategy-api` (deleted after merge)
 - **Base commit:** `b2c30cba584efd9d21361197ce0e97c7d042cdf6`
+- **Merge commit:** `c1fa3106e828df0c47fd27d168c7ebd5a4445b06`
 - **Dependencies:** `P02-T2`, `P02-T5`, `P01-T3`, `P01-T4` (satisfied on main)
 - **Merge target:** `main` (squash)
-- **Allowed paths:** `src/ainvest/strategies/**`, `examples/strategies/**`,
-  `config/strategies.example.yaml`, `tests/unit/strategies/**`,
-  `tests/integration/strategies/**`, `pyproject.toml` / `uv.lock` only for
-  strategy entry points / plugin packaging, `docs/tasks/status.md` (C2 handoff
-  only), `README.md` (status line only if needed)
-- **Forbidden:** `src/ainvest/db/**`, `migrations/**`, `src/ainvest/audit/**`,
-  `src/ainvest/execution/**`, broker credentials, network in reference strategy,
-  live trading
-- **Safety posture:** Strategy declarations and offline reference plugin only;
-  Paper remains default; no broker access
-- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
 - **Handoff PR:** https://github.com/likefudan/ainvest/pull/38
 - **Next after merge:** Feeds later worker isolation (P03-T4) and Gate 1
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T0` | Define the Strategy API, Definitions, and Hook Contract | `in_review` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T2`, `P02-T5`, `P01-T3` | https://github.com/likefudan/ainvest/pull/38 |
-| `P03-T1` | Load pluggy Plugins into StrategyRegistry | `in_review` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0` | https://github.com/likefudan/ainvest/pull/38 |
-| `P03-T2` | Implement Strategy Instance YAML Configuration | `in_review` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`, `P03-T1`, `P01-T4` | https://github.com/likefudan/ainvest/pull/38 |
-| `P03-T3` | Build a Reference Moving-Average Strategy Plugin | `in_review` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`–`T2`, `P02-T1`–`T2` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T0` | Define the Strategy API, Definitions, and Hook Contract | `merged` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T2`, `P02-T5`, `P01-T3` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T1` | Load pluggy Plugins into StrategyRegistry | `merged` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T2` | Implement Strategy Instance YAML Configuration | `merged` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`, `P03-T1`, `P01-T4` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T3` | Build a Reference Moving-Average Strategy Plugin | `merged` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`–`T2`, `P02-T1`–`T2` | https://github.com/likefudan/ainvest/pull/38 |
 
 ### Batch C — Part 3a (C3a)
 
@@ -165,10 +155,11 @@ allowed paths.
   taxonomy (`P03-T13` only)
 - **Plan batch:** Batch C (parallel with C1/C2)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress`
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-c3a
 - **Integration branch:** `task/batch-c3a-broker-port`
 - **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Implementation commit:** `14aa7e04c83fcb3a902bcac54ec523b8b1ea6269`
 - **Dependencies:** `P02-T3` (satisfied on main)
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/execution/broker.py`,
@@ -181,11 +172,13 @@ allowed paths.
 - **Safety posture:** Interface + taxonomy + contract tests only; no Paper
   simulator and no real broker writes
 - **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+  (passed: 248 tests, 86.31% coverage; audit clean)
+- **Handoff PR:** [PR #36](https://github.com/likefudan/ainvest/pull/36)
 - **Next after merge:** C3b Paper waits for C1 + `P02-T9`
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T13` | Define the Broker Port and Error Taxonomy | `in_progress` | cursor-subagent-c3a | `task/batch-c3a-broker-port` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T3` | TBD |
+| `P03-T13` | Define the Broker Port and Error Taxonomy | `in_review` | cursor-subagent-c3a | `task/batch-c3a-broker-port` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T3` | [#36](https://github.com/likefudan/ainvest/pull/36) |
 
 ## Completed batches
 
