@@ -1,0 +1,35 @@
+# Example risk configuration (placeholders only).
+#
+# DEC-002: every required risk limit must be present and valid before an order
+#          can be proposed or executed. There are no implicit tradable defaults.
+# DEC-012: concrete numeric limits are an owner decision and are unresolved;
+#          values below are synthetic documentation placeholders, not approval.
+# DEC-001: first release is regular US trading session only.
+#
+# Copy to an untracked file (for example config/risk.yaml) and replace
+# placeholders after the owner accepts DEC-012. Do not commit real account
+# scopes, budgets, or production allowlists.
+
+schema_version: "1"
+
+notes: >
+  Synthetic example only. Missing or unresolved owner limits must reject
+  trading under REQUIRE_COMPLETE_RISK_LIMITS=true.
+
+limits:
+  # Replace PLACEHOLDER_* with owner-approved Decimal strings (DEC-012).
+  max_order_notional: "PLACEHOLDER_MAX_ORDER_NOTIONAL"
+  max_symbol_weight: "PLACEHOLDER_MAX_SYMBOL_WEIGHT"
+  max_sector_exposure: "PLACEHOLDER_MAX_SECTOR_EXPOSURE"
+  max_daily_turnover: "PLACEHOLDER_MAX_DAILY_TURNOVER"
+  max_daily_loss: "PLACEHOLDER_MAX_DAILY_LOSS"
+  max_drawdown: "PLACEHOLDER_MAX_DRAWDOWN"
+  min_cash_reserve: "PLACEHOLDER_MIN_CASH_RESERVE"
+
+instrument_allowlist:
+  # Canonical instrument identity is required; a ticker alone is not enough.
+  - instrument_id: "PLACEHOLDER_INSTRUMENT_ID"
+    symbol: "PLACEHOLDER_SYMBOL"
+    exchange_mic: "XNAS"
+    currency: "USD"
+    asset_type: "equity"
