@@ -67,24 +67,32 @@ the dependency-change workflow.
 
 ## Active wave
 
+None. A coordinator must claim the next wave here before dispatching tasks.
+
+## Completed waves
+
+### Wave 1A
+
 - **Wave:** 1A — decision/process baseline and Python project baseline
 - **Coordinator:** `/root`
 - **Integration branch:** `agent/wave-1a-foundation`
 - **Base commit:** `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependency PRs/commits:** None
 - **Merge target:** `main`
+- **Implementation commit:** `1d77146443e883f15475297e4858b7b705658d7d`
+- **Handoff PR:** [#4](https://github.com/likefudan/ainvest/pull/4)
 - **Safety posture:** documentation and development tooling only; Paper remains
   the default and no broker, credential, or live capability is introduced
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P01-T0` | Create the Decision Register and ADR Process | `in_review` | `/root/p01_t0_decisions` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None | Pending wave integration |
-| `P01-T2` | Initialize the Python Project and Dependency Groups | `in_review` | `/root/p01_t2_python` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None; ran in parallel with `P01-T0` | Pending wave integration |
+| `P01-T0` | Create the Decision Register and ADR Process | `merged` | `/root/p01_t0_decisions` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None | [#4](https://github.com/likefudan/ainvest/pull/4) |
+| `P01-T2` | Initialize the Python Project and Dependency Groups | `merged` | `/root/p01_t2_python` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None; ran in parallel with `P01-T0` | [#4](https://github.com/likefudan/ainvest/pull/4) |
 
 ## Execution envelope: P01-T0
 
 - **Title:** Create the Decision Register and ADR Process
-- **Status/owner:** `in_review` — `/root/p01_t0_decisions`
+- **Status/owner:** `merged` — `/root/p01_t0_decisions`
 - **Branch/base:** `agent/wave-1a-foundation` at
   `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependencies:** None
@@ -107,15 +115,17 @@ the dependency-change workflow.
 - **Blockers:** None
 - **Assumptions:** Task deadlines are implementation gates rather than calendar
   dates. Owner-controlled external values remain unresolved and fail closed.
-- **Handoff notes:** Documentation is ready for coordinator review. Downstream
-  task prompts should cite decision IDs rather than restating or guessing owner
-  choices.
-- **Resulting commit/PR:** Pending wave integration
+- **Handoff notes:** Coordinator review passed uniqueness, completeness, link,
+  diff, and secret-signature checks. Downstream task prompts should cite
+  decision IDs rather than restating or guessing owner choices.
+- **Resulting commit/PR:** implementation commit
+  `1d77146443e883f15475297e4858b7b705658d7d`;
+  [PR #4](https://github.com/likefudan/ainvest/pull/4)
 
 ## Execution envelope: P01-T2
 
 - **Title:** Initialize the Python Project and Dependency Groups
-- **Status/owner:** `in_review` — `/root/p01_t2_python`
+- **Status/owner:** `merged` — `/root/p01_t2_python`
 - **Branch/base:** `agent/wave-1a-foundation` at
   `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependencies:** None; coordinated to run in parallel with `P01-T0`
@@ -149,8 +159,6 @@ the dependency-change workflow.
   temporary-environment install. `yfinance` is isolated in the `offline-data`
   profile; the Research profile export contains no `yfinance`, MCP, FastAPI,
   Telegram, or WebAuthn package.
-- **Resulting commit/PR:** Pending wave integration
-
-## Completed waves
-
-None yet.
+- **Resulting commit/PR:** implementation commit
+  `1d77146443e883f15475297e4858b7b705658d7d`;
+  [PR #4](https://github.com/likefudan/ainvest/pull/4)
