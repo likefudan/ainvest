@@ -19,10 +19,25 @@ from pydantic import (
     ConfigDict,
     PlainSerializer,
     StringConstraints,
+    WithJsonSchema,
     field_validator,
 )
 
 SCHEMA_VERSION_V1: Final[str] = "1.0"
+
+# Canonical finite decimal string for JSON Schema / structured model output.
+DECIMAL_STRING_PATTERN: Final[str] = r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$"
+DECIMAL_JSON_SCHEMA: Final[dict[str, object]] = {
+    "type": "string",
+    "pattern": DECIMAL_STRING_PATTERN,
+    "description": "Canonical decimal string. Binary JSON numbers are rejected.",
+}
+
+UTC_DATETIME_JSON_SCHEMA: Final[dict[str, object]] = {
+    "type": "string",
+    "format": "date-time",
+    "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+}
 
 SchemaVersion = Annotated[
     str,
@@ -169,12 +184,14 @@ UtcDateTime = Annotated[
     datetime,
     BeforeValidator(_parse_utc_datetime),
     PlainSerializer(_serialize_utc_datetime, return_type=str),
+    WithJsonSchema(UTC_DATETIME_JSON_SCHEMA),
 ]
 
 DecimalString = Annotated[
     Decimal,
     BeforeValidator(_parse_decimal),
     PlainSerializer(_serialize_decimal, return_type=str),
+    WithJsonSchema(DECIMAL_JSON_SCHEMA),
 ]
 
 NonNegativeDecimal = Annotated[DecimalString, AfterValidator(_require_non_negative)]
@@ -261,7 +278,14 @@ def ensure_utc(value: datetime | str) -> datetime:
     return _parse_utc_datetime(value)
 
 
+def decimal_json_schema() -> dict[str, object]:
+    """Return the canonical JSON Schema fragment for money-like fields."""
+    return dict(DECIMAL_JSON_SCHEMA)
+
+
 __all__ = [
+    "DECIMAL_JSON_SCHEMA",
+    "DECIMAL_STRING_PATTERN",
     "SCHEMA_VERSION_V1",
     "AssetType",
     "CurrencyCode",
@@ -286,5 +310,6 @@ __all__ = [
     "Symbol",
     "UtcDateTime",
     "Weight",
+    "decimal_json_schema",
     "ensure_utc",
 ]

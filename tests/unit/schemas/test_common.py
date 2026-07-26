@@ -10,15 +10,20 @@ import pytest
 from pydantic import TypeAdapter, ValidationError
 
 from ainvest.schemas.common import (
+    DECIMAL_STRING_PATTERN,
     InstrumentIdentity,
     Money,
     PnL,
+    Price,
     Provenance,
     QualityFlag,
     Ratio,
     Weight,
+    decimal_json_schema,
     ensure_utc,
 )
+from ainvest.schemas.market import ResearchMarketSection
+from ainvest.schemas.research import ResearchPacket
 
 
 @pytest.mark.unit
@@ -29,6 +34,25 @@ def test_decimal_money_round_trip_rejects_float() -> None:
     assert adapter.dump_python(value, mode="json") == "12.34"
     with pytest.raises(ValidationError, match="binary floats"):
         adapter.validate_python(1.25)
+
+
+@pytest.mark.unit
+def test_decimal_json_schema_is_string_only() -> None:
+    """Generated validation schema must not allow JSON numbers."""
+    fragment = decimal_json_schema()
+    assert fragment["type"] == "string"
+    assert fragment["pattern"] == DECIMAL_STRING_PATTERN
+
+    price_schema = TypeAdapter(Price).json_schema()
+    assert price_schema["type"] == "string"
+    assert "anyOf" not in price_schema
+    assert price_schema["pattern"] == DECIMAL_STRING_PATTERN
+
+    packet_schema = ResearchPacket.model_json_schema()
+    market_price = packet_schema["$defs"]["ResearchMarketSection"]["properties"]["last_price"]
+    assert market_price["type"] == "string"
+    assert "anyOf" not in market_price
+    assert market_price["pattern"] == DECIMAL_STRING_PATTERN
 
 
 @pytest.mark.unit
@@ -139,3 +163,16 @@ def test_json_round_trip_preserves_decimal_types() -> None:
     restored = InstrumentIdentity.model_validate(raw)
     assert restored == identity
     assert QualityFlag.STALE.value == "STALE"
+    section = ResearchMarketSection.model_validate(
+        {
+            "last_price": "1.00",
+            "currency": "USD",
+            "observed_at": "2026-07-24T18:30:00Z",
+            "provenance": {
+                "source": "robinhood.mcp.quotes",
+                "observed_at": "2026-07-24T18:30:00Z",
+                "received_at": "2026-07-24T18:30:00Z",
+            },
+        }
+    )
+    assert section.last_price == Decimal("1.00")

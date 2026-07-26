@@ -10,7 +10,15 @@ from pathlib import Path
 import pytest
 from pydantic import ValidationError
 
-from ainvest.schemas.market import MarketQuote, OhlcvBar, TechnicalIndicators
+from ainvest.schemas.market import (
+    FactValueKind,
+    FundamentalFact,
+    FundamentalSnapshot,
+    MarketEvent,
+    MarketQuote,
+    OhlcvBar,
+    TechnicalIndicators,
+)
 from ainvest.schemas.research import (
     EvidenceCitation,
     EvidenceKind,
@@ -75,6 +83,61 @@ def test_rejects_invalid_time_ordering() -> None:
 
 
 @pytest.mark.unit
+def test_rejects_look_ahead_instrument_identity() -> None:
+    payload = _example()
+    instrument = payload["instrument"]
+    assert isinstance(instrument, dict)
+    instrument["identity_as_of"] = "2026-07-24T19:00:00Z"
+    with pytest.raises(ValidationError, match="identity_as_of"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
+def test_rejects_look_ahead_technical_provenance() -> None:
+    payload = _example()
+    technical = payload["technical"]
+    assert isinstance(technical, dict)
+    provenance = technical["provenance"]
+    assert isinstance(provenance, dict)
+    provenance["observed_at"] = "2026-07-24T19:00:00Z"
+    provenance["received_at"] = "2026-07-24T19:00:00Z"
+    with pytest.raises(ValidationError, match=r"technical\.provenance"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
+def test_rejects_look_ahead_evidence_provenance() -> None:
+    payload = _example()
+    payload["evidence"] = [
+        {
+            "evidence_id": "evd_01CALC0001",
+            "kind": "CALCULATED",
+            "summary": "future calc",
+            "locator": "tool:ainvest.indicators.sma#run1",
+            "numeric_value": "211.30",
+            "calculation_source": "ainvest.indicators.sma",
+            "provenance": {
+                "source": "ainvest.indicators.v1",
+                "observed_at": "2026-07-24T19:00:00Z",
+                "received_at": "2026-07-24T19:00:00Z",
+            },
+        }
+    ]
+    with pytest.raises(ValidationError, match=r"evidence\[0\]\.provenance"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
+def test_rejects_currency_mismatch_between_instrument_and_market() -> None:
+    payload = _example()
+    instrument = payload["instrument"]
+    assert isinstance(instrument, dict)
+    instrument["currency"] = "EUR"
+    with pytest.raises(ValidationError, match="currency"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
 def test_stale_or_delayed_data_is_explicitly_flagged() -> None:
     payload = _example()
     market = payload["market"]
@@ -91,36 +154,59 @@ def test_stale_or_delayed_data_is_explicitly_flagged() -> None:
 
 
 @pytest.mark.unit
-def test_natural_language_cannot_become_numeric_evidence() -> None:
-    with pytest.raises(ValidationError, match="calculation_source"):
+def test_natural_language_without_locator_cannot_become_evidence() -> None:
+    with pytest.raises(ValidationError):
         EvidenceCitation.model_validate(
             {
                 "evidence_id": "evd_01NARRATIVE01",
                 "kind": EvidenceKind.FUNDAMENTAL,
-                "source": "analyst.note",
                 "summary": "Revenue will grow a lot next year",
-                "observed_at": "2026-07-24T18:00:00Z",
-                "received_at": "2026-07-24T18:01:00Z",
-                "numeric_value": "12.5",
+                "provenance": {
+                    "source": "analyst.note",
+                    "observed_at": "2026-07-24T18:00:00Z",
+                    "received_at": "2026-07-24T18:01:00Z",
+                },
             }
         )
 
 
 @pytest.mark.unit
-def test_calculated_evidence_requires_numeric_and_source() -> None:
+def test_numeric_evidence_requires_calculation_source_and_allows_negative() -> None:
+    with pytest.raises(ValidationError, match="calculation_source"):
+        EvidenceCitation.model_validate(
+            {
+                "evidence_id": "evd_01NARRATIVE01",
+                "kind": EvidenceKind.FUNDAMENTAL,
+                "summary": "EPS estimate",
+                "locator": "tool:edgar.xbrl#eps",
+                "numeric_value": "-1.25",
+                "provenance": {
+                    "source": "sec.edgar",
+                    "observed_at": "2026-07-24T18:00:00Z",
+                    "received_at": "2026-07-24T18:01:00Z",
+                },
+            }
+        )
+
     citation = EvidenceCitation.model_validate(
         {
             "evidence_id": "evd_01CALC0001",
             "kind": "CALCULATED",
-            "source": "ainvest.indicators.v1",
-            "summary": "SMA20 computed from daily closes",
-            "observed_at": "2026-07-24T18:29:58Z",
-            "received_at": "2026-07-24T18:30:00Z",
-            "numeric_value": "211.30",
-            "calculation_source": "ainvest.indicators.sma",
+            "summary": "Trailing EPS",
+            "locator": "tool:ainvest.fundamentals.eps#ttm",
+            "numeric_value": "-1.25",
+            "calculation_source": "ainvest.fundamentals.eps",
+            "provenance": {
+                "source": "ainvest.fundamentals.v1",
+                "observed_at": "2026-07-24T18:29:58Z",
+                "received_at": "2026-07-24T18:30:00Z",
+                "timezone": "UTC",
+                "is_delayed": False,
+            },
         }
     )
-    assert citation.numeric_value == Decimal("211.30")
+    assert citation.numeric_value == Decimal("-1.25")
+    assert citation.provenance.timezone == "UTC"
 
 
 @pytest.mark.unit
@@ -192,6 +278,74 @@ def test_technical_rsi_bounds() -> None:
 
 
 @pytest.mark.unit
+def test_fundamental_snapshot_uses_typed_immutable_facts() -> None:
+    snapshot = FundamentalSnapshot.model_validate(
+        {
+            "symbol": "AAPL",
+            "as_of": "2026-07-24T18:30:00Z",
+            "facts": [
+                {
+                    "key": "net_income",
+                    "kind": FactValueKind.DECIMAL,
+                    "decimal_value": "-10.50",
+                    "unit": "USD",
+                }
+            ],
+            "provenance": {
+                "source": "sec.edgar",
+                "observed_at": "2026-07-24T18:00:00Z",
+                "received_at": "2026-07-24T18:30:00Z",
+            },
+        }
+    )
+    assert snapshot.facts[0].decimal_value == Decimal("-10.50")
+    with pytest.raises((ValidationError, TypeError)):
+        snapshot.facts[0].key = "tampered"
+    with pytest.raises(ValidationError):
+        FundamentalFact.model_validate(
+            {
+                "key": "bad_nan",
+                "kind": "DECIMAL",
+                "decimal_value": "NaN",
+            }
+        )
+
+
+@pytest.mark.unit
+def test_market_event_time_order() -> None:
+    event = MarketEvent.model_validate(
+        {
+            "event_id": "evt_01_8k",
+            "symbol": "AAPL",
+            "event_type": "SEC_8K",
+            "headline": "Item 2.02 results",
+            "occurred_at": "2026-07-24T17:00:00Z",
+            "provenance": {
+                "source": "sec.edgar",
+                "observed_at": "2026-07-24T17:00:00Z",
+                "received_at": "2026-07-24T17:05:00Z",
+            },
+        }
+    )
+    assert event.event_type == "SEC_8K"
+    with pytest.raises(ValidationError, match="occurred_at"):
+        MarketEvent.model_validate(
+            {
+                "event_id": "evt_01_8k",
+                "symbol": "AAPL",
+                "event_type": "SEC_8K",
+                "headline": "Item 2.02 results",
+                "occurred_at": "2026-07-24T18:00:00Z",
+                "provenance": {
+                    "source": "sec.edgar",
+                    "observed_at": "2026-07-24T17:00:00Z",
+                    "received_at": "2026-07-24T17:05:00Z",
+                },
+            }
+        )
+
+
+@pytest.mark.unit
 def test_unknown_fields_rejected_on_research_packet() -> None:
     payload = _example()
     payload["surprise"] = True
@@ -205,3 +359,6 @@ def test_json_schema_can_be_emitted_for_research_packet() -> None:
     schema = ResearchPacket.model_json_schema()
     assert schema["title"] == "ResearchPacket"
     assert "research_id" in schema["properties"]
+    evidence = schema["$defs"]["EvidenceCitation"]["properties"]
+    assert "provenance" in evidence
+    assert evidence["locator"]["type"] == "string"

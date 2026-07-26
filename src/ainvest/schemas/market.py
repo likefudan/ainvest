@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
-from typing import Annotated
+from enum import StrEnum
+from typing import Annotated, Self
 
-from pydantic import Field, StringConstraints, model_validator
+from pydantic import StringConstraints, model_validator
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
@@ -13,6 +14,7 @@ from ainvest.schemas.common import (
     InstrumentIdentity,
     Money,
     NonNegativeDecimal,
+    PnL,
     PositiveDecimal,
     Price,
     Provenance,
@@ -88,19 +90,67 @@ class TechnicalIndicators(DomainModel):
         return self
 
 
+class FactValueKind(StrEnum):
+    """Discriminated fundamental fact value kinds."""
+
+    DECIMAL = "DECIMAL"
+    TEXT = "TEXT"
+    BOOLEAN = "BOOLEAN"
+
+
+class FundamentalFact(DomainModel):
+    """Immutable typed fundamental fact. Raw dicts are not allowed."""
+
+    key: Annotated[str, StringConstraints(pattern=r"^[a-z][a-z0-9_]{1,63}$", max_length=64)]
+    kind: FactValueKind
+    decimal_value: PnL | None = None
+    text_value: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
+    boolean_value: bool | None = None
+    unit: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
+
+    @model_validator(mode="after")
+    def _one_value_for_kind(self) -> Self:
+        if self.kind is FactValueKind.DECIMAL:
+            if (
+                self.decimal_value is None
+                or self.text_value is not None
+                or self.boolean_value is not None
+            ):
+                raise ValueError("DECIMAL facts require decimal_value only")
+        elif self.kind is FactValueKind.TEXT:
+            if (
+                self.text_value is None
+                or self.decimal_value is not None
+                or self.boolean_value is not None
+            ):
+                raise ValueError("TEXT facts require text_value only")
+        elif self.kind is FactValueKind.BOOLEAN and (
+            self.boolean_value is None
+            or self.decimal_value is not None
+            or self.text_value is not None
+        ):
+            raise ValueError("BOOLEAN facts require boolean_value only")
+        return self
+
+
 class FundamentalSnapshot(DomainModel):
     """Standardized fundamental facts with evidence-grade provenance."""
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     symbol: Symbol
     as_of: UtcDateTime
-    facts: dict[str, NonNegativeDecimal | str | bool] = Field(default_factory=dict)
+    facts: tuple[FundamentalFact, ...] = ()
     provenance: Provenance
 
     @model_validator(mode="after")
     def _reject_empty_facts_without_flag(self) -> FundamentalSnapshot:
         if not self.facts and not self.provenance.quality_flags:
             raise ValueError("empty fundamentals require an explicit quality flag")
+        keys = [fact.key for fact in self.facts]
+        if len(keys) != len(set(keys)):
+            raise ValueError("fundamental fact keys must be unique")
+        if self.as_of < self.provenance.observed_at:
+            raise ValueError("fundamentals as_of must be >= provenance.observed_at")
         return self
 
 
@@ -157,6 +207,8 @@ class ResearchPortfolioSection(DomainModel):
 
 
 __all__ = [
+    "FactValueKind",
+    "FundamentalFact",
     "FundamentalSnapshot",
     "MarketEvent",
     "MarketQuote",

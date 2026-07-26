@@ -12,7 +12,8 @@ from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
     DomainModel,
     InstrumentIdentity,
-    NonNegativeDecimal,
+    PnL,
+    Provenance,
     QualityFlag,
     SchemaVersion,
     SourceId,
@@ -42,35 +43,21 @@ class EvidenceKind(StrEnum):
 class EvidenceCitation(DomainModel):
     """Provenanced citation for a research claim.
 
-    Natural-language assertions without a deterministic source cannot validate.
-    Numeric values must cite a calculation or tool source.
+    Natural-language assertions without a deterministic source/locator cannot
+    validate. Numeric values must cite a calculation or tool source.
     """
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     evidence_id: StableId
     kind: EvidenceKind
-    source: SourceId
     summary: Annotated[str, StringConstraints(min_length=1, max_length=1024)]
-    observed_at: UtcDateTime
-    received_at: UtcDateTime
-    locator: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
-    numeric_value: NonNegativeDecimal | None = None
+    provenance: Provenance
+    locator: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+    numeric_value: PnL | None = None
     calculation_source: SourceId | None = None
-    quality_flags: tuple[QualityFlag, ...] = ()
-
-    @field_validator("quality_flags", mode="before")
-    @classmethod
-    def _coerce_flags(cls, value: object) -> object:
-        if value is None:
-            return ()
-        if isinstance(value, (str, QualityFlag)):
-            return (value,)
-        return value
 
     @model_validator(mode="after")
-    def _require_deterministic_numeric_source(self) -> EvidenceCitation:
-        if self.received_at < self.observed_at:
-            raise ValueError("received_at must be >= observed_at")
+    def _require_deterministic_binding(self) -> EvidenceCitation:
         if self.kind is EvidenceKind.CALCULATED and self.calculation_source is None:
             raise ValueError("CALCULATED evidence requires calculation_source")
         if self.numeric_value is not None and self.calculation_source is None:
@@ -105,6 +92,11 @@ class ThesisSection(DomainModel):
         return cleaned
 
 
+def _reject_after_as_of(label: str, moment: datetime, as_of: datetime) -> None:
+    if moment > as_of:
+        raise ValueError(f"{label} must be <= research as_of")
+
+
 class ResearchPacket(DomainModel):
     """AI research output consumed by strategies (design.md §6.1)."""
 
@@ -129,15 +121,55 @@ class ResearchPacket(DomainModel):
 
     @model_validator(mode="after")
     def _consistency(self) -> ResearchPacket:
-        if self.instrument is not None and self.instrument.symbol != self.symbol:
-            raise ValueError("instrument.symbol must match research packet symbol")
+        if self.instrument is not None:
+            if self.instrument.symbol != self.symbol:
+                raise ValueError("instrument.symbol must match research packet symbol")
+            if self.market.currency != self.instrument.currency:
+                raise ValueError("market.currency must match instrument.currency")
+            _reject_after_as_of(
+                "instrument.identity_as_of",
+                self.instrument.identity_as_of,
+                self.as_of,
+            )
+
         if self.technical is not None and self.technical.symbol != self.symbol:
             raise ValueError("technical.symbol must match research packet symbol")
-        if self.market.provenance.observed_at > self.as_of:
-            raise ValueError("market observation must be <= research as_of")
-        if self.market.provenance.received_at > self.as_of:
-            # Allow equal; reject future-dated ingest relative to research time.
-            raise ValueError("market received_at must be <= research as_of")
+
+        _reject_after_as_of(
+            "market.provenance.observed_at",
+            self.market.provenance.observed_at,
+            self.as_of,
+        )
+        _reject_after_as_of(
+            "market.provenance.received_at",
+            self.market.provenance.received_at,
+            self.as_of,
+        )
+
+        if self.technical is not None:
+            _reject_after_as_of(
+                "technical.provenance.observed_at",
+                self.technical.provenance.observed_at,
+                self.as_of,
+            )
+            _reject_after_as_of(
+                "technical.provenance.received_at",
+                self.technical.provenance.received_at,
+                self.as_of,
+            )
+
+        for index, citation in enumerate(self.evidence):
+            _reject_after_as_of(
+                f"evidence[{index}].provenance.observed_at",
+                citation.provenance.observed_at,
+                self.as_of,
+            )
+            _reject_after_as_of(
+                f"evidence[{index}].provenance.received_at",
+                citation.provenance.received_at,
+                self.as_of,
+            )
+
         stale_flags = set(self.quality_flags) | set(self.market.provenance.quality_flags)
         if self.market.provenance.is_delayed and QualityFlag.DELAYED not in stale_flags:
             raise ValueError("delayed market data must set DELAYED quality flag")
@@ -231,7 +263,6 @@ def assert_time_ordering(
         raise ValueError("observation times must be <= as_of")
 
 
-# Re-export Provenance for research consumers.
 __all__ = [
     "EvidenceCitation",
     "EvidenceKind",

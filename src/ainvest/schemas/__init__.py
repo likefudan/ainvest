@@ -11,8 +11,13 @@ from ainvest.schemas.common import (
     InstrumentIdentity,
     Provenance,
     QualityFlag,
+    decimal_json_schema,
 )
 from ainvest.schemas.market import (
+    FactValueKind,
+    FundamentalFact,
+    FundamentalSnapshot,
+    MarketEvent,
     MarketQuote,
     OhlcvBar,
     ResearchMarketSection,
@@ -33,7 +38,11 @@ __all__ = [
     "AssetType",
     "EvidenceCitation",
     "EvidenceKind",
+    "FactValueKind",
+    "FundamentalFact",
+    "FundamentalSnapshot",
     "InstrumentIdentity",
+    "MarketEvent",
     "MarketQuote",
     "OhlcvBar",
     "Provenance",
@@ -43,6 +52,7 @@ __all__ = [
     "ResearchPortfolioSection",
     "TechnicalIndicators",
     "ThesisSection",
+    "decimal_json_schema",
     "parse_research_packet",
     "research_packet_example",
 ]
