@@ -82,7 +82,7 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | complete (merged) |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | complete (merged) |
 | Batch B complete | Batch B | all of the above | complete |
-| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | in_progress (critical path) |
+| Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | in_review (critical path) |
 | Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | in_progress (parallel) |
 | Batch C — Part 3a (C3a) | Batch C | `P03-T13` | in_progress (parallel) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
@@ -103,10 +103,10 @@ implementation agents must not rewrite another track's allowed paths.
   UoW, append-only audit (`P02-T6`, `P02-T7`, `P02-T8`)
 - **Plan batch:** Batch C (critical path)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress`
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-c1
 - **Integration branch:** `task/batch-c1-db-audit`
-- **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Base commit:** `b2c30cba584efd9d21361197ce0e97c7d042cdf6`
 - **Dependencies:** Batch B complete (`P02-T0`–`P02-T5`)
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/db/**`, `migrations/**`, `alembic.ini` (if
@@ -120,14 +120,22 @@ implementation agents must not rewrite another track's allowed paths.
 - **Safety posture:** Paper remains default; persistence and audit only; no
   broker write capability or live trading
 - **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Handoff PR:** [#37](https://github.com/likefudan/ainvest/pull/37)
+- **Handoff notes:** Implemented `ainvest.db` (models, DecimalString/UtcDateTime,
+  repositories, UoW) and `ainvest.audit` (envelope, recursive redaction, digests,
+  append-only service). Initial Alembic revision `ec71aaa3381a` upgrade/downgrade/
+  upgrade verified on empty SQLite. `./scripts/dev verify` and `./scripts/dev audit`
+  passed on `f9cdb23`. Residual: repository branch coverage is partial beyond the
+  exercised proposal/approval/broker/audit paths; cancel/operator rows are modeled
+  but not yet repository-wrapped.
 - **Next after merge:** C4a (`P03-T8`/`T10`/`T11`) may start; C3b still needs
   `P02-T9`
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T6` | Create SQLAlchemy Models and the Initial Alembic Migration | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T0`–`P02-T3`, `P01-T4` | TBD |
-| `P02-T7` | Implement Repositories, Unit of Work, and Concurrency Control | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T6` | TBD |
-| `P02-T8` | Implement Append-Only Audit Events and Redaction | `in_progress` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T6`, `P02-T7` | TBD |
+| `P02-T6` | Create SQLAlchemy Models and the Initial Alembic Migration | `in_review` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T0`–`P02-T3`, `P01-T4` | [#37](https://github.com/likefudan/ainvest/pull/37) |
+| `P02-T7` | Implement Repositories, Unit of Work, and Concurrency Control | `in_review` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T6` | [#37](https://github.com/likefudan/ainvest/pull/37) |
+| `P02-T8` | Implement Append-Only Audit Events and Redaction | `in_review` | cursor-subagent-c1 | `task/batch-c1-db-audit` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T6`, `P02-T7` | [#37](https://github.com/likefudan/ainvest/pull/37) |
 
 ### Batch C — Part 2 (C2)
 
