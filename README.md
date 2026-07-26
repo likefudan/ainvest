@@ -4,9 +4,8 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Batch B is complete (`P02-T0`–`P02-T5`). Next: parallel Batch C claims — C1
-(persistence, critical path), C2 (Strategy API), and C3a (broker port only).
-Real-money trading remains disabled.
+Batch C is in progress in parallel: C1 (db/audit, critical path), C2 (Strategy
+API), and C3a (broker port). Real-money trading remains disabled.
 
 Project coordination:
 
