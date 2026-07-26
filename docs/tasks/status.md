@@ -109,8 +109,8 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T0` | Define Common Domain Types | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P01-T2`–`P01-T4` | pending |
-| `P02-T1` | Define Market, Research, and Evidence Schemas | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P02-T0` | pending |
+| `P02-T0` | Define Common Domain Types | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P01-T2`–`P01-T4` | [#21](https://github.com/likefudan/ainvest/pull/21) |
+| `P02-T1` | Define Market, Research, and Evidence Schemas | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P02-T0` | [#21](https://github.com/likefudan/ainvest/pull/21) |
 
 ## Completed batches
 
