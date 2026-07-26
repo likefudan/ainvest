@@ -28,6 +28,15 @@ def test_exact_and_inequality_clauses() -> None:
 
 
 @pytest.mark.unit
+def test_zero_major_semver_range_clauses_parse() -> None:
+    """Alternation must not bind only the leading ``0`` in ``0.x.y`` bounds."""
+    assert parse_strategy_api_range("0.1.0").contains("0.1.0")
+    assert strategy_api_range_contains(">=0.9.0,<2.0.0", "1.0.0")
+    assert strategy_api_range_contains(">=0.1.0,<=0.9.9", "0.9.0")
+    assert not strategy_api_range_contains(">=0.1.0,<1.0.0", "1.0.0")
+
+
+@pytest.mark.unit
 def test_incompatible_range_fails_closed() -> None:
     with pytest.raises(ValueError, match="incompatible"):
         assert_strategy_api_compatible(">=2.0.0,<3.0.0")

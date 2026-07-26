@@ -12,10 +12,9 @@ from typing import Final
 
 STRATEGY_API_VERSION: Final[str] = "1.0.0"
 
+_SEMVER_CORE = r"(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*)"
 _VERSION_RE = re.compile(r"^(?P<major>0|[1-9]\d*)\.(?P<minor>0|[1-9]\d*)\.(?P<patch>0|[1-9]\d*)$")
-_CLAUSE_RE = re.compile(
-    r"^(?P<op>>=|>|<=|<|==|=)?(?P<version>0|[1-9]\d*\.(?:0|[1-9]\d*)\.(?:0|[1-9]\d*))$"
-)
+_CLAUSE_RE = re.compile(rf"^(?P<op>>=|>|<=|<|==|=)?(?P<version>{_SEMVER_CORE})$")
 
 
 @dataclass(frozen=True, slots=True)
