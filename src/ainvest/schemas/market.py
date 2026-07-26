@@ -5,7 +5,7 @@ from __future__ import annotations
 from enum import StrEnum
 from typing import Annotated, Self
 
-from pydantic import StringConstraints, model_validator
+from pydantic import StrictBool, StringConstraints, model_validator
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
@@ -105,7 +105,7 @@ class FundamentalFact(DomainModel):
     kind: FactValueKind
     decimal_value: PnL | None = None
     text_value: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
-    boolean_value: bool | None = None
+    boolean_value: StrictBool | None = None
     unit: Annotated[str, StringConstraints(min_length=1, max_length=32)] | None = None
 
     @model_validator(mode="after")

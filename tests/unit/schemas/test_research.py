@@ -154,6 +154,27 @@ def test_stale_or_delayed_data_is_explicitly_flagged() -> None:
 
 
 @pytest.mark.unit
+def test_delayed_market_cannot_borrow_sibling_delayed_flag() -> None:
+    """DELAYED must appear on the delayed provenance itself."""
+    payload = _example()
+    market = payload["market"]
+    assert isinstance(market, dict)
+    market_prov = market["provenance"]
+    assert isinstance(market_prov, dict)
+    market_prov["is_delayed"] = True
+    market_prov["quality_flags"] = []
+
+    technical = payload["technical"]
+    assert isinstance(technical, dict)
+    tech_prov = technical["provenance"]
+    assert isinstance(tech_prov, dict)
+    tech_prov["quality_flags"] = ["DELAYED"]
+
+    with pytest.raises(ValidationError, match="DELAYED"):
+        parse_research_packet(payload)
+
+
+@pytest.mark.unit
 def test_flagged_stale_aggregates_technical_and_evidence_provenance() -> None:
     payload = _example()
     technical = payload["technical"]
@@ -386,6 +407,27 @@ def test_fundamental_snapshot_uses_typed_immutable_facts() -> None:
                 "decimal_value": "NaN",
             }
         )
+
+
+@pytest.mark.unit
+def test_fundamental_fact_rejects_boolean_coercion() -> None:
+    for coerced in (1, 0, "true", "false"):
+        with pytest.raises(ValidationError):
+            FundamentalFact.model_validate(
+                {
+                    "key": "is_active",
+                    "kind": "BOOLEAN",
+                    "boolean_value": coerced,
+                }
+            )
+    fact = FundamentalFact.model_validate(
+        {
+            "key": "is_active",
+            "kind": "BOOLEAN",
+            "boolean_value": True,
+        }
+    )
+    assert fact.boolean_value is True
 
 
 @pytest.mark.unit

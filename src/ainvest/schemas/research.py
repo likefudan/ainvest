@@ -186,8 +186,8 @@ class ResearchPacket(DomainModel):
                 self.as_of,
             )
 
-        if self._any_delayed_provenance() and QualityFlag.DELAYED not in self._aggregated_flags():
-            raise ValueError("delayed research data must set DELAYED quality flag")
+        # Delayed-flag consistency is enforced on each Provenance object. Packet
+        # aggregation is only used by flagged_stale() for consumers.
         return self
 
     def _embedded_provenances(self) -> tuple[Provenance, ...]:

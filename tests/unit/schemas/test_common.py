@@ -191,6 +191,39 @@ def test_provenance_rejects_received_before_observed_and_unknown_fields() -> Non
 
 
 @pytest.mark.unit
+def test_provenance_delayed_requires_local_delayed_flag() -> None:
+    with pytest.raises(ValidationError, match="DELAYED"):
+        Provenance.model_validate(
+            {
+                "source": "robinhood.mcp.quotes",
+                "observed_at": "2026-07-24T18:30:00Z",
+                "received_at": "2026-07-24T18:30:00Z",
+                "is_delayed": True,
+                "quality_flags": [],
+            }
+        )
+    with pytest.raises(ValidationError):
+        Provenance.model_validate(
+            {
+                "source": "robinhood.mcp.quotes",
+                "observed_at": "2026-07-24T18:30:00Z",
+                "received_at": "2026-07-24T18:30:00Z",
+                "is_delayed": 1,
+            }
+        )
+    delayed = Provenance.model_validate(
+        {
+            "source": "robinhood.mcp.quotes",
+            "observed_at": "2026-07-24T18:30:00Z",
+            "received_at": "2026-07-24T18:30:00Z",
+            "is_delayed": True,
+            "quality_flags": ["DELAYED"],
+        }
+    )
+    assert delayed.is_delayed is True
+
+
+@pytest.mark.unit
 def test_nan_and_infinity_rejected() -> None:
     for bad in ("NaN", "Infinity", "-Infinity"):
         with pytest.raises(ValidationError):

@@ -19,9 +19,11 @@ from pydantic import (
     BeforeValidator,
     ConfigDict,
     PlainSerializer,
+    StrictBool,
     StringConstraints,
     WithJsonSchema,
     field_validator,
+    model_validator,
 )
 
 SCHEMA_VERSION_V1: Final[Literal["1.0"]] = "1.0"
@@ -356,7 +358,7 @@ class Provenance(DomainModel):
     observed_at: UtcDateTime
     received_at: UtcDateTime
     timezone: ProvenanceTimezone = "UTC"
-    is_delayed: bool = False
+    is_delayed: StrictBool = False
     quality_flags: tuple[QualityFlag, ...] = ()
 
     @field_validator("quality_flags", mode="before")
@@ -375,6 +377,13 @@ class Provenance(DomainModel):
         if isinstance(observed, datetime) and value < observed:
             raise ValueError("received_at must be >= observed_at")
         return value
+
+    @model_validator(mode="after")
+    def _delayed_requires_flag(self) -> Provenance:
+        """Delayed data must carry DELAYED on this provenance, not a sibling."""
+        if self.is_delayed and QualityFlag.DELAYED not in self.quality_flags:
+            raise ValueError("delayed data must set DELAYED quality flag")
+        return self
 
 
 def ensure_utc(value: datetime | str) -> datetime:
