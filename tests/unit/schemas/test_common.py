@@ -21,6 +21,7 @@ from ainvest.schemas.common import (
     Weight,
     decimal_json_schema,
     ensure_utc,
+    parse_decimal,
 )
 from ainvest.schemas.market import ResearchMarketSection
 from ainvest.schemas.research import ResearchPacket
@@ -34,6 +35,48 @@ def test_decimal_money_round_trip_rejects_float() -> None:
     assert adapter.dump_python(value, mode="json") == "12.34"
     with pytest.raises(ValidationError, match="binary floats"):
         adapter.validate_python(1.25)
+
+
+@pytest.mark.unit
+def test_decimal_runtime_rejects_scientific_notation_and_extreme_exponents() -> None:
+    adapter = TypeAdapter(Money)
+    with pytest.raises(ValidationError, match="decimal"):
+        adapter.validate_python("1e10")
+    with pytest.raises(ValidationError, match="decimal"):
+        adapter.validate_python("1E+6")
+    with pytest.raises(ValueError, match="exponent"):
+        parse_decimal(Decimal("1e1000000"))
+    with pytest.raises(ValueError, match="exponent"):
+        parse_decimal(Decimal("1e-1000000"))
+
+
+@pytest.mark.unit
+def test_trailing_zero_equivalent_decimals_share_accepted_domain() -> None:
+    """Bounds apply after stripping insignificant trailing zeros."""
+    adapter = TypeAdapter(Money)
+    assert adapter.validate_python("1") == Decimal("1")
+    padded = "1." + ("0" * 40)
+    assert len(padded) <= 64
+    assert adapter.validate_python(padded) == Decimal("1")
+
+    tiny = "0." + ("0" * 27) + "1"  # 1e-28 fixed-point
+    assert adapter.validate_python(tiny) == Decimal("1e-28")
+    tiny_padded = tiny + "00"
+    assert adapter.validate_python(tiny_padded) == Decimal("1e-28")
+
+
+@pytest.mark.unit
+def test_extreme_exponent_zeros_canonicalize_before_expand() -> None:
+    """Zero encodings must collapse to Decimal(0) before serialize/scale."""
+    for raw in (Decimal("0e1000000"), Decimal("0e-1000000"), Decimal("-0e999999")):
+        canonical = parse_decimal(raw)
+        assert canonical == Decimal(0)
+        assert canonical.as_tuple() == (0, (0,), 0)
+
+    adapter = TypeAdapter(Money)
+    parsed = adapter.validate_python(Decimal("0e-1000000"))
+    assert parsed == Decimal(0)
+    assert adapter.dump_python(parsed, mode="json") == "0"
 
 
 @pytest.mark.unit
