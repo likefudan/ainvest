@@ -111,6 +111,40 @@ def test_candidate_and_proposal_enforce_price_and_quantity_increments() -> None:
         CandidateOrder.model_validate(oversized)
 
 
+@pytest.mark.unit
+def test_large_significand_increment_and_notional_are_exact() -> None:
+    """Default Decimal precision must not accept off-increment or over-notional."""
+    payload = _valid_proposal()
+    payload["candidate_id"] = "cand_01HZYEXAMPLE0001"
+    payload.pop("proposal_id", None)
+    payload.pop("risk_decision_id", None)
+    payload.pop("order_hash", None)
+    payload["reason_codes"] = ["SIZED_TO_TARGET_WEIGHT"]
+
+    off_increment = deepcopy(payload)
+    off_increment["quantity"] = "10000000000000000000000000000.5"
+    off_increment["quantity_increment"] = "1"
+    off_increment["limit_price"] = "1"
+    off_increment["price_increment"] = "1"
+    off_increment["maximum_notional"] = "999999999999999999999999999999999"
+    with pytest.raises(ValidationError, match="quantity"):
+        CandidateOrder.model_validate(off_increment)
+
+    # 9999999999999999^2 exceeds the rounded Decimal product by 1.
+    over_notional = deepcopy(payload)
+    over_notional["quantity"] = "9999999999999999"
+    over_notional["quantity_increment"] = "1"
+    over_notional["limit_price"] = "9999999999999999"
+    over_notional["price_increment"] = "1"
+    over_notional["maximum_notional"] = "99999999999999980000000000000000"
+    with pytest.raises(ValidationError, match="maximum_notional"):
+        CandidateOrder.model_validate(over_notional)
+
+    exact = deepcopy(over_notional)
+    exact["maximum_notional"] = "99999999999999980000000000000001"
+    CandidateOrder.model_validate(exact)
+
+
 def _proposal_ids() -> dict[str, str]:
     return {
         "proposal_id": "ordp_01HZYEXAMPLE0001",

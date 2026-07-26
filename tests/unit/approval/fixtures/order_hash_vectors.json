@@ -6,7 +6,7 @@
     "cancel": "ainvest.cancel.v1"
   },
   "canonicalization": {
-    "decimal": "normalize + strip trailing zeros; no scientific notation",
+    "decimal": "as_tuple strip trailing zeros; no Decimal.normalize(); no scientific notation",
     "timestamp": "UTC with microsecond precision YYYY-MM-DDTHH:MM:SS.ffffffZ",
     "unicode": "NFC",
     "null": "protected fields reject null"

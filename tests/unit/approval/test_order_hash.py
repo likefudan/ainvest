@@ -139,3 +139,19 @@ def test_cancel_hash_is_independent_of_order_hash_domain() -> None:
     tweaked = deepcopy(cancel)
     tweaked["idempotency_key"] = "cancel-key-0002"
     assert compute_cancel_hash(tweaked) != cancel_digest
+
+
+@pytest.mark.unit
+def test_high_precision_quantities_do_not_collide_under_default_context() -> None:
+    """>28 significant digits must not round into the same digest."""
+    base = _base_order()
+    base["maximum_notional"] = "999999999999999999999999999999999"
+    early = deepcopy(base)
+    early["quantity"] = "10000000000000000000000000000.1"
+    late = deepcopy(base)
+    late["quantity"] = "10000000000000000000000000000.9"
+    assert compute_order_hash(early) != compute_order_hash(late)
+    # Trailing-zero equivalence still holds without normalize().
+    twin = deepcopy(base)
+    twin["quantity"] = "2.0"
+    assert compute_order_hash(twin) == compute_order_hash(base)

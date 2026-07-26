@@ -63,18 +63,41 @@ def _nfc(value: str) -> str:
 
 
 def _canonical_decimal(value: Decimal | str | int) -> str:
+    """Format a Decimal without depending on the global Decimal context.
+
+    ``Decimal.normalize()`` rounds to ``getcontext().prec`` (default 28), which
+    collides distinct protected values. Strip trailing zeros via ``as_tuple()``
+    so semantically equal encodings (``2`` / ``2.0``) match while >28-digit
+    significands stay exact.
+    """
     if isinstance(value, bool):
         raise TypeError("boolean is not a valid decimal")
     decimal_value = value if isinstance(value, Decimal) else Decimal(str(value))
     if not decimal_value.is_finite():
         raise ValueError("NaN and Infinity are not allowed in order hashes")
-    normalized = decimal_value.normalize()
-    # Avoid scientific notation; keep a stable finite decimal string.
-    text = format(normalized, "f")
-    if "." in text:
-        text = text.rstrip("0").rstrip(".")
-    if text in {"", "-0"}:
-        text = "0"
+    sign, digits, exp = decimal_value.as_tuple()
+    if not isinstance(exp, int):
+        raise ValueError("NaN and Infinity are not allowed in order hashes")
+    digs = list(digits)
+    while digs and digs[-1] == 0:
+        digs.pop()
+        exp += 1
+    if not digs:
+        return "0"
+    coefficient = "".join(str(digit) for digit in digs)
+    if exp >= 0:
+        text = coefficient + ("0" * exp)
+    else:
+        place = -exp
+        if place >= len(coefficient):
+            text = "0." + ("0" * (place - len(coefficient))) + coefficient
+        else:
+            split = len(coefficient) - place
+            text = f"{coefficient[:split]}.{coefficient[split:]}"
+    if sign:
+        text = f"-{text}"
+    if text in {"-0"}:
+        return "0"
     return text
 
 

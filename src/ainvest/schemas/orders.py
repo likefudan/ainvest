@@ -7,6 +7,7 @@ produce an OrderProposal.
 
 from __future__ import annotations
 
+from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -101,9 +102,7 @@ class CandidateOrder(DomainModel):
             raise ValueError("price_increment must be > 0")
         _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
         _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
-        notional = self.quantity * self.limit_price
-        if notional > self.maximum_notional:
-            raise ValueError("quantity * limit_price must be <= maximum_notional")
+        _require_notional_within_limit(self.quantity, self.limit_price, self.maximum_notional)
         return self
 
 
@@ -157,20 +156,63 @@ class OrderProposal(DomainModel):
             raise ValueError("price_increment must be > 0")
         _require_increment_multiple("quantity", self.quantity, self.quantity_increment)
         _require_increment_multiple("limit_price", self.limit_price, self.price_increment)
-        notional = self.quantity * self.limit_price
-        if notional > self.maximum_notional:
-            raise ValueError("quantity * limit_price must be <= maximum_notional")
+        _require_notional_within_limit(self.quantity, self.limit_price, self.maximum_notional)
         return self
 
 
-def _require_increment_multiple(label: str, value: object, increment: object) -> None:
-    from decimal import Decimal
+def _decimal_coeff_exp(value: Decimal) -> tuple[int, int]:
+    """Return ``(coefficient, exponent)`` for exact integer-scaled arithmetic."""
+    sign, digits, exp = value.as_tuple()
+    if not isinstance(exp, int):
+        raise ValueError("NaN and Infinity are not allowed")
+    coefficient = int("".join(str(digit) for digit in digits) or "0")
+    if sign:
+        coefficient = -coefficient
+    return coefficient, exp
 
+
+def _require_increment_multiple(label: str, value: object, increment: object) -> None:
+    """Require ``value`` to be an exact integer multiple of ``increment``.
+
+    Uses integer scaling instead of Decimal division so the default 28-digit
+    context cannot round a non-multiple into an apparently integral ratio.
+    """
     amount = value if isinstance(value, Decimal) else Decimal(str(value))
     step = increment if isinstance(increment, Decimal) else Decimal(str(increment))
-    ratio = amount / step
-    if ratio != ratio.to_integral_value():
+    if step <= 0:
+        raise ValueError(f"{label} increment must be > 0")
+    amount_coeff, amount_exp = _decimal_coeff_exp(amount)
+    step_coeff, step_exp = _decimal_coeff_exp(step)
+    scale = min(amount_exp, step_exp)
+    amount_int = amount_coeff * (10 ** (amount_exp - scale))
+    step_int = step_coeff * (10 ** (step_exp - scale))
+    if amount_int % step_int != 0:
         raise ValueError(f"{label} must be an integer multiple of its increment")
+
+
+def _require_notional_within_limit(
+    quantity: object,
+    limit_price: object,
+    maximum_notional: object,
+) -> None:
+    """Require ``quantity * limit_price <= maximum_notional`` without rounding."""
+    qty = quantity if isinstance(quantity, Decimal) else Decimal(str(quantity))
+    price = limit_price if isinstance(limit_price, Decimal) else Decimal(str(limit_price))
+    limit = (
+        maximum_notional
+        if isinstance(maximum_notional, Decimal)
+        else Decimal(str(maximum_notional))
+    )
+    qty_coeff, qty_exp = _decimal_coeff_exp(qty)
+    price_coeff, price_exp = _decimal_coeff_exp(price)
+    limit_coeff, limit_exp = _decimal_coeff_exp(limit)
+    left_coeff = qty_coeff * price_coeff
+    left_exp = qty_exp + price_exp
+    scale = min(left_exp, limit_exp)
+    left_int = left_coeff * (10 ** (left_exp - scale))
+    right_int = limit_coeff * (10 ** (limit_exp - scale))
+    if left_int > right_int:
+        raise ValueError("quantity * limit_price must be <= maximum_notional")
 
 
 def order_proposal_example() -> dict[str, Any]:
