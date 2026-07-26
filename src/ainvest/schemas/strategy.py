@@ -272,12 +272,28 @@ def parse_trade_signal_for_context(
     data: dict[str, Any],
     context: StrategyContext,
 ) -> TradeSignal:
-    """Validate a signal against a StrategyContext evaluation clock and identity."""
+    """Validate a signal against a StrategyContext evaluation clock and identity.
+
+    Deterministic binding rules:
+    - ``generated_at`` must equal ``context.as_of`` (evaluation clock)
+    - ``symbol`` / ``research_id`` must match the context research packet
+    - when ``strategy_state`` is present, ``strategy`` and ``strategy_version``
+      must match that state
+    """
     signal = parse_trade_signal(data, as_of=context.as_of)
+    if signal.generated_at != context.as_of:
+        raise ValueError("signal.generated_at must equal context.as_of")
     if signal.symbol != context.symbol:
         raise ValueError("signal.symbol must match strategy context symbol")
     if signal.research_id != context.research.research_id:
         raise ValueError("signal.research_id must match context research_id")
+    if context.strategy_state is not None:
+        if signal.strategy != context.strategy_state.strategy:
+            raise ValueError("signal.strategy must match context.strategy_state.strategy")
+        if signal.strategy_version != context.strategy_state.strategy_version:
+            raise ValueError(
+                "signal.strategy_version must match context.strategy_state.strategy_version"
+            )
     return signal
 
 

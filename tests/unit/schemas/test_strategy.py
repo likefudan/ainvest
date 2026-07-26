@@ -205,6 +205,25 @@ def test_parse_trade_signal_rejects_future_and_expired_relative_to_as_of() -> No
 
 
 @pytest.mark.unit
+def test_parse_trade_signal_for_context_rejects_early_or_mismatched_strategy() -> None:
+    context = parse_strategy_context(_context_example())
+
+    early = trade_signal_example()
+    early["generated_at"] = "2026-07-24T17:00:00Z"
+    early["expires_at"] = "2026-07-24T19:00:00Z"
+    with pytest.raises(ValueError, match="generated_at"):
+        parse_trade_signal_for_context(early, context)
+
+    mismatched = trade_signal_example()
+    mismatched["generated_at"] = "2026-07-24T18:30:00Z"
+    mismatched["expires_at"] = "2026-07-24T19:00:00Z"
+    mismatched["strategy"] = "other_strategy"
+    mismatched["strategy_version"] = "9.9.9"
+    with pytest.raises(ValueError, match="strategy"):
+        parse_trade_signal_for_context(mismatched, context)
+
+
+@pytest.mark.unit
 def test_hold_cannot_become_order_or_carry_target_weight() -> None:
     payload = trade_signal_example()
     payload["intent"] = "HOLD"

@@ -113,8 +113,8 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
   `StrategyContext` / `TradeSignal`. Strength is signed `[-1,1]` and not a
   probability; HOLD cannot carry target_weight or become an order. Future
   timestamps, inverted expiry windows, missing strategy versions, and
-  inconsistent exposure fail closed. `./scripts/dev verify` passed (135 tests;
-  83.49% coverage); `./scripts/dev audit` clean.
+  inconsistent exposure fail closed. `./scripts/dev verify` passed (138 tests;
+  84.10% coverage); `./scripts/dev audit` clean.
 - **Next after merge:** Batch B — Part 3 (B3) — `P02-T3` + `P02-T4`
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
