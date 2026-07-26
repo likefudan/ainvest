@@ -26,6 +26,11 @@ from ainvest.schemas.common import (
     QualityFlag,
     decimal_json_schema,
 )
+from ainvest.schemas.export import (
+    EXPORTED_MODELS,
+    check_json_schemas,
+    export_json_schemas,
+)
 from ainvest.schemas.market import (
     FactValueKind,
     FundamentalFact,
@@ -74,6 +79,7 @@ from ainvest.schemas.strategy import (
 )
 
 __all__ = [
+    "EXPORTED_MODELS",
     "SCHEMA_VERSION_V1",
     "AccountScope",
     "ApprovalChallenge",
@@ -119,7 +125,9 @@ __all__ = [
     "ThesisSection",
     "TimeInForce",
     "TradeSignal",
+    "check_json_schemas",
     "decimal_json_schema",
+    "export_json_schemas",
     "order_proposal_example",
     "parse_research_packet",
     "parse_strategy_context",

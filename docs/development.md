@@ -33,8 +33,14 @@ The complete command interface is:
 | `./scripts/dev contract` | Run public/provider contract tests |
 | `./scripts/dev integration` | Run cross-component integration tests |
 | `./scripts/dev test` | Run all tests with branch coverage |
+| `./scripts/dev export-schemas` | Write or `--check` committed JSON Schema snapshots |
 | `./scripts/dev audit` | Audit every locked dependency group and optional extra |
 | `./scripts/dev verify` | Run the lock, formatting, lint, type, suite, and coverage gates |
+
+Schema compatibility rules and Strategy API version ranges are documented in
+[`docs/schema-versioning.md`](schema-versioning.md). Committed snapshots live
+under `schemas/json/`. `verify` includes `./scripts/dev export-schemas --check`
+so unintended schema drift fails CI.
 
 `verify` is the canonical local merge gate. GitHub Actions CI calls this wrapper (see
 `.github/workflows/ci.yml`) rather than duplicating tool-specific arguments. CI also runs a

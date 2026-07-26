@@ -1,0 +1,120 @@
+{
+  "as_of": "2026-07-24T18:30:00Z",
+  "portfolio": {
+    "account_scope": "paper",
+    "as_of": "2026-07-24T18:30:00Z",
+    "buying_power": "3000.00",
+    "cash": "3000.00",
+    "currency": "USD",
+    "equity": "5154.20",
+    "exposure": {
+      "cash": "3000.00",
+      "equity": "5154.20",
+      "gross_market_value": "2154.20",
+      "largest_position_weight": "0.4180",
+      "net_market_value": "2154.20",
+      "position_count": 1
+    },
+    "open_orders": [],
+    "positions": [
+      {
+        "average_cost": "200.00",
+        "currency": "USD",
+        "instrument": {
+          "asset_type": "EQUITY",
+          "currency": "USD",
+          "exchange": "XNAS",
+          "identity_as_of": "2026-07-24T18:30:00Z",
+          "instrument_id": "rh_inst_aapl_xnas",
+          "symbol": "AAPL"
+        },
+        "market_value": "2154.20",
+        "portfolio_weight": "0.4180",
+        "quantity": "10",
+        "unrealized_pnl": "154.20"
+      }
+    ],
+    "provenance": {
+      "is_delayed": false,
+      "observed_at": "2026-07-24T18:29:58Z",
+      "quality_flags": [],
+      "received_at": "2026-07-24T18:30:00Z",
+      "source": "robinhood.mcp.portfolio",
+      "timezone": "UTC"
+    },
+    "schema_version": "1.0",
+    "snapshot_id": "port_01HZYEXAMPLE0001"
+  },
+  "research": {
+    "as_of": "2026-07-24T18:30:00Z",
+    "evidence": [],
+    "instrument": {
+      "asset_type": "EQUITY",
+      "currency": "USD",
+      "exchange": "XNAS",
+      "identity_as_of": "2026-07-24T18:30:00Z",
+      "instrument_id": "rh_inst_aapl_xnas",
+      "provider": "robinhood.mcp",
+      "symbol": "AAPL"
+    },
+    "market": {
+      "ask": "215.44",
+      "bid": "215.40",
+      "currency": "USD",
+      "last_price": "215.42",
+      "observed_at": "2026-07-24T18:29:58Z",
+      "provenance": {
+        "is_delayed": false,
+        "observed_at": "2026-07-24T18:29:58Z",
+        "quality_flags": [],
+        "received_at": "2026-07-24T18:30:00Z",
+        "source": "robinhood.mcp.quotes",
+        "timezone": "UTC"
+      }
+    },
+    "portfolio": {
+      "buying_power": "3000.00",
+      "market_value": "2154.20",
+      "portfolio_weight": "0.0800",
+      "quantity": "10"
+    },
+    "quality_flags": [],
+    "research_id": "res_01HZYEXAMPLE0001",
+    "schema_version": "1.0",
+    "symbol": "AAPL",
+    "technical": {
+      "atr_14": "4.70",
+      "provenance": {
+        "is_delayed": false,
+        "observed_at": "2026-07-24T18:29:58Z",
+        "quality_flags": [],
+        "received_at": "2026-07-24T18:30:00Z",
+        "source": "ainvest.indicators.v1",
+        "timezone": "UTC"
+      },
+      "rsi_14": "61.20",
+      "schema_version": "1.0",
+      "sma_20": "211.30",
+      "sma_50": "204.80",
+      "symbol": "AAPL"
+    },
+    "thesis": {
+      "bear_case": [],
+      "bull_case": [],
+      "risks": []
+    }
+  },
+  "schema_version": "not-a-version",
+  "strategy_state": {
+    "entries": [
+      {
+        "key": "last_cross",
+        "kind": "TEXT",
+        "text_value": "bullish"
+      }
+    ],
+    "strategy": "sma_crossover",
+    "strategy_version": "1.2.0",
+    "updated_at": "2026-07-24T18:00:00Z"
+  }
+}

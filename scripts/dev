@@ -26,6 +26,7 @@ Commands:
   contract       Run contract tests
   integration    Run integration tests
   test           Run all tests with coverage
+  export-schemas Write or check committed JSON Schema snapshots
   audit          Audit every locked dependency group and optional extra
   verify         Run every required local merge check
 EOF
@@ -60,6 +61,10 @@ run_test() {
     --cov=ainvest \
     --cov-report=term-missing \
     --cov-fail-under=80
+}
+
+run_export_schemas_check() {
+  uv run --locked python scripts/export_json_schemas.py --check
 }
 
 run_audit() (
@@ -113,6 +118,10 @@ case "${1:-}" in
   test)
     run_test
     ;;
+  export-schemas)
+    shift
+    uv run --locked python scripts/export_json_schemas.py "$@"
+    ;;
   audit)
     run_audit
     ;;
@@ -122,6 +131,7 @@ case "${1:-}" in
     run_lint
     run_type_check
     run_unit
+    run_export_schemas_check
     run_contract
     run_integration
     run_test

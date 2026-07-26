@@ -1,0 +1,216 @@
+{
+  "$defs": {
+    "AssetType": {
+      "description": "First-release tradeable asset classes.",
+      "enum": [
+        "EQUITY",
+        "ETF"
+      ],
+      "title": "AssetType",
+      "type": "string"
+    },
+    "InstrumentIdentity": {
+      "additionalProperties": false,
+      "description": "Canonical tradeable instrument identity.\n\nA display symbol alone is never sufficient to identify a broker instrument.",
+      "properties": {
+        "asset_type": {
+          "$ref": "#/$defs/AssetType"
+        },
+        "currency": {
+          "maxLength": 3,
+          "minLength": 3,
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "exchange": {
+          "maxLength": 4,
+          "minLength": 4,
+          "pattern": "^[A-Z0-9]{4}$",
+          "title": "Exchange",
+          "type": "string"
+        },
+        "identity_as_of": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Identity As Of",
+          "type": "string"
+        },
+        "instrument_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "symbol": {
+          "maxLength": 10,
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9.]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "symbol",
+        "exchange",
+        "currency",
+        "asset_type",
+        "identity_as_of"
+      ],
+      "title": "InstrumentIdentity",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Freshness and source metadata required on every external datum.",
+      "properties": {
+        "is_delayed": {
+          "default": false,
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "observed_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "quality_flags": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QualityFlag"
+          },
+          "title": "Quality Flags",
+          "type": "array"
+        },
+        "received_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Received At",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "observed_at",
+        "received_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "QualityFlag": {
+      "description": "Machine-readable data-quality markers for provenance envelopes.",
+      "enum": [
+        "STALE",
+        "DELAYED",
+        "PARTIAL",
+        "ESTIMATED",
+        "CONFLICTING_SOURCES",
+        "MISSING_FIELDS",
+        "UNVERIFIED"
+      ],
+      "title": "QualityFlag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Equity/ETF quote observation with required provenance.",
+  "properties": {
+    "ask": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Ask"
+    },
+    "bid": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Bid"
+    },
+    "currency": {
+      "default": "USD",
+      "maxLength": 3,
+      "minLength": 3,
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "type": "string"
+    },
+    "instrument": {
+      "$ref": "#/$defs/InstrumentIdentity"
+    },
+    "last_price": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Last Price",
+      "type": "string"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    }
+  },
+  "required": [
+    "instrument",
+    "last_price",
+    "provenance"
+  ],
+  "title": "MarketQuote",
+  "type": "object"
+}

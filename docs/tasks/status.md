@@ -80,18 +80,46 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | complete (merged) |
 | Batch B — Part 2 (B2) | Batch B | `P02-T2` | complete (merged) |
 | Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | complete (merged) |
-| Batch B — Part 4 (B4) | Batch B | `P02-T5` | next |
+| Batch B — Part 4 (B4) | Batch B | `P02-T5` | in_review |
 | Batch B complete | Batch B | all of the above | after B4 merges |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch B — Part 4 (B4)** (`P02-T5`) — schema versioning
-and compatibility rules, versioned JSON Schema export, fixtures, snapshot /
-contract tests, CI breaking-change detection, and Strategy API version ranges.
-Its coordinator must claim B4 here from current `main` before implementation
-begins. Dependencies are satisfied; no pending design items block the start.
+### Batch B — Part 4 (B4)
+
+- **Batch:** Batch B — Part 4 (B4) — schema versioning, JSON Schema export,
+  fixtures, and contract/CI breaking-change detection (`P02-T5`)
+- **Plan batch:** Batch B (completes Batch B when this part merges)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Integration:** [PR #27](https://github.com/likefudan/ainvest/pull/27)
+- **Integration branch:** `task/batch-b4-schema-versioning`
+- **Base commit:** `c843aa198deb4fe362957ae01780b53450aae8ea`
+- **Dependency PRs/commits:** Batch B3 /
+  [PR #25](https://github.com/likefudan/ainvest/pull/25) /
+  [PR #26](https://github.com/likefudan/ainvest/pull/26)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `docs/schema-versioning.md`, `schemas/json/**`,
+  `src/ainvest/schemas/export.py`, `src/ainvest/schemas/examples.py`,
+  `src/ainvest/schemas/__init__.py`, `src/ainvest/strategies/**`,
+  `tests/contract/**`, `tests/unit/strategies/**`, `tests/unit/schemas/test_examples.py`,
+  `scripts/**`, `docs/tasks/status.md`, `README.md`, `docs/development.md`
+- **Safety posture:** documentation, JSON Schema artifacts, contract tests, and
+  Strategy API version helpers only; Paper remains the default; no broker write
+  capability, credentials, AI calls, Telegram runtime, or live trading
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Handoff notes:** Added `docs/schema-versioning.md`, exported 20 core models
+  to `schemas/json/v1/`, contract snapshot/fixture tests, Strategy API range
+  helpers, and `./scripts/dev export-schemas --check` in verify/CI.
+  `./scripts/dev verify` passed (208 tests; 84.70% coverage);
+  `./scripts/dev audit` clean.
+- **Next after merge:** Batch B complete; Batch C
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T5` | Establish Schema Versioning and Compatibility Rules | `in_review` | cursor-agent | `task/batch-b4-schema-versioning` | `c843aa198deb4fe362957ae01780b53450aae8ea` | `P02-T0`–`P02-T4` | [#27](https://github.com/likefudan/ainvest/pull/27) |
 
 ## Completed batches
 

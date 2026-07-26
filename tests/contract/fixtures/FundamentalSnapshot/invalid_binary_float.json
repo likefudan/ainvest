@@ -1,0 +1,20 @@
+{
+  "as_of": "2026-07-24T18:30:00Z",
+  "facts": [
+    {
+      "decimal_value": 1.25,
+      "key": "pe_ratio",
+      "kind": "DECIMAL"
+    }
+  ],
+  "provenance": {
+    "is_delayed": false,
+    "observed_at": "2026-07-24T18:29:58Z",
+    "quality_flags": [],
+    "received_at": "2026-07-24T18:30:00Z",
+    "source": "robinhood.mcp.fundamentals",
+    "timezone": "UTC"
+  },
+  "schema_version": "1.0",
+  "symbol": "AAPL"
+}
