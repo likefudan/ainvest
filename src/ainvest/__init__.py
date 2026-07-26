@@ -1,4 +1,8 @@
-"""ainvest package."""
+"""ainvest package.
+
+Boundary packages live under ``ainvest.{agents,data,schemas,strategies,risk,
+approval,execution,portfolio,audit,api}``. See ``docs/architecture/``.
+"""
 
 from importlib.metadata import PackageNotFoundError, version
 
