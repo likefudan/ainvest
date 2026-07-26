@@ -75,15 +75,41 @@ that section has merged. Current Batch A split:
 | Record | Plan section | Cards | Status |
 |---|---|---|---|
 | Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
-| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | next |
+| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | in progress |
 | Batch A complete | Batch A | all of the above | after Part 2 merges |
 
 Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch A — Part 2** (`P01-T1`, `P01-T3`, `P01-T4`,
-`P01-T5`). A coordinator must claim it here before dispatching tasks.
+### Batch A — Part 2
+
+- **Batch:** Batch A — Part 2 — threat model, package boundaries, safe
+  configuration, and CI gates (`P01-T1`, `P01-T3`, `P01-T4`, `P01-T5`)
+- **Plan batch:** Batch A (completes Batch A when this part merges)
+- **Coordinator:** cursor-agent / local
+- **Integration branch:** `task/batch-a-part-2`
+- **Base commit:** `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Dependency PRs/commits:** Batch A — Part 1 /
+  [PR #4](https://github.com/likefudan/ainvest/pull/4) /
+  `1d77146443e883f15475297e4858b7b705658d7d`; batch-naming /
+  [PR #5](https://github.com/likefudan/ainvest/pull/5) /
+  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Merge target:** `main`
+- **Safety posture:** documentation, package skeleton, fail-closed config, and
+  CI only; Paper remains the default; no broker write capability, credentials,
+  or live trading are introduced
+- **Path coordination:** disjoint ownership below; `docs/tasks/status.md` and
+  integration merge owned by the coordinator; `pyproject.toml` owned only by
+  `P01-T5` for markers/CI tooling; `src/ainvest/__init__.py` owned only by
+  `P01-T3`
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P01-T1` | Document Trust Boundaries and Threat Model | `in_progress` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | pending |
+| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_progress` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
+| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_progress` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
+| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_progress` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
 
 ## Completed batches
 
@@ -181,3 +207,83 @@ None. Next claim: **Batch A — Part 2** (`P01-T1`, `P01-T3`, `P01-T4`,
 - **Resulting commit/PR:** implementation commit
   `1d77146443e883f15475297e4858b7b705658d7d`;
   [PR #4](https://github.com/likefudan/ainvest/pull/4)
+
+## Execution envelope: P01-T1
+
+- **Title:** Document Trust Boundaries and Threat Model
+- **Status/owner:** `in_progress` — `subagent/p01-t1`
+- **Branch/base:** `task/p01-t1-threat-model` at
+  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Dependencies:** `P01-T0` (merged)
+- **Design and plan authority:** `design.md` sections 1, 3–5, 7–9, 11;
+  `IMPLEMENTATION_TODO.md` sections 1, 4 (`P01-T1`), and 16; `docs/decisions`
+- **Accepted decisions:** `DEC-001`–`DEC-008`
+- **Allowed paths:** `docs/security/**`
+- **Forbidden paths:** all application, test, CI, lock, and configuration
+  runtime files; `docs/tasks/status.md` (coordinator-owned)
+- **Verification:** document completeness against the P01-T1 checklist;
+  diagrams and threat/control tables present; residual risks recorded
+- **Blockers:** None
+- **Handoff notes:** pending
+
+## Execution envelope: P01-T3
+
+- **Title:** Create Package Boundaries and Architecture Tests
+- **Status/owner:** `in_progress` — `subagent/p01-t3`
+- **Branch/base:** `task/p01-t3-package-boundaries` at
+  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Dependencies:** `P01-T2` (merged)
+- **Design and plan authority:** `design.md` section 10.2;
+  `IMPLEMENTATION_TODO.md` sections 1 and 4 (`P01-T3`)
+- **Accepted decisions:** `DEC-001`–`DEC-008` apply where relevant
+- **Allowed paths:** `src/ainvest/{agents,data,schemas,strategies,risk,approval,execution,portfolio,audit,api}/**`,
+  `src/ainvest/__init__.py`, `tests/unit/architecture/**`,
+  `docs/architecture/**` (optional package-boundary notes)
+- **Forbidden paths:** `src/ainvest/config.py`, `config/**`, `.env.example`,
+  `.github/**`, `.pre-commit-config.yaml`, `docs/security/**`,
+  `docs/tasks/status.md`, and unrelated dependency changes beyond imports
+  needed by architecture fixtures
+- **Canonical verification:** `./scripts/dev unit` and architecture-focused
+  checks; full `./scripts/dev verify` after integration
+- **Blockers:** None
+- **Handoff notes:** pending
+
+## Execution envelope: P01-T4
+
+- **Title:** Implement Configuration Loading and Safe Defaults
+- **Status/owner:** `in_progress` — `subagent/p01-t4`
+- **Branch/base:** `task/p01-t4-config` at
+  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Dependencies:** `P01-T2` (merged)
+- **Design and plan authority:** `design.md` sections 11–12;
+  `IMPLEMENTATION_TODO.md` sections 1, 4 (`P01-T4`), and 16;
+  `DEC-001`, `DEC-002`, `DEC-004`, `DEC-005`, `DEC-006`
+- **Allowed paths:** `src/ainvest/config.py`, `config/**`, `.env.example`,
+  `tests/unit/config/**`
+- **Forbidden paths:** package submodules owned by `P01-T3`, CI files owned by
+  `P01-T5`, `docs/security/**`, `docs/tasks/status.md`, and `pyproject.toml`
+- **Canonical verification:** targeted config unit tests plus
+  `./scripts/dev unit` / type-check after integration
+- **Owner values/credentials:** None. Use placeholders only in `.env.example`.
+- **Blockers:** None
+- **Handoff notes:** pending
+
+## Execution envelope: P01-T5
+
+- **Title:** Add CI, Commit Quality Gates, and Dependency Security
+- **Status/owner:** `in_progress` — `subagent/p01-t5`
+- **Branch/base:** `task/p01-t5-ci` at
+  `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
+- **Dependencies:** `P01-T2` (merged)
+- **Design and plan authority:** `docs/development.md`;
+  `IMPLEMENTATION_TODO.md` sections 1 and 4 (`P01-T5`)
+- **Allowed paths:** `.github/**`, `.pre-commit-config.yaml`, `CODEOWNERS`,
+  `pyproject.toml` (markers / CI-related tooling only), `uv.lock` if a new
+  locked CI tool is required, and a short CI note in `docs/development.md`
+- **Forbidden paths:** `src/ainvest/**` application modules except as needed
+  for nothing (do not edit application code), `docs/security/**`,
+  `docs/tasks/status.md`, `config/**`, `.env.example`
+- **Canonical verification:** CI must invoke `./scripts/dev` commands; never
+  inject real credentials
+- **Blockers:** None
+- **Handoff notes:** pending
