@@ -1,0 +1,16 @@
+{
+  "event_id": "mevt_01HZYEXAMPLE",
+  "event_type": "EARNINGS",
+  "headline": "Quarterly earnings released",
+  "occurred_at": "2026-07-24T18:30:00",
+  "provenance": {
+    "is_delayed": false,
+    "observed_at": "2026-07-20T21:05:00Z",
+    "quality_flags": [],
+    "received_at": "2026-07-20T21:06:00Z",
+    "source": "robinhood.mcp.events",
+    "timezone": "UTC"
+  },
+  "schema_version": "1.0",
+  "symbol": "AAPL"
+}

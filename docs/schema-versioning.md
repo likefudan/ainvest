@@ -24,25 +24,47 @@ support Strategy API `1.x` while exchanging only payload `schema_version`
 
 Format: `MAJOR.MINOR` (two non-negative integers, no patch segment).
 
-### Minor (compatible)
+Compatibility is evaluated under ainvest's fail-closed unknown-field policy
+(`extra="forbid"` / exported `additionalProperties: false`). That policy makes
+**forward** compatibility (old validators reading newer documents) stricter than
+typical “ignore unknown fields” schema ecosystems.
 
-A minor bump (`1.0` → `1.1`) may:
+### Terminology
 
-- add optional fields with safe defaults
-- widen a value domain in a backward-compatible way (e.g. allow an additional
-  enum member that old producers never emit)
+- **Backward compatible:** newer validators still accept every document that was
+  valid under the previous minor.
+- **Forward compatible:** older validators still accept documents produced under
+  the newer minor. ainvest does **not** provide forward compatibility when the
+  wire shape grows, because unknown properties are rejected.
+
+### Minor (backward compatible)
+
+A minor bump (`1.0` → `1.1`) may only:
+
 - add documentation-only JSON Schema annotations
+- widen acceptance of an **existing** field so previously valid documents remain
+  valid (for example raising a numeric upper bound, or accepting an additional
+  enum member that old producers never emitted into stored documents)
 
-Consumers that validate with the previous minor **must** continue to accept
-documents produced under the new minor when unknown fields are stripped by the
-producer, and producers **must not** require new fields from older consumers.
+A minor bump must **not**:
+
+- add, remove, or rename properties
+- make an optional field required
+- narrow types, enums, patterns, or ranges
+- change field semantics, units, unknown-field policy, or Decimal/UTC rules
+
+Because unknown fields are forbidden, publishing a new property—even an
+“optional” one with a default—is a **major** change: existing forbid-mode
+consumers and exported JSON Schema validators will reject documents that include
+it. Coordinated upgrades across producers and consumers do not turn that into a
+minor.
 
 ### Major (breaking)
 
-A major bump (`1.x` → `2.0`) is required when a change can break a conforming
-consumer or producer, including:
+A major bump (`1.x` → `2.0`) is required for any change that can break a
+conforming consumer or producer, including:
 
-- removing or renaming a field
+- adding, removing, or renaming a field
 - making an optional field required
 - narrowing types, enums, patterns, or ranges
 - changing field semantics or units
@@ -57,12 +79,13 @@ and this document's migration notes. Silent drift is rejected by CI.
 Domain models use Pydantic `extra="forbid"`.
 
 - Unknown fields are **rejected** at the ainvest boundary (fail closed).
-- Cross-language JSON Schema consumers should treat additional properties as
-  disallowed for exported schemas (`additionalProperties: false` where
-  emitted).
+- Cross-language JSON Schema consumers must treat additional properties as
+  disallowed (`additionalProperties: false` on exported object schemas).
 - Producers outside ainvest that forward opaque extensions must place them
   outside these contracts or negotiate a versioned extension object in a later
-  major.
+  **major**.
+- This policy is why additive wire fields cannot ship as a minor bump (see
+  above).
 
 ## Deprecation window
 
