@@ -26,7 +26,7 @@ from ainvest.schemas.common import (
     StableId,
     Symbol,
     UtcDateTime,
-    enforce_bounded_decimal,
+    parse_decimal,
 )
 from ainvest.schemas.portfolio import AccountScope
 from ainvest.schemas.strategy import StrategyName, StrategyVersion
@@ -162,9 +162,13 @@ class OrderProposal(DomainModel):
 
 
 def _decimal_coeff_exp(value: Decimal) -> tuple[int, int]:
-    """Return ``(coefficient, exponent)`` for exact integer-scaled arithmetic."""
-    enforce_bounded_decimal(value)
-    sign, digits, exp = value.as_tuple()
+    """Return ``(coefficient, exponent)`` for exact integer-scaled arithmetic.
+
+    Always re-canonicalizes so helpers never operate on extreme-exponent zeros
+    or unstripped trailing zeros.
+    """
+    canonical = parse_decimal(value)
+    sign, digits, exp = canonical.as_tuple()
     if not isinstance(exp, int):
         raise ValueError("NaN and Infinity are not allowed")
     coefficient = int("".join(str(digit) for digit in digits) or "0")
@@ -179,8 +183,8 @@ def _require_increment_multiple(label: str, value: object, increment: object) ->
     Uses integer scaling instead of Decimal division so the default 28-digit
     context cannot round a non-multiple into an apparently integral ratio.
     """
-    amount = value if isinstance(value, Decimal) else Decimal(str(value))
-    step = increment if isinstance(increment, Decimal) else Decimal(str(increment))
+    amount = parse_decimal(value)
+    step = parse_decimal(increment)
     if step <= 0:
         raise ValueError(f"{label} increment must be > 0")
     amount_coeff, amount_exp = _decimal_coeff_exp(amount)
@@ -198,13 +202,9 @@ def _require_notional_within_limit(
     maximum_notional: object,
 ) -> None:
     """Require ``quantity * limit_price <= maximum_notional`` without rounding."""
-    qty = quantity if isinstance(quantity, Decimal) else Decimal(str(quantity))
-    price = limit_price if isinstance(limit_price, Decimal) else Decimal(str(limit_price))
-    limit = (
-        maximum_notional
-        if isinstance(maximum_notional, Decimal)
-        else Decimal(str(maximum_notional))
-    )
+    qty = parse_decimal(quantity)
+    price = parse_decimal(limit_price)
+    limit = parse_decimal(maximum_notional)
     qty_coeff, qty_exp = _decimal_coeff_exp(qty)
     price_coeff, price_exp = _decimal_coeff_exp(price)
     limit_coeff, limit_exp = _decimal_coeff_exp(limit)

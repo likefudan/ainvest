@@ -66,6 +66,20 @@ def test_trailing_zero_equivalent_decimals_share_accepted_domain() -> None:
 
 
 @pytest.mark.unit
+def test_extreme_exponent_zeros_canonicalize_before_expand() -> None:
+    """Zero encodings must collapse to Decimal(0) before serialize/scale."""
+    for raw in (Decimal("0e1000000"), Decimal("0e-1000000"), Decimal("-0e999999")):
+        canonical = parse_decimal(raw)
+        assert canonical == Decimal(0)
+        assert canonical.as_tuple() == (0, (0,), 0)
+
+    adapter = TypeAdapter(Money)
+    parsed = adapter.validate_python(Decimal("0e-1000000"))
+    assert parsed == Decimal(0)
+    assert adapter.dump_python(parsed, mode="json") == "0"
+
+
+@pytest.mark.unit
 def test_decimal_json_schema_is_string_only() -> None:
     """Generated validation schema must not allow JSON numbers."""
     fragment = decimal_json_schema()

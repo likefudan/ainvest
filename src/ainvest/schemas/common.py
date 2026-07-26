@@ -106,34 +106,33 @@ def _reject_bool(value: object) -> object:
     return value
 
 
-def enforce_bounded_decimal(value: Decimal) -> Decimal:
-    """Reject Decimals whose coefficient/exponent can amplify memory or CPU.
+def _canonical_decimal_tuple(
+    value: Decimal,
+) -> tuple[int, tuple[int, ...], int]:
+    """Return a trailing-zero-stripped ``(sign, digits, exp)`` without rounding.
 
-    Hashing and exact integer scaling expand exponents into digit strings or
-    ``10 ** n`` integers. Insignificant trailing zeros are stripped first so
-    equivalent encodings (``1`` vs ``1.000…0``) share the same accepted domain;
-    coefficient, exponent, and rendered-length limits then apply to that
-    canonical tuple. Raw input string length is still guarded at parse time.
+    Does not call ``Decimal.normalize()`` (context-precision sensitive). All-zero
+    coefficients collapse to the canonical zero tuple ``(0, (0,), 0)``.
     """
     if not value.is_finite():
         raise ValueError("NaN and Infinity are not allowed")
     sign, digits, exp = value.as_tuple()
     if not isinstance(exp, int):
         raise ValueError("NaN and Infinity are not allowed")
-
     digs = list(digits)
     while digs and digs[-1] == 0:
         digs.pop()
         exp += 1
     if not digs:
-        return value
+        return (0, (0,), 0)
+    return (sign, tuple(digs), exp)
 
-    if len(digs) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
-        raise ValueError("decimal significand exceeds maximum digits")
-    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
-        raise ValueError("decimal exponent exceeds maximum magnitude")
 
-    coefficient_len = len(digs)
+def _rendered_fixed_point_length(sign: int, digits: tuple[int, ...], exp: int) -> int:
+    """Length of the fixed-point rendering of a canonical decimal tuple."""
+    if digits == (0,):
+        return 1
+    coefficient_len = len(digits)
     if exp >= 0:
         rendered_len = coefficient_len + exp
     else:
@@ -142,27 +141,72 @@ def enforce_bounded_decimal(value: Decimal) -> Decimal:
         rendered_len = 2 + place if place >= coefficient_len else coefficient_len + 1
     if sign:
         rendered_len += 1
-    if rendered_len > MAX_DECIMAL_STRING_LENGTH:
+    return rendered_len
+
+
+def canonicalize_decimal(value: Decimal) -> Decimal:
+    """Return the unique domain representation of a finite Decimal.
+
+    Equivalent encodings (``2`` / ``2.0``, ``0e100`` / ``0.00``) collapse to the
+    same object shape. Zero is always ``Decimal(0)`` so extreme zero exponents
+    cannot survive into serialization or exact arithmetic.
+    """
+    sign, digits, exp = _canonical_decimal_tuple(value)
+    if digits == (0,):
+        return Decimal(0)
+    return Decimal((sign, digits, exp))
+
+
+def enforce_bounded_decimal(value: Decimal) -> Decimal:
+    """Canonicalize then reject values that would amplify memory or CPU.
+
+    Pipeline (single contract for schemas, hashing, and exact order checks):
+
+    1. Strip insignificant trailing zeros without ``normalize()``.
+    2. Collapse every zero encoding to ``Decimal(0)``.
+    3. Bound significand digits, absolute exponent, and fixed-point render length
+       on that canonical tuple only.
+    4. Return the canonical Decimal so callers never keep a dangerous exponent.
+
+    Raw string ``maxLength`` / scientific-notation rejection happen in
+    :func:`parse_decimal` before this step.
+    """
+    sign, digits, exp = _canonical_decimal_tuple(value)
+    if digits == (0,):
+        return Decimal(0)
+
+    if len(digits) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
+        raise ValueError("decimal significand exceeds maximum digits")
+    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
+        raise ValueError("decimal exponent exceeds maximum magnitude")
+    if _rendered_fixed_point_length(sign, digits, exp) > MAX_DECIMAL_STRING_LENGTH:
         raise ValueError("decimal exceeds maximum canonical length")
-    return value
+    return Decimal((sign, digits, exp))
+
+
+def format_canonical_decimal(value: object) -> str:
+    """Fixed-point string for hashing/serialization of a bounded decimal."""
+    text = format(parse_decimal(value), "f")
+    return "0" if text in {"-0", "-0.0"} else text
 
 
 def parse_decimal(value: object) -> Decimal:
-    """Parse a domain decimal and enforce digit/exponent bounds."""
+    """Parse a domain decimal into a bounded canonical Decimal."""
     return _parse_decimal(value)
 
 
 def _parse_decimal(value: object) -> Decimal:
     value = _reject_bool(value)
     if isinstance(value, Decimal):
-        decimal_value = value
-    elif isinstance(value, int):
+        return enforce_bounded_decimal(value)
+    if isinstance(value, int):
+        # Guard before constructing huge ints into Decimal.
         if value != 0 and len(str(abs(value))) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
             raise ValueError("decimal significand exceeds maximum digits")
-        decimal_value = Decimal(value)
-    elif isinstance(value, float):
+        return enforce_bounded_decimal(Decimal(value))
+    if isinstance(value, float):
         raise ValueError("binary floats are not allowed; use decimal strings")
-    elif isinstance(value, str):
+    if isinstance(value, str):
         text = value.strip()
         if not text or len(text) > MAX_DECIMAL_STRING_LENGTH:
             raise ValueError("invalid decimal string")
@@ -179,13 +223,11 @@ def _parse_decimal(value: object) -> Decimal:
         if _DECIMAL_STRING_RE.fullmatch(text) is None:
             raise ValueError("invalid decimal string")
         try:
-            decimal_value = Decimal(text)
+            parsed = Decimal(text)
         except InvalidOperation as exc:
             raise ValueError("invalid decimal string") from exc
-    else:
-        raise ValueError(f"unsupported decimal input type: {type(value).__name__}")
-
-    return enforce_bounded_decimal(decimal_value)
+        return enforce_bounded_decimal(parsed)
+    raise ValueError(f"unsupported decimal input type: {type(value).__name__}")
 
 
 def _require_non_negative(value: Decimal) -> Decimal:
@@ -213,7 +255,8 @@ def _require_signed_unit_interval(value: Decimal) -> Decimal:
 
 
 def _serialize_decimal(value: Decimal) -> str:
-    return format(value, "f")
+    """Serialize via the canonical form so extreme exponents cannot expand."""
+    return format_canonical_decimal(value)
 
 
 def _parse_utc_datetime(value: object) -> datetime:
@@ -372,8 +415,10 @@ __all__ = [
     "Symbol",
     "UtcDateTime",
     "Weight",
+    "canonicalize_decimal",
     "decimal_json_schema",
     "enforce_bounded_decimal",
     "ensure_utc",
+    "format_canonical_decimal",
     "parse_decimal",
 ]

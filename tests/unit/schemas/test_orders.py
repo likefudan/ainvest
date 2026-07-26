@@ -177,6 +177,16 @@ def test_extreme_exponents_rejected_before_power_operations() -> None:
     with pytest.raises(ValidationError, match="exponent"):
         CandidateOrder.model_validate(tiny)
 
+    # Extreme-exponent zero must canonicalize before notional power ops.
+    zero_max = deepcopy(payload)
+    zero_max["quantity"] = "1"
+    zero_max["limit_price"] = "1"
+    zero_max["price_increment"] = "1"
+    zero_max["quantity_increment"] = "1"
+    zero_max["maximum_notional"] = Decimal("0e1000000")
+    with pytest.raises(ValidationError, match="maximum_notional"):
+        CandidateOrder.model_validate(zero_max)
+
 
 def _proposal_ids() -> dict[str, str]:
     return {

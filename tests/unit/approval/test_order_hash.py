@@ -189,3 +189,15 @@ def test_hash_accepts_trailing_zero_equivalent_quantities() -> None:
     tiny_padded = deepcopy(tiny)
     tiny_padded["limit_price"] = tiny["limit_price"] + "00"
     assert compute_order_hash(tiny) == compute_order_hash(tiny_padded)
+
+
+@pytest.mark.unit
+def test_hash_collapses_extreme_exponent_zero_notionals() -> None:
+    from decimal import Decimal
+
+    base = _base_order()
+    plain = deepcopy(base)
+    plain["maximum_notional"] = "0"
+    extreme = deepcopy(plain)
+    extreme["maximum_notional"] = Decimal("0e1000000")
+    assert compute_order_hash(plain) == compute_order_hash(extreme)

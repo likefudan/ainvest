@@ -116,9 +116,10 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
   webauthn+live enforcement, plus canonical `sha256:` order/cancel digests and
   fixed vectors. Extended the shared Decimal contract in
   `src/ainvest/schemas/common.py` (reject scientific notation; bound
-  significand/exponent/rendered length after trailing-zero canonicalization;
-  keep raw input maxLength) so hashing and exact order checks cannot amplify
-  memory/CPU. `./scripts/dev verify` passed (159 tests; 84.83% coverage);
+  significand/exponent/rendered length after trailing-zero canonicalization,
+  including collapsing every zero encoding to ``Decimal(0)``; keep raw input
+  maxLength) so hashing and exact order checks cannot amplify memory/CPU.
+  `./scripts/dev verify` passed (161 tests; 84.81% coverage);
   `./scripts/dev audit` clean.
 - **Next after merge:** Batch B — Part 4 (B4) — `P02-T5`
 
