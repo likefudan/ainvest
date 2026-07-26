@@ -1,0 +1,116 @@
+#!/usr/bin/env bash
+
+set -euo pipefail
+
+REPOSITORY_ROOT="$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)"
+cd "${REPOSITORY_ROOT}"
+
+if ! command -v uv >/dev/null 2>&1; then
+  echo "uv is required. Install it from https://docs.astral.sh/uv/." >&2
+  exit 127
+fi
+
+usage() {
+  cat <<'EOF'
+Usage: ./scripts/dev <command>
+
+Commands:
+  setup          Create/update the Python 3.12 development environment
+  lock           Regenerate uv.lock after an intentional dependency change
+  lock-check     Verify pyproject.toml and uv.lock are consistent
+  format         Apply Ruff formatting and safe lint fixes
+  format-check   Check formatting without modifying files
+  lint           Run Ruff lint checks
+  type-check     Run strict mypy checks
+  unit           Run unit tests
+  contract       Run contract tests
+  integration    Run integration tests
+  test           Run all tests with coverage
+  verify         Run every required local merge check
+EOF
+}
+
+run_format_check() {
+  uv run --locked ruff format --check .
+}
+
+run_lint() {
+  uv run --locked ruff check .
+}
+
+run_type_check() {
+  uv run --locked mypy
+}
+
+run_unit() {
+  uv run --locked pytest tests/unit
+}
+
+run_contract() {
+  uv run --locked pytest tests/contract
+}
+
+run_integration() {
+  uv run --locked pytest tests/integration
+}
+
+run_test() {
+  uv run --locked pytest \
+    --cov=ainvest \
+    --cov-report=term-missing \
+    --cov-fail-under=80
+}
+
+case "${1:-}" in
+  setup)
+    uv sync --locked
+    ;;
+  lock)
+    uv lock
+    ;;
+  lock-check)
+    uv lock --check
+    ;;
+  format)
+    uv run --locked ruff format .
+    uv run --locked ruff check --fix .
+    ;;
+  format-check)
+    run_format_check
+    ;;
+  lint)
+    run_lint
+    ;;
+  type-check)
+    run_type_check
+    ;;
+  unit)
+    run_unit
+    ;;
+  contract)
+    run_contract
+    ;;
+  integration)
+    run_integration
+    ;;
+  test)
+    run_test
+    ;;
+  verify)
+    uv lock --check
+    run_format_check
+    run_lint
+    run_type_check
+    run_unit
+    run_contract
+    run_integration
+    run_test
+    ;;
+  help | --help | -h)
+    usage
+    ;;
+  *)
+    usage >&2
+    exit 2
+    ;;
+esac

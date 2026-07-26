@@ -1,0 +1,75 @@
+# Development Commands
+
+This repository supports Python 3.12 and newer. Python 3.12 is the minimum compatibility
+baseline and the version selected by `.python-version`. It is a maintained CPython release and
+gives contributors a stable target while dependencies add support for newer interpreter versions.
+
+The project uses [uv](https://docs.astral.sh/uv/) for Python installation, dependency resolution,
+virtual environments, and command execution. `uv.lock` is committed and records artifact hashes.
+Do not install dependencies manually into the project environment or invoke underlying tools with
+ad hoc options in task handoffs.
+
+## Canonical workflow
+
+Run the repository wrapper from the repository root:
+
+```bash
+./scripts/dev setup
+./scripts/dev verify
+```
+
+The complete command interface is:
+
+| Command | Purpose |
+|---|---|
+| `./scripts/dev setup` | Create or update the locked default development environment |
+| `./scripts/dev lock` | Intentionally regenerate `uv.lock` after changing dependencies |
+| `./scripts/dev lock-check` | Verify the project metadata and lock file agree |
+| `./scripts/dev format` | Apply formatting and safe lint fixes |
+| `./scripts/dev format-check` | Check formatting without modifying files |
+| `./scripts/dev lint` | Run static lint rules |
+| `./scripts/dev type-check` | Run strict type checks |
+| `./scripts/dev unit` | Run isolated unit tests |
+| `./scripts/dev contract` | Run public/provider contract tests |
+| `./scripts/dev integration` | Run cross-component integration tests |
+| `./scripts/dev test` | Run all tests with branch coverage |
+| `./scripts/dev verify` | Run the lock, formatting, lint, type, suite, and coverage gates |
+
+`verify` is the canonical local merge gate. Later CI work should call this wrapper rather than
+duplicate its tool-specific arguments.
+
+## Dependency profiles
+
+The default install contains the environment-independent core plus development and test tools.
+Runtime capabilities are isolated as optional extras:
+
+| Profile | Install command | Intended consumer |
+|---|---|---|
+| Core | `uv sync --locked --no-default-groups` | Shared schemas, workflow, storage, scheduling |
+| Research | `uv sync --locked --no-default-groups --extra research` | Research/data workers |
+| Offline data | `uv sync --locked --no-default-groups --extra offline-data` | Development and offline research only |
+| Approval | `uv sync --locked --no-default-groups --extra approval` | Approval API and Telegram worker |
+| Broker | `uv sync --locked --no-default-groups --extra broker` | Official MCP broker gateways |
+| Observability | `uv sync --locked --no-default-groups --extra observability` | Runtime telemetry |
+
+Multiple deployment profiles may be combined by repeating `--extra`. In particular, the research
+profile does not install the offline-data, approval, or broker packages. `yfinance` is isolated in
+the offline-data profile and must never supply live quotes, pre-trade risk inputs, or broker
+fallback data. The broker profile contains the official MCP Python SDK and must never add a client
+that uses Robinhood usernames, passwords, or unofficial Robinhood APIs.
+
+Production images should install only their required extras with `--no-default-groups`; Ruff,
+mypy, pytest, and other development tools are intentionally absent from those environments.
+
+## Dependency changes
+
+Use compatible version ranges in `pyproject.toml`. APScheduler is deliberately constrained to the
+3.11.x line until the architecture decision changes. After any dependency edit:
+
+1. Run `./scripts/dev lock`.
+2. Review both `pyproject.toml` and `uv.lock`, including transitive package additions.
+3. Run `./scripts/dev verify`.
+4. Commit the metadata and lock file together.
+
+Never put credentials in dependency URLs, `.env` files committed to Git, tests, fixtures, logs, or
+lock-file configuration.

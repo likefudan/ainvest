@@ -1,0 +1,114 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ainvest"
+version = "0.1.0"
+description = "AI-assisted investment research and controlled trade execution"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "alembic>=1.15,<2",
+    "apscheduler>=3.11,<3.12",
+    "pluggy>=1.5,<2",
+    "pydantic>=2.11,<3",
+    "pydantic-settings>=2.8,<3",
+    "pyyaml>=6,<7",
+    "sqlalchemy>=2.0,<3",
+    "transitions>=0.9,<1",
+]
+
+[project.optional-dependencies]
+research = [
+    "edgartools>=4,<6",
+    "httpx>=0.28,<1",
+    "pandas-market-calendars>=5,<6",
+    "pydantic-ai-slim[openai]>=1,<2",
+]
+offline-data = [
+    "yfinance>=0.2.65,<1",
+]
+approval = [
+    "fastapi>=0.115,<1",
+    "python-telegram-bot>=22,<23",
+    "uvicorn[standard]>=0.34,<1",
+    "webauthn>=2.6,<3",
+]
+broker = [
+    "mcp>=1.8,<2",
+]
+observability = [
+    "opentelemetry-api>=1.32,<2",
+    "opentelemetry-sdk>=1.32,<2",
+    "prometheus-client>=0.22,<1",
+    "structlog>=25,<26",
+]
+
+[dependency-groups]
+dev = [
+    "mypy>=1.15,<2",
+    "ruff>=0.11,<1",
+    "types-pyyaml>=6.0.12,<7",
+]
+test = [
+    "hypothesis>=6.130,<7",
+    "httpx>=0.28,<1",
+    "pytest>=8.3,<10",
+    "pytest-cov>=6,<8",
+    "respx>=0.22,<1",
+]
+
+[tool.uv]
+default-groups = ["dev", "test"]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ainvest"]
+
+[tool.pytest.ini_options]
+addopts = [
+    "--strict-config",
+    "--strict-markers",
+    "-ra",
+]
+testpaths = ["tests"]
+markers = [
+    "unit: fast tests isolated from external processes and services",
+    "contract: public interface and provider contract tests",
+    "integration: tests spanning multiple components or process boundaries",
+]
+
+[tool.coverage.run]
+branch = true
+source = ["ainvest"]
+
+[tool.coverage.report]
+fail_under = 80
+show_missing = true
+skip_covered = true
+
+[tool.ruff]
+target-version = "py312"
+line-length = 100
+src = ["src", "tests"]
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = [
+    "B",
+    "E",
+    "F",
+    "I",
+    "RUF",
+    "SIM",
+    "UP",
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/**/*.py" = ["S101"]
+
+[tool.mypy]
+python_version = "3.12"
+strict = true
+files = ["src", "tests"]
+warn_unreachable = true
