@@ -68,25 +68,49 @@ the dependency-change workflow.
 ## Batch naming
 
 Batch IDs match `IMPLEMENTATION_TODO.md` section 12 (`Batch A`, `Batch B`,
-…). When a plan batch is delivered in more than one integration part, record parts as
-`Batch <Letter> — Part N`. Mark the plan batch complete only when every card in
-that section has merged. Current Batch A split:
+…). When a plan batch is delivered in more than one integration part, record
+parts as `Batch <Letter> — Part N` (or the plan's `B1`/`B2` labels). Mark the
+plan batch complete only when every card in that section has merged.
 
 | Record | Plan section | Cards | Status |
 |---|---|---|---|
 | Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
 | Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
 | Batch A complete | Batch A | all of the above | complete |
+| Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | in_review |
+| Batch B — Part 2 (B2) | Batch B | `P02-T2` | next after B1 |
+| Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | after B2 |
+| Batch B — Part 4 (B4) | Batch B | `P02-T5` | after B3 |
+| Batch B complete | Batch B | all of the above | after B4 merges |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch B** (`P02-T0` through `P02-T5`) — domain schemas,
-market/research/portfolio/strategy/order/risk/approval/broker contracts,
-canonical order hashing, and schema versioning. Prefer the merge order in
-`IMPLEMENTATION_TODO.md` section 12 (B1 → B2 → B3 → B4). A coordinator must
-claim Batch B here before dispatching those tasks.
+### Batch B — Part 1 (B1)
+
+- **Batch:** Batch B — Part 1 (B1) — common domain types and
+  market/research/evidence schemas (`P02-T0`, `P02-T1`)
+- **Plan batch:** Batch B (partial; remaining parts B2–B4)
+- **Coordinator:** cursor-agent / local
+- **Integration branch:** `task/batch-b1-schemas`
+- **Base commit:** `9afbf33448a981aa48bfa98f866a04a69eb92d28`
+  (current `main`; supersedes the earlier `669746e` tip cited in the dispatch
+  note so Batch A follow-ups from PR #20 are included)
+- **Dependency PRs/commits:** Batch A complete; config/package baseline on
+  `main` including [PR #20](https://github.com/likefudan/ainvest/pull/20)
+- **Merge target:** `main` (squash)
+- **Safety posture:** domain schemas and unit tests only; Paper remains the
+  default; no broker write capability, credentials, AI calls, Telegram, or live
+  trading are introduced
+- **Verification:** `./scripts/dev verify` passed (113 tests; coverage ≥80%);
+  `./scripts/dev audit` found no known vulnerabilities
+- **Next after merge:** Batch B — Part 2 (B2) — `P02-T2` only
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T0` | Define Common Domain Types | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P01-T2`–`P01-T4` | [#21](https://github.com/likefudan/ainvest/pull/21) |
+| `P02-T1` | Define Market, Research, and Evidence Schemas | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P02-T0` | [#21](https://github.com/likefudan/ainvest/pull/21) |
 
 ## Completed batches
 
@@ -323,3 +347,43 @@ claim Batch B here before dispatching those tasks.
 - **Handoff notes:** `live_safety` marker cannot use skip/skipif. CODEOWNERS
   covers security/execution/approval/config/CI paths. No credentials in CI.
 - **Resulting commit/PR:** feature `d83155de62ab76b31716c585bbbcf12194c064ce`; squash `3d5afefca34aa8748efbbd4942b2c38b8b736726`; [PR #6](https://github.com/likefudan/ainvest/pull/6)
+
+## Execution envelope: P02-T0
+
+- **Title:** Define Common Domain Types
+- **Status/owner:** `in_review` — `cursor-agent`
+- **Branch/base:** `task/batch-b1-schemas` at
+  `9afbf33448a981aa48bfa98f866a04a69eb92d28`
+- **Dependencies:** `P01-T2`–`P01-T4` (merged)
+- **Design and plan authority:** `design.md` §6; `IMPLEMENTATION_TODO.md`
+  sections 1 and 5 (`P02-T0`)
+- **Allowed paths:** `src/ainvest/schemas/common.py`,
+  `src/ainvest/schemas/__init__.py`, `tests/unit/schemas/test_common.py`,
+  `docs/tasks/status.md`, `README.md`
+- **Forbidden paths:** portfolio/strategy/order schemas (B2/B3),
+  `schemas/json/**` versioning export (B4), broker/approval runtime
+- **Verification:** unit tests for Decimal/UTC/InstrumentIdentity; included in
+  `./scripts/dev verify`
+- **Blockers:** None
+- **Handoff notes:** Shared primitives ready for B2 `TradeSignal` /
+  portfolio schemas. JSON uses decimal strings and UTC `Z` timestamps.
+
+## Execution envelope: P02-T1
+
+- **Title:** Define Market, Research, and Evidence Schemas
+- **Status/owner:** `in_review` — `cursor-agent`
+- **Branch/base:** `task/batch-b1-schemas` at
+  `9afbf33448a981aa48bfa98f866a04a69eb92d28`
+- **Dependencies:** `P02-T0` (same PR)
+- **Design and plan authority:** `design.md` §5–§6.1;
+  `IMPLEMENTATION_TODO.md` sections 1 and 5 (`P02-T1`)
+- **Allowed paths:** `src/ainvest/schemas/market.py`,
+  `src/ainvest/schemas/research.py`, `tests/unit/schemas/test_research.py`,
+  `tests/unit/schemas/fixtures/**`
+- **Forbidden paths:** `P02-T2`–`P02-T5` production paths; live/broker code
+- **Verification:** design example validates; golden fixture present; stale /
+  time-order / NL-as-evidence failures covered; `model_json_schema()` smoke
+  test (versioned `schemas/json/` export deferred to B4 / `P02-T5`)
+- **Blockers:** None
+- **Handoff notes:** `ResearchPacket` requires market provenance. Next claim
+  after merge is B2 (`P02-T2`).
