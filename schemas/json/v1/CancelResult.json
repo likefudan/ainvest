@@ -1,0 +1,68 @@
+{
+  "$defs": {
+    "CancelStatus": {
+      "description": "Cancel-command outcomes (design §8 cancellation machine).",
+      "enum": [
+        "REQUESTED",
+        "CONFIRMED",
+        "REJECTED",
+        "NOT_APPLIED",
+        "UNKNOWN",
+        "RECONCILING",
+        "MANUAL_REVIEW"
+      ],
+      "title": "CancelStatus",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Outcome of a cancel command, including uncertain paths.",
+  "properties": {
+    "broker_order_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Broker Order Id",
+      "type": "string"
+    },
+    "cancel_id": {
+      "maxLength": 160,
+      "minLength": 8,
+      "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+      "title": "Cancel Id",
+      "type": "string"
+    },
+    "observed_at": {
+      "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+      "format": "date-time",
+      "title": "Observed At",
+      "type": "string"
+    },
+    "reason_code": {
+      "maxLength": 64,
+      "minLength": 2,
+      "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+      "title": "Reason Code",
+      "type": "string"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "status": {
+      "$ref": "#/$defs/CancelStatus"
+    }
+  },
+  "required": [
+    "cancel_id",
+    "broker_order_id",
+    "status",
+    "reason_code",
+    "observed_at"
+  ],
+  "title": "CancelResult",
+  "type": "object"
+}

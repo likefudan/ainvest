@@ -1,0 +1,8 @@
+{
+  "broker_order_id": "brk_ord_1",
+  "fill_id": "fill_01HZYEXAMPLE",
+  "filled_at": "2026-07-24T18:31:10Z",
+  "price": "214.48",
+  "quantity": "2",
+  "schema_version": "1.0"
+}

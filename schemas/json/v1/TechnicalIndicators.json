@@ -1,0 +1,158 @@
+{
+  "$defs": {
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Freshness and source metadata required on every external datum.",
+      "properties": {
+        "is_delayed": {
+          "default": false,
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "observed_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "quality_flags": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QualityFlag"
+          },
+          "title": "Quality Flags",
+          "type": "array"
+        },
+        "received_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Received At",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "observed_at",
+        "received_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "QualityFlag": {
+      "description": "Machine-readable data-quality markers for provenance envelopes.",
+      "enum": [
+        "STALE",
+        "DELAYED",
+        "PARTIAL",
+        "ESTIMATED",
+        "CONFLICTING_SOURCES",
+        "MISSING_FIELDS",
+        "UNVERIFIED"
+      ],
+      "title": "QualityFlag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Deterministic technical indicator snapshot.",
+  "properties": {
+    "atr_14": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Atr 14"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "rsi_14": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Rsi 14"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "sma_20": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sma 20"
+    },
+    "sma_50": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Sma 50"
+    },
+    "symbol": {
+      "maxLength": 10,
+      "minLength": 1,
+      "pattern": "^[A-Z][A-Z0-9.]{0,9}$",
+      "title": "Symbol",
+      "type": "string"
+    }
+  },
+  "required": [
+    "symbol",
+    "provenance"
+  ],
+  "title": "TechnicalIndicators",
+  "type": "object"
+}

@@ -1,0 +1,457 @@
+{
+  "$defs": {
+    "AccountScope": {
+      "description": "Broker account partition observed by strategies and sizing.\n\n``paper`` is the safe default path. ``agentic`` matches the Robinhood\naccount scope used by design.md OrderProposal examples.",
+      "enum": [
+        "paper",
+        "agentic"
+      ],
+      "title": "AccountScope",
+      "type": "string"
+    },
+    "AssetType": {
+      "description": "First-release tradeable asset classes.",
+      "enum": [
+        "EQUITY",
+        "ETF"
+      ],
+      "title": "AssetType",
+      "type": "string"
+    },
+    "ExposureSnapshot": {
+      "additionalProperties": false,
+      "description": "Aggregate exposure derived from cash and positions.",
+      "properties": {
+        "cash": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Cash",
+          "type": "string"
+        },
+        "equity": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Equity",
+          "type": "string"
+        },
+        "gross_market_value": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Gross Market Value",
+          "type": "string"
+        },
+        "largest_position_weight": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Largest Position Weight",
+          "type": "string"
+        },
+        "net_market_value": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Net Market Value",
+          "type": "string"
+        },
+        "position_count": {
+          "default": 0,
+          "minimum": 0,
+          "title": "Position Count",
+          "type": "integer"
+        }
+      },
+      "required": [
+        "cash",
+        "equity",
+        "gross_market_value",
+        "net_market_value",
+        "largest_position_weight"
+      ],
+      "title": "ExposureSnapshot",
+      "type": "object"
+    },
+    "InstrumentIdentity": {
+      "additionalProperties": false,
+      "description": "Canonical tradeable instrument identity.\n\nA display symbol alone is never sufficient to identify a broker instrument.",
+      "properties": {
+        "asset_type": {
+          "$ref": "#/$defs/AssetType"
+        },
+        "currency": {
+          "maxLength": 3,
+          "minLength": 3,
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "exchange": {
+          "maxLength": 4,
+          "minLength": 4,
+          "pattern": "^[A-Z0-9]{4}$",
+          "title": "Exchange",
+          "type": "string"
+        },
+        "identity_as_of": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Identity As Of",
+          "type": "string"
+        },
+        "instrument_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Instrument Id",
+          "type": "string"
+        },
+        "provider": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Provider"
+        },
+        "symbol": {
+          "maxLength": 10,
+          "minLength": 1,
+          "pattern": "^[A-Z][A-Z0-9.]{0,9}$",
+          "title": "Symbol",
+          "type": "string"
+        }
+      },
+      "required": [
+        "instrument_id",
+        "symbol",
+        "exchange",
+        "currency",
+        "asset_type",
+        "identity_as_of"
+      ],
+      "title": "InstrumentIdentity",
+      "type": "object"
+    },
+    "OpenOrderSide": {
+      "description": "Sides allowed on open-order snapshots (long-only first release).",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "OpenOrderSide",
+      "type": "string"
+    },
+    "OpenOrderSnapshot": {
+      "additionalProperties": false,
+      "description": "Outstanding broker order visible to strategies and pre-trade checks.",
+      "properties": {
+        "instrument": {
+          "$ref": "#/$defs/InstrumentIdentity"
+        },
+        "limit_price": {
+          "anyOf": [
+            {
+              "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+              "maxLength": 64,
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Limit Price"
+        },
+        "order_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Order Id",
+          "type": "string"
+        },
+        "quantity": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Quantity",
+          "type": "string"
+        },
+        "side": {
+          "$ref": "#/$defs/OpenOrderSide"
+        },
+        "submitted_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Submitted At",
+          "type": "string"
+        },
+        "symbol": {
+          "anyOf": [
+            {
+              "maxLength": 10,
+              "minLength": 1,
+              "pattern": "^[A-Z][A-Z0-9.]{0,9}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Symbol"
+        }
+      },
+      "required": [
+        "order_id",
+        "instrument",
+        "side",
+        "quantity",
+        "submitted_at"
+      ],
+      "title": "OpenOrderSnapshot",
+      "type": "object"
+    },
+    "PositionSnapshot": {
+      "additionalProperties": false,
+      "description": "Single long position within a portfolio snapshot.",
+      "properties": {
+        "average_cost": {
+          "anyOf": [
+            {
+              "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+              "maxLength": 64,
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Average Cost"
+        },
+        "currency": {
+          "default": "USD",
+          "maxLength": 3,
+          "minLength": 3,
+          "pattern": "^[A-Z]{3}$",
+          "title": "Currency",
+          "type": "string"
+        },
+        "instrument": {
+          "$ref": "#/$defs/InstrumentIdentity"
+        },
+        "market_value": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Market Value",
+          "type": "string"
+        },
+        "portfolio_weight": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Portfolio Weight",
+          "type": "string"
+        },
+        "quantity": {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "title": "Quantity",
+          "type": "string"
+        },
+        "unrealized_pnl": {
+          "anyOf": [
+            {
+              "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+              "maxLength": 64,
+              "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Unrealized Pnl"
+        }
+      },
+      "required": [
+        "instrument",
+        "quantity",
+        "market_value",
+        "portfolio_weight"
+      ],
+      "title": "PositionSnapshot",
+      "type": "object"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Freshness and source metadata required on every external datum.",
+      "properties": {
+        "is_delayed": {
+          "default": false,
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "observed_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "quality_flags": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QualityFlag"
+          },
+          "title": "Quality Flags",
+          "type": "array"
+        },
+        "received_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Received At",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "observed_at",
+        "received_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "QualityFlag": {
+      "description": "Machine-readable data-quality markers for provenance envelopes.",
+      "enum": [
+        "STALE",
+        "DELAYED",
+        "PARTIAL",
+        "ESTIMATED",
+        "CONFLICTING_SOURCES",
+        "MISSING_FIELDS",
+        "UNVERIFIED"
+      ],
+      "title": "QualityFlag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Immutable account snapshot consumed by StrategyContext and sizing.",
+  "properties": {
+    "account_scope": {
+      "$ref": "#/$defs/AccountScope"
+    },
+    "as_of": {
+      "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+      "format": "date-time",
+      "title": "As Of",
+      "type": "string"
+    },
+    "buying_power": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Buying Power",
+      "type": "string"
+    },
+    "cash": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Cash",
+      "type": "string"
+    },
+    "currency": {
+      "default": "USD",
+      "maxLength": 3,
+      "minLength": 3,
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "type": "string"
+    },
+    "equity": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Equity",
+      "type": "string"
+    },
+    "exposure": {
+      "$ref": "#/$defs/ExposureSnapshot"
+    },
+    "open_orders": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/OpenOrderSnapshot"
+      },
+      "title": "Open Orders",
+      "type": "array"
+    },
+    "positions": {
+      "default": [],
+      "items": {
+        "$ref": "#/$defs/PositionSnapshot"
+      },
+      "title": "Positions",
+      "type": "array"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "snapshot_id": {
+      "maxLength": 160,
+      "minLength": 8,
+      "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+      "title": "Snapshot Id",
+      "type": "string"
+    }
+  },
+  "required": [
+    "snapshot_id",
+    "account_scope",
+    "as_of",
+    "cash",
+    "buying_power",
+    "equity",
+    "exposure",
+    "provenance"
+  ],
+  "title": "PortfolioSnapshot",
+  "type": "object"
+}

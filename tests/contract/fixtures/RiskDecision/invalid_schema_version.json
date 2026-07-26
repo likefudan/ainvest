@@ -1,0 +1,11 @@
+{
+  "candidate_id": "cand_01HZYEXAMPLE0001",
+  "decided_at": "2026-07-24T18:30:11Z",
+  "outcome": "APPROVED",
+  "reason": "all hard and review rules passed",
+  "reason_code": "ALL_RULES_PASSED",
+  "risk_decision_id": "risk_01HZYEXAMPLE0001",
+  "rule_set_version": "1.0.0",
+  "schema_version": "not-a-version",
+  "violations": []
+}

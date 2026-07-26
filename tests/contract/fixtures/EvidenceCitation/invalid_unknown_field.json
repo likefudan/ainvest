@@ -1,0 +1,16 @@
+{
+  "evidence_id": "evid_01HZYEXAMPLE0001",
+  "kind": "QUOTE",
+  "locator": "quote:robinhood.mcp.quotes/AAPL#last",
+  "provenance": {
+    "is_delayed": false,
+    "observed_at": "2026-07-24T18:29:58Z",
+    "quality_flags": [],
+    "received_at": "2026-07-24T18:30:00Z",
+    "source": "robinhood.mcp.quotes",
+    "timezone": "UTC"
+  },
+  "schema_version": "1.0",
+  "summary": "Last price observed near session high",
+  "unexpected_extension_field": "boom"
+}

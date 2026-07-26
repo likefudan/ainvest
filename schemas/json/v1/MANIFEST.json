@@ -1,0 +1,26 @@
+{
+  "major": 1,
+  "models": [
+    "ApprovalChallenge",
+    "ApprovalEvent",
+    "BrokerFill",
+    "BrokerOrder",
+    "CancelCommand",
+    "CancelResult",
+    "CandidateOrder",
+    "EvidenceCitation",
+    "FundamentalSnapshot",
+    "MarketEvent",
+    "MarketQuote",
+    "OhlcvBar",
+    "OrderProposal",
+    "PortfolioSnapshot",
+    "ReconciliationResult",
+    "ResearchPacket",
+    "RiskDecision",
+    "StrategyContext",
+    "TechnicalIndicators",
+    "TradeSignal"
+  ],
+  "schema_version_line": "MAJOR.MINOR payload versions; see docs/schema-versioning.md"
+}

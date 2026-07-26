@@ -1,0 +1,12 @@
+{
+  "approved_at": "2026-07-24T18:31:00Z",
+  "approver_identity": "tg_user_1",
+  "challenge_id": "apch_01HZYEXAMPLE0001",
+  "event_id": "apev_01HZYEXAMPLE0001",
+  "method": "telegram",
+  "order_hash": "sha256:d1b50c5ba161bf21c22422d2f45b6dab5b01ce67583a66b089f7c3f1e3a77fe7",
+  "outcome": "APPROVED",
+  "proposal_id": "ordp_01HZYEXAMPLE0001",
+  "schema_version": "1.0",
+  "scope": "paper"
+}

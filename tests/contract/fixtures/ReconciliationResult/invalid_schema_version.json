@@ -1,0 +1,9 @@
+{
+  "broker_order_id": "brk_ord_1",
+  "observed_at": "2026-07-24T18:40:00Z",
+  "outcome": "MATCHED",
+  "proposal_id": "ordp_01HZYEXAMPLE0001",
+  "reason_code": "MATCHED",
+  "reconciliation_id": "recon_01HZYEXAMPLE01",
+  "schema_version": "not-a-version"
+}

@@ -1,0 +1,211 @@
+{
+  "$defs": {
+    "AccountScope": {
+      "description": "Broker account partition observed by strategies and sizing.\n\n``paper`` is the safe default path. ``agentic`` matches the Robinhood\naccount scope used by design.md OrderProposal examples.",
+      "enum": [
+        "paper",
+        "agentic"
+      ],
+      "title": "AccountScope",
+      "type": "string"
+    },
+    "AssetType": {
+      "description": "First-release tradeable asset classes.",
+      "enum": [
+        "EQUITY",
+        "ETF"
+      ],
+      "title": "AssetType",
+      "type": "string"
+    },
+    "OrderSide": {
+      "description": "First-release order sides. Short selling is not permitted.",
+      "enum": [
+        "BUY",
+        "SELL"
+      ],
+      "title": "OrderSide",
+      "type": "string"
+    },
+    "OrderType": {
+      "description": "First-release order types. Only LIMIT is allowed.",
+      "enum": [
+        "LIMIT"
+      ],
+      "title": "OrderType",
+      "type": "string"
+    },
+    "TimeInForce": {
+      "description": "First-release time-in-force. Only DAY is allowed.",
+      "enum": [
+        "DAY"
+      ],
+      "title": "TimeInForce",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Sizer output before risk approval. Not yet approval-bound.",
+  "properties": {
+    "account_scope": {
+      "$ref": "#/$defs/AccountScope"
+    },
+    "asset_type": {
+      "$ref": "#/$defs/AssetType"
+    },
+    "candidate_id": {
+      "maxLength": 160,
+      "minLength": 8,
+      "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+      "title": "Candidate Id",
+      "type": "string"
+    },
+    "created_at": {
+      "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+      "format": "date-time",
+      "title": "Created At",
+      "type": "string"
+    },
+    "currency": {
+      "maxLength": 3,
+      "minLength": 3,
+      "pattern": "^[A-Z]{3}$",
+      "title": "Currency",
+      "type": "string"
+    },
+    "exchange": {
+      "maxLength": 4,
+      "minLength": 4,
+      "pattern": "^[A-Z0-9]{4}$",
+      "title": "Exchange",
+      "type": "string"
+    },
+    "expires_at": {
+      "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+      "format": "date-time",
+      "title": "Expires At",
+      "type": "string"
+    },
+    "instrument_id": {
+      "maxLength": 128,
+      "minLength": 3,
+      "title": "Instrument Id",
+      "type": "string"
+    },
+    "limit_price": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Limit Price",
+      "type": "string"
+    },
+    "maximum_notional": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Maximum Notional",
+      "type": "string"
+    },
+    "order_type": {
+      "$ref": "#/$defs/OrderType",
+      "default": "LIMIT"
+    },
+    "price_increment": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Price Increment",
+      "type": "string"
+    },
+    "quantity": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Quantity",
+      "type": "string"
+    },
+    "quantity_increment": {
+      "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+      "maxLength": 64,
+      "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+      "title": "Quantity Increment",
+      "type": "string"
+    },
+    "reason_codes": {
+      "default": [],
+      "items": {
+        "maxLength": 64,
+        "minLength": 2,
+        "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+        "type": "string"
+      },
+      "title": "Reason Codes",
+      "type": "array"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "side": {
+      "$ref": "#/$defs/OrderSide"
+    },
+    "signal_id": {
+      "maxLength": 160,
+      "minLength": 8,
+      "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+      "title": "Signal Id",
+      "type": "string"
+    },
+    "strategy": {
+      "maxLength": 64,
+      "minLength": 2,
+      "pattern": "^[a-z][a-z0-9_]{1,63}$",
+      "title": "Strategy",
+      "type": "string"
+    },
+    "strategy_version": {
+      "maxLength": 32,
+      "minLength": 5,
+      "pattern": "^[0-9]+\\.[0-9]+\\.[0-9]+$",
+      "title": "Strategy Version",
+      "type": "string"
+    },
+    "symbol": {
+      "maxLength": 10,
+      "minLength": 1,
+      "pattern": "^[A-Z][A-Z0-9.]{0,9}$",
+      "title": "Symbol",
+      "type": "string"
+    },
+    "time_in_force": {
+      "$ref": "#/$defs/TimeInForce",
+      "default": "DAY"
+    }
+  },
+  "required": [
+    "candidate_id",
+    "signal_id",
+    "account_scope",
+    "instrument_id",
+    "symbol",
+    "exchange",
+    "currency",
+    "asset_type",
+    "side",
+    "quantity",
+    "quantity_increment",
+    "limit_price",
+    "price_increment",
+    "maximum_notional",
+    "strategy",
+    "strategy_version",
+    "created_at",
+    "expires_at"
+  ],
+  "title": "CandidateOrder",
+  "type": "object"
+}

@@ -1,0 +1,161 @@
+{
+  "$defs": {
+    "EvidenceKind": {
+      "description": "Allowed evidence categories. Free-form natural language is not evidence.",
+      "enum": [
+        "FILING",
+        "QUOTE",
+        "OHLCV",
+        "TECHNICAL",
+        "FUNDAMENTAL",
+        "EVENT",
+        "CALCULATED"
+      ],
+      "title": "EvidenceKind",
+      "type": "string"
+    },
+    "Provenance": {
+      "additionalProperties": false,
+      "description": "Freshness and source metadata required on every external datum.",
+      "properties": {
+        "is_delayed": {
+          "default": false,
+          "title": "Is Delayed",
+          "type": "boolean"
+        },
+        "observed_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Observed At",
+          "type": "string"
+        },
+        "quality_flags": {
+          "default": [],
+          "items": {
+            "$ref": "#/$defs/QualityFlag"
+          },
+          "title": "Quality Flags",
+          "type": "array"
+        },
+        "received_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "title": "Received At",
+          "type": "string"
+        },
+        "source": {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+          "title": "Source",
+          "type": "string"
+        },
+        "timezone": {
+          "default": "UTC",
+          "maxLength": 64,
+          "minLength": 1,
+          "title": "Timezone",
+          "type": "string"
+        }
+      },
+      "required": [
+        "source",
+        "observed_at",
+        "received_at"
+      ],
+      "title": "Provenance",
+      "type": "object"
+    },
+    "QualityFlag": {
+      "description": "Machine-readable data-quality markers for provenance envelopes.",
+      "enum": [
+        "STALE",
+        "DELAYED",
+        "PARTIAL",
+        "ESTIMATED",
+        "CONFLICTING_SOURCES",
+        "MISSING_FIELDS",
+        "UNVERIFIED"
+      ],
+      "title": "QualityFlag",
+      "type": "string"
+    }
+  },
+  "additionalProperties": false,
+  "description": "Provenanced citation for a research claim.\n\nNatural-language assertions without a deterministic source/locator cannot\nvalidate. Numeric values must cite a calculation or tool source.",
+  "properties": {
+    "calculation_source": {
+      "anyOf": [
+        {
+          "maxLength": 64,
+          "minLength": 2,
+          "pattern": "^[a-z][a-z0-9_.:-]{1,63}$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Calculation Source"
+    },
+    "evidence_id": {
+      "maxLength": 160,
+      "minLength": 8,
+      "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+      "title": "Evidence Id",
+      "type": "string"
+    },
+    "kind": {
+      "$ref": "#/$defs/EvidenceKind"
+    },
+    "locator": {
+      "maxLength": 512,
+      "minLength": 3,
+      "pattern": "^(tool|filing|quote|ohlcv|technical|fundamental|event|calc):[A-Za-z0-9][A-Za-z0-9._/#:-]{0,500}$",
+      "title": "Locator",
+      "type": "string"
+    },
+    "numeric_value": {
+      "anyOf": [
+        {
+          "description": "Canonical decimal string without scientific notation. Binary JSON numbers are rejected.",
+          "maxLength": 64,
+          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d+)?$",
+          "type": "string"
+        },
+        {
+          "type": "null"
+        }
+      ],
+      "default": null,
+      "title": "Numeric Value"
+    },
+    "provenance": {
+      "$ref": "#/$defs/Provenance"
+    },
+    "schema_version": {
+      "default": "1.0",
+      "maxLength": 32,
+      "minLength": 3,
+      "pattern": "^[0-9]+\\.[0-9]+$",
+      "title": "Schema Version",
+      "type": "string"
+    },
+    "summary": {
+      "maxLength": 1024,
+      "minLength": 1,
+      "title": "Summary",
+      "type": "string"
+    }
+  },
+  "required": [
+    "evidence_id",
+    "kind",
+    "summary",
+    "provenance",
+    "locator"
+  ],
+  "title": "EvidenceCitation",
+  "type": "object"
+}

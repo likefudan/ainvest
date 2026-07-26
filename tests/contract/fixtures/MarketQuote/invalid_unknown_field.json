@@ -1,0 +1,24 @@
+{
+  "ask": "215.44",
+  "bid": "215.40",
+  "currency": "USD",
+  "instrument": {
+    "asset_type": "EQUITY",
+    "currency": "USD",
+    "exchange": "XNAS",
+    "identity_as_of": "2026-07-24T18:30:00Z",
+    "instrument_id": "rh_inst_aapl_xnas",
+    "symbol": "AAPL"
+  },
+  "last_price": "215.42",
+  "provenance": {
+    "is_delayed": false,
+    "observed_at": "2026-07-24T18:29:58Z",
+    "quality_flags": [],
+    "received_at": "2026-07-24T18:30:00Z",
+    "source": "robinhood.mcp.quotes",
+    "timezone": "UTC"
+  },
+  "schema_version": "1.0",
+  "unexpected_extension_field": "boom"
+}
