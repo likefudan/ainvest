@@ -77,8 +77,8 @@ plan batch complete only when every card in that section has merged.
 | Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
 | Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
 | Batch A complete | Batch A | all of the above | complete |
-| Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | in_review |
-| Batch B — Part 2 (B2) | Batch B | `P02-T2` | next after B1 |
+| Batch B — Part 1 (B1) | Batch B | `P02-T0`, `P02-T1` | complete (merged) |
+| Batch B — Part 2 (B2) | Batch B | `P02-T2` | next |
 | Batch B — Part 3 (B3) | Batch B | `P02-T3`, `P02-T4` | after B2 |
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | after B3 |
 | Batch B complete | Batch B | all of the above | after B4 merges |
@@ -87,32 +87,41 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
+None. Next claim: **Batch B — Part 2 (B2)** (`P02-T2`) — portfolio,
+strategy-context, and trade-signal schemas. Its coordinator must claim B2 here
+from current `main` before implementation begins.
+
+## Completed batches
+
 ### Batch B — Part 1 (B1)
 
 - **Batch:** Batch B — Part 1 (B1) — common domain types and
   market/research/evidence schemas (`P02-T0`, `P02-T1`)
 - **Plan batch:** Batch B (partial; remaining parts B2–B4)
 - **Coordinator:** cursor-agent / local
-- **Integration branch:** `task/batch-b1-schemas`
+- **Status:** `merged`
+- **Integration:** [PR #21](https://github.com/likefudan/ainvest/pull/21),
+  squash merged into `main`
+- **Integration branch:** `task/batch-b1-schemas` (deleted after squash merge)
 - **Base commit:** `9afbf33448a981aa48bfa98f866a04a69eb92d28`
-  (current `main`; supersedes the earlier `669746e` tip cited in the dispatch
+  (superseded the earlier `669746e` tip cited in the dispatch
   note so Batch A follow-ups from PR #20 are included)
+- **Implementation commit:** `5f75db668f7cc0708404a609bdcba7bab385fb4e`
 - **Dependency PRs/commits:** Batch A complete; config/package baseline on
   `main` including [PR #20](https://github.com/likefudan/ainvest/pull/20)
 - **Merge target:** `main` (squash)
 - **Safety posture:** domain schemas and unit tests only; Paper remains the
   default; no broker write capability, credentials, AI calls, Telegram, or live
   trading are introduced
-- **Verification:** `./scripts/dev verify` passed (113 tests; coverage ≥80%);
-  `./scripts/dev audit` found no known vulnerabilities
-- **Next after merge:** Batch B — Part 2 (B2) — `P02-T2` only
+- **Verification:** final `./scripts/dev verify` passed (124 tests; 83.79%
+  coverage); `./scripts/dev audit` found no known vulnerabilities; all
+  pre-commit checks passed; post-merge `main` CI passed
+- **Next:** Batch B — Part 2 (B2) — `P02-T2` only
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T0` | Define Common Domain Types | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P01-T2`–`P01-T4` | [#21](https://github.com/likefudan/ainvest/pull/21) |
-| `P02-T1` | Define Market, Research, and Evidence Schemas | `in_review` | cursor-agent | `task/batch-b1-schemas` | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P02-T0` | [#21](https://github.com/likefudan/ainvest/pull/21) |
-
-## Completed batches
+| `P02-T0` | Define Common Domain Types | `merged` | cursor-agent | `task/batch-b1-schemas` (deleted) | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P01-T2`–`P01-T4` | [#21](https://github.com/likefudan/ainvest/pull/21) |
+| `P02-T1` | Define Market, Research, and Evidence Schemas | `merged` | cursor-agent | `task/batch-b1-schemas` (deleted) | `9afbf33448a981aa48bfa98f866a04a69eb92d28` | `P02-T0` | [#21](https://github.com/likefudan/ainvest/pull/21) |
 
 ### Batch A review remediation
 
@@ -351,8 +360,8 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 ## Execution envelope: P02-T0
 
 - **Title:** Define Common Domain Types
-- **Status/owner:** `in_review` — `cursor-agent`
-- **Branch/base:** `task/batch-b1-schemas` at
+- **Status/owner:** `merged` — `cursor-agent`
+- **Branch/base:** `task/batch-b1-schemas` (deleted) at
   `9afbf33448a981aa48bfa98f866a04a69eb92d28`
 - **Dependencies:** `P01-T2`–`P01-T4` (merged)
 - **Design and plan authority:** `design.md` §6; `IMPLEMENTATION_TODO.md`
@@ -367,12 +376,15 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Blockers:** None
 - **Handoff notes:** Shared primitives ready for B2 `TradeSignal` /
   portfolio schemas. JSON uses decimal strings and UTC `Z` timestamps.
+- **Resulting commit/PR:** squash
+  `5f75db668f7cc0708404a609bdcba7bab385fb4e`;
+  [PR #21](https://github.com/likefudan/ainvest/pull/21)
 
 ## Execution envelope: P02-T1
 
 - **Title:** Define Market, Research, and Evidence Schemas
-- **Status/owner:** `in_review` — `cursor-agent`
-- **Branch/base:** `task/batch-b1-schemas` at
+- **Status/owner:** `merged` — `cursor-agent`
+- **Branch/base:** `task/batch-b1-schemas` (deleted) at
   `9afbf33448a981aa48bfa98f866a04a69eb92d28`
 - **Dependencies:** `P02-T0` (same PR)
 - **Design and plan authority:** `design.md` §5–§6.1;
@@ -385,5 +397,9 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
   time-order / NL-as-evidence failures covered; `model_json_schema()` smoke
   test (versioned `schemas/json/` export deferred to B4 / `P02-T5`)
 - **Blockers:** None
-- **Handoff notes:** `ResearchPacket` requires market provenance. Next claim
-  after merge is B2 (`P02-T2`).
+- **Handoff notes:** `ResearchPacket` requires market provenance, rejects
+  look-ahead data, and aggregates freshness across market, technical, and
+  evidence sources. Next claim is B2 (`P02-T2`).
+- **Resulting commit/PR:** squash
+  `5f75db668f7cc0708404a609bdcba7bab385fb4e`;
+  [PR #21](https://github.com/likefudan/ainvest/pull/21)
