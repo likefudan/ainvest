@@ -7,9 +7,10 @@ Configuration precedence (later sources override earlier ones):
 
 1. Built-in fail-closed defaults defined on the Settings models
 2. Optional YAML files (``risk`` / ``strategies`` via :func:`load_yaml_mapping`)
-3. Optional ``.env`` file (Pydantic Settings)
-4. Environment variables
-5. Explicit keyword overrides passed to :func:`load_settings`
+3. Optional file-secret directory (Pydantic Settings)
+4. Optional ``.env`` file (Pydantic Settings)
+5. Environment variables
+6. Explicit keyword overrides passed to :func:`load_settings`
 
 Production (``AINVEST_ENV=production``) and all other environments reject unknown
 fields on Settings/YAML document models and reject unsafe mode combinations.
@@ -74,6 +75,7 @@ _SECRET_FIELD_NAMES: Final[frozenset[str]] = frozenset(
 CONFIG_PRECEDENCE: Final[tuple[str, ...]] = (
     "built-in fail-closed defaults",
     "optional YAML files (safe loader)",
+    "optional file-secret directory",
     "optional .env file",
     "environment variables",
     "explicit load_settings overrides",
@@ -372,7 +374,11 @@ class WebAuthnSettings(BaseModel):
             raise ValueError("WebAuthn origin must not contain a path, query, or fragment")
         if parsed.hostname.endswith("."):
             raise ValueError("WebAuthn origin hostname must not have a trailing dot")
-        return value
+        hostname = parsed.hostname.lower()
+        authority = f"[{hostname}]" if ":" in hostname else hostname
+        if parsed.port not in (None, 443):
+            authority = f"{authority}:{parsed.port}"
+        return f"https://{authority}"
 
     @field_validator("rp_id")
     @classmethod

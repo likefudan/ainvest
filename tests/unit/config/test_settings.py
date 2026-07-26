@@ -68,6 +68,7 @@ def test_config_precedence_constant_documents_order() -> None:
     assert CONFIG_PRECEDENCE == (
         "built-in fail-closed defaults",
         "optional YAML files (safe loader)",
+        "optional file-secret directory",
         "optional .env file",
         "environment variables",
         "explicit load_settings overrides",
@@ -288,6 +289,26 @@ def test_webauthn_rejects_rp_id_unrelated_to_origin() -> None:
             rp_id="unrelated.example",
             credential_ids=("primary", "recovery"),
         )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("origin", "expected"),
+    [
+        ("https://APPROVE.Example.COM:8443", "https://approve.example.com:8443"),
+        ("https://APPROVE.Example.COM:443", "https://approve.example.com"),
+    ],
+)
+def test_webauthn_normalizes_origin(origin: str, expected: str) -> None:
+    """Stored origins match the browser's canonical hostname and port form."""
+    settings = WebAuthnSettings(
+        origin=origin,
+        rp_id="approve.example.com",
+        credential_ids=("primary", "recovery"),
+    )
+
+    assert settings.origin == expected
+    assert settings.rp_id == "approve.example.com"
 
 
 @pytest.mark.unit
