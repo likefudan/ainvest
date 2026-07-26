@@ -64,9 +64,14 @@ def test_missing_optional_config_starts_paper_safe() -> None:
 
 @pytest.mark.unit
 def test_config_precedence_constant_documents_order() -> None:
-    """Precedence is explicit and ends with explicit overrides."""
-    assert CONFIG_PRECEDENCE[0].startswith("built-in")
-    assert CONFIG_PRECEDENCE[-1].startswith("explicit")
+    """The public precedence declaration matches the implemented source order."""
+    assert CONFIG_PRECEDENCE == (
+        "built-in fail-closed defaults",
+        "optional YAML files (safe loader)",
+        "optional .env file",
+        "environment variables",
+        "explicit load_settings overrides",
+    )
 
 
 @pytest.mark.unit
@@ -78,6 +83,77 @@ def test_explicit_overrides_beat_environment(tmp_path: Path) -> None:
         trading_mode=TradingMode.PAPER,
     )
     assert settings.trading_mode is TradingMode.PAPER
+
+
+@pytest.mark.unit
+def test_environment_beats_risk_yaml(tmp_path: Path) -> None:
+    """Environment values override the lower-priority risk YAML source."""
+    risk_yaml = tmp_path / "risk.yaml"
+    risk_yaml.write_text(
+        "schema_version: '1'\nnotes: yaml-value\n",
+        encoding="utf-8",
+    )
+
+    settings = load_settings(
+        environ={"RISK__NOTES": "environment-value"},
+        env_file=None,
+        risk_yaml=risk_yaml,
+    )
+
+    assert settings.risk.notes == "environment-value"
+
+
+@pytest.mark.unit
+def test_dotenv_beats_risk_yaml(tmp_path: Path) -> None:
+    """Dotenv values override the lower-priority risk YAML source."""
+    risk_yaml = tmp_path / "risk.yaml"
+    risk_yaml.write_text(
+        "schema_version: '1'\nnotes: yaml-value\n",
+        encoding="utf-8",
+    )
+    env_file = tmp_path / ".env"
+    env_file.write_text("RISK__NOTES=dotenv-value\n", encoding="utf-8")
+
+    settings = load_settings(
+        environ={},
+        env_file=env_file,
+        risk_yaml=risk_yaml,
+    )
+
+    assert settings.risk.notes == "dotenv-value"
+
+
+@pytest.mark.unit
+def test_environment_beats_dotenv(tmp_path: Path) -> None:
+    """Process environment values override the optional dotenv file."""
+    env_file = tmp_path / ".env"
+    env_file.write_text("TRADING_MODE=paper\n", encoding="utf-8")
+
+    settings = load_settings(
+        environ={"TRADING_MODE": "research"},
+        env_file=env_file,
+    )
+
+    assert settings.trading_mode is TradingMode.RESEARCH
+
+
+@pytest.mark.unit
+def test_explicit_override_beats_environment_and_risk_yaml(tmp_path: Path) -> None:
+    """Explicit nested settings remain the highest-priority source."""
+    risk_yaml = tmp_path / "risk.yaml"
+    risk_yaml.write_text(
+        "schema_version: '1'\nnotes: yaml-value\n",
+        encoding="utf-8",
+    )
+
+    settings = load_settings(
+        environ={"RISK__NOTES": "environment-value"},
+        env_file=None,
+        risk_yaml=risk_yaml,
+        risk={"schema_version": "1", "notes": "explicit-value"},
+    )
+
+    assert settings.risk.notes == "explicit-value"
 
 
 @pytest.mark.unit
@@ -179,6 +255,49 @@ def test_incomplete_live_config_rejected() -> None:
             origin="http://insecure.example.com",
             rp_id="insecure.example.com",
             credential_ids=("a", "b"),
+        )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "origin",
+    [
+        "https://approve.example.com/",
+        "https://approve.example.com/path",
+        "https://approve.example.com?query=value",
+        "https://approve.example.com#fragment",
+        "https://user@approve.example.com",
+    ],
+)
+def test_webauthn_rejects_non_origin_urls(origin: str) -> None:
+    """A WebAuthn origin is scheme/host/port only, never a general URL."""
+    with pytest.raises(ValidationError, match="origin"):
+        WebAuthnSettings(
+            origin=origin,
+            rp_id="approve.example.com",
+            credential_ids=("primary", "recovery"),
+        )
+
+
+@pytest.mark.unit
+def test_webauthn_rejects_rp_id_unrelated_to_origin() -> None:
+    """The first-release RP ID must exactly match the configured origin host."""
+    with pytest.raises(ValidationError, match="exactly match"):
+        WebAuthnSettings(
+            origin="https://approve.example.com",
+            rp_id="unrelated.example",
+            credential_ids=("primary", "recovery"),
+        )
+
+
+@pytest.mark.unit
+def test_webauthn_rejects_duplicate_recovery_credentials() -> None:
+    """Two distinct credentials are required for recovery readiness."""
+    with pytest.raises(ValidationError, match="distinct"):
+        WebAuthnSettings(
+            origin="https://approve.example.com",
+            rp_id="approve.example.com",
+            credential_ids=("duplicate", "duplicate"),
         )
 
 

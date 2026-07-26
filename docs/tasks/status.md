@@ -68,7 +68,7 @@ the dependency-change workflow.
 ## Batch naming
 
 Batch IDs match `IMPLEMENTATION_TODO.md` section 12 (`Batch A`, `Batch B`,
-…). When a plan batch is delivered in more than one merge wave, record parts as
+…). When a plan batch is delivered in more than one integration part, record parts as
 `Batch <Letter> — Part N`. Mark the plan batch complete only when every card in
 that section has merged. Current Batch A split:
 
@@ -78,15 +78,37 @@ that section has merged. Current Batch A split:
 | Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
 | Batch A complete | Batch A | all of the above | complete |
 
-Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
+Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-None. Next claim: **Batch B** (`P02-T0` through `P02-T5`) — domain schemas,
-market/research/portfolio/strategy/order/risk/approval/broker contracts,
-canonical order hashing, and schema versioning. Prefer the merge order in
-`IMPLEMENTATION_TODO.md` section 12 (B1 → B2 → B3 → B4). A coordinator must
-claim Batch B here before dispatching those tasks.
+### Batch A remediation
+
+- **Status/owner:** `in_review` — `/root`
+- **Branch/base:** `agent/fix-batch-a-review` at
+  `93e644406f97750cc5132242b62230a9cff3a73d`
+- **Scope:** Correct review findings in P01-T3 through P01-T5: configuration
+  source precedence, strict WebAuthn prerequisites, relative-import and ORM
+  boundary enforcement, PR secret-scan permissions, immutable CI action
+  references, complete dependency-profile auditing, and Batch terminology.
+- **Safety posture:** Paper remains the default. No broker write capability,
+  credentials, external deployment, or live-trading enablement is introduced.
+- **Verification:** task-specific regression tests and the complete local merge
+  gate pass; the all-profile audit command requires network access and is also
+  enforced by CI.
+- **External blocker:** GitHub returns HTTP 403 for both repository rulesets
+  and classic branch protection because this private repository's current plan
+  does not include those features. Upgrade the plan or make a separate,
+  deliberate repository-visibility decision before requiring `Verify`,
+  `Secret scan`, and `Dependency audit`. Until then, the owner must wait for all
+  three checks before merging; GitHub cannot enforce that policy here.
+
+After this remediation merges, the next claim is **Batch B** (`P02-T0` through
+`P02-T5`) — domain schemas, market/research/portfolio/strategy/order/risk/
+approval/broker contracts, canonical order hashing, and schema versioning.
+Prefer the merge order in `IMPLEMENTATION_TODO.md` section 12
+(B1 → B2 → B3 → B4). A coordinator must claim Batch B here before dispatching
+those tasks.
 
 ## Completed batches
 

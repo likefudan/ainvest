@@ -16,6 +16,7 @@ from import_graph import (
     extract_module_imports,
     find_forbidden_edges,
     find_forbidden_external_imports,
+    find_forbidden_internal_imports,
     find_import_cycles,
     package_root,
 )
@@ -106,6 +107,15 @@ def test_schemas_do_not_import_sqlalchemy_orm() -> None:
 
 
 @pytest.mark.unit
+def test_production_packages_do_not_import_orm_models() -> None:
+    """ORM implementation modules stay behind repository interfaces."""
+    violations = find_forbidden_internal_imports(AINVEST_ROOT)
+    assert violations == [], "ORM model imports crossed a boundary: " + ", ".join(
+        f"{item.package}:{item.module}@{item.source_path}:{item.lineno}" for item in violations
+    )
+
+
+@pytest.mark.unit
 def test_checker_detects_forbidden_strategies_execution_fixture() -> None:
     """An intentionally invalid fixture proves the checker fails closed."""
     fixture = FIXTURES / "forbidden_strategies_imports_execution.py"
@@ -120,6 +130,23 @@ def test_checker_detects_forbidden_strategies_execution_fixture() -> None:
         lineno=1,
     )
     assert find_forbidden_edges([synthetic]) == [synthetic]
+
+
+@pytest.mark.unit
+def test_checker_detects_forbidden_relative_import_fixture() -> None:
+    """Relative imports cannot bypass the boundary matrix."""
+    fixture = FIXTURES / "forbidden_strategies_relative_execution.txt"
+    source = fixture.read_text(encoding="utf-8")
+    imported = {
+        name
+        for name, _ in extract_ainvest_boundary_imports(
+            source,
+            source_path=fixture,
+            current_package="ainvest.strategies",
+        )
+    }
+    assert imported == {"execution"}
+    assert check_edge_against_matrix("strategies", "execution")
 
 
 @pytest.mark.unit
@@ -139,6 +166,24 @@ def test_checker_detects_forbidden_schemas_orm_fixture(
     assert len(violations) == 1
     assert violations[0].package == "schemas"
     assert violations[0].module == "sqlalchemy.orm"
+
+
+@pytest.mark.unit
+def test_checker_detects_ainvest_db_model_import_fixture(tmp_path: Path) -> None:
+    """An internal ORM-model import is detected even before ``db`` exists."""
+    fixture = FIXTURES / "forbidden_strategies_imports_db_models.txt"
+    strategies_dir = tmp_path / "strategies"
+    strategies_dir.mkdir()
+    (strategies_dir / "__init__.py").write_text(
+        fixture.read_text(encoding="utf-8"),
+        encoding="utf-8",
+    )
+
+    violations = find_forbidden_internal_imports(tmp_path)
+
+    assert len(violations) == 1
+    assert violations[0].package == "strategies"
+    assert violations[0].module == "ainvest.db.models"
 
 
 def _format_edge_violations(violations: list[ImportEdge]) -> str:

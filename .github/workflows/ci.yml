@@ -7,6 +7,7 @@ on:
 
 permissions:
   contents: read
+  pull-requests: read
 
 concurrency:
   group: ci-${{ github.workflow }}-${{ github.ref }}
@@ -22,13 +23,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
+          version: "0.11.26"
           enable-cache: true
-          python-version-file: ".python-version"
+          python-version: "3.12"
 
       - name: Install locked development environment
         run: ./scripts/dev setup
@@ -41,12 +43,12 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           fetch-depth: 0
 
       - name: Scan for secrets with Gitleaks
-        uses: gitleaks/gitleaks-action@v2
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
@@ -55,13 +57,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Check out repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
       - name: Install uv
-        uses: astral-sh/setup-uv@v6
+        uses: astral-sh/setup-uv@d0cc045d04ccac9d8b7881df0226f9e82c39688e # v6
         with:
+          version: "0.11.26"
           enable-cache: true
-          python-version-file: ".python-version"
+          python-version: "3.12"
 
       - name: Install locked development environment
         run: ./scripts/dev setup
@@ -69,5 +72,5 @@ jobs:
       - name: Confirm lock file matches project metadata
         run: ./scripts/dev lock-check
 
-      - name: Audit locked dependencies
-        run: uv run --locked pip-audit
+      - name: Audit every locked dependency profile
+        run: ./scripts/dev audit

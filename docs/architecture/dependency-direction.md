@@ -18,7 +18,10 @@ Boundary packages under `src/ainvest` follow the control-flow order from
 | `audit` | Append-only audit events |
 | `api` | HTTPS approval and operator API |
 
-## Allowed direction
+## Runtime control and data flow
+
+The arrows below describe runtime handoff of versioned data. They are **not**
+permission for the package on the left to import the package on the right.
 
 ```text
 schemas  <---  shared by all packages (import schemas only; never the reverse)
@@ -32,7 +35,14 @@ execution ---> broker write tools only here
 
 Layers exchange **versioned Pydantic models**, not ORM instances.
 
-## Forbidden edges (enforced by architecture tests)
+## Python import direction
+
+All packages may import `schemas`. Orchestrators such as `api` and `execution`
+may import lower-level interfaces where the forbidden-edge matrix permits it.
+Runtime control flow must use dependency injection when following the data-flow
+arrows would otherwise create a forbidden reverse import.
+
+## Forbidden Python imports (enforced by architecture tests)
 
 | Importer | Must not import |
 | --- | --- |
@@ -53,6 +63,12 @@ Import cycles among boundary packages are forbidden.
 - SQLAlchemy ORM models must not live in `schemas` and must not cross package
   boundaries as ORM instances.
 - Architecture tests fail if `schemas` imports `sqlalchemy` / `sqlalchemy.orm`.
+- The future persistence package is reserved as `ainvest.db`. Boundary packages
+  may consume repository interfaces, but may not import
+  `ainvest.db.models` or `ainvest.db.orm`. `schemas` may not import any
+  `ainvest.db` module.
+- Both absolute and relative imports are resolved by the checker; relative
+  syntax cannot bypass the dependency matrix.
 
 ## Checker proof
 

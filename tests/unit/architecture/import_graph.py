@@ -46,6 +46,17 @@ FORBIDDEN_EXTERNAL_MODULES: Mapping[str, frozenset[str]] = {
     "schemas": frozenset({"sqlalchemy", "sqlalchemy.orm"}),
 }
 
+# Boundary packages may depend on repository interfaces, but ORM models must
+# stay behind the persistence boundary. Schemas cannot depend on ``ainvest.db``
+# at all; every other boundary package is barred from importing model modules.
+FORBIDDEN_INTERNAL_MODULES: Mapping[str, frozenset[str]] = {
+    "schemas": frozenset({"ainvest.db"}),
+    **{
+        package: frozenset({"ainvest.db.models", "ainvest.db.orm"})
+        for package in BOUNDARY_PACKAGES - {"schemas"}
+    },
+}
+
 
 @dataclass(frozen=True, slots=True)
 class ImportEdge:
@@ -67,6 +78,16 @@ class ForbiddenExternalImport:
     lineno: int
 
 
+@dataclass(frozen=True, slots=True)
+class ForbiddenInternalImport:
+    """A boundary package importing a persistence implementation module."""
+
+    package: str
+    module: str
+    source_path: Path
+    lineno: int
+
+
 def package_root(src_root: Path) -> Path:
     """Return the ``src/ainvest`` directory under a repository root or src root."""
     candidate = src_root / "ainvest"
@@ -81,7 +102,7 @@ def package_root(src_root: Path) -> Path:
 def iter_python_files(root: Path) -> list[Path]:
     """List ``*.py`` files under ``root``, excluding caches."""
     return sorted(
-        path for path in root.rglob("*.py") if ".__pycache__" not in path.parts and path.is_file()
+        path for path in root.rglob("*.py") if "__pycache__" not in path.parts and path.is_file()
     )
 
 
@@ -99,6 +120,7 @@ def extract_ainvest_boundary_imports(
     source: str,
     *,
     source_path: Path | None = None,
+    current_package: str | None = None,
 ) -> list[tuple[str, int]]:
     """Return ``(boundary_package, lineno)`` imports found in ``source``."""
     tree = ast.parse(source, filename=str(source_path or "<string>"))
@@ -112,9 +134,10 @@ def extract_ainvest_boundary_imports(
                 if boundary is not None:
                     found.append((boundary, node.lineno))
         elif isinstance(node, ast.ImportFrom):
-            if node.module is None:
+            module = _resolve_import_from_module(node, current_package=current_package)
+            if module is None:
                 continue
-            parts = tuple(node.module.split("."))
+            parts = tuple(module.split("."))
             # ``from ainvest import execution`` — names are boundary packages.
             if parts == ("ainvest",):
                 for alias in node.names:
@@ -132,6 +155,7 @@ def extract_module_imports(
     source: str,
     *,
     source_path: Path | None = None,
+    current_package: str | None = None,
 ) -> list[tuple[str, int]]:
     """Return ``(module_name, lineno)`` for top-level and dotted imports."""
     tree = ast.parse(source, filename=str(source_path or "<string>"))
@@ -141,10 +165,58 @@ def extract_module_imports(
         if isinstance(node, ast.Import):
             for alias in node.names:
                 found.append((alias.name, node.lineno))
-        elif isinstance(node, ast.ImportFrom) and node.module is not None:
-            found.append((node.module, node.lineno))
+        elif isinstance(node, ast.ImportFrom):
+            module = _resolve_import_from_module(node, current_package=current_package)
+            if module is not None:
+                found.append((module, node.lineno))
 
     return found
+
+
+def extract_resolved_module_imports(
+    source: str,
+    *,
+    source_path: Path | None = None,
+    current_package: str | None = None,
+) -> list[tuple[str, int]]:
+    """Return imported modules, expanding ``from package import module``."""
+    tree = ast.parse(source, filename=str(source_path or "<string>"))
+    found: list[tuple[str, int]] = []
+
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.extend((alias.name, node.lineno) for alias in node.names)
+        elif isinstance(node, ast.ImportFrom):
+            module = _resolve_import_from_module(node, current_package=current_package)
+            if module is None:
+                continue
+            found.append((module, node.lineno))
+            found.extend(
+                (f"{module}.{alias.name}", node.lineno) for alias in node.names if alias.name != "*"
+            )
+
+    return found
+
+
+def _resolve_import_from_module(
+    node: ast.ImportFrom,
+    *,
+    current_package: str | None,
+) -> str | None:
+    """Resolve an absolute or relative ``from`` import to a module name."""
+    if node.level == 0:
+        return node.module
+    if current_package is None:
+        return None
+
+    package_parts = current_package.split(".")
+    keep = len(package_parts) - node.level + 1
+    if keep <= 0:
+        return None
+    resolved_parts = package_parts[:keep]
+    if node.module is not None:
+        resolved_parts.extend(node.module.split("."))
+    return ".".join(resolved_parts)
 
 
 def boundary_package_for_path(file_path: Path, ainvest_root: Path) -> str | None:
@@ -161,6 +233,18 @@ def boundary_package_for_path(file_path: Path, ainvest_root: Path) -> str | None
     return None
 
 
+def package_name_for_path(file_path: Path, ainvest_root: Path) -> str | None:
+    """Return the import package containing ``file_path``."""
+    try:
+        relative = file_path.resolve().relative_to(ainvest_root.resolve())
+    except ValueError:
+        return None
+    if not relative.parts or relative.suffix != ".py":
+        return None
+    parent_parts = relative.parts[:-1]
+    return ".".join(("ainvest", *parent_parts))
+
+
 def collect_import_edges(ainvest_root: Path) -> list[ImportEdge]:
     """Collect directed boundary-package import edges under ``ainvest_root``."""
     edges: list[ImportEdge] = []
@@ -169,7 +253,12 @@ def collect_import_edges(ainvest_root: Path) -> list[ImportEdge]:
         if importer is None:
             continue
         source = path.read_text(encoding="utf-8")
-        for imported, lineno in extract_ainvest_boundary_imports(source, source_path=path):
+        current_package = package_name_for_path(path, ainvest_root)
+        for imported, lineno in extract_ainvest_boundary_imports(
+            source,
+            source_path=path,
+            current_package=current_package,
+        ):
             if imported == importer:
                 continue
             edges.append(
@@ -204,11 +293,41 @@ def find_forbidden_external_imports(ainvest_root: Path) -> list[ForbiddenExterna
         if not banned:
             continue
         source = path.read_text(encoding="utf-8")
-        for module, lineno in extract_module_imports(source, source_path=path):
+        for module, lineno in extract_module_imports(
+            source,
+            source_path=path,
+            current_package=package_name_for_path(path, ainvest_root),
+        ):
             root_module = module.split(".", maxsplit=1)[0]
             if module in banned or root_module in banned:
                 violations.append(
                     ForbiddenExternalImport(
+                        package=package,
+                        module=module,
+                        source_path=path,
+                        lineno=lineno,
+                    )
+                )
+    return violations
+
+
+def find_forbidden_internal_imports(ainvest_root: Path) -> list[ForbiddenInternalImport]:
+    """Return boundary imports that leak persistence implementation modules."""
+    violations: list[ForbiddenInternalImport] = []
+    for path in iter_python_files(ainvest_root):
+        package = boundary_package_for_path(path, ainvest_root)
+        if package is None:
+            continue
+        banned = FORBIDDEN_INTERNAL_MODULES.get(package, frozenset())
+        source = path.read_text(encoding="utf-8")
+        for module, lineno in extract_resolved_module_imports(
+            source,
+            source_path=path,
+            current_package=package_name_for_path(path, ainvest_root),
+        ):
+            if any(module == prefix or module.startswith(f"{prefix}.") for prefix in banned):
+                violations.append(
+                    ForbiddenInternalImport(
                         package=package,
                         module=module,
                         source_path=path,

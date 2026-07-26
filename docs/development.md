@@ -33,13 +33,26 @@ The complete command interface is:
 | `./scripts/dev contract` | Run public/provider contract tests |
 | `./scripts/dev integration` | Run cross-component integration tests |
 | `./scripts/dev test` | Run all tests with branch coverage |
+| `./scripts/dev audit` | Audit every locked dependency group and optional extra |
 | `./scripts/dev verify` | Run the lock, formatting, lint, type, suite, and coverage gates |
 
 `verify` is the canonical local merge gate. GitHub Actions CI calls this wrapper (see
 `.github/workflows/ci.yml`) rather than duplicating tool-specific arguments. CI also runs a
-Gitleaks secret scan and `uv run --locked pip-audit` after `./scripts/dev setup`. Workflows must
-not inject real OpenAI, broker, or Telegram credentials, must keep `LIVE_TRADING_ENABLED=false`,
-and must not upload `.env`, tokens, or account data as artifacts.
+Gitleaks secret scan and `./scripts/dev audit` after `./scripts/dev setup`. The audit exports and
+checks the complete lock across every optional extra and dependency group, not only the default
+development environment. Workflows must not inject real OpenAI, broker, or Telegram credentials,
+must keep `LIVE_TRADING_ENABLED=false`, and must not upload `.env`, tokens, or account data as
+artifacts.
+
+CI actions are pinned to immutable commit SHAs. The workflow grants only read access to repository
+contents and pull requests; pull-request read access is required for the Gitleaks action to inspect
+PR metadata. Version comments beside action SHAs may be updated only after reviewing the upstream
+release and replacing the SHA.
+
+The repository owner should require the `Verify`, `Secret scan`, and `Dependency audit` checks on
+`main`. If GitHub branch protection is unavailable for the repository's visibility and account
+plan, this remains a manual merge requirement: never merge while one of those checks is pending,
+skipped, or failed.
 
 ## Pre-commit
 
