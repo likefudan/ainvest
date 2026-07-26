@@ -96,12 +96,11 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Verification:** task-specific regression tests and the complete local merge
   gate pass; the all-profile audit command requires network access and is also
   enforced by CI.
-- **External blocker:** GitHub returns HTTP 403 for both repository rulesets
-  and classic branch protection because this private repository's current plan
-  does not include those features. Upgrade the plan or make a separate,
-  deliberate repository-visibility decision before requiring `Verify`,
-  `Secret scan`, and `Dependency audit`. Until then, the owner must wait for all
-  three checks before merging; GitHub cannot enforce that policy here.
+- **Repository protection:** GitHub ruleset `Protect main` (`19761285`) is
+  active on the default branch with no bypass actors. It requires a PR, squash
+  merge, resolved review conversations, a branch current with `main`, and
+  successful `Verify`, `Secret scan`, and `Dependency audit` checks. It also
+  enforces linear history and blocks deletion and force pushes.
 
 After this remediation merges, the next claim is **Batch B** (`P02-T0` through
 `P02-T5`) — domain schemas, market/research/portfolio/strategy/order/risk/

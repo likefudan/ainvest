@@ -49,10 +49,10 @@ contents and pull requests; pull-request read access is required for the Gitleak
 PR metadata. Version comments beside action SHAs may be updated only after reviewing the upstream
 release and replacing the SHA.
 
-The repository owner should require the `Verify`, `Secret scan`, and `Dependency audit` checks on
-`main`. If GitHub branch protection is unavailable for the repository's visibility and account
-plan, this remains a manual merge requirement: never merge while one of those checks is pending,
-skipped, or failed.
+GitHub ruleset `Protect main` requires the `Verify`, `Secret scan`, and `Dependency audit` checks
+on the current default branch with strict up-to-date checking. It also requires pull requests,
+resolved review conversations, squash-only merges, and linear history, and blocks deletion and
+force pushes. The ruleset has no bypass actors.
 
 ## Pre-commit
 
