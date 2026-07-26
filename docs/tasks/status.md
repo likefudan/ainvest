@@ -94,6 +94,7 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Plan batch:** Batch B (partial; remaining part B4)
 - **Coordinator:** cursor-agent / local
 - **Status:** `in_review`
+- **Integration:** [PR #25](https://github.com/likefudan/ainvest/pull/25)
 - **Integration branch:** `task/batch-b3-order-schemas`
 - **Base commit:** `c6fedb8cf4011ff305ff40f8503c44e94def9996`
 - **Dependency PRs/commits:** Batch B2 /
@@ -118,8 +119,8 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T3` | Define Candidate Order, Risk, Approval, and Broker Schemas | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T0`, `P02-T2` | TBD |
-| `P02-T4` | Implement Canonical Order Serialization and Hashing | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T3` | TBD |
+| `P02-T3` | Define Candidate Order, Risk, Approval, and Broker Schemas | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T0`, `P02-T2` | [#25](https://github.com/likefudan/ainvest/pull/25) |
+| `P02-T4` | Implement Canonical Order Serialization and Hashing | `in_review` | cursor-agent | `task/batch-b3-order-schemas` | `c6fedb8cf4011ff305ff40f8503c44e94def9996` | `P02-T3` | [#25](https://github.com/likefudan/ainvest/pull/25) |
 
 ## Completed batches
 
