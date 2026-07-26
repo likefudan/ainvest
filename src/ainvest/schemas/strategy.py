@@ -21,6 +21,7 @@ from pydantic import StrictBool, StrictInt, StringConstraints, field_validator, 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
     DomainModel,
+    MachineCode,
     PnL,
     SchemaVersion,
     SignedRatio,
@@ -43,10 +44,7 @@ StrategyVersion = Annotated[
     StringConstraints(pattern=r"^[0-9]+\.[0-9]+\.[0-9]+$", min_length=5, max_length=32),
 ]
 
-ReasonCode = Annotated[
-    str,
-    StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$", min_length=2, max_length=64),
-]
+ReasonCode = MachineCode
 
 StateKey = Annotated[
     str,

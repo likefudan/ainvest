@@ -14,13 +14,15 @@ from pydantic import StringConstraints, model_validator
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
     DomainModel,
+    MachineCode,
+    OrderSide,
     PositiveDecimal,
     Price,
     SchemaVersion,
     StableId,
     UtcDateTime,
 )
-from ainvest.schemas.orders import OrderHashDigest, OrderSide
+from ainvest.schemas.orders import OrderHashDigest
 from ainvest.schemas.portfolio import AccountScope
 
 
@@ -56,10 +58,7 @@ class ReconciliationOutcome(StrEnum):
     MANUAL_REVIEW = "MANUAL_REVIEW"
 
 
-CancelReasonCode = Annotated[
-    str,
-    StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$", min_length=2, max_length=64),
-]
+CancelReasonCode = MachineCode
 
 
 class BrokerOrder(DomainModel):

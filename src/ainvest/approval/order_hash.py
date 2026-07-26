@@ -9,6 +9,7 @@ digest; a prior approval cannot authorize it.
 from __future__ import annotations
 
 import hashlib
+import hmac
 import json
 import unicodedata
 from collections.abc import Mapping
@@ -185,7 +186,7 @@ def verify_order_hash(proposal: OrderProposal | Mapping[str, Any]) -> None:
     )
     expected = compute_order_hash(data)
     actual = data.get("order_hash")
-    if actual != expected:
+    if not isinstance(actual, str) or not hmac.compare_digest(actual, expected):
         raise ValueError("order_hash does not match protected proposal fields")
 
 

@@ -18,6 +18,7 @@ from ainvest.schemas.common import (
     DomainModel,
     InstrumentIdentity,
     Money,
+    OrderSide,
     PnL,
     PositiveDecimal,
     Price,
@@ -45,11 +46,8 @@ class AccountScope(StrEnum):
     AGENTIC = "agentic"
 
 
-class OpenOrderSide(StrEnum):
-    """Sides allowed on open-order snapshots (long-only first release)."""
-
-    BUY = "BUY"
-    SELL = "SELL"
+# Backward-compatible alias: open-order sides are the shared OrderSide enum.
+OpenOrderSide = OrderSide
 
 
 class PositionSnapshot(DomainModel):

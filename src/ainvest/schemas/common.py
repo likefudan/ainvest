@@ -92,6 +92,20 @@ class AssetType(StrEnum):
     ETF = "ETF"
 
 
+class OrderSide(StrEnum):
+    """Long-only BUY/SELL sides shared by orders and open-order snapshots."""
+
+    BUY = "BUY"
+    SELL = "SELL"
+
+
+# Uppercase machine identifiers (reason/rule/cancel/event codes).
+MachineCode = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$", min_length=2, max_length=64),
+]
+
+
 class QualityFlag(StrEnum):
     """Machine-readable data-quality markers for provenance envelopes."""
 
@@ -409,8 +423,10 @@ __all__ = [
     "DomainModel",
     "ExchangeMic",
     "InstrumentIdentity",
+    "MachineCode",
     "Money",
     "NonNegativeDecimal",
+    "OrderSide",
     "PnL",
     "PositiveDecimal",
     "Price",

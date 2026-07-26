@@ -12,6 +12,7 @@ from ainvest.schemas.common import (
     CurrencyCode,
     DomainModel,
     InstrumentIdentity,
+    MachineCode,
     Money,
     NonNegativeDecimal,
     PnL,
@@ -22,6 +23,7 @@ from ainvest.schemas.common import (
     SchemaVersion,
     Symbol,
     UtcDateTime,
+    Weight,
 )
 
 
@@ -163,7 +165,7 @@ class MarketEvent(DomainModel):
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     event_id: Annotated[str, StringConstraints(min_length=4, max_length=128)]
     symbol: Symbol | None = None
-    event_type: Annotated[str, StringConstraints(pattern=r"^[A-Z][A-Z0-9_]{1,63}$")]
+    event_type: MachineCode
     headline: Annotated[str, StringConstraints(min_length=1, max_length=512)]
     occurred_at: UtcDateTime
     provenance: Provenance
@@ -201,14 +203,8 @@ class ResearchPortfolioSection(DomainModel):
 
     quantity: Quantity
     market_value: Money
-    portfolio_weight: NonNegativeDecimal
+    portfolio_weight: Weight
     buying_power: Money
-
-    @model_validator(mode="after")
-    def _weight_bounds(self) -> ResearchPortfolioSection:
-        if self.portfolio_weight > 1:
-            raise ValueError("portfolio_weight must be <= 1")
-        return self
 
 
 __all__ = [
