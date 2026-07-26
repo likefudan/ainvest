@@ -103,7 +103,7 @@ claim Batch B here before dispatching those tasks.
   batch-naming [PR #5](https://github.com/likefudan/ainvest/pull/5)
 - **Merge target:** `main`
 - **Implementation tip commit:** `921edbc` (integration HEAD before squash)
-- **Handoff PR:** pending (this branch)
+- **Handoff PR:** [#6](https://github.com/likefudan/ainvest/pull/6)
 - **Safety posture:** documentation, package skeleton, fail-closed config, and
   CI only; Paper remains the default; no broker write capability, credentials,
   or live trading are introduced
@@ -112,10 +112,10 @@ claim Batch B here before dispatching those tasks.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P01-T1` | Document Trust Boundaries and Threat Model | `in_review` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | pending |
-| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_review` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
-| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_review` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
-| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_review` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | pending |
+| `P01-T1` | Document Trust Boundaries and Threat Model | `in_review` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_review` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_review` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_review` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
 
 ### Batch A — Part 1
 
