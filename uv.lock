@@ -91,7 +91,7 @@ requires-dist = [
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "structlog", marker = "extra == 'observability'", specifier = ">=25,<26" },
     { name = "transitions", specifier = ">=0.9,<1" },
-    { name = "uvicorn", extras = ["standard"], marker = "extra == 'approval'", specifier = ">=0.34,<1" },
+    { name = "uvicorn", extras = ["standard"], marker = "extra == 'approval'", specifier = ">=0.51.0,<1" },
     { name = "webauthn", marker = "extra == 'approval'", specifier = ">=2.6,<3" },
     { name = "yfinance", marker = "extra == 'offline-data'", specifier = ">=0.2.65,<1" },
 ]
