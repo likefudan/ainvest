@@ -48,6 +48,8 @@ observability = [
 [dependency-groups]
 dev = [
     "mypy>=1.15,<2",
+    "pip-audit>=2.9,<3",
+    "pre-commit>=4.2,<5",
     "ruff>=0.11,<1",
     "types-pyyaml>=6.0.12,<7",
 ]
@@ -76,6 +78,7 @@ markers = [
     "unit: fast tests isolated from external processes and services",
     "contract: public interface and provider contract tests",
     "integration: tests spanning multiple components or process boundaries",
+    "live_safety: required live-trading safety gates; must run in CI and cannot use skip/skipif",
 ]
 
 [tool.coverage.run]

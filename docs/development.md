@@ -35,8 +35,28 @@ The complete command interface is:
 | `./scripts/dev test` | Run all tests with branch coverage |
 | `./scripts/dev verify` | Run the lock, formatting, lint, type, suite, and coverage gates |
 
-`verify` is the canonical local merge gate. Later CI work should call this wrapper rather than
-duplicate its tool-specific arguments.
+`verify` is the canonical local merge gate. GitHub Actions CI calls this wrapper (see
+`.github/workflows/ci.yml`) rather than duplicating tool-specific arguments. CI also runs a
+Gitleaks secret scan and `uv run --locked pip-audit` after `./scripts/dev setup`. Workflows must
+not inject real OpenAI, broker, or Telegram credentials, must keep `LIVE_TRADING_ENABLED=false`,
+and must not upload `.env`, tokens, or account data as artifacts.
+
+## Pre-commit
+
+Optional local hooks mirror the CI quality gates via `./scripts/dev`:
+
+```bash
+./scripts/dev setup
+uv run --locked pre-commit install
+uv run --locked pre-commit run --all-files
+```
+
+## Live-safety tests
+
+Pytest registers a `live_safety` marker for trading-safety gates. Those tests are part of the
+default suite run by `./scripts/dev test` / `./scripts/dev verify` and by CI. They must not use
+`@pytest.mark.skip` or `@pytest.mark.skipif`; collection fails if they do. Do not deselect them
+with an ordinary `-m "not live_safety"` policy in merge CI.
 
 ## Dependency profiles
 

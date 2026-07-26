@@ -1,0 +1,39 @@
+# Local hooks call ./scripts/dev so contributor gates match CI.
+# Install once: uv run --locked pre-commit install
+repos:
+  - repo: local
+    hooks:
+      - id: lock-check
+        name: Lock file consistency
+        entry: ./scripts/dev lock-check
+        language: system
+        pass_filenames: false
+
+      - id: format-check
+        name: Format check
+        entry: ./scripts/dev format-check
+        language: system
+        pass_filenames: false
+
+      - id: lint
+        name: Lint
+        entry: ./scripts/dev lint
+        language: system
+        pass_filenames: false
+
+      - id: type-check
+        name: Type check
+        entry: ./scripts/dev type-check
+        language: system
+        pass_filenames: false
+
+      - id: unit
+        name: Unit tests
+        entry: ./scripts/dev unit
+        language: system
+        pass_filenames: false
+
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.28.0
+    hooks:
+      - id: gitleaks
