@@ -1,0 +1,290 @@
+"""Shared domain primitives for versioned ainvest schemas (P02-T0).
+
+All money-related values use :class:`~decimal.Decimal`. JSON serialization uses
+decimal strings and timezone-aware UTC ISO 8601 timestamps. Naive datetimes and
+binary floats are rejected.
+"""
+
+from __future__ import annotations
+
+from datetime import UTC, datetime
+from decimal import Decimal, InvalidOperation
+from enum import StrEnum
+from typing import Annotated, Any, Final
+
+from pydantic import (
+    AfterValidator,
+    BaseModel,
+    BeforeValidator,
+    ConfigDict,
+    PlainSerializer,
+    StringConstraints,
+    field_validator,
+)
+
+SCHEMA_VERSION_V1: Final[str] = "1.0"
+
+SchemaVersion = Annotated[
+    str,
+    StringConstraints(pattern=r"^[0-9]+\.[0-9]+$", min_length=3, max_length=32),
+]
+
+Symbol = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Z][A-Z0-9.]{0,9}$", min_length=1, max_length=10),
+]
+
+CurrencyCode = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Z]{3}$", min_length=3, max_length=3),
+]
+
+ExchangeMic = Annotated[
+    str,
+    StringConstraints(pattern=r"^[A-Z0-9]{4}$", min_length=4, max_length=4),
+]
+
+SourceId = Annotated[
+    str,
+    StringConstraints(pattern=r"^[a-z][a-z0-9_.:-]{1,63}$", min_length=2, max_length=64),
+]
+
+StableId = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$", min_length=8, max_length=160
+    ),
+]
+
+
+class AssetType(StrEnum):
+    """First-release tradeable asset classes."""
+
+    EQUITY = "EQUITY"
+    ETF = "ETF"
+
+
+class QualityFlag(StrEnum):
+    """Machine-readable data-quality markers for provenance envelopes."""
+
+    STALE = "STALE"
+    DELAYED = "DELAYED"
+    PARTIAL = "PARTIAL"
+    ESTIMATED = "ESTIMATED"
+    CONFLICTING_SOURCES = "CONFLICTING_SOURCES"
+    MISSING_FIELDS = "MISSING_FIELDS"
+    UNVERIFIED = "UNVERIFIED"
+
+
+def _reject_bool(value: object) -> object:
+    if isinstance(value, bool):
+        raise ValueError("boolean values are not valid numbers")
+    return value
+
+
+def _parse_decimal(value: object) -> Decimal:
+    value = _reject_bool(value)
+    if isinstance(value, Decimal):
+        decimal_value = value
+    elif isinstance(value, int):
+        decimal_value = Decimal(value)
+    elif isinstance(value, float):
+        raise ValueError("binary floats are not allowed; use decimal strings")
+    elif isinstance(value, str):
+        text = value.strip()
+        if not text or text.lower() in {
+            "nan",
+            "inf",
+            "+inf",
+            "-inf",
+            "infinity",
+            "+infinity",
+            "-infinity",
+        }:
+            raise ValueError("invalid decimal string")
+        try:
+            decimal_value = Decimal(text)
+        except InvalidOperation as exc:
+            raise ValueError("invalid decimal string") from exc
+    else:
+        raise ValueError(f"unsupported decimal input type: {type(value).__name__}")
+
+    if not decimal_value.is_finite():
+        raise ValueError("NaN and Infinity are not allowed")
+    return decimal_value
+
+
+def _require_non_negative(value: Decimal) -> Decimal:
+    if value < 0:
+        raise ValueError("value must be >= 0")
+    return value
+
+
+def _require_positive(value: Decimal) -> Decimal:
+    if value <= 0:
+        raise ValueError("value must be > 0")
+    return value
+
+
+def _require_unit_interval(value: Decimal) -> Decimal:
+    if value < 0 or value > 1:
+        raise ValueError("ratio/weight must be between 0 and 1 inclusive")
+    return value
+
+
+def _require_signed_unit_interval(value: Decimal) -> Decimal:
+    if value < -1 or value > 1:
+        raise ValueError("signed ratio must be between -1 and 1 inclusive")
+    return value
+
+
+def _serialize_decimal(value: Decimal) -> str:
+    return format(value, "f")
+
+
+def _parse_utc_datetime(value: object) -> datetime:
+    if isinstance(value, datetime):
+        parsed = value
+    elif isinstance(value, str):
+        text = value.strip()
+        if text.endswith("Z"):
+            text = f"{text[:-1]}+00:00"
+        try:
+            parsed = datetime.fromisoformat(text)
+        except ValueError as exc:
+            raise ValueError("invalid ISO 8601 datetime") from exc
+    else:
+        raise ValueError(f"unsupported datetime input type: {type(value).__name__}")
+
+    if parsed.tzinfo is None:
+        raise ValueError("naive datetimes are not allowed; use timezone-aware UTC")
+    return parsed.astimezone(UTC)
+
+
+def _serialize_utc_datetime(value: datetime) -> str:
+    return value.astimezone(UTC).isoformat().replace("+00:00", "Z")
+
+
+UtcDateTime = Annotated[
+    datetime,
+    BeforeValidator(_parse_utc_datetime),
+    PlainSerializer(_serialize_utc_datetime, return_type=str),
+]
+
+DecimalString = Annotated[
+    Decimal,
+    BeforeValidator(_parse_decimal),
+    PlainSerializer(_serialize_decimal, return_type=str),
+]
+
+NonNegativeDecimal = Annotated[DecimalString, AfterValidator(_require_non_negative)]
+PositiveDecimal = Annotated[DecimalString, AfterValidator(_require_positive)]
+Money = Annotated[DecimalString, AfterValidator(_require_non_negative)]
+Price = Annotated[DecimalString, AfterValidator(_require_positive)]
+Quantity = Annotated[DecimalString, AfterValidator(_require_non_negative)]
+Weight = Annotated[DecimalString, AfterValidator(_require_unit_interval)]
+Ratio = Annotated[DecimalString, AfterValidator(_require_unit_interval)]
+SignedRatio = Annotated[DecimalString, AfterValidator(_require_signed_unit_interval)]
+PnL = DecimalString  # Gains and losses may be negative.
+
+
+class DomainModel(BaseModel):
+    """Base model for domain contracts: frozen, forbid extras, UTC/Decimal safe."""
+
+    model_config = ConfigDict(
+        extra="forbid",
+        frozen=True,
+        validate_assignment=True,
+        str_strip_whitespace=True,
+    )
+
+
+class InstrumentIdentity(DomainModel):
+    """Canonical tradeable instrument identity.
+
+    A display symbol alone is never sufficient to identify a broker instrument.
+    """
+
+    instrument_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    symbol: Symbol
+    exchange: ExchangeMic
+    currency: CurrencyCode
+    asset_type: AssetType
+    identity_as_of: UtcDateTime
+    provider: SourceId | None = None
+
+    @field_validator("instrument_id")
+    @classmethod
+    def _require_non_empty_instrument_id(cls, value: str) -> str:
+        normalized = value.strip()
+        if not normalized:
+            raise ValueError("instrument_id must be non-empty")
+        return normalized
+
+
+ProvenanceTimezone = Annotated[
+    str,
+    StringConstraints(min_length=1, max_length=64),
+]
+
+
+class Provenance(DomainModel):
+    """Freshness and source metadata required on every external datum."""
+
+    source: SourceId
+    observed_at: UtcDateTime
+    received_at: UtcDateTime
+    timezone: ProvenanceTimezone = "UTC"
+    is_delayed: bool = False
+    quality_flags: tuple[QualityFlag, ...] = ()
+
+    @field_validator("quality_flags", mode="before")
+    @classmethod
+    def _coerce_flags(cls, value: object) -> object:
+        if value is None:
+            return ()
+        if isinstance(value, (str, QualityFlag)):
+            return (value,)
+        return value
+
+    @field_validator("received_at")
+    @classmethod
+    def _received_not_before_observed(cls, value: datetime, info: Any) -> datetime:
+        observed = info.data.get("observed_at")
+        if isinstance(observed, datetime) and value < observed:
+            raise ValueError("received_at must be >= observed_at")
+        return value
+
+
+def ensure_utc(value: datetime | str) -> datetime:
+    """Public helper used by tests and downstream packages."""
+    return _parse_utc_datetime(value)
+
+
+__all__ = [
+    "SCHEMA_VERSION_V1",
+    "AssetType",
+    "CurrencyCode",
+    "DecimalString",
+    "DomainModel",
+    "ExchangeMic",
+    "InstrumentIdentity",
+    "Money",
+    "NonNegativeDecimal",
+    "PnL",
+    "PositiveDecimal",
+    "Price",
+    "Provenance",
+    "ProvenanceTimezone",
+    "QualityFlag",
+    "Quantity",
+    "Ratio",
+    "SchemaVersion",
+    "SignedRatio",
+    "SourceId",
+    "StableId",
+    "Symbol",
+    "UtcDateTime",
+    "Weight",
+    "ensure_utc",
+]

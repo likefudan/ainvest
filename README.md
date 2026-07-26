@@ -4,8 +4,8 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Phase 01 Batch A and its review remediation are complete. Next: Batch B domain
-schemas. Real-money trading remains disabled.
+Batch B — Part 1 (B1) domain schemas are in review (`P02-T0`/`P02-T1`). Next
+after merge: B2 (`P02-T2`). Real-money trading remains disabled.
 
 Project coordination:
 
