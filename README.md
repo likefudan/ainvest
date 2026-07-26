@@ -4,8 +4,8 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Batch B — Part 4 (B4) schema versioning and JSON Schema contracts are in
-review (`P02-T5`). Real-money trading remains disabled.
+Batch B is complete (`P02-T0`–`P02-T5`). Next claim: Batch C (C1 persistence
+and/or C2 Strategy API). Real-money trading remains disabled.
 
 Project coordination:
 
