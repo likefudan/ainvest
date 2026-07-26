@@ -83,7 +83,7 @@ plan batch complete only when every card in that section has merged.
 | Batch B — Part 4 (B4) | Batch B | `P02-T5` | complete (merged) |
 | Batch B complete | Batch B | all of the above | complete |
 | Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | in_progress (critical path) |
-| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | in_progress (parallel) |
+| Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | pr_open |
 | Batch C — Part 3a (C3a) | Batch C | `P03-T13` | in_progress (parallel) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
@@ -135,10 +135,10 @@ implementation agents must not rewrite another track's allowed paths.
   reference MA plugin (`P03-T0`–`P03-T3`)
 - **Plan batch:** Batch C (parallel with C1/C3a)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress`
+- **Status:** `pr_open`
 - **Owner/agent:** cursor-subagent-c2
 - **Integration branch:** `task/batch-c2-strategy-api`
-- **Base commit:** `55c6660a23ca2b8da1ecef73f7c5a3c55f185693`
+- **Base commit:** `b2c30cba584efd9d21361197ce0e97c7d042cdf6`
 - **Dependencies:** `P02-T2`, `P02-T5`, `P01-T3`, `P01-T4` (satisfied on main)
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/strategies/**`, `examples/strategies/**`,
@@ -152,14 +152,15 @@ implementation agents must not rewrite another track's allowed paths.
 - **Safety posture:** Strategy declarations and offline reference plugin only;
   Paper remains default; no broker access
 - **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+- **Handoff PR:** https://github.com/likefudan/ainvest/pull/38
 - **Next after merge:** Feeds later worker isolation (P03-T4) and Gate 1
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T0` | Define the Strategy API, Definitions, and Hook Contract | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P02-T2`, `P02-T5`, `P01-T3` | TBD |
-| `P03-T1` | Load pluggy Plugins into StrategyRegistry | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0` | TBD |
-| `P03-T2` | Implement Strategy Instance YAML Configuration | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0`, `P03-T1`, `P01-T4` | TBD |
-| `P03-T3` | Build a Reference Moving-Average Strategy Plugin | `in_progress` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `55c6660a23ca2b8da1ecef73f7c5a3c55f185693` | `P03-T0`–`T2`, `P02-T1`–`T2` | TBD |
+| `P03-T0` | Define the Strategy API, Definitions, and Hook Contract | `pr_open` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P02-T2`, `P02-T5`, `P01-T3` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T1` | Load pluggy Plugins into StrategyRegistry | `pr_open` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T2` | Implement Strategy Instance YAML Configuration | `pr_open` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`, `P03-T1`, `P01-T4` | https://github.com/likefudan/ainvest/pull/38 |
+| `P03-T3` | Build a Reference Moving-Average Strategy Plugin | `pr_open` | cursor-subagent-c2 | `task/batch-c2-strategy-api` | `b2c30cba584efd9d21361197ce0e97c7d042cdf6` | `P03-T0`–`T2`, `P02-T1`–`T2` | https://github.com/likefudan/ainvest/pull/38 |
 
 ### Batch C — Part 3a (C3a)
 
