@@ -31,7 +31,7 @@ Last updated: 2026-07-26
 4. Ownership is path-based as well as task-based. Do not edit another active
    task's allowed paths. Coordinate shared or unexpected files first and record
    the agreement under handoff notes.
-5. A shared integration branch may be used only when the wave coordinator
+5. A shared integration branch may be used only when the batch coordinator
    explicitly assigns disjoint paths. Sub-agents do not commit, rebase, push, or
    merge unless the coordinator explicitly delegates that action.
 6. Move a task to `blocked` as soon as progress requires an unresolved external
@@ -65,17 +65,18 @@ Only `./scripts/dev lock` and `./scripts/dev format` intentionally modify
 tracked project artifacts. See `docs/development.md` for dependency profiles and
 the dependency-change workflow.
 
-## Active wave
+## Active batch
 
-None. A coordinator must claim the next wave here before dispatching tasks.
+None. A coordinator must claim the next batch here before dispatching tasks.
 
-## Completed waves
+## Completed batches
 
-### Wave 1A
+### Batch 1A
 
-- **Wave:** 1A — decision/process baseline and Python project baseline
+- **Batch:** 1A — decision/process baseline and Python project baseline
 - **Coordinator:** `/root`
-- **Integration branch:** `agent/wave-1a-foundation`
+- **Integration branch:** [PR #4 head branch](https://github.com/likefudan/ainvest/pull/4)
+  (deleted after merge)
 - **Base commit:** `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependency PRs/commits:** None
 - **Merge target:** `main`
@@ -86,14 +87,14 @@ None. A coordinator must claim the next wave here before dispatching tasks.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P01-T0` | Create the Decision Register and ADR Process | `merged` | `/root/p01_t0_decisions` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None | [#4](https://github.com/likefudan/ainvest/pull/4) |
-| `P01-T2` | Initialize the Python Project and Dependency Groups | `merged` | `/root/p01_t2_python` | `agent/wave-1a-foundation` | `0cc3ff895542986e677f8913bbc134dae8aea602` | None; ran in parallel with `P01-T0` | [#4](https://github.com/likefudan/ainvest/pull/4) |
+| `P01-T0` | Create the Decision Register and ADR Process | `merged` | `/root/p01_t0_decisions` | PR #4 head (deleted) | `0cc3ff895542986e677f8913bbc134dae8aea602` | None | [#4](https://github.com/likefudan/ainvest/pull/4) |
+| `P01-T2` | Initialize the Python Project and Dependency Groups | `merged` | `/root/p01_t2_python` | PR #4 head (deleted) | `0cc3ff895542986e677f8913bbc134dae8aea602` | None; ran in parallel with `P01-T0` | [#4](https://github.com/likefudan/ainvest/pull/4) |
 
 ## Execution envelope: P01-T0
 
 - **Title:** Create the Decision Register and ADR Process
 - **Status/owner:** `merged` — `/root/p01_t0_decisions`
-- **Branch/base:** `agent/wave-1a-foundation` at
+- **Branch/base:** PR #4 head branch (deleted after merge) at
   `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependencies:** None
 - **Design and plan authority:** `design.md` sections 1, 3, 11–12, and 16–17;
@@ -126,7 +127,7 @@ None. A coordinator must claim the next wave here before dispatching tasks.
 
 - **Title:** Initialize the Python Project and Dependency Groups
 - **Status/owner:** `merged` — `/root/p01_t2_python`
-- **Branch/base:** `agent/wave-1a-foundation` at
+- **Branch/base:** PR #4 head branch (deleted after merge) at
   `0cc3ff895542986e677f8913bbc134dae8aea602`
 - **Dependencies:** None; coordinated to run in parallel with `P01-T0`
 - **Design and plan authority:** `design.md` sections 3, 10–12, 14, and 16–17;
