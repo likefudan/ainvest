@@ -24,6 +24,14 @@ from ainvest.schemas.market import (
     ResearchPortfolioSection,
     TechnicalIndicators,
 )
+from ainvest.schemas.portfolio import (
+    AccountScope,
+    ExposureSnapshot,
+    OpenOrderSide,
+    OpenOrderSnapshot,
+    PortfolioSnapshot,
+    PositionSnapshot,
+)
 from ainvest.schemas.research import (
     EvidenceCitation,
     EvidenceKind,
@@ -32,12 +40,24 @@ from ainvest.schemas.research import (
     parse_research_packet,
     research_packet_example,
 )
+from ainvest.schemas.strategy import (
+    SignalIntent,
+    StrategyContext,
+    StrategyState,
+    TradeSignal,
+    parse_strategy_context,
+    parse_trade_signal,
+    parse_trade_signal_for_context,
+    trade_signal_example,
+)
 
 __all__ = [
     "SCHEMA_VERSION_V1",
+    "AccountScope",
     "AssetType",
     "EvidenceCitation",
     "EvidenceKind",
+    "ExposureSnapshot",
     "FactValueKind",
     "FundamentalFact",
     "FundamentalSnapshot",
@@ -45,14 +65,26 @@ __all__ = [
     "MarketEvent",
     "MarketQuote",
     "OhlcvBar",
+    "OpenOrderSide",
+    "OpenOrderSnapshot",
+    "PortfolioSnapshot",
+    "PositionSnapshot",
     "Provenance",
     "QualityFlag",
     "ResearchMarketSection",
     "ResearchPacket",
     "ResearchPortfolioSection",
+    "SignalIntent",
+    "StrategyContext",
+    "StrategyState",
     "TechnicalIndicators",
     "ThesisSection",
+    "TradeSignal",
     "decimal_json_schema",
     "parse_research_packet",
+    "parse_strategy_context",
+    "parse_trade_signal",
+    "parse_trade_signal_for_context",
     "research_packet_example",
+    "trade_signal_example",
 ]
