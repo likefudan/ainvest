@@ -94,6 +94,7 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 - **Plan batch:** Batch B (partial; remaining parts B3–B4)
 - **Coordinator:** cursor-agent / local
 - **Status:** `in_review`
+- **Integration:** [PR #23](https://github.com/likefudan/ainvest/pull/23)
 - **Integration branch:** `task/batch-b2-strategy-schemas`
 - **Base commit:** `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d`
 - **Dependency PRs/commits:** Batch B1 /
@@ -118,7 +119,7 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T2` | Define Portfolio, Strategy Context, and TradeSignal Schemas | `in_review` | cursor-agent | `task/batch-b2-strategy-schemas` | `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d` | `P02-T0`, `P02-T1` | TBD |
+| `P02-T2` | Define Portfolio, Strategy Context, and TradeSignal Schemas | `in_review` | cursor-agent | `task/batch-b2-strategy-schemas` | `6eec043e1a6101ac17f7bfa6fa4fae51ef78ae5d` | `P02-T0`, `P02-T1` | [#23](https://github.com/likefudan/ainvest/pull/23) |
 
 ## Completed batches
 
