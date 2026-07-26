@@ -1,8 +1,8 @@
 {
   "broker_order_id": "brk_ord_1",
   "cancel_id": "cncl_01HZYEXAMPLE0001",
-  "observed_at": "2026-07-24T18:31:21Z",
+  "observed_at": "2026-13-01T18:30:00Z",
   "reason_code": "USER_REQUESTED",
-  "schema_version": "2.0",
+  "schema_version": "1.0",
   "status": "CONFIRMED"
 }

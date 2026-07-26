@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-07-24T18:30:00Z",
+  "as_of": "2026-13-01T18:30:00Z",
   "portfolio": {
     "account_scope": "paper",
     "as_of": "2026-07-24T18:30:00Z",
@@ -104,7 +104,7 @@
       "risks": []
     }
   },
-  "schema_version": "2.0",
+  "schema_version": "1.0",
   "strategy_state": {
     "entries": [
       {

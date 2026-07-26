@@ -1,5 +1,5 @@
 {
-  "as_of": "2026-07-24T18:30:00Z",
+  "as_of": "2026-13-01T18:30:00Z",
   "evidence": [],
   "instrument": {
     "asset_type": "EQUITY",
@@ -33,7 +33,7 @@
   },
   "quality_flags": [],
   "research_id": "res_01HZYEXAMPLE0001",
-  "schema_version": "2.0",
+  "schema_version": "1.0",
   "symbol": "AAPL",
   "technical": {
     "atr_14": "4.70",

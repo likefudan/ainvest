@@ -16,7 +16,7 @@
   "reason_codes": [
     "SIZED_TO_TARGET_WEIGHT"
   ],
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "side": "BUY",
   "signal_id": "sig_01HZYEXAMPLE0001",
   "strategy": "sma_crossover",

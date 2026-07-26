@@ -1,12 +1,12 @@
 {
   "expires_at": "2026-07-24T19:00:10Z",
-  "generated_at": "2026-07-24T18:30:10Z",
+  "generated_at": "2026-13-01T18:30:00Z",
   "intent": "BUY",
   "reason_codes": [
     "SMA20_CROSSED_ABOVE_SMA50"
   ],
   "research_id": "res_01HZYEXAMPLE0001",
-  "schema_version": "2.0",
+  "schema_version": "1.0",
   "signal_id": "sig_01HZYEXAMPLE0001",
   "strategy": "sma_crossover",
   "strategy_version": "1.2.0",

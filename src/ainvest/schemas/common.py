@@ -11,7 +11,7 @@ import re
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
-from typing import Annotated, Any, Final
+from typing import Annotated, Any, Final, Literal
 
 from pydantic import (
     AfterValidator,
@@ -24,7 +24,7 @@ from pydantic import (
     field_validator,
 )
 
-SCHEMA_VERSION_V1: Final[str] = "1.0"
+SCHEMA_VERSION_V1: Final[Literal["1.0"]] = "1.0"
 
 # Canonical finite decimal string for JSON Schema / structured model output.
 # Scientific notation is rejected; digit/exponent bounds close amplification paths.
@@ -45,13 +45,15 @@ DECIMAL_JSON_SCHEMA: Final[dict[str, object]] = {
 UTC_DATETIME_JSON_SCHEMA: Final[dict[str, object]] = {
     "type": "string",
     "format": "date-time",
+    "pattern": r"(?:Z|[+-]\d{2}:\d{2})$",
     "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
 }
 
-SchemaVersion = Annotated[
-    str,
-    StringConstraints(pattern=r"^[0-9]+\.[0-9]+$", min_length=3, max_length=32),
-]
+# A v1 model must not silently accept a document claiming a different wire
+# contract. When a backward-compatible v1.1 model is implemented, expand this
+# cumulatively to Literal["1.0", "1.1"] so the newer validator still accepts
+# every older v1 payload it claims to support.
+SchemaVersion = Literal["1.0"]
 
 Symbol = Annotated[
     str,
