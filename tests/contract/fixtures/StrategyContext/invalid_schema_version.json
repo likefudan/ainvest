@@ -104,7 +104,7 @@
       "risks": []
     }
   },
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "strategy_state": {
     "entries": [
       {

@@ -11,6 +11,6 @@
     "source": "robinhood.mcp.events",
     "timezone": "UTC"
   },
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "symbol": "AAPL"
 }

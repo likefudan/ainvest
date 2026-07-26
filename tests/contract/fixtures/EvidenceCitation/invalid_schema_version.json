@@ -10,6 +10,6 @@
     "source": "robinhood.mcp.quotes",
     "timezone": "UTC"
   },
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "summary": "Last price observed near session high"
 }

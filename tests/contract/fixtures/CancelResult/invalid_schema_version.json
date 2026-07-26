@@ -3,6 +3,6 @@
   "cancel_id": "cncl_01HZYEXAMPLE0001",
   "observed_at": "2026-07-24T18:31:21Z",
   "reason_code": "USER_REQUESTED",
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "status": "CONFIRMED"
 }

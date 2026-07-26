@@ -33,7 +33,7 @@
   },
   "quality_flags": [],
   "research_id": "res_01HZYEXAMPLE0001",
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "symbol": "AAPL",
   "technical": {
     "atr_14": "4.70",

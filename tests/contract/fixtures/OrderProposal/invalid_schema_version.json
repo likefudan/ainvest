@@ -16,7 +16,7 @@
   "quantity": "2",
   "quantity_increment": "1",
   "risk_decision_id": "risk_01HZYEXAMPLE0001",
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "side": "BUY",
   "signal_id": "sig_01HZYEXAMPLE0001",
   "strategy": "sma_crossover",

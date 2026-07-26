@@ -11,6 +11,7 @@ from pydantic import TypeAdapter, ValidationError
 
 from ainvest.schemas.common import (
     DECIMAL_STRING_PATTERN,
+    UTC_DATETIME_JSON_SCHEMA,
     InstrumentIdentity,
     Money,
     PnL,
@@ -131,6 +132,12 @@ def test_utc_datetime_rejects_naive_and_normalizes_z() -> None:
                 "identity_as_of": "2026-07-24T18:30:00",
             }
         )
+
+
+@pytest.mark.unit
+def test_utc_json_schema_requires_an_explicit_timezone() -> None:
+    assert UTC_DATETIME_JSON_SCHEMA["format"] == "date-time"
+    assert UTC_DATETIME_JSON_SCHEMA["pattern"] == r"(?:Z|[+-]\d{2}:\d{2})$"
 
 
 @pytest.mark.unit

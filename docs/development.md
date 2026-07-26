@@ -39,8 +39,10 @@ The complete command interface is:
 
 Schema compatibility rules and Strategy API version ranges are documented in
 [`docs/schema-versioning.md`](schema-versioning.md). Committed snapshots live
-under `schemas/json/`. `verify` includes `./scripts/dev export-schemas --check`
-so unintended schema drift fails CI.
+under `schemas/json/`, with deterministic valid/invalid fixtures under
+`tests/contract/fixtures/`. `verify` includes
+`./scripts/dev export-schemas --check` so unintended schema or fixture drift
+fails CI.
 
 `verify` is the canonical local merge gate. GitHub Actions CI calls this wrapper (see
 `.github/workflows/ci.yml`) rather than duplicating tool-specific arguments. CI also runs a

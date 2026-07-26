@@ -33,6 +33,7 @@
         "identity_as_of": {
           "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
           "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
           "title": "Identity As Of",
           "type": "string"
         },
@@ -88,6 +89,7 @@
         "observed_at": {
           "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
           "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
           "title": "Observed At",
           "type": "string"
         },
@@ -102,6 +104,7 @@
         "received_at": {
           "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
           "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
           "title": "Received At",
           "type": "string"
         },
@@ -198,10 +201,8 @@
       "$ref": "#/$defs/Provenance"
     },
     "schema_version": {
+      "const": "1.0",
       "default": "1.0",
-      "maxLength": 32,
-      "minLength": 3,
-      "pattern": "^[0-9]+\\.[0-9]+$",
       "title": "Schema Version",
       "type": "string"
     }

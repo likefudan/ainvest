@@ -108,56 +108,90 @@ def _set_path(payload: dict[str, Any], path: list[str], value: Any) -> None:
         cursor[last] = value
 
 
-def _write_extra_invalids(model_dir: Path, valid: dict[str, Any]) -> None:
+def _fixture_documents(name: str) -> dict[str, dict[str, Any]]:
+    """Build the complete deterministic fixture set for one exported model."""
+    model = EXPORTED_MODELS[name]
+    if name not in EXAMPLE_BUILDERS:
+        raise SystemExit(f"missing example builder for exported model {name}")
+    valid = example_payload(name)
+    model.model_validate(valid)
+
+    unknown = deepcopy(valid)
+    unknown["unexpected_extension_field"] = "boom"
+
+    unsupported_version = deepcopy(valid)
+    unsupported_version["schema_version"] = "2.0"
+
+    documents = {
+        "valid.json": valid,
+        "invalid_unknown_field.json": unknown,
+        "invalid_schema_version.json": unsupported_version,
+    }
+
     decimal_path = _find_key_path(valid, _DECIMAL_KEYS)
     if decimal_path is not None:
         floaty = deepcopy(valid)
         _set_path(floaty, decimal_path, 1.25)
-        (model_dir / "invalid_binary_float.json").write_text(
-            dump_schema_document(floaty),
-            encoding="utf-8",
-        )
+        documents["invalid_binary_float.json"] = floaty
 
     timestamp_path = _find_key_path(valid, _TIMESTAMP_KEYS)
     if timestamp_path is not None:
         naive = deepcopy(valid)
         _set_path(naive, timestamp_path, "2026-07-24T18:30:00")
-        (model_dir / "invalid_naive_timestamp.json").write_text(
-            dump_schema_document(naive),
-            encoding="utf-8",
-        )
+        documents["invalid_naive_timestamp.json"] = naive
+
+    return documents
+
+
+def _fixture_drift_problems() -> list[str]:
+    """Return drift messages for committed deterministic contract fixtures."""
+    if not FIXTURE_ROOT.is_dir():
+        return [f"missing fixture root: {FIXTURE_ROOT}"]
+    problems: list[str] = []
+    expected_model_names = set(EXPORTED_MODELS)
+    on_disk_model_names = {path.name for path in FIXTURE_ROOT.iterdir() if path.is_dir()}
+    for name in sorted(expected_model_names - on_disk_model_names):
+        problems.append(f"missing fixture directory: {name}")
+    for name in sorted(on_disk_model_names - expected_model_names):
+        problems.append(f"unexpected fixture directory: {name}")
+
+    for name in sorted(EXPORTED_MODELS):
+        model_dir = FIXTURE_ROOT / name
+        if not model_dir.is_dir():
+            continue
+        expected = {
+            filename: dump_schema_document(document)
+            for filename, document in _fixture_documents(name).items()
+        }
+        on_disk = {path.name for path in model_dir.glob("*.json")}
+        for filename in sorted(set(expected) - on_disk):
+            problems.append(f"missing fixture: {name}/{filename}")
+        for filename in sorted(on_disk - set(expected)):
+            problems.append(f"unexpected fixture: {name}/{filename}")
+        for filename, contents in expected.items():
+            path = model_dir / filename
+            if path.is_file() and path.read_text(encoding="utf-8") != contents:
+                problems.append(
+                    f"fixture drift for {name}/{filename}: "
+                    "run ./scripts/dev export-schemas --fixtures"
+                )
+    return problems
 
 
 def _write_fixtures() -> None:
     FIXTURE_ROOT.mkdir(parents=True, exist_ok=True)
-    for name, model in EXPORTED_MODELS.items():
-        if name not in EXAMPLE_BUILDERS:
-            raise SystemExit(f"missing example builder for exported model {name}")
+    for name in EXPORTED_MODELS:
         model_dir = FIXTURE_ROOT / name
         model_dir.mkdir(parents=True, exist_ok=True)
-        valid = example_payload(name)
-        # Confirm the golden payload validates before writing.
-        model.model_validate(valid)
-        (model_dir / "valid.json").write_text(
-            dump_schema_document(valid),
-            encoding="utf-8",
-        )
-
-        unknown = deepcopy(valid)
-        unknown["unexpected_extension_field"] = "boom"
-        (model_dir / "invalid_unknown_field.json").write_text(
-            dump_schema_document(unknown),
-            encoding="utf-8",
-        )
-
-        bad_version = deepcopy(valid)
-        bad_version["schema_version"] = "not-a-version"
-        (model_dir / "invalid_schema_version.json").write_text(
-            dump_schema_document(bad_version),
-            encoding="utf-8",
-        )
-
-        _write_extra_invalids(model_dir, valid)
+        documents = _fixture_documents(name)
+        for path in model_dir.glob("*.json"):
+            if path.name not in documents:
+                path.unlink()
+        for filename, document in documents.items():
+            (model_dir / filename).write_text(
+                dump_schema_document(document),
+                encoding="utf-8",
+            )
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -165,7 +199,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--check",
         action="store_true",
-        help="fail if committed schemas drift from live Pydantic models",
+        help="fail if committed schemas or fixtures drift from their generators",
     )
     parser.add_argument(
         "--fixtures",
@@ -175,7 +209,7 @@ def main(argv: list[str] | None = None) -> int:
     args = parser.parse_args(argv)
 
     if args.check:
-        problems = check_json_schemas()
+        problems = [*check_json_schemas(), *_fixture_drift_problems()]
         if problems:
             for item in problems:
                 print(item, file=sys.stderr)

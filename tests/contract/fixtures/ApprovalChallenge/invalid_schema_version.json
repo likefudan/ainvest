@@ -6,7 +6,7 @@
   "nonce_hash": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
   "order_hash": "sha256:d1b50c5ba161bf21c22422d2f45b6dab5b01ce67583a66b089f7c3f1e3a77fe7",
   "proposal_id": "ordp_01HZYEXAMPLE0001",
-  "schema_version": "not-a-version",
+  "schema_version": "2.0",
   "scope": "paper",
   "status": "PENDING"
 }

@@ -5,5 +5,5 @@
   "proposal_id": "ordp_01HZYEXAMPLE0001",
   "reason_code": "MATCHED",
   "reconciliation_id": "recon_01HZYEXAMPLE01",
-  "schema_version": "not-a-version"
+  "schema_version": "2.0"
 }
