@@ -155,3 +155,17 @@ def test_high_precision_quantities_do_not_collide_under_default_context() -> Non
     twin = deepcopy(base)
     twin["quantity"] = "2.0"
     assert compute_order_hash(twin) == compute_order_hash(base)
+
+
+@pytest.mark.unit
+def test_extreme_decimal_exponents_are_rejected_before_allocation() -> None:
+    """Compact scientific inputs must fail closed on the public mapping path."""
+    from decimal import Decimal
+
+    base = _base_order()
+    with pytest.raises(ValueError, match="decimal"):
+        compute_order_hash({**base, "quantity": "1e1000000"})
+    with pytest.raises(ValueError, match="exponent"):
+        compute_order_hash({**base, "quantity": Decimal("1e1000000")})
+    with pytest.raises(ValueError, match="exponent"):
+        compute_order_hash({**base, "limit_price": Decimal("1e-1000000")})

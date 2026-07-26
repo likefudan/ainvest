@@ -21,6 +21,7 @@ from ainvest.schemas.common import (
     Weight,
     decimal_json_schema,
     ensure_utc,
+    parse_decimal,
 )
 from ainvest.schemas.market import ResearchMarketSection
 from ainvest.schemas.research import ResearchPacket
@@ -34,6 +35,19 @@ def test_decimal_money_round_trip_rejects_float() -> None:
     assert adapter.dump_python(value, mode="json") == "12.34"
     with pytest.raises(ValidationError, match="binary floats"):
         adapter.validate_python(1.25)
+
+
+@pytest.mark.unit
+def test_decimal_runtime_rejects_scientific_notation_and_extreme_exponents() -> None:
+    adapter = TypeAdapter(Money)
+    with pytest.raises(ValidationError, match="decimal"):
+        adapter.validate_python("1e10")
+    with pytest.raises(ValidationError, match="decimal"):
+        adapter.validate_python("1E+6")
+    with pytest.raises(ValueError, match="exponent"):
+        parse_decimal(Decimal("1e1000000"))
+    with pytest.raises(ValueError, match="exponent"):
+        parse_decimal(Decimal("1e-1000000"))
 
 
 @pytest.mark.unit

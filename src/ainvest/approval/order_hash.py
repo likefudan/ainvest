@@ -16,7 +16,11 @@ from decimal import Decimal
 from typing import Any
 
 from ainvest.schemas.broker import CancelCommand
-from ainvest.schemas.common import ensure_utc
+from ainvest.schemas.common import (
+    MAX_DECIMAL_ABS_EXPONENT,
+    ensure_utc,
+    parse_decimal,
+)
 from ainvest.schemas.orders import CandidateOrder, OrderProposal
 
 ORDER_HASH_ALGORITHM = "sha256"
@@ -68,13 +72,14 @@ def _canonical_decimal(value: Decimal | str | int) -> str:
     ``Decimal.normalize()`` rounds to ``getcontext().prec`` (default 28), which
     collides distinct protected values. Strip trailing zeros via ``as_tuple()``
     so semantically equal encodings (``2`` / ``2.0``) match while >28-digit
-    significands stay exact.
+    significands stay exact. Exponent/digit bounds are enforced before any
+    zero-repetition allocation so compact scientific inputs cannot amplify.
     """
     if isinstance(value, bool):
         raise TypeError("boolean is not a valid decimal")
-    decimal_value = value if isinstance(value, Decimal) else Decimal(str(value))
-    if not decimal_value.is_finite():
-        raise ValueError("NaN and Infinity are not allowed in order hashes")
+    # parse_decimal rejects scientific notation strings and out-of-range exponents
+    # before this formatter expands them into fixed-point text.
+    decimal_value = parse_decimal(value)
     sign, digits, exp = decimal_value.as_tuple()
     if not isinstance(exp, int):
         raise ValueError("NaN and Infinity are not allowed in order hashes")
@@ -84,6 +89,9 @@ def _canonical_decimal(value: Decimal | str | int) -> str:
         exp += 1
     if not digs:
         return "0"
+    # Trailing-zero stripping can raise the exponent; fail closed before repetition.
+    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
+        raise ValueError("decimal exponent exceeds maximum magnitude")
     coefficient = "".join(str(digit) for digit in digs)
     if exp >= 0:
         text = coefficient + ("0" * exp)

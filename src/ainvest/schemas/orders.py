@@ -26,6 +26,7 @@ from ainvest.schemas.common import (
     StableId,
     Symbol,
     UtcDateTime,
+    enforce_bounded_decimal,
 )
 from ainvest.schemas.portfolio import AccountScope
 from ainvest.schemas.strategy import StrategyName, StrategyVersion
@@ -162,6 +163,7 @@ class OrderProposal(DomainModel):
 
 def _decimal_coeff_exp(value: Decimal) -> tuple[int, int]:
     """Return ``(coefficient, exponent)`` for exact integer-scaled arithmetic."""
+    enforce_bounded_decimal(value)
     sign, digits, exp = value.as_tuple()
     if not isinstance(exp, int):
         raise ValueError("NaN and Infinity are not allowed")

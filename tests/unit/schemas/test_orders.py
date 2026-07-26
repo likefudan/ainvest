@@ -145,6 +145,39 @@ def test_large_significand_increment_and_notional_are_exact() -> None:
     CandidateOrder.model_validate(exact)
 
 
+@pytest.mark.unit
+def test_extreme_exponents_rejected_before_power_operations() -> None:
+    from decimal import Decimal
+
+    payload = _valid_proposal()
+    payload["candidate_id"] = "cand_01HZYEXAMPLE0001"
+    payload.pop("proposal_id", None)
+    payload.pop("risk_decision_id", None)
+    payload.pop("order_hash", None)
+    payload["reason_codes"] = ["SIZED_TO_TARGET_WEIGHT"]
+
+    scientific = deepcopy(payload)
+    scientific["quantity"] = "1e1000000"
+    with pytest.raises(ValidationError, match="decimal"):
+        CandidateOrder.model_validate(scientific)
+
+    # Bypass string pattern with a pre-built Decimal; helpers must still refuse.
+    huge = deepcopy(payload)
+    huge["quantity"] = Decimal("1e1000000")
+    huge["quantity_increment"] = Decimal("1")
+    huge["limit_price"] = Decimal("1")
+    huge["price_increment"] = Decimal("1")
+    huge["maximum_notional"] = Decimal("1")
+    with pytest.raises(ValidationError, match="exponent"):
+        CandidateOrder.model_validate(huge)
+
+    tiny = deepcopy(huge)
+    tiny["quantity"] = Decimal("1")
+    tiny["limit_price"] = Decimal("1e-1000000")
+    with pytest.raises(ValidationError, match="exponent"):
+        CandidateOrder.model_validate(tiny)
+
+
 def _proposal_ids() -> dict[str, str]:
     return {
         "proposal_id": "ordp_01HZYEXAMPLE0001",

@@ -7,6 +7,7 @@ binary floats are rejected.
 
 from __future__ import annotations
 
+import re
 from datetime import UTC, datetime
 from decimal import Decimal, InvalidOperation
 from enum import StrEnum
@@ -26,11 +27,19 @@ from pydantic import (
 SCHEMA_VERSION_V1: Final[str] = "1.0"
 
 # Canonical finite decimal string for JSON Schema / structured model output.
+# Scientific notation is rejected; digit/exponent bounds close amplification paths.
 DECIMAL_STRING_PATTERN: Final[str] = r"^-?(?:0|[1-9]\d*)(?:\.\d+)?$"
+_DECIMAL_STRING_RE: Final[re.Pattern[str]] = re.compile(DECIMAL_STRING_PATTERN)
+MAX_DECIMAL_STRING_LENGTH: Final[int] = 64
+MAX_DECIMAL_SIGNIFICAND_DIGITS: Final[int] = 40
+MAX_DECIMAL_ABS_EXPONENT: Final[int] = 28
 DECIMAL_JSON_SCHEMA: Final[dict[str, object]] = {
     "type": "string",
     "pattern": DECIMAL_STRING_PATTERN,
-    "description": "Canonical decimal string. Binary JSON numbers are rejected.",
+    "maxLength": MAX_DECIMAL_STRING_LENGTH,
+    "description": (
+        "Canonical decimal string without scientific notation. Binary JSON numbers are rejected."
+    ),
 }
 
 UTC_DATETIME_JSON_SCHEMA: Final[dict[str, object]] = {
@@ -97,17 +106,53 @@ def _reject_bool(value: object) -> object:
     return value
 
 
+def enforce_bounded_decimal(value: Decimal) -> Decimal:
+    """Reject Decimals whose coefficient/exponent can amplify memory or CPU.
+
+    Hashing and exact integer scaling expand exponents into digit strings or
+    ``10 ** n`` integers. Bound significand digits and absolute exponent before
+    those expansions. Trailing-zero stripping is considered because it can raise
+    the stored exponent before rendering.
+    """
+    if not value.is_finite():
+        raise ValueError("NaN and Infinity are not allowed")
+    _sign, digits, exp = value.as_tuple()
+    if not isinstance(exp, int):
+        raise ValueError("NaN and Infinity are not allowed")
+    if len(digits) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
+        raise ValueError("decimal significand exceeds maximum digits")
+    if abs(exp) > MAX_DECIMAL_ABS_EXPONENT:
+        raise ValueError("decimal exponent exceeds maximum magnitude")
+    stripped_exp = exp
+    digs = list(digits)
+    while digs and digs[-1] == 0:
+        digs.pop()
+        stripped_exp += 1
+    if digs and abs(stripped_exp) > MAX_DECIMAL_ABS_EXPONENT:
+        raise ValueError("decimal exponent exceeds maximum magnitude")
+    return value
+
+
+def parse_decimal(value: object) -> Decimal:
+    """Parse a domain decimal and enforce digit/exponent bounds."""
+    return _parse_decimal(value)
+
+
 def _parse_decimal(value: object) -> Decimal:
     value = _reject_bool(value)
     if isinstance(value, Decimal):
         decimal_value = value
     elif isinstance(value, int):
+        if value != 0 and len(str(abs(value))) > MAX_DECIMAL_SIGNIFICAND_DIGITS:
+            raise ValueError("decimal significand exceeds maximum digits")
         decimal_value = Decimal(value)
     elif isinstance(value, float):
         raise ValueError("binary floats are not allowed; use decimal strings")
     elif isinstance(value, str):
         text = value.strip()
-        if not text or text.lower() in {
+        if not text or len(text) > MAX_DECIMAL_STRING_LENGTH:
+            raise ValueError("invalid decimal string")
+        if text.lower() in {
             "nan",
             "inf",
             "+inf",
@@ -117,6 +162,8 @@ def _parse_decimal(value: object) -> Decimal:
             "-infinity",
         }:
             raise ValueError("invalid decimal string")
+        if _DECIMAL_STRING_RE.fullmatch(text) is None:
+            raise ValueError("invalid decimal string")
         try:
             decimal_value = Decimal(text)
         except InvalidOperation as exc:
@@ -124,9 +171,7 @@ def _parse_decimal(value: object) -> Decimal:
     else:
         raise ValueError(f"unsupported decimal input type: {type(value).__name__}")
 
-    if not decimal_value.is_finite():
-        raise ValueError("NaN and Infinity are not allowed")
-    return decimal_value
+    return enforce_bounded_decimal(decimal_value)
 
 
 def _require_non_negative(value: Decimal) -> Decimal:
@@ -286,6 +331,9 @@ def decimal_json_schema() -> dict[str, object]:
 __all__ = [
     "DECIMAL_JSON_SCHEMA",
     "DECIMAL_STRING_PATTERN",
+    "MAX_DECIMAL_ABS_EXPONENT",
+    "MAX_DECIMAL_SIGNIFICAND_DIGITS",
+    "MAX_DECIMAL_STRING_LENGTH",
     "SCHEMA_VERSION_V1",
     "AssetType",
     "CurrencyCode",
@@ -311,5 +359,7 @@ __all__ = [
     "UtcDateTime",
     "Weight",
     "decimal_json_schema",
+    "enforce_bounded_decimal",
     "ensure_utc",
+    "parse_decimal",
 ]
