@@ -5,9 +5,11 @@ build-backend = "hatchling.build"
 [project]
 name = "ainvest-ma"
 version = "1.0.0"
-description = "Reference moving-average crossover strategy plugin for ainvest"
+description = "Sample packaging surface for the ainvest reference MA strategy"
 requires-python = ">=3.12"
-dependencies = []
+dependencies = [
+    "ainvest",
+]
 
 [project.entry-points."ainvest.strategies"]
 moving_average = "ainvest_ma.plugin:plugin"

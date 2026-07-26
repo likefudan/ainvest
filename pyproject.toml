@@ -54,7 +54,6 @@ dev = [
     "types-pyyaml>=6.0.12,<7",
 ]
 test = [
-    "ainvest-ma",
     "hypothesis>=6.130,<7",
     "httpx>=0.28,<1",
     "jsonschema[format]>=4.26,<5",
@@ -67,8 +66,9 @@ test = [
 [tool.uv]
 default-groups = ["dev", "test"]
 
-[tool.uv.sources]
-ainvest-ma = { path = "examples/strategies/moving_average", editable = true }
+[project.entry-points."ainvest.strategies"]
+moving_average = "ainvest.strategies.reference.moving_average.plugin:plugin"
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainvest"]
 
@@ -119,7 +119,7 @@ select = [
 [tool.mypy]
 python_version = "3.12"
 strict = true
-files = ["src", "tests", "examples/strategies/moving_average/src"]
+files = ["src", "tests"]
 warn_unreachable = true
 exclude = [
     "(^|/)conftest\\.py$",

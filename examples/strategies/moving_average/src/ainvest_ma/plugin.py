@@ -1,28 +1,9 @@
-"""pluggy plugin entry for the reference moving-average strategy."""
+"""Sample third-party entry-point package wrapping the reference MA strategy.
 
-from __future__ import annotations
+Installed ainvest already registers this strategy. This package documents how
+external teams publish under the ``ainvest.strategies`` entry-point group.
+"""
 
-from ainvest.strategies import PluginMetadata, StrategyDefinition, hookimpl
-from ainvest_ma.strategy import MovingAverageStrategy
+from ainvest.strategies.reference.moving_average.plugin import METADATA, plugin
 
-METADATA = PluginMetadata(
-    plugin_id="moving_average",
-    plugin_version="1.0.0",
-    ainvest_strategy_api=">=1.0.0,<2.0.0",
-    source_commit="local",
-    owner="ainvest",
-    repository="examples/strategies/moving_average",
-)
-
-
-class MovingAveragePlugin:
-    """Declares strategy definitions only; never evaluates on import."""
-
-    metadata = METADATA
-
-    @hookimpl
-    def strategy_definitions(self) -> list[StrategyDefinition]:
-        return [StrategyDefinition.from_type(MovingAverageStrategy, metadata=METADATA)]
-
-
-plugin = MovingAveragePlugin()
+__all__ = ["METADATA", "plugin"]

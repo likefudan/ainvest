@@ -5,11 +5,14 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from ainvest_ma.strategy import MovingAverageParams, MovingAverageStrategy
 from helpers import context_payload, make_context
 from pydantic import ValidationError
 
 from ainvest.schemas.strategy import SignalIntent, parse_strategy_context
+from ainvest.strategies.reference.moving_average.strategy import (
+    MovingAverageParams,
+    MovingAverageStrategy,
+)
 
 
 @pytest.mark.unit
@@ -100,7 +103,7 @@ def test_source_code_avoids_system_clock_and_network() -> None:
     from pathlib import Path
 
     source = Path(__file__).resolve().parents[3] / (
-        "examples/strategies/moving_average/src/ainvest_ma/strategy.py"
+        "src/ainvest/strategies/reference/moving_average/strategy.py"
     )
     text = source.read_text(encoding="utf-8")
     assert "datetime.now(" not in text
