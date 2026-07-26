@@ -75,8 +75,8 @@ that section has merged. Current Batch A split:
 | Record | Plan section | Cards | Status |
 |---|---|---|---|
 | Batch A — Part 1 | Batch A | `P01-T0`, `P01-T2` | complete (merged) |
-| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | in_review |
-| Batch A complete | Batch A | all of the above | after Part 2 merges |
+| Batch A — Part 2 | Batch A | `P01-T1`, `P01-T3`, `P01-T4`, `P01-T5` | complete (merged) |
+| Batch A complete | Batch A | all of the above | complete |
 
 Do not invent alternate labels such as `1A`, `Wave 1A`, or `Batch 1A`.
 
@@ -94,15 +94,15 @@ claim Batch B here before dispatching those tasks.
 
 - **Batch:** Batch A — Part 2 — threat model, package boundaries, safe
   configuration, and CI gates (`P01-T1`, `P01-T3`, `P01-T4`, `P01-T5`)
-- **Plan batch:** Batch A (completes Batch A when this part merges)
+- **Plan batch:** Batch A — **complete**
 - **Coordinator:** cursor-agent / local
-- **Integration branch:** `task/batch-a-part-2`
+- **Integration branch:** `task/batch-a-part-2` (deleted after squash merge)
 - **Base commit:** `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependency PRs/commits:** Batch A — Part 1 /
   [PR #4](https://github.com/likefudan/ainvest/pull/4);
   batch-naming [PR #5](https://github.com/likefudan/ainvest/pull/5)
 - **Merge target:** `main`
-- **Implementation tip commit:** `921edbc` (integration HEAD before squash)
+- **Implementation commit:** `3d5afefca34aa8748efbbd4942b2c38b8b736726` (squash merge)
 - **Handoff PR:** [#6](https://github.com/likefudan/ainvest/pull/6)
 - **Safety posture:** documentation, package skeleton, fail-closed config, and
   CI only; Paper remains the default; no broker write capability, credentials,
@@ -112,10 +112,10 @@ claim Batch B here before dispatching those tasks.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P01-T1` | Document Trust Boundaries and Threat Model | `in_review` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | [#6](https://github.com/likefudan/ainvest/pull/6) |
-| `P01-T3` | Create Package Boundaries and Architecture Tests | `in_review` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
-| `P01-T4` | Implement Configuration Loading and Safe Defaults | `in_review` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
-| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `in_review` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T1` | Document Trust Boundaries and Threat Model | `merged` | subagent/p01-t1 | `task/p01-t1-threat-model` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T0` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T3` | Create Package Boundaries and Architecture Tests | `merged` | subagent/p01-t3 | `task/p01-t3-package-boundaries` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T4` | Implement Configuration Loading and Safe Defaults | `merged` | subagent/p01-t4 | `task/p01-t4-config` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
+| `P01-T5` | Add CI, Commit Quality Gates, and Dependency Security | `merged` | subagent/p01-t5 | `task/p01-t5-ci` | `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7` | `P01-T2` | [#6](https://github.com/likefudan/ainvest/pull/6) |
 
 ### Batch A — Part 1
 
@@ -215,7 +215,7 @@ claim Batch B here before dispatching those tasks.
 ## Execution envelope: P01-T1
 
 - **Title:** Document Trust Boundaries and Threat Model
-- **Status/owner:** `in_review` — `subagent/p01-t1`
+- **Status/owner:** `merged` — `subagent/p01-t1`
 - **Branch/base:** `task/p01-t1-threat-model` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T0` (merged)
@@ -230,12 +230,12 @@ claim Batch B here before dispatching those tasks.
 - **Blockers:** None
 - **Handoff notes:** Integrated on `task/batch-a-part-2`. Threat IDs ready for
   Phase 08 security-test traceability.
-- **Resulting commit:** `c5564a4041588a46bcdb57de2f0ea7046b69cb8c`
+- **Resulting commit/PR:** feature `c5564a4041588a46bcdb57de2f0ea7046b69cb8c`; squash `3d5afefca34aa8748efbbd4942b2c38b8b736726`; [PR #6](https://github.com/likefudan/ainvest/pull/6)
 
 ## Execution envelope: P01-T3
 
 - **Title:** Create Package Boundaries and Architecture Tests
-- **Status/owner:** `in_review` — `subagent/p01-t3`
+- **Status/owner:** `merged` — `subagent/p01-t3`
 - **Branch/base:** `task/p01-t3-package-boundaries` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
@@ -254,12 +254,12 @@ claim Batch B here before dispatching those tasks.
 - **Handoff notes:** Forbidden-edge matrix enforced via AST checker; intentional
   violation fixtures under `tests/unit/architecture/fixtures/`. Coordinator
   narrowed root `.gitignore` `data/`/`logs/` to `/data/`/`/logs/`.
-- **Resulting commit:** `0457680` / feature `5d30648`
+- **Resulting commit/PR:** feature `5d30648` / `0457680`; squash `3d5afefca34aa8748efbbd4942b2c38b8b736726`; [PR #6](https://github.com/likefudan/ainvest/pull/6)
 
 ## Execution envelope: P01-T4
 
 - **Title:** Implement Configuration Loading and Safe Defaults
-- **Status/owner:** `in_review` — `subagent/p01-t4`
+- **Status/owner:** `merged` — `subagent/p01-t4`
 - **Branch/base:** `task/p01-t4-config` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
@@ -277,12 +277,12 @@ claim Batch B here before dispatching those tasks.
 - **Handoff notes:** Paper defaults locked; live WebAuthn incomplete configs
   fail closed; secrets use `repr=False`. Downstream schema tasks may load
   settings through `ainvest.config` only.
-- **Resulting commit:** `4a808e79442a4d9ad4d6423c8af6b360ed1680bb`
+- **Resulting commit/PR:** feature `4a808e79442a4d9ad4d6423c8af6b360ed1680bb`; squash `3d5afefca34aa8748efbbd4942b2c38b8b736726`; [PR #6](https://github.com/likefudan/ainvest/pull/6)
 
 ## Execution envelope: P01-T5
 
 - **Title:** Add CI, Commit Quality Gates, and Dependency Security
-- **Status/owner:** `in_review` — `subagent/p01-t5`
+- **Status/owner:** `merged` — `subagent/p01-t5`
 - **Branch/base:** `task/p01-t5-ci` at
   `c0b8106dd3efdfbc5853ba019cb6f3c29702dac7`
 - **Dependencies:** `P01-T2` (merged)
@@ -299,4 +299,4 @@ claim Batch B here before dispatching those tasks.
 - **Blockers:** None
 - **Handoff notes:** `live_safety` marker cannot use skip/skipif. CODEOWNERS
   covers security/execution/approval/config/CI paths. No credentials in CI.
-- **Resulting commit:** `d83155de62ab76b31716c585bbbcf12194c064ce`
+- **Resulting commit/PR:** feature `d83155de62ab76b31716c585bbbcf12194c064ce`; squash `3d5afefca34aa8748efbbd4942b2c38b8b736726`; [PR #6](https://github.com/likefudan/ainvest/pull/6)

@@ -4,7 +4,7 @@ AI-assisted stock research, strategy evaluation, risk control, human approval, a
 
 ## Status
 
-Phase 01 Batch A is ready for merge (Part 2 in review). Real-money trading
+Phase 01 Batch A is complete. Next: Batch B domain schemas. Real-money trading
 remains disabled.
 
 Project coordination:
