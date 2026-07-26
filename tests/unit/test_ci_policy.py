@@ -6,9 +6,11 @@ import re
 from pathlib import Path
 
 import pytest
+import yaml
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 CI_WORKFLOW = REPO_ROOT / ".github" / "workflows" / "ci.yml"
+DEPENDABOT_CONFIG = REPO_ROOT / ".github" / "dependabot.yml"
 ACTION_REF = re.compile(r"^\s*uses:\s+\S+@([0-9a-f]{40})(?:\s+#.*)?$", re.MULTILINE)
 
 
@@ -41,3 +43,24 @@ def test_ci_audits_all_dependency_profiles_through_wrapper() -> None:
     assert "--all-extras" in dev_script
     assert "--all-groups" in dev_script
     assert "python-version-file" not in workflow
+
+
+@pytest.mark.unit
+def test_setup_uv_preserves_cache_pruning() -> None:
+    """setup-uv major upgrades must not silently disable cache pruning."""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    setup_uv_steps = workflow.count("uses: astral-sh/setup-uv@")
+
+    assert setup_uv_steps > 0
+    assert workflow.count("prune-cache: true") == setup_uv_steps
+
+
+@pytest.mark.unit
+def test_dependabot_groups_github_action_updates() -> None:
+    """A weekly Actions refresh should produce one reviewable PR."""
+    config = yaml.safe_load(DEPENDABOT_CONFIG.read_text(encoding="utf-8"))
+    actions_update = next(
+        update for update in config["updates"] if update["package-ecosystem"] == "github-actions"
+    )
+
+    assert actions_update["groups"]["github-actions"]["patterns"] == ["*"]
