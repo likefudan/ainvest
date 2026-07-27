@@ -396,6 +396,24 @@ def test_read_write_port_views_and_no_replace() -> None:
 
 
 @pytest.mark.unit
+def test_fill_timestamp_uses_event_time_not_clock() -> None:
+    """Fills must stamp event.observed_at even when the injected clock is ahead."""
+    clock = _FixedClock(datetime(2026, 7, 24, 19, 0, 0, tzinfo=UTC))
+    broker = _broker(clock=clock, cash="10000.00")
+    # Proposal must still be unexpired relative to clock.
+    proposal = _paper_proposal(expires_at="2026-07-24T19:05:00Z")
+    _submit(broker, proposal)
+    event_time = datetime(2026, 7, 24, 18, 45, 0, tzinfo=UTC)
+    fills = broker.inject_market_event(
+        _event(liquidity="2", observed_at=event_time, bid="214.40", ask="214.45")
+    )
+    assert len(fills) == 1
+    assert fills[0].filled_at == event_time
+    quotes = broker.get_quotes(("rh_inst_aapl_xnas",))
+    assert quotes[0].provenance.observed_at == event_time
+
+
+@pytest.mark.unit
 def test_reject_non_paper_account_scope_on_read() -> None:
     broker = _broker()
     from ainvest.execution.broker import BrokerRejectedError

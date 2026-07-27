@@ -351,7 +351,7 @@ class PaperBroker:
         max_fee = _fee_for(notional=qty * limit, costs=self._costs)
 
         if proposal.side is OrderSide.BUY:
-            need = canonicalize_decimal(qty * limit + max_fee)
+            need = _money(qty * limit + max_fee)
             available = self._available_cash()
             if need > available:
                 result = BrokerSubmitResult(
@@ -513,7 +513,8 @@ class PaperBroker:
                 details={"event_id": event.event_id, "error": str(exc)},
             ) from exc
 
-        observed = self._touch(event.observed_at)
+        observed = _require_utc(event.observed_at)
+        self._advance_ledger(observed)
         instrument = self._instrument_for_event(event)
         self._quotes[event.instrument_id] = MarketQuote(
             instrument=instrument,
@@ -585,14 +586,15 @@ class PaperBroker:
     # Internals
     # ------------------------------------------------------------------
 
-    def _touch(self, moment: datetime) -> datetime:
+    def _advance_ledger(self, moment: datetime) -> None:
         observed = _require_utc(moment)
         if observed > self._ledger_as_of:
             self._ledger_as_of = observed
-        return self._ledger_as_of
 
     def _now(self) -> datetime:
-        return self._touch(self._clock())
+        """Return ledger time: max(injected clock, prior event/submit times)."""
+        self._advance_ledger(self._clock())
+        return self._ledger_as_of
 
     def _remember_submit(
         self,
@@ -610,8 +612,17 @@ class PaperBroker:
                 reason_code=PaperRejectReason.ACCOUNT_SCOPE_NOT_PAPER.value,
             )
 
+    def _open_working_orders(self) -> tuple[_WorkingOrder, ...]:
+        return tuple(
+            wo
+            for wo in self._orders.values()
+            if wo.broker_order.status
+            in {BrokerOrderStatus.ACCEPTED, BrokerOrderStatus.PARTIALLY_FILLED}
+            and wo.remaining > ZERO
+        )
+
     def _available_cash(self) -> Decimal:
-        reserved = sum((wo.reserved_cash for wo in self._orders.values()), ZERO)
+        reserved = sum((wo.reserved_cash for wo in self._open_working_orders()), ZERO)
         return canonicalize_decimal(self._cash - reserved)
 
     def _position_qty(self, instrument_id: str) -> Decimal:
@@ -663,13 +674,13 @@ class PaperBroker:
         instrument: InstrumentIdentity,
     ) -> BrokerFill:
         quantity = canonicalize_decimal(quantity)
-        price = canonicalize_decimal(price)
-        notional = canonicalize_decimal(quantity * price)
+        price = _money(price)
+        notional = _money(quantity * price)
         fee = _fee_for(notional=notional, costs=self._costs)
         side = working.proposal.side
 
         if side is OrderSide.BUY:
-            debit = canonicalize_decimal(notional + fee)
+            debit = _money(notional + fee)
             # Reserved cash was sized at limit+max_fee; fill_price <= limit so
             # debit must fit. Fail closed if bookkeeping ever drifts.
             if debit > self._cash:
@@ -681,7 +692,7 @@ class PaperBroker:
             working.reserved_cash = canonicalize_decimal(max(ZERO, working.reserved_cash - debit))
             self._credit_position(instrument, quantity=quantity, price=price)
         else:
-            proceeds = canonicalize_decimal(notional - fee)
+            proceeds = _money(notional - fee)
             if proceeds < ZERO:
                 raise BrokerRejectedError(
                     "paper fill fee exceeds sell proceeds",
@@ -836,15 +847,7 @@ class PaperBroker:
             )
 
         # Buying power = cash minus open buy reserves (sells do not free BP until fill).
-        reserved_buys = sum(
-            (
-                wo.reserved_cash
-                for wo in self._orders.values()
-                if wo.broker_order.status
-                in {BrokerOrderStatus.ACCEPTED, BrokerOrderStatus.PARTIALLY_FILLED}
-            ),
-            ZERO,
-        )
+        reserved_buys = sum((wo.reserved_cash for wo in self._open_working_orders()), ZERO)
         cash = self._cash
         equity = canonicalize_decimal(cash + gross)
         buying_power = canonicalize_decimal(max(ZERO, cash - reserved_buys))
