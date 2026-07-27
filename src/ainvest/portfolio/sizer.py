@@ -53,6 +53,8 @@ class SizerReasonCode(StrEnum):
     BELOW_MIN_NOTIONAL = "BELOW_MIN_NOTIONAL"
     INSUFFICIENT_POSITION = "INSUFFICIENT_POSITION"
     CASH_RESERVE_BLOCKS_BUY = "CASH_RESERVE_BLOCKS_BUY"
+    OPEN_BUY_BLOCKS = "OPEN_BUY_BLOCKS"
+    OPEN_BUY_MISSING_LIMIT = "OPEN_BUY_MISSING_LIMIT"
     MAX_NOTIONAL_BLOCKS = "MAX_NOTIONAL_BLOCKS"
 
 
@@ -119,8 +121,9 @@ def size_position(
     """Convert target-weight intent into a whole-share candidate order.
 
     Fail-closed: HOLD, expired/inactive signals, missing price, invalid
-    increments, and non-positive buying power return no order with a stable
-    reason. Arithmetic uses :class:`~decimal.Decimal` only.
+    increments, and non-positive buying power on BUY return no order with a
+    stable reason. Open BUY notionals reserve cash; open SELLs reduce sellable
+    quantity. Arithmetic uses :class:`~decimal.Decimal` only.
     """
     clock = ensure_utc(as_of)
     early = _early_reject(
@@ -137,12 +140,21 @@ def size_position(
     price_inc = parse_decimal(config.price_increment)
 
     position = _find_position(portfolio, quote)
-    current_qty = parse_decimal(position.quantity) if position is not None else ZERO
-    current_value = (
-        parse_decimal(position.market_value)
-        if position is not None
-        else canonicalize_decimal(current_qty * last_price)
-    )
+    filled_qty = parse_decimal(position.quantity) if position is not None else ZERO
+    open_buy_qty, open_sell_qty = _open_order_quantities(portfolio, quote.instrument.instrument_id)
+    effective_qty = canonicalize_decimal(filled_qty + open_buy_qty - open_sell_qty)
+    if effective_qty < ZERO:
+        return SizingResult(
+            reason_code=SizerReasonCode.INSUFFICIENT_POSITION,
+            candidate=None,
+            as_of=clock,
+        )
+
+    # Mark with last when open orders affect exposure; otherwise trust snapshot MV.
+    if open_buy_qty == ZERO and open_sell_qty == ZERO and position is not None:
+        current_value = parse_decimal(position.market_value)
+    else:
+        current_value = canonicalize_decimal(effective_qty * last_price)
 
     target_value = canonicalize_decimal(equity * target_weight)
     delta_value = canonicalize_decimal(target_value - current_value)
@@ -163,6 +175,14 @@ def size_position(
     ):
         return SizingResult(
             reason_code=SizerReasonCode.INTENT_DELTA_MISMATCH,
+            candidate=None,
+            as_of=clock,
+        )
+
+    # Buying power gates buys only; fully invested accounts must still be able to sell.
+    if side is OrderSide.BUY and parse_decimal(portfolio.buying_power) <= ZERO:
+        return SizingResult(
+            reason_code=SizerReasonCode.NON_POSITIVE_BUYING_POWER,
             candidate=None,
             as_of=clock,
         )
@@ -193,7 +213,8 @@ def size_position(
         )
 
     if side is OrderSide.SELL:
-        sellable = _floor_to_increment(current_qty, qty_inc)
+        # Never sell shares already committed on open sell orders.
+        sellable = _floor_to_increment(filled_qty - open_sell_qty, qty_inc)
         if sellable <= ZERO:
             return SizingResult(
                 reason_code=SizerReasonCode.INSUFFICIENT_POSITION,
@@ -203,9 +224,21 @@ def size_position(
         quantity = min(quantity, sellable)
     else:
         spendable = _spendable_buying_power(portfolio=portfolio, config=config)
-        if spendable <= ZERO:
+        if spendable is None:
             return SizingResult(
-                reason_code=SizerReasonCode.CASH_RESERVE_BLOCKS_BUY,
+                reason_code=SizerReasonCode.OPEN_BUY_MISSING_LIMIT,
+                candidate=None,
+                as_of=clock,
+            )
+        if spendable <= ZERO:
+            if parse_decimal(portfolio.buying_power) <= ZERO:
+                reason = SizerReasonCode.NON_POSITIVE_BUYING_POWER
+            elif parse_decimal(_open_buy_reserved_notional(portfolio) or ZERO) > ZERO:
+                reason = SizerReasonCode.OPEN_BUY_BLOCKS
+            else:
+                reason = SizerReasonCode.CASH_RESERVE_BLOCKS_BUY
+            return SizingResult(
+                reason_code=reason,
                 candidate=None,
                 as_of=clock,
             )
@@ -320,10 +353,6 @@ def _early_reject(
     if quote.currency != portfolio.currency or quote.instrument.currency != portfolio.currency:
         return SizerReasonCode.CURRENCY_MISMATCH
 
-    buying_power = parse_decimal(portfolio.buying_power)
-    if buying_power <= ZERO:
-        return SizerReasonCode.NON_POSITIVE_BUYING_POWER
-
     # Instrument binding: any open position for the symbol must match quote identity.
     for position in portfolio.positions:
         if position.instrument.symbol == signal.symbol and (
@@ -341,6 +370,45 @@ def _find_position(portfolio: PortfolioSnapshot, quote: MarketQuote) -> Position
         if position.instrument.instrument_id == quote.instrument.instrument_id:
             return position
     return None
+
+
+def _open_order_quantities(
+    portfolio: PortfolioSnapshot, instrument_id: str
+) -> tuple[Decimal, Decimal]:
+    """Return ``(open_buy_qty, open_sell_qty)`` for one instrument."""
+    buy_qty = ZERO
+    sell_qty = ZERO
+    for order in portfolio.open_orders:
+        if order.instrument.instrument_id != instrument_id:
+            continue
+        qty = parse_decimal(order.quantity)
+        if order.side is OrderSide.BUY:
+            buy_qty = canonicalize_decimal(buy_qty + qty)
+        elif order.side is OrderSide.SELL:
+            sell_qty = canonicalize_decimal(sell_qty + qty)
+    return buy_qty, sell_qty
+
+
+def _open_buy_reserved_notional(portfolio: PortfolioSnapshot) -> Decimal | None:
+    """Sum open BUY ``qty * limit_price``.
+
+    Returns ``None`` when any open BUY lacks a positive limit price so sizing
+    cannot safely reserve capital (fail closed).
+    """
+    reserved = ZERO
+    for order in portfolio.open_orders:
+        if order.side is not OrderSide.BUY:
+            continue
+        if order.limit_price is None:
+            return None
+        try:
+            limit = parse_decimal(order.limit_price)
+        except ValueError:
+            return None
+        if limit <= ZERO:
+            return None
+        reserved = canonicalize_decimal(reserved + parse_decimal(order.quantity) * limit)
+    return reserved
 
 
 def _reference_price(*, quote: MarketQuote, side: OrderSide) -> Decimal | None:
@@ -414,15 +482,27 @@ def _ceil_to_increment(value: Decimal, increment: Decimal) -> Decimal:
     return canonicalize_decimal(floored + increment)
 
 
-def _spendable_buying_power(*, portfolio: PortfolioSnapshot, config: SizingConfig) -> Decimal:
-    """Buying power remaining after the configured cash reserve."""
+def _spendable_buying_power(
+    *, portfolio: PortfolioSnapshot, config: SizingConfig
+) -> Decimal | None:
+    """Buying power remaining after cash reserve and open BUY notionals.
+
+    Returns ``None`` when an open BUY is missing a usable limit price.
+    """
     buying_power = parse_decimal(portfolio.buying_power)
     cash = parse_decimal(portfolio.cash)
     reserve = parse_decimal(config.cash_reserve)
     after_reserve = cash - reserve
     if after_reserve < ZERO:
         after_reserve = ZERO
-    return canonicalize_decimal(min(buying_power, after_reserve))
+    available = min(buying_power, after_reserve)
+    open_buy_notional = _open_buy_reserved_notional(portfolio)
+    if open_buy_notional is None:
+        return None
+    remaining = available - open_buy_notional
+    if remaining < ZERO:
+        remaining = ZERO
+    return canonicalize_decimal(remaining)
 
 
 def _coeff_exp(value: Decimal) -> tuple[int, int]:

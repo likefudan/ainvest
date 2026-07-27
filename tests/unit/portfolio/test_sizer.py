@@ -133,25 +133,25 @@ def test_expired_signal_rejected() -> None:
 
 @pytest.mark.unit
 def test_non_positive_buying_power_rejected() -> None:
+    """BUY must fail closed when buying power is zero; SELL is tested separately."""
     payload = portfolio_snapshot_example()
-    payload["cash"] = "0"
+    payload["cash"] = "100.00"
     payload["buying_power"] = "0"
-    payload["equity"] = "0"
+    payload["equity"] = "100.00"
     payload["positions"] = []
     payload["exposure"] = {
-        "cash": "0",
-        "equity": "0",
+        "cash": "100.00",
+        "equity": "100.00",
         "gross_market_value": "0",
         "net_market_value": "0",
         "largest_position_weight": "0",
         "position_count": 0,
     }
-    portfolio = PortfolioSnapshot.model_validate(payload)
     result = size_position(
-        signal=_signal(),
+        signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(),
-        portfolio=portfolio,
-        config=_config(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
     )
@@ -249,6 +249,136 @@ def test_sizing_is_deterministic() -> None:
         candidate_id=CANDIDATE_ID,
     )
     assert first.model_dump() == second.model_dump()
+
+
+@pytest.mark.unit
+def test_sell_allowed_when_buying_power_is_zero() -> None:
+    """Fully invested accounts must still be able to reduce a position."""
+    payload = portfolio_snapshot_example()
+    market_value = parse_decimal(payload["positions"][0]["market_value"])
+    payload["cash"] = "0"
+    payload["buying_power"] = "0"
+    payload["equity"] = str(market_value)
+    payload["positions"][0]["portfolio_weight"] = "1"
+    payload["exposure"] = {
+        "cash": "0",
+        "equity": str(market_value),
+        "gross_market_value": str(market_value),
+        "net_market_value": str(market_value),
+        "largest_position_weight": "1",
+        "position_count": 1,
+    }
+    result = size_position(
+        signal=_signal(intent="SELL", target_weight="0.20", strength="-0.50"),
+        quote=_quote(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    assert result.candidate.side is OrderSide.SELL
+    assert result.candidate.quantity >= 1
+
+
+@pytest.mark.unit
+def test_open_sell_orders_reduce_sellable_quantity() -> None:
+    payload = portfolio_snapshot_example()  # 10 AAPL
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_sell_aapl",
+            "instrument": payload["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "8",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="SELL", target_weight="0", strength="-1"),
+        quote=_quote(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # 10 filled - 8 open sell => at most 2 more shares may be sold.
+    assert result.candidate.quantity == Decimal("2")
+
+
+@pytest.mark.unit
+def test_open_buy_orders_reduce_spendable_buying_power() -> None:
+    """Open BUY notionals reserve cash even for a different symbol."""
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "20",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # 20*214.50=4290 reserved from 5000 => <=710 spendable => at most 3 shares.
+    assert result.candidate.quantity <= Decimal("3")
+    assert result.candidate.quantity * result.candidate.limit_price <= Decimal("710.00")
+
+
+@pytest.mark.unit
+def test_open_buy_without_limit_fails_closed() -> None:
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_no_limit",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "5",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.10"),
+        quote=_quote(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.OPEN_BUY_MISSING_LIMIT
 
 
 @pytest.mark.unit
