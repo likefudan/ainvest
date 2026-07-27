@@ -221,11 +221,12 @@ rewrite another track's allowed paths.
   order rules for proposal-hash / client-order-id / symbol-side window / open-order
   conflicts; `evaluate_pretrade` re-fetches quote+portfolio and runs
   `PRETRADE_RULE_CODES` with a new decision id (never reuses prior APPROVED).
-- **PR:** TBD (opened after rebase onto `3e12ecc`)
+  Rebased onto `3e12ecc`; `./scripts/dev verify` passed (532 tests).
+- **PR:** https://github.com/likefudan/ainvest/pull/67
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T12` | Prevent Duplicate Orders and Re-run Risk Before Execution | `in_review` | cursor-subagent-d2 | `task/batch-d2c-pretrade-risk` | `3e12ecc` | `P03-T8`–`T11`, `P02-T7`, `P02-T9` | TBD |
+| `P03-T12` | Prevent Duplicate Orders and Re-run Risk Before Execution | `in_review` | cursor-subagent-d2 | `task/batch-d2c-pretrade-risk` | `3e12ecc` | `P03-T8`–`T11`, `P02-T7`, `P02-T9` | https://github.com/likefudan/ainvest/pull/67 |
 
 ### Batch D — Part 3b (D3b)
 
