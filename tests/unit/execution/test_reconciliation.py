@@ -69,11 +69,12 @@ def _local(
     known_fill_ids: tuple[str, ...] = (),
     lifecycle: OrderLifecycleState = OrderLifecycleState.SUBMITTED,
     broker_order_id: str | None = "paper_client_ord_1",
+    side: OrderSide = OrderSide.BUY,
 ) -> LocalOrderExpectation:
     return LocalOrderExpectation(
         client_order_id="client_ord_1",
         proposal_id="ordp_01HZYRECONCILE0001",
-        side=OrderSide.BUY,
+        side=side,
         expected_quantity=Decimal(quantity),
         expected_limit_price=Decimal(limit),
         instrument=_instrument(),
@@ -321,3 +322,164 @@ def test_status_mismatch_manual_review() -> None:
     )
     assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
     assert DiscrepancyCode.STATUS_MISMATCH in report.discrepancy_codes
+
+
+@pytest.mark.unit
+def test_partial_ledger_apply_rolls_back_on_reject() -> None:
+    """Cash 250 + fills 100 then 200 → MANUAL_REVIEW with cash still 250."""
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("250"),
+        as_of=AS_OF,
+    )
+    first = _fill(fill_id="fill_ok_100", quantity="1", price="100")
+    second = _fill(
+        fill_id="fill_fail_200",
+        quantity="1",
+        price="200",
+        filled_at=AS_OF + timedelta(seconds=1),
+    )
+    report = reconciler.reconcile(
+        _local(quantity="3", limit="200"),
+        broker_orders=(_broker_order(status=BrokerOrderStatus.PARTIALLY_FILLED),),
+        broker_fills=(first, second),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYPARTIALROLL1",
+        ledger=ledger,
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert report.requires_manual_review
+    assert ledger.cash == Decimal("250")
+    assert ledger.positions() == {}
+    assert ledger.applied_fill_ids == frozenset()
+    assert alerts.alerts
+
+
+@pytest.mark.unit
+def test_side_mismatch_buy_local_sell_broker_is_manual_review() -> None:
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("10000"),
+        as_of=AS_OF,
+    )
+    report = reconciler.reconcile(
+        _local(side=OrderSide.BUY),
+        broker_orders=(_broker_order(status=BrokerOrderStatus.FILLED, side=OrderSide.SELL),),
+        broker_fills=(_fill(fill_id="fill_side_1", quantity="2", price="214"),),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYSIDEMISMATCH1",
+        ledger=ledger,
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert DiscrepancyCode.SIDE_MISMATCH in report.discrepancy_codes
+    assert ledger.cash == Decimal("10000")
+    assert ledger.positions() == {}
+    assert alerts.alerts
+
+
+@pytest.mark.unit
+def test_orphan_fill_assigns_unknown_fill() -> None:
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    orphan = _fill(
+        fill_id="fill_orphan_1",
+        quantity="1",
+        price="100",
+        broker_order_id="paper_unknown_99",
+    )
+    report = reconciler.reconcile(
+        _local(),
+        broker_orders=(_broker_order(status=BrokerOrderStatus.ACCEPTED),),
+        broker_fills=(orphan,),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYORPHANFILL01",
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert DiscrepancyCode.UNKNOWN_FILL in report.discrepancy_codes
+    assert DiscrepancyCode.UNKNOWN_FILL.value in alerts.alerts[0].details
+
+
+@pytest.mark.unit
+def test_broker_filled_underfill_is_manual_review() -> None:
+    """Broker FILLED with fill qty < expected, including local FILLED filled_qty=0."""
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("10000"),
+        as_of=AS_OF,
+    )
+    report = reconciler.reconcile(
+        _local(lifecycle=OrderLifecycleState.FILLED, filled="0", quantity="2"),
+        broker_orders=(_broker_order(status=BrokerOrderStatus.FILLED),),
+        broker_fills=(_fill(fill_id="fill_short_1", quantity="1", price="214"),),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYUNDERFILL0001",
+        ledger=ledger,
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert DiscrepancyCode.QUANTITY_MISMATCH in report.discrepancy_codes
+    assert ledger.cash == Decimal("10000")
+    assert ledger.applied_fill_ids == frozenset()
+    assert alerts.alerts
+
+
+@pytest.mark.unit
+def test_fill_quantity_mismatch_even_when_new_fills_exist() -> None:
+    """Local filled_quantity disagrees with known fills; do not skip when unseen fills exist."""
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("10000"),
+        as_of=AS_OF,
+    )
+    report = reconciler.reconcile(
+        _local(
+            lifecycle=OrderLifecycleState.PARTIALLY_FILLED,
+            known_fill_ids=(),
+            filled="1",
+            quantity="2",
+        ),
+        broker_orders=(_broker_order(status=BrokerOrderStatus.PARTIALLY_FILLED),),
+        broker_fills=(_fill(fill_id="fill_a", quantity="1", price="214"),),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYQTYSKIP00001",
+        ledger=ledger,
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert DiscrepancyCode.FILL_QUANTITY_MISMATCH in report.discrepancy_codes
+    assert ledger.cash == Decimal("10000")
+    assert ledger.applied_fill_ids == frozenset()
+    assert alerts.alerts
+
+
+@pytest.mark.unit
+def test_broker_order_id_mismatch_uses_distinct_code() -> None:
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    # Match via client_order_id, but local remembers a different broker_order_id.
+    report = reconciler.reconcile(
+        _local(broker_order_id="paper_stale_id_99"),
+        broker_orders=(
+            _broker_order(
+                broker_order_id="paper_client_ord_1",
+                status=BrokerOrderStatus.ACCEPTED,
+            ),
+        ),
+        broker_fills=(),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYBROKERIDMIS01",
+    )
+    assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
+    assert DiscrepancyCode.BROKER_ORDER_ID_MISMATCH in report.discrepancy_codes
+    assert DiscrepancyCode.CLIENT_ORDER_ID_MISMATCH not in report.discrepancy_codes
+    assert alerts.alerts

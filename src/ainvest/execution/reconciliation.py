@@ -61,6 +61,8 @@ class DiscrepancyCode(StrEnum):
     MISSING_BROKER_ORDER = "MISSING_BROKER_ORDER"
     UNKNOWN_BROKER_ORDER = "UNKNOWN_BROKER_ORDER"
     CLIENT_ORDER_ID_MISMATCH = "CLIENT_ORDER_ID_MISMATCH"
+    BROKER_ORDER_ID_MISMATCH = "BROKER_ORDER_ID_MISMATCH"
+    SIDE_MISMATCH = "SIDE_MISMATCH"
     QUANTITY_MISMATCH = "QUANTITY_MISMATCH"
     PRICE_MISMATCH = "PRICE_MISMATCH"
     STATUS_MISMATCH = "STATUS_MISMATCH"
@@ -197,8 +199,9 @@ class OrderReconciler:
     """Compare local expectations to broker orders/fills without mutating money.
 
     Matched new fills may be applied to an injected :class:`PortfolioLedger`
-    only when the comparison is clean. Divergent cases alert and return
-    ``MANUAL_REVIEW`` without ledger writes.
+    only when the comparison is clean, and only via an all-or-nothing batch.
+    Divergent cases alert and return ``MANUAL_REVIEW`` with the ledger left
+    unchanged — never a partial money rewrite.
     """
 
     alert_sink: AlertSink | None = None
@@ -289,17 +292,26 @@ class OrderReconciler:
                 broker_order_id=broker.broker_order_id,
             )
 
+        if broker.side is not local.side:
+            codes.append(DiscrepancyCode.SIDE_MISMATCH)
+
         allowed = expected_broker_statuses(local.local_lifecycle)
         if allowed and broker.status not in allowed:
             codes.append(DiscrepancyCode.STATUS_MISMATCH)
 
         if local.broker_order_id is not None and broker.broker_order_id != local.broker_order_id:
-            codes.append(DiscrepancyCode.CLIENT_ORDER_ID_MISMATCH)
+            codes.append(DiscrepancyCode.BROKER_ORDER_ID_MISMATCH)
 
         order_fills = sorted(
             (fill for fill in broker_fills if fill.broker_order_id == broker.broker_order_id),
             key=lambda item: (ensure_utc(item.filled_at), item.fill_id),
         )
+        orphan_fills = [
+            fill for fill in broker_fills if fill.broker_order_id != broker.broker_order_id
+        ]
+        if orphan_fills:
+            codes.append(DiscrepancyCode.UNKNOWN_FILL)
+
         known = set(local.known_fill_ids)
         new_fills: list[BrokerFill] = []
         duplicate_ids: list[str] = []
@@ -312,12 +324,23 @@ class OrderReconciler:
         broker_filled_qty = canonicalize_decimal(
             sum((parse_decimal(fill.quantity) for fill in order_fills), ZERO)
         )
+        known_fill_qty = canonicalize_decimal(
+            sum(
+                (parse_decimal(fill.quantity) for fill in order_fills if fill.fill_id in known),
+                ZERO,
+            )
+        )
         local_filled = canonicalize_decimal(parse_decimal(local.filled_quantity))
         expected_qty = canonicalize_decimal(parse_decimal(local.expected_quantity))
 
         if broker_filled_qty > expected_qty:
             codes.append(DiscrepancyCode.QUANTITY_MISMATCH)
-        if local_filled > ZERO and not new_fills and broker_filled_qty != local_filled:
+        if broker.status is BrokerOrderStatus.FILLED and broker_filled_qty < expected_qty:
+            codes.append(DiscrepancyCode.QUANTITY_MISMATCH)
+        # Local filled_quantity must agree with quantities of known (already-seen) fills,
+        # even when unseen broker fills are also present — otherwise inconsistent books
+        # are treated as MATCHED and new fills can double-apply.
+        if local_filled != known_fill_qty:
             codes.append(DiscrepancyCode.FILL_QUANTITY_MISMATCH)
 
         limit = canonicalize_decimal(parse_decimal(local.expected_limit_price))
@@ -336,6 +359,8 @@ class OrderReconciler:
             DiscrepancyCode.PRICE_MISMATCH,
             DiscrepancyCode.STATUS_MISMATCH,
             DiscrepancyCode.CLIENT_ORDER_ID_MISMATCH,
+            DiscrepancyCode.BROKER_ORDER_ID_MISMATCH,
+            DiscrepancyCode.SIDE_MISMATCH,
             DiscrepancyCode.FILL_QUANTITY_MISMATCH,
             DiscrepancyCode.UNKNOWN_FILL,
         }
@@ -354,31 +379,34 @@ class OrderReconciler:
             )
 
         applied_new: list[str] = []
-        if ledger is not None:
-            for fill in new_fills:
-                apply_result = ledger.apply_fill(
-                    fill,
-                    side=local.side,
-                    instrument=local.instrument,
-                    fee=fees.get(fill.fill_id, ZERO),
+        if ledger is not None and new_fills:
+            batch = [
+                (fill, local.side, local.instrument, fees.get(fill.fill_id, ZERO))
+                for fill in new_fills
+            ]
+            apply_results = ledger.apply_fills_atomic(batch)
+            rejected = next(
+                (item for item in apply_results if item.status is LedgerApplyStatus.REJECTED),
+                None,
+            )
+            if rejected is not None:
+                return self._manual(
+                    local=local,
+                    observed=observed,
+                    reconciliation_id=reconciliation_id,
+                    codes=(DiscrepancyCode.FILL_QUANTITY_MISMATCH,),
+                    reason_code=rejected.reason_code or "LEDGER_REJECTED",
+                    message=(
+                        "matched fill could not be applied to ledger; refusing silent rewrite"
+                    ),
+                    broker_order_id=broker.broker_order_id,
+                    broker_filled_quantity=broker_filled_qty,
+                    new_fill_ids=tuple(item.fill_id for item in new_fills),
+                    duplicate_fill_ids=tuple(duplicate_ids),
                 )
-                if apply_result.status is LedgerApplyStatus.REJECTED:
-                    return self._manual(
-                        local=local,
-                        observed=observed,
-                        reconciliation_id=reconciliation_id,
-                        codes=(DiscrepancyCode.FILL_QUANTITY_MISMATCH,),
-                        reason_code=apply_result.reason_code or "LEDGER_REJECTED",
-                        message=(
-                            "matched fill could not be applied to ledger; refusing silent rewrite"
-                        ),
-                        broker_order_id=broker.broker_order_id,
-                        broker_filled_quantity=broker_filled_qty,
-                        new_fill_ids=tuple(item.fill_id for item in new_fills),
-                        duplicate_fill_ids=tuple(duplicate_ids),
-                    )
-                if apply_result.status is LedgerApplyStatus.APPLIED:
-                    applied_new.append(fill.fill_id)
+            applied_new = [
+                item.fill_id for item in apply_results if item.status is LedgerApplyStatus.APPLIED
+            ]
 
         return self._report(
             local=local,

@@ -36,7 +36,6 @@ from ainvest.schemas.common import (
     parse_decimal,
 )
 from ainvest.schemas.portfolio import (
-    WEIGHT_TOLERANCE,
     AccountScope,
     ExposureSnapshot,
     OpenOrderSnapshot,
@@ -130,6 +129,19 @@ class _Lot:
     instrument: InstrumentIdentity
     quantity: Decimal
     average_cost: Decimal
+
+
+@dataclass
+class _LedgerCheckpoint:
+    """Opaque snapshot used for all-or-nothing fill batches."""
+
+    cash: Decimal
+    lots: dict[str, _Lot]
+    entries: list[LedgerEntry]
+    seen_fills: dict[str, str]
+    realized_pnl: Decimal
+    entry_seq: int
+    as_of: datetime
 
 
 @dataclass
@@ -313,6 +325,57 @@ class PortfolioLedger:
             for fill, side, instrument, fee in ordered
         )
 
+    def apply_fills_atomic(
+        self,
+        fills: Sequence[tuple[BrokerFill, OrderSide, InstrumentIdentity, Decimal]],
+    ) -> tuple[FillApplyResult, ...]:
+        """Apply a fill batch all-or-nothing.
+
+        Fills are sorted by ``(filled_at, fill_id)``. On any ``REJECTED`` result the
+        ledger is restored to its pre-batch state so callers never observe a
+        partial money rewrite alongside a failure / manual-review path.
+        ``DUPLICATE`` results do not trigger rollback.
+        """
+        ordered = sorted(fills, key=lambda item: (ensure_utc(item[0].filled_at), item[0].fill_id))
+        if not ordered:
+            return ()
+        checkpoint = self._checkpoint()
+        results: list[FillApplyResult] = []
+        for fill, side, instrument, fee in ordered:
+            result = self.apply_fill(fill, side=side, instrument=instrument, fee=fee)
+            results.append(result)
+            if result.status is LedgerApplyStatus.REJECTED:
+                self._restore(checkpoint)
+                return tuple(results)
+        return tuple(results)
+
+    def _checkpoint(self) -> _LedgerCheckpoint:
+        return _LedgerCheckpoint(
+            cash=self._cash,
+            lots={
+                key: _Lot(
+                    instrument=lot.instrument,
+                    quantity=lot.quantity,
+                    average_cost=lot.average_cost,
+                )
+                for key, lot in self._lots.items()
+            },
+            entries=list(self._entries),
+            seen_fills=dict(self._seen_fills),
+            realized_pnl=self._realized_pnl,
+            entry_seq=self._entry_seq,
+            as_of=self.as_of,
+        )
+
+    def _restore(self, checkpoint: _LedgerCheckpoint) -> None:
+        self._cash = checkpoint.cash
+        self._lots = checkpoint.lots
+        self._entries = checkpoint.entries
+        self._seen_fills = checkpoint.seen_fills
+        self._realized_pnl = checkpoint.realized_pnl
+        self._entry_seq = checkpoint.entry_seq
+        self.as_of = checkpoint.as_of
+
     def cost_basis(self) -> Decimal:
         total = ZERO
         for lot in self._lots.values():
@@ -397,12 +460,7 @@ class PortfolioLedger:
             weight = ZERO if equity == ZERO else _weight(pos.market_value / equity)
             weighted.append(pos.model_copy(update={"portfolio_weight": weight}))
 
-        largest = ZERO
-        if weighted:
-            largest = max(p.portfolio_weight for p in weighted)
-            # Snap within schema tolerance so float-free Decimal weights validate.
-            if abs(largest - max(p.portfolio_weight for p in weighted)) > WEIGHT_TOLERANCE:
-                largest = max(p.portfolio_weight for p in weighted)
+        largest = max((p.portfolio_weight for p in weighted), default=ZERO)
 
         return PortfolioSnapshot(
             snapshot_id=snapshot_id,
