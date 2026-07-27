@@ -233,24 +233,28 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 3b (D3b) — Domain commands/events (`P02-T10`)
 - **Plan batch:** Batch D (D3)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress` (code parallel; **do not open formal PR until D2 merged**)
+- **Status:** `in_progress` (code ready on branch; **do not open formal PR until D2 merged**)
 - **Owner/agent:** cursor-subagent-d3
 - **Integration branch:** `task/batch-d3b-workflow-commands`
-- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
+- **Base commit:** `b189f71a8feffe5255f7a653d398086f90934378`
 - **Dependencies:** `P02-T9`, `P02-T8` (satisfied); rebase onto post-D2 `main` before PR
 - **Merge target:** `main` (squash); after D2b+D2c
 - **Allowed paths:** `src/ainvest/workflow/**`,
   `tests/unit/workflow/**`, `tests/contract/workflow/**` (if needed),
   `docs/tasks/status.md` (D3b section + summary row + Active batch notes only),
-  `pyproject.toml` (package discovery only if required)
+  `pyproject.toml` (package discovery only if required),
+  `docs/architecture/dependency-direction.md` + architecture tests (register `workflow`)
 - **Forbidden:** reconciliation/ledger (D3c), pretrade (D2c), strategy worker (D1),
   live broker, Temporal/durable queue implementation (interface only)
-- **Handoff notes:** Commands/events with correlation/causation/idempotency;
-  in-process dispatcher; distinguish retryable vs broker-write never-blind-retry.
+- **Handoff notes:** Implemented `ainvest.workflow` commands/events with
+  correlation/causation/idempotency; `InProcessCommandDispatcher` +
+  `IdempotencyStore` port; retry classes PURE / READ_ONLY_EXTERNAL / BROKER_WRITE;
+  architecture matrix registers `workflow`. `./scripts/dev verify` green.
+  **No PR opened.** T15 draft not started. Ready for merge queue after D2.
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_progress` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P02-T9`, `P02-T8` | hold until D2 |
+| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_progress` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `b189f71a8feffe5255f7a653d398086f90934378` | `P02-T9`, `P02-T8` | hold until D2 |
 
 ### Batch C — Part 4b (C4b)
 
