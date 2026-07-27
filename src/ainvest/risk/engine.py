@@ -16,7 +16,7 @@ from pydantic import StringConstraints
 
 from ainvest.data.calendar_port import MarketCalendar
 from ainvest.risk.models import RiskContext, RiskRuleConfig, RuleResult
-from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES, RiskRule
+from ainvest.risk.rules import DEFAULT_RULE_CODES, RiskRule
 from ainvest.risk.rules.eligibility import (
     AllowlistRule,
     AssetClassRule,
@@ -24,6 +24,7 @@ from ainvest.risk.rules.eligibility import (
     SessionRule,
     SideAndProductRule,
 )
+from ainvest.risk.rules.exposure import build_exposure_rules
 from ainvest.risk.rules.market_quality import (
     LimitDeviationRule,
     QuoteFreshnessRule,
@@ -175,30 +176,34 @@ def evaluate_rules(
 
 
 def build_c4a_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
-    """Instantiate the standard C4a rule set bound to ``calendar``."""
-    rules: tuple[RiskRule, ...] = (
-        AssetClassRule(),
-        AllowlistRule(),
-        IdentityConsistencyRule(),
-        SideAndProductRule(),
-        SessionRule(calendar),
-        QuoteFreshnessRule(),
-        SpreadRule(),
-        VolatilityRule(),
-        LimitDeviationRule(),
-    )
-    return {rule.code: rule for rule in rules}
+    """Instantiate eligibility + market-quality + exposure rules."""
+    rules: dict[str, RiskRule] = {
+        rule.code: rule
+        for rule in (
+            AssetClassRule(),
+            AllowlistRule(),
+            IdentityConsistencyRule(),
+            SideAndProductRule(),
+            SessionRule(calendar),
+            QuoteFreshnessRule(),
+            SpreadRule(),
+            VolatilityRule(),
+            LimitDeviationRule(),
+        )
+    }
+    rules.update(build_exposure_rules())  # type: ignore[arg-type]
+    return rules
 
 
 def evaluate_risk(
     context: RiskContext,
     *,
     calendar: MarketCalendar,
-    rule_codes: Sequence[str] | None = DEFAULT_C4A_RULE_CODES,
+    rule_codes: Sequence[str] | None = DEFAULT_RULE_CODES,
 ) -> RiskEngineOutput:
-    """Evaluate with the standard C4a rules (unknown codes fail closed)."""
+    """Evaluate with the standard rule set (unknown codes fail closed)."""
     available = build_c4a_rules(calendar)
-    codes = tuple(DEFAULT_C4A_RULE_CODES if rule_codes is None else rule_codes)
+    codes = tuple(DEFAULT_RULE_CODES if rule_codes is None else rule_codes)
     selected: list[RiskRule] = []
     for code in codes:
         rule = available.get(code)

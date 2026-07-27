@@ -13,12 +13,14 @@ from ainvest.risk.models import (
     AllowlistEntry,
     EligibilityLimits,
     EvaluationPhase,
+    ExposureLimits,
     InstrumentMetadata,
     MarketQualityLimits,
     PhaseMarketQualityLimits,
     RiskContext,
     RiskRuleConfig,
 )
+from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES
 from ainvest.risk.rules.eligibility import (
     AllowlistRule,
     AssetClassRule,
@@ -56,6 +58,14 @@ def _config() -> RiskRuleConfig:
             )
         ),
         market_quality=_mq(),
+        exposure=ExposureLimits(
+            max_order_notional=Decimal("10000"),
+            max_symbol_weight=Decimal("0.50"),
+            max_sector_weight=Decimal("0.80"),
+            max_daily_turnover=Decimal("50000"),
+            min_cash_reserve_weight=Decimal("0.0"),
+            max_daily_loss=Decimal("10000"),
+        ),
     )
 
 
@@ -188,6 +198,6 @@ def test_session_holiday_and_off_hours_reject() -> None:
 def test_full_engine_rejects_unknown_exchange_session() -> None:
     cal = FakeMarketCalendar(supported_exchanges=frozenset({"XNYS"}))
     # Candidate exchange is XNAS → UNKNOWN → reject
-    out = evaluate_risk(_ctx(), calendar=cal)
+    out = evaluate_risk(_ctx(), calendar=cal, rule_codes=DEFAULT_C4A_RULE_CODES)
     assert out.decision.outcome is RiskOutcome.REJECTED
     assert any(v.rule_code == "ELIGIBILITY_SESSION" for v in out.decision.violations)

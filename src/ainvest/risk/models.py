@@ -20,12 +20,15 @@ from ainvest.schemas.common import (
     DomainModel,
     ExchangeMic,
     MachineCode,
+    Money,
     NonNegativeDecimal,
+    PnL,
     PositiveDecimal,
     SchemaVersion,
     StableId,
     Symbol,
     UtcDateTime,
+    Weight,
 )
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
@@ -92,13 +95,48 @@ class MarketQualityLimits(DomainModel):
     max_clock_skew_seconds: Annotated[int, Field(ge=0, le=3600)]
 
 
+class ExposureLimits(DomainModel):
+    """Explicit exposure limits (P03-T9). Every field is required; no defaults."""
+
+    max_order_notional: PositiveDecimal
+    max_symbol_weight: Weight
+    max_sector_weight: Weight
+    max_daily_turnover: PositiveDecimal
+    min_cash_reserve_weight: Weight
+    max_daily_loss: PositiveDecimal
+
+    @model_validator(mode="after")
+    def _weights_in_unit_interval(self) -> ExposureLimits:
+        # Weight type already enforces [0, 1]; keep an explicit cross-field note.
+        if self.max_symbol_weight > 1 or self.max_sector_weight > 1:
+            raise ValueError("weights must be <= 1")
+        return self
+
+
+class SectorAssignment(DomainModel):
+    """Sector label for one instrument (fail closed when missing)."""
+
+    instrument_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    sector: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+
+
+class ExposureInputs(DomainModel):
+    """Daily and sector inputs required by exposure rules (P03-T9)."""
+
+    sectors: tuple[SectorAssignment, ...] = ()
+    daily_turnover_to_date: Money
+    daily_realized_pnl: PnL
+    daily_unrealized_pnl: PnL | None = None
+
+
 class RiskRuleConfig(DomainModel):
-    """C4a rule configuration. Missing sections fail closed at construction."""
+    """Rule configuration. Missing sections fail closed at construction."""
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     rule_set_version: Annotated[str, StringConstraints(min_length=1, max_length=64)]
     eligibility: EligibilityLimits
     market_quality: MarketQualityLimits
+    exposure: ExposureLimits
 
 
 class RuleResult(DomainModel):
@@ -140,6 +178,7 @@ class RiskContext(DomainModel):
     config: RiskRuleConfig
     portfolio: PortfolioSnapshot | None = None
     short_term_volatility_bps: NonNegativeDecimal | None = None
+    exposure_inputs: ExposureInputs | None = None
 
 
 ZERO = Decimal("0")
@@ -152,10 +191,13 @@ __all__ = [
     "AllowlistEntry",
     "EligibilityLimits",
     "EvaluationPhase",
+    "ExposureInputs",
+    "ExposureLimits",
     "InstrumentMetadata",
     "MarketQualityLimits",
     "PhaseMarketQualityLimits",
     "RiskContext",
     "RiskRuleConfig",
     "RuleResult",
+    "SectorAssignment",
 ]
