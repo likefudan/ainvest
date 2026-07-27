@@ -76,85 +76,89 @@ def test_config_precedence_constant_documents_order() -> None:
 
 
 @pytest.mark.unit
-def test_explicit_overrides_beat_environment(tmp_path: Path) -> None:
-    """Explicit load_settings kwargs win over environment values."""
+@pytest.mark.parametrize(
+    ("environ", "dotenv", "risk_yaml_text", "overrides", "field", "expected"),
+    [
+        (
+            {"TRADING_MODE": "research"},
+            None,
+            None,
+            {"trading_mode": TradingMode.PAPER},
+            "trading_mode",
+            TradingMode.PAPER,
+        ),
+        (
+            {"TRADING_MODE": "research"},
+            "TRADING_MODE=paper\n",
+            None,
+            {},
+            "trading_mode",
+            TradingMode.RESEARCH,
+        ),
+        (
+            {"RISK__NOTES": "environment-value"},
+            None,
+            "schema_version: '1'\nnotes: yaml-value\n",
+            {},
+            "risk.notes",
+            "environment-value",
+        ),
+        (
+            {},
+            "RISK__NOTES=dotenv-value\n",
+            "schema_version: '1'\nnotes: yaml-value\n",
+            {},
+            "risk.notes",
+            "dotenv-value",
+        ),
+        (
+            {"RISK__NOTES": "environment-value"},
+            None,
+            "schema_version: '1'\nnotes: yaml-value\n",
+            {"risk": {"schema_version": "1", "notes": "explicit-value"}},
+            "risk.notes",
+            "explicit-value",
+        ),
+    ],
+    ids=(
+        "explicit_beats_environment",
+        "environment_beats_dotenv",
+        "environment_beats_risk_yaml",
+        "dotenv_beats_risk_yaml",
+        "explicit_beats_environment_and_risk_yaml",
+    ),
+)
+def test_config_source_precedence(
+    tmp_path: Path,
+    environ: dict[str, str],
+    dotenv: str | None,
+    risk_yaml_text: str | None,
+    overrides: dict[str, object],
+    field: str,
+    expected: object,
+) -> None:
+    """Higher-priority config sources win over lower ones (CONFIG_PRECEDENCE)."""
+    env_file: Path | None = None
+    if dotenv is not None:
+        env_file = tmp_path / ".env"
+        env_file.write_text(dotenv, encoding="utf-8")
+
+    risk_yaml: Path | None = None
+    if risk_yaml_text is not None:
+        risk_yaml = tmp_path / "risk.yaml"
+        risk_yaml.write_text(risk_yaml_text, encoding="utf-8")
+
     settings = load_settings(
-        environ={"TRADING_MODE": "research"},
-        env_file=None,
-        trading_mode=TradingMode.PAPER,
-    )
-    assert settings.trading_mode is TradingMode.PAPER
-
-
-@pytest.mark.unit
-def test_environment_beats_risk_yaml(tmp_path: Path) -> None:
-    """Environment values override the lower-priority risk YAML source."""
-    risk_yaml = tmp_path / "risk.yaml"
-    risk_yaml.write_text(
-        "schema_version: '1'\nnotes: yaml-value\n",
-        encoding="utf-8",
-    )
-
-    settings = load_settings(
-        environ={"RISK__NOTES": "environment-value"},
-        env_file=None,
-        risk_yaml=risk_yaml,
-    )
-
-    assert settings.risk.notes == "environment-value"
-
-
-@pytest.mark.unit
-def test_dotenv_beats_risk_yaml(tmp_path: Path) -> None:
-    """Dotenv values override the lower-priority risk YAML source."""
-    risk_yaml = tmp_path / "risk.yaml"
-    risk_yaml.write_text(
-        "schema_version: '1'\nnotes: yaml-value\n",
-        encoding="utf-8",
-    )
-    env_file = tmp_path / ".env"
-    env_file.write_text("RISK__NOTES=dotenv-value\n", encoding="utf-8")
-
-    settings = load_settings(
-        environ={},
+        environ=environ,
         env_file=env_file,
         risk_yaml=risk_yaml,
+        **overrides,  # type: ignore[arg-type]
     )
 
-    assert settings.risk.notes == "dotenv-value"
-
-
-@pytest.mark.unit
-def test_environment_beats_dotenv(tmp_path: Path) -> None:
-    """Process environment values override the optional dotenv file."""
-    env_file = tmp_path / ".env"
-    env_file.write_text("TRADING_MODE=paper\n", encoding="utf-8")
-
-    settings = load_settings(
-        environ={"TRADING_MODE": "research"},
-        env_file=env_file,
-    )
-
-    assert settings.trading_mode is TradingMode.RESEARCH
-
-
-@pytest.mark.unit
-def test_explicit_override_beats_environment_and_risk_yaml(tmp_path: Path) -> None:
-    """Explicit nested settings remain the highest-priority source."""
-    risk_yaml = tmp_path / "risk.yaml"
-    risk_yaml.write_text(
-        "schema_version: '1'\nnotes: yaml-value\n",
-        encoding="utf-8",
-    )
-
-    settings = load_settings(
-        environ={"RISK__NOTES": "environment-value"},
-        env_file=None,
-        risk_yaml=risk_yaml,
-        risk={"schema_version": "1", "notes": "explicit-value"},
-    )
-
-    assert settings.risk.notes == "explicit-value"
+    actual: object = settings
+    for part in field.split("."):
+        actual = getattr(actual, part)
+    assert actual == expected
 
 
 @pytest.mark.unit

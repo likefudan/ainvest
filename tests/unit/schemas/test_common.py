@@ -7,6 +7,15 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from decimal_cases import (
+    EXTREME_HUGE,
+    EXTREME_TINY,
+    EXTREME_ZERO_ENCODINGS,
+    PADDED_ONE,
+    SCIENTIFIC_NOTATION_STRINGS,
+    TINY_FIXED,
+    TINY_PADDED,
+)
 from pydantic import TypeAdapter, ValidationError
 
 from ainvest.schemas.common import (
@@ -39,16 +48,18 @@ def test_decimal_money_round_trip_rejects_float() -> None:
 
 
 @pytest.mark.unit
-def test_decimal_runtime_rejects_scientific_notation_and_extreme_exponents() -> None:
+@pytest.mark.parametrize("raw", SCIENTIFIC_NOTATION_STRINGS)
+def test_decimal_runtime_rejects_scientific_notation(raw: str) -> None:
     adapter = TypeAdapter(Money)
     with pytest.raises(ValidationError, match="decimal"):
-        adapter.validate_python("1e10")
-    with pytest.raises(ValidationError, match="decimal"):
-        adapter.validate_python("1E+6")
+        adapter.validate_python(raw)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("raw", (EXTREME_HUGE, EXTREME_TINY))
+def test_decimal_runtime_rejects_extreme_exponents(raw: Decimal) -> None:
     with pytest.raises(ValueError, match="exponent"):
-        parse_decimal(Decimal("1e1000000"))
-    with pytest.raises(ValueError, match="exponent"):
-        parse_decimal(Decimal("1e-1000000"))
+        parse_decimal(raw)
 
 
 @pytest.mark.unit
@@ -56,26 +67,27 @@ def test_trailing_zero_equivalent_decimals_share_accepted_domain() -> None:
     """Bounds apply after stripping insignificant trailing zeros."""
     adapter = TypeAdapter(Money)
     assert adapter.validate_python("1") == Decimal("1")
-    padded = "1." + ("0" * 40)
-    assert len(padded) <= 64
-    assert adapter.validate_python(padded) == Decimal("1")
+    assert len(PADDED_ONE) <= 64
+    assert adapter.validate_python(PADDED_ONE) == Decimal("1")
 
-    tiny = "0." + ("0" * 27) + "1"  # 1e-28 fixed-point
-    assert adapter.validate_python(tiny) == Decimal("1e-28")
-    tiny_padded = tiny + "00"
-    assert adapter.validate_python(tiny_padded) == Decimal("1e-28")
+    assert adapter.validate_python(TINY_FIXED) == Decimal("1e-28")
+    assert adapter.validate_python(TINY_PADDED) == Decimal("1e-28")
 
 
 @pytest.mark.unit
-def test_extreme_exponent_zeros_canonicalize_before_expand() -> None:
+@pytest.mark.parametrize("raw", EXTREME_ZERO_ENCODINGS)
+def test_extreme_exponent_zeros_canonicalize_via_parse_decimal(raw: Decimal) -> None:
     """Zero encodings must collapse to Decimal(0) before serialize/scale."""
-    for raw in (Decimal("0e1000000"), Decimal("0e-1000000"), Decimal("-0e999999")):
-        canonical = parse_decimal(raw)
-        assert canonical == Decimal(0)
-        assert canonical.as_tuple() == (0, (0,), 0)
+    canonical = parse_decimal(raw)
+    assert canonical == Decimal(0)
+    assert canonical.as_tuple() == (0, (0,), 0)
 
+
+@pytest.mark.unit
+def test_extreme_exponent_zero_money_round_trips() -> None:
+    """Money accepts canonicalized extreme-exponent zero encodings."""
     adapter = TypeAdapter(Money)
-    parsed = adapter.validate_python(Decimal("0e-1000000"))
+    parsed = adapter.validate_python(EXTREME_ZERO_ENCODINGS[1])  # 0e-1000000
     assert parsed == Decimal(0)
     assert adapter.dump_python(parsed, mode="json") == "0"
 

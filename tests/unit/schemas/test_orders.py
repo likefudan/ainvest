@@ -7,6 +7,7 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
+from decimal_cases import EXTREME_ZERO_ENCODINGS
 from pydantic import ValidationError
 
 from ainvest.approval.order_hash import (
@@ -158,9 +159,12 @@ def test_large_significand_increment_and_notional_are_exact() -> None:
 
 
 @pytest.mark.unit
-def test_extreme_exponents_rejected_before_power_operations() -> None:
-    from decimal import Decimal
+def test_extreme_exponent_zero_notional_fail_closed() -> None:
+    """Extreme-exponent zero must canonicalize before notional product checks.
 
+    Scientific / extreme-exponent rejection lives in ``test_common``; this only
+    proves the CandidateOrder notional gate after canonicalization.
+    """
     payload = _valid_proposal()
     payload["candidate_id"] = "cand_01HZYEXAMPLE0001"
     payload.pop("proposal_id", None)
@@ -168,34 +172,12 @@ def test_extreme_exponents_rejected_before_power_operations() -> None:
     payload.pop("order_hash", None)
     payload["reason_codes"] = ["SIZED_TO_TARGET_WEIGHT"]
 
-    scientific = deepcopy(payload)
-    scientific["quantity"] = "1e1000000"
-    with pytest.raises(ValidationError, match="decimal"):
-        CandidateOrder.model_validate(scientific)
-
-    # Bypass string pattern with a pre-built Decimal; helpers must still refuse.
-    huge = deepcopy(payload)
-    huge["quantity"] = Decimal("1e1000000")
-    huge["quantity_increment"] = Decimal("1")
-    huge["limit_price"] = Decimal("1")
-    huge["price_increment"] = Decimal("1")
-    huge["maximum_notional"] = Decimal("1")
-    with pytest.raises(ValidationError, match="exponent"):
-        CandidateOrder.model_validate(huge)
-
-    tiny = deepcopy(huge)
-    tiny["quantity"] = Decimal("1")
-    tiny["limit_price"] = Decimal("1e-1000000")
-    with pytest.raises(ValidationError, match="exponent"):
-        CandidateOrder.model_validate(tiny)
-
-    # Extreme-exponent zero must canonicalize before notional power ops.
     zero_max = deepcopy(payload)
     zero_max["quantity"] = "1"
     zero_max["limit_price"] = "1"
     zero_max["price_increment"] = "1"
     zero_max["quantity_increment"] = "1"
-    zero_max["maximum_notional"] = Decimal("0e1000000")
+    zero_max["maximum_notional"] = EXTREME_ZERO_ENCODINGS[0]
     with pytest.raises(ValidationError, match="maximum_notional"):
         CandidateOrder.model_validate(zero_max)
 
