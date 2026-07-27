@@ -87,7 +87,8 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 3a (C3a) | Batch C | `P03-T13` | complete (merged) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | merged |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | merged |
-| Batch C — Part 4b (C4b) | Batch C | `P03-T9` | in_review |
+| Batch C — Part 4b (C4b) | Batch C | `P03-T9` | merged |
+| Batch C complete | Batch C | all of the above | complete |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
 
@@ -99,7 +100,7 @@ Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
 **C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **D3a is merged**
 (`3de469d`). **C3b is merged** (`380aedf`, [#44](https://github.com/likefudan/ainvest/pull/44)).
 **C4a is merged** (`f3641dd`, [#45](https://github.com/likefudan/ainvest/pull/45)).
-**C4b is in review** on `task/batch-c4b-exposure-rules` (base `f3641dd`).
+**C4b is merged** (see C4b section). **Batch C is complete.**
 Coordinators own `docs/tasks/status.md` updates for handoff; implementation
 agents must not rewrite another track's allowed paths.
 
@@ -108,9 +109,10 @@ agents must not rewrite another track's allowed paths.
 - **Batch:** Batch C — Part 4b (C4b) — Exposure rules (`P03-T9`)
 - **Plan batch:** Batch C (after C4a + D2a)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-c4b
-- **Integration branch:** `task/batch-c4b-exposure-rules`
+- **Integration branch:** `task/batch-c4b-exposure-rules` (deleted after merge)
+- **Handoff PR:** [#46](https://github.com/likefudan/ainvest/pull/46)
 - **Base commit:** `f3641ddd9d0912a60a371e0558be3a6a23ee7203`
 - **Dependencies:** `P03-T8`, `P03-T6` (satisfied on main)
 - **Merge target:** `main` (squash)
@@ -126,7 +128,7 @@ agents must not rewrite another track's allowed paths.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T9` | Implement Notional, Position, Sector, and Cash Rules | `in_review` | cursor-subagent-c4b | `task/batch-c4b-exposure-rules` | `f3641ddd9d0912a60a371e0558be3a6a23ee7203` | `P03-T8`, `P03-T6` | |
+| `P03-T9` | Implement Notional, Position, Sector, and Cash Rules | `merged` | cursor-subagent-c4b | `task/batch-c4b-exposure-rules` | `f3641ddd9d0912a60a371e0558be3a6a23ee7203` | `P03-T8`, `P03-T6` | [#46](https://github.com/likefudan/ainvest/pull/46) |
 
 ### Batch C — Part 4a (C4a)
 
