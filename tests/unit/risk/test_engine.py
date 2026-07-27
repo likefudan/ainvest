@@ -246,3 +246,35 @@ def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
         with_port.model_copy(update={"exposure_inputs": other_exposure})
     )
     assert digest_a != digest_c
+
+    # Order of identical positions/open_orders must not change the digest.
+    reordered = portfolio.model_dump(mode="python")
+    reordered["positions"] = list(reversed(reordered["positions"]))
+    reordered["open_orders"] = [
+        {
+            "order_id": "ord_b",
+            "instrument": reordered["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "1",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        },
+        {
+            "order_id": "ord_a",
+            "instrument": reordered["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "1",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        },
+    ]
+    digest_d = compute_input_digest(
+        with_port.model_copy(update={"portfolio": PortfolioSnapshot.model_validate(reordered)})
+    )
+    reordered["open_orders"] = list(reversed(reordered["open_orders"]))
+    digest_e = compute_input_digest(
+        with_port.model_copy(update={"portfolio": PortfolioSnapshot.model_validate(reordered)})
+    )
+    assert digest_d == digest_e

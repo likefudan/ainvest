@@ -98,7 +98,10 @@ def compute_input_digest(context: RiskContext) -> str:
                             "quantity": str(p.quantity),
                             "market_value": str(p.market_value),
                         }
-                        for p in portfolio.positions
+                        for p in sorted(
+                            portfolio.positions,
+                            key=lambda p: p.instrument.instrument_id,
+                        )
                     ],
                     "open_orders": [
                         {
@@ -110,7 +113,10 @@ def compute_input_digest(context: RiskContext) -> str:
                                 str(o.limit_price) if o.limit_price is not None else None
                             ),
                         }
-                        for o in portfolio.open_orders
+                        for o in sorted(
+                            portfolio.open_orders,
+                            key=lambda o: (o.order_id, o.instrument.instrument_id),
+                        )
                     ],
                 }
             ),

@@ -391,6 +391,48 @@ def test_paper_style_buying_power_does_not_double_count_open_buys() -> None:
 
 
 @pytest.mark.unit
+def test_margin_style_buying_power_still_reserves_open_buys() -> None:
+    """BP < cash for margin reasons must not skip open-buy reservation."""
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["cash"] = "5000.00"
+    payload["buying_power"] = "3000.00"
+    payload["equity"] = "5000.00"
+    payload["exposure"]["cash"] = "5000.00"
+    payload["exposure"]["equity"] = "5000.00"
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "5",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "200.00",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="200.00", ask="200.00", bid="199.90"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # Spendable = min(3000, 5000) - 1000 = 2000, not 3000.
+    assert result.candidate.quantity * result.candidate.limit_price <= Decimal("2000.00")
+
+
+@pytest.mark.unit
 def test_open_buy_without_limit_fails_closed() -> None:
     portfolio = _empty_portfolio()
     payload = portfolio.model_dump(mode="python")
