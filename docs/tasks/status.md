@@ -88,6 +88,8 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
+| Batch D — Part 2a (D2a) | Batch D | `P03-T6` | in review |
+| Batch D — Part 3a (D3a) | Batch D | `P02-T9` | after D2a |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -95,8 +97,37 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
 **C3a is merged** (`1404978`). C4a may start. Do not claim C3b/C4b until their
-prerequisites land. Coordinators own `docs/tasks/status.md` updates for handoff;
-implementation agents must not rewrite another track's allowed paths.
+prerequisites land. **Batch D — Part 2a (D2a)** is `in_review` for `P03-T6`
+(position sizer). Do not claim D3a (`P02-T9`) until D2a is merged.
+Coordinators own `docs/tasks/status.md` updates for handoff; implementation
+agents must not rewrite another track's allowed paths.
+
+### Batch D — Part 2a (D2a)
+
+- **Batch:** Batch D — Part 2a (D2a) — Single-strategy Position Sizer (`P03-T6`)
+- **Plan batch:** Batch D (early unlock for C4b)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Owner/agent:** cursor-subagent-d2a
+- **Integration branch:** `task/batch-d2a-position-sizer`
+- **Base commit:** `00b772a2c4c4af84c3e317e8bd0a2f237515364e`
+- **Dependencies:** `P02-T2`, `P02-T3`, `P01-T4` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/portfolio/sizer.py`,
+  `src/ainvest/portfolio/__init__.py`, `tests/unit/portfolio/**`,
+  `docs/tasks/status.md`
+- **Verification:** `./scripts/dev verify` and `./scripts/dev audit` passed
+  locally
+- **Handoff notes:** `size_position` converts target-weight `TradeSignal` +
+  quote + portfolio + `SizingConfig` into a whole-share `CandidateOrder` or a
+  stable no-trade reason. Decimal-only arithmetic; capital-safe tick rounding;
+  cash reserve / min-max notional / buying-power clamps; no risk approval and
+  no broker writes. Property tests cover increments and buy limits. Unlocks
+  C4b after merge (still needs C4a).
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T6` | Implement the Single-Strategy Position Sizer | `in_review` | cursor-subagent-d2a | `task/batch-d2a-position-sizer` | `00b772a2c4c4af84c3e317e8bd0a2f237515364e` | `P02-T2`, `P02-T3`, `P01-T4` | |
 
 ### Batch C — Part 1 (C1)
 
