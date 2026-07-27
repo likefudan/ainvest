@@ -255,17 +255,15 @@ class AuditBackedStatePersistence:
         audit: AuditService,
         *,
         apply_business_state: Callable[[MachineKind, str, str, str], None],
-        atomic: Callable[[Callable[[], None]], None] | None = None,
+        atomic: Callable[[Callable[[], None]], None],
         seen_event_ids: set[str] | None = None,
     ) -> AuditBackedStatePersistence:
         """Build a port that audits through ``record_state_change``.
 
-        ``atomic`` wraps the combined business+audit work. Default runs the
-        unit directly (tests / single-process). Production must pass a UoW
-        wrapper so a mid-flight failure rolls both sides back.
+        ``atomic`` is required and must wrap the combined business+audit work in
+        one transactional unit (e.g. Unit of Work). Without it, a mid-flight
+        failure can leave business state applied without an audit row.
         """
-        run_atomic = atomic or (lambda work: work())
-
         def commit(
             *,
             machine: MachineKind,
@@ -305,7 +303,7 @@ class AuditBackedStatePersistence:
                     occurred_at=occurred_at,
                 )
 
-            run_atomic(unit)
+            atomic(unit)
 
         return cls(commit=commit, seen_event_ids=seen_event_ids)
 
