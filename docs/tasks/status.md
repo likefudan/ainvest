@@ -96,7 +96,7 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | complete (merged) |
-| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | in_progress |
+| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | in_review (#69) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -262,25 +262,27 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 3c (D3c) — Reconciliation + portfolio ledger (`P03-T15`)
 - **Plan batch:** Batch D (D3)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress` (draft on branch; **do not open formal PR until D3b merged**)
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-d3
 - **Integration branch:** `task/batch-d3c-reconciliation-ledger`
-- **Base commit:** `b189f71a8feffe5255f7a653d398086f90934378`
-- **Dependencies:** `P03-T14`, `P02-T6`–`T8` (satisfied on main); rebase after D3b before PR
-- **Merge target:** `main` (squash); after D3b
+- **Handoff PR:** [#69](https://github.com/likefudan/ainvest/pull/69)
+- **Base commit:** `efec55b5e5f6c5b53dbf87475afa5353981f917a` (rebased onto post-D3b `main`)
+- **Dependencies:** `P03-T14`, `P02-T6`–`T8`, `P02-T10` (satisfied on main)
+- **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/execution/reconciliation.py`,
   `src/ainvest/portfolio/ledger.py`,
   `src/ainvest/execution/__init__.py` / `portfolio/__init__.py` (re-exports),
   `tests/unit/execution/**`, `tests/unit/portfolio/**` (ledger/reconcile),
   `docs/tasks/status.md` (D3c section + summary row only)
-- **Forbidden:** opening PR before D3b; rewriting T10; D1/D2 paths
-- **Handoff notes:** `PortfolioLedger` with idempotent fills + conservation;
-  `OrderReconciler` compares client IDs/qty/price/state, routes discrepancies to
-  MANUAL_REVIEW with alerts (never silent money rewrite). **No PR opened.**
+- **Forbidden:** rewriting T10 / D1 / D2 paths beyond type imports
+- **Handoff notes:** Rebased onto `efec55b`; `./scripts/dev verify` green (593 passed).
+  `PortfolioLedger` with idempotent fills + conservation; `OrderReconciler`
+  compares client IDs/qty/price/state and routes discrepancies to MANUAL_REVIEW
+  with alerts (never silent money rewrite).
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T15` | Reconcile Paper Orders and Maintain the Portfolio Ledger | `in_progress` | cursor-subagent-d3 | `task/batch-d3c-reconciliation-ledger` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T14`, `P02-T6`–`T8` | hold until D3b |
+| `P03-T15` | Reconcile Paper Orders and Maintain the Portfolio Ledger | `in_review` | cursor-subagent-d3 | `task/batch-d3c-reconciliation-ledger` | `efec55b5e5f6c5b53dbf87475afa5353981f917a` | `P03-T14`, `P02-T6`–`T8` | [#69](https://github.com/likefudan/ainvest/pull/69) |
 
 ### Batch C — Part 4b (C4b)
 
