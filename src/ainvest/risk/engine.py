@@ -227,8 +227,8 @@ def evaluate_rules(
     )
 
 
-def build_c4a_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
-    """Instantiate eligibility + market-quality + exposure rules."""
+def build_default_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
+    """Instantiate the default screening + exposure rule set."""
     rules: dict[str, RiskRule] = {
         rule.code: rule
         for rule in (
@@ -243,7 +243,7 @@ def build_c4a_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
             LimitDeviationRule(),
         )
     }
-    rules.update(build_exposure_rules())  # type: ignore[arg-type]
+    rules.update(build_exposure_rules())
     return rules
 
 
@@ -254,7 +254,7 @@ def evaluate_risk(
     rule_codes: Sequence[str] | None = DEFAULT_RULE_CODES,
 ) -> RiskEngineOutput:
     """Evaluate with the standard rule set (unknown codes fail closed)."""
-    available = build_c4a_rules(calendar)
+    available = build_default_rules(calendar)
     codes = tuple(DEFAULT_RULE_CODES if rule_codes is None else rule_codes)
     selected: list[RiskRule] = []
     for code in codes:
@@ -285,7 +285,7 @@ class _UnknownRule:
 __all__ = [
     "RiskEngineOutput",
     "aggregate_rule_results",
-    "build_c4a_rules",
+    "build_default_rules",
     "compute_config_digest",
     "compute_input_digest",
     "evaluate_risk",

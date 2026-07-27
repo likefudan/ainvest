@@ -12,29 +12,8 @@ from ainvest.risk.models import (
     RiskContext,
     RuleResult,
 )
-from ainvest.risk.rules import register_rule
+from ainvest.risk.rules.results import approve, hard_reject
 from ainvest.schemas.common import QualityFlag, canonicalize_decimal, ensure_utc
-from ainvest.schemas.risk import RiskOutcome, RiskSeverity
-
-
-def _hard(code: str, reason: str, evidence: str | None = None) -> RuleResult:
-    return RuleResult(
-        rule_code=code,
-        severity=RiskSeverity.HARD,
-        decision=RiskOutcome.REJECTED,
-        reason=reason,
-        evidence=evidence,
-    )
-
-
-def _ok(code: str, reason: str, evidence: str | None = None) -> RuleResult:
-    return RuleResult(
-        rule_code=code,
-        severity=RiskSeverity.INFO,
-        decision=RiskOutcome.APPROVED,
-        reason=reason,
-        evidence=evidence,
-    )
 
 
 def _phase_limits(context: RiskContext) -> PhaseMarketQualityLimits:
@@ -64,11 +43,11 @@ class QuoteFreshnessRule:
         received = ensure_utc(quote.provenance.received_at)
 
         if received < observed:
-            return _hard(self.code, "quote received_at precedes observed_at")
+            return hard_reject(self.code, "quote received_at precedes observed_at")
 
         skew = abs((received - as_of).total_seconds())
         if skew > max_skew:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "quote clock skew exceeds maximum",
                 evidence=f"skew_seconds={skew}; max={max_skew}",
@@ -76,13 +55,13 @@ class QuoteFreshnessRule:
 
         age = (as_of - observed).total_seconds()
         if age < 0:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "quote observed_at is in the future relative to as_of (clock skew)",
                 evidence=f"age_seconds={age}",
             )
         if age > limits.max_quote_age_seconds:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "quote age exceeds maximum for evaluation phase",
                 evidence=(
@@ -92,24 +71,24 @@ class QuoteFreshnessRule:
             )
 
         if quote.provenance.is_delayed or QualityFlag.DELAYED in quote.provenance.quality_flags:
-            return _hard(self.code, "delayed quotes are rejected")
+            return hard_reject(self.code, "delayed quotes are rejected")
         if QualityFlag.STALE in quote.provenance.quality_flags:
-            return _hard(self.code, "stale quality flag is rejected")
+            return hard_reject(self.code, "stale quality flag is rejected")
 
         if quote.bid is None or quote.ask is None:
-            return _hard(self.code, "bid and ask are required")
+            return hard_reject(self.code, "bid and ask are required")
         bid = canonicalize_decimal(quote.bid)
         ask = canonicalize_decimal(quote.ask)
         last = canonicalize_decimal(quote.last_price)
         if bid <= ZERO or ask <= ZERO or last <= ZERO:
-            return _hard(self.code, "zero or negative prices are rejected")
+            return hard_reject(self.code, "zero or negative prices are rejected")
         if bid > ask:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "crossed market (bid > ask) is rejected",
                 evidence=f"bid={bid}; ask={ask}",
             )
-        return _ok(
+        return approve(
             self.code,
             "quote freshness and completeness checks passed",
             evidence=f"age_seconds={age}; phase={context.phase.value}",
@@ -124,23 +103,23 @@ class SpreadRule:
     def evaluate(self, context: RiskContext) -> RuleResult:
         quote = context.quote
         if quote.bid is None or quote.ask is None:
-            return _hard(self.code, "bid and ask are required for spread check")
+            return hard_reject(self.code, "bid and ask are required for spread check")
         bid = canonicalize_decimal(quote.bid)
         ask = canonicalize_decimal(quote.ask)
         if bid <= ZERO or ask <= ZERO or bid > ask:
-            return _hard(self.code, "invalid bid/ask for spread check")
+            return hard_reject(self.code, "invalid bid/ask for spread check")
         mid = _mid(bid, ask)
         if mid <= ZERO:
-            return _hard(self.code, "mid price must be positive")
+            return hard_reject(self.code, "mid price must be positive")
         spread_bps = canonicalize_decimal((ask - bid) / mid * BPS_DENOM)
         limit = canonicalize_decimal(_phase_limits(context).max_spread_bps)
         if spread_bps > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "spread exceeds maximum for evaluation phase",
                 evidence=(f"spread_bps={spread_bps}; max={limit}; phase={context.phase.value}"),
             )
-        return _ok(
+        return approve(
             self.code,
             "spread within limit",
             evidence=f"spread_bps={spread_bps}; max={limit}",
@@ -156,19 +135,19 @@ class VolatilityRule:
         limit = canonicalize_decimal(_phase_limits(context).max_short_term_volatility_bps)
         measured = context.short_term_volatility_bps
         if measured is None:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "short-term volatility input is required",
                 evidence=f"phase={context.phase.value}",
             )
         value = canonicalize_decimal(measured)
         if value > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "short-term volatility exceeds maximum for evaluation phase",
                 evidence=(f"volatility_bps={value}; max={limit}; phase={context.phase.value}"),
             )
-        return _ok(
+        return approve(
             self.code,
             "short-term volatility within limit",
             evidence=f"volatility_bps={value}; max={limit}",
@@ -183,37 +162,30 @@ class LimitDeviationRule:
     def evaluate(self, context: RiskContext) -> RuleResult:
         quote = context.quote
         if quote.bid is None or quote.ask is None:
-            return _hard(self.code, "bid and ask are required for limit deviation")
+            return hard_reject(self.code, "bid and ask are required for limit deviation")
         bid = canonicalize_decimal(quote.bid)
         ask = canonicalize_decimal(quote.ask)
         if bid <= ZERO or ask <= ZERO or bid > ask:
-            return _hard(self.code, "invalid bid/ask for limit deviation")
+            return hard_reject(self.code, "invalid bid/ask for limit deviation")
         mid = _mid(bid, ask)
         limit_price = canonicalize_decimal(context.candidate.limit_price)
         if mid <= ZERO or limit_price <= ZERO:
-            return _hard(self.code, "reference and limit prices must be positive")
+            return hard_reject(self.code, "reference and limit prices must be positive")
         deviation_bps = canonicalize_decimal(abs(limit_price - mid) / mid * BPS_DENOM)
         max_dev = canonicalize_decimal(_phase_limits(context).max_limit_deviation_bps)
         if deviation_bps > max_dev:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "limit price deviation from reference exceeds maximum",
                 evidence=(
                     f"deviation_bps={deviation_bps}; max={max_dev}; phase={context.phase.value}"
                 ),
             )
-        return _ok(
+        return approve(
             self.code,
             "limit deviation within limit",
             evidence=f"deviation_bps={deviation_bps}; max={max_dev}",
         )
-
-
-def register_market_quality_rules() -> None:
-    register_rule(QuoteFreshnessRule.code, QuoteFreshnessRule)
-    register_rule(SpreadRule.code, SpreadRule)
-    register_rule(VolatilityRule.code, VolatilityRule)
-    register_rule(LimitDeviationRule.code, LimitDeviationRule)
 
 
 __all__ = [
@@ -221,5 +193,4 @@ __all__ = [
     "QuoteFreshnessRule",
     "SpreadRule",
     "VolatilityRule",
-    "register_market_quality_rules",
 ]

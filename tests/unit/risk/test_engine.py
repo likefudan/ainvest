@@ -28,7 +28,7 @@ from ainvest.risk.models import (
     RuleResult,
     SectorAssignment,
 )
-from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES
+from ainvest.risk.rules import DEFAULT_SCREENING_RULE_CODES
 from ainvest.schemas.common import AssetType
 from ainvest.schemas.examples import (
     candidate_order_example,
@@ -58,7 +58,7 @@ def _phase_limits(
 
 def _config() -> RiskRuleConfig:
     return RiskRuleConfig(
-        rule_set_version="c4a-1.0.0",
+        rule_set_version="risk-rules-1.0.0",
         eligibility=EligibilityLimits(
             allowlist=(
                 AllowlistEntry(
@@ -205,11 +205,11 @@ def test_happy_path_approved_with_digests() -> None:
         ask="214.52",
     )
     ctx = ctx.model_copy(update={"quote": quote})
-    out = evaluate_risk(ctx, calendar=cal, rule_codes=DEFAULT_C4A_RULE_CODES)
+    out = evaluate_risk(ctx, calendar=cal, rule_codes=DEFAULT_SCREENING_RULE_CODES)
     assert out.decision.outcome is RiskOutcome.APPROVED
     assert out.input_digest.startswith("sha256:")
     assert out.config_digest.startswith("sha256:")
-    assert out.decision.rule_set_version == "c4a-1.0.0"
+    assert out.decision.rule_set_version == "risk-rules-1.0.0"
 
 
 @pytest.mark.unit

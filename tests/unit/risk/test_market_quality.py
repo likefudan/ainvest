@@ -44,7 +44,7 @@ def _limits(*, age: int, spread: str, deviation: str, vol: str) -> PhaseMarketQu
 
 def _config() -> RiskRuleConfig:
     return RiskRuleConfig(
-        rule_set_version="c4a-1.0.0",
+        rule_set_version="risk-rules-1.0.0",
         eligibility=EligibilityLimits(
             allowlist=(
                 AllowlistEntry(

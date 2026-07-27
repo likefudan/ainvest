@@ -1,12 +1,12 @@
-"""Risk rule protocol, registry, and rule implementations (P03-T8).
+"""Risk rule protocol and default rule-code catalogs (P03-T8).
 
-Package layout: registry lives here; concrete rules are submodules. The C4a
-owner of ``engine.py`` also owns this registry.
+Concrete rules live in submodules. The engine instantiates them via
+:func:`~ainvest.risk.engine.build_default_rules` — there is no separate
+runtime registry.
 """
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
 from typing import Final, Protocol, runtime_checkable
 
 from ainvest.risk.models import RiskContext, RuleResult
@@ -28,51 +28,7 @@ class RiskRule(Protocol):
         ...
 
 
-RuleFactory = Callable[[], RiskRule]
-
-
-_REGISTRY: dict[str, RuleFactory] = {}
-
-
-def register_rule(code: str, factory: RuleFactory) -> None:
-    """Register a rule factory under a stable code (fail on duplicates)."""
-    if code in _REGISTRY:
-        raise ValueError(f"duplicate risk rule registration: {code}")
-    _REGISTRY[code] = factory
-
-
-def unregister_rule(code: str) -> None:
-    """Remove a rule from the registry (tests only)."""
-    _REGISTRY.pop(code, None)
-
-
-def clear_registry() -> None:
-    """Drop all registrations (tests only)."""
-    _REGISTRY.clear()
-
-
-def registered_rule_codes() -> frozenset[str]:
-    return frozenset(_REGISTRY)
-
-
-def get_rule(code: str) -> RiskRule:
-    factory = _REGISTRY.get(code)
-    if factory is None:
-        raise KeyError(code)
-    return factory()
-
-
-def resolve_rules(codes: Sequence[str] | None = None) -> tuple[RiskRule, ...]:
-    """Instantiate rules. Unknown codes raise ``KeyError`` (engine fails closed)."""
-    ordered = tuple(sorted(_REGISTRY)) if codes is None else tuple(codes)
-    return tuple(get_rule(code) for code in ordered)
-
-
-def registry_snapshot() -> Mapping[str, RuleFactory]:
-    return dict(_REGISTRY)
-
-
-DEFAULT_C4A_RULE_CODES: Final[tuple[str, ...]] = (
+DEFAULT_SCREENING_RULE_CODES: Final[tuple[str, ...]] = (
     "ELIGIBILITY_ASSET_CLASS",
     "ELIGIBILITY_ALLOWLIST",
     "ELIGIBILITY_IDENTITY",
@@ -93,20 +49,14 @@ DEFAULT_EXPOSURE_RULE_CODES: Final[tuple[str, ...]] = (
     "EXPOSURE_MAX_DAILY_LOSS",
 )
 
-DEFAULT_RULE_CODES: Final[tuple[str, ...]] = DEFAULT_C4A_RULE_CODES + DEFAULT_EXPOSURE_RULE_CODES
+DEFAULT_RULE_CODES: Final[tuple[str, ...]] = (
+    DEFAULT_SCREENING_RULE_CODES + DEFAULT_EXPOSURE_RULE_CODES
+)
 
 
 __all__ = [
-    "DEFAULT_C4A_RULE_CODES",
     "DEFAULT_EXPOSURE_RULE_CODES",
     "DEFAULT_RULE_CODES",
+    "DEFAULT_SCREENING_RULE_CODES",
     "RiskRule",
-    "RuleFactory",
-    "clear_registry",
-    "get_rule",
-    "register_rule",
-    "registered_rule_codes",
-    "registry_snapshot",
-    "resolve_rules",
-    "unregister_rule",
 ]

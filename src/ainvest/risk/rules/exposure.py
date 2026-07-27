@@ -15,32 +15,13 @@ from ainvest.risk.models import (
     RiskContext,
     RuleResult,
 )
+from ainvest.risk.rules import RiskRule
+from ainvest.risk.rules.results import approve, hard_reject
 from ainvest.schemas.common import OrderSide, canonicalize_decimal
 from ainvest.schemas.portfolio import PortfolioSnapshot
-from ainvest.schemas.risk import RiskOutcome, RiskSeverity
 
 _MONEY_QUANT = Decimal("0.000001")
 _WEIGHT_QUANT = Decimal("0.00000001")
-
-
-def _hard(code: str, reason: str, evidence: str | None = None) -> RuleResult:
-    return RuleResult(
-        rule_code=code,
-        severity=RiskSeverity.HARD,
-        decision=RiskOutcome.REJECTED,
-        reason=reason,
-        evidence=evidence,
-    )
-
-
-def _ok(code: str, reason: str, evidence: str | None = None) -> RuleResult:
-    return RuleResult(
-        rule_code=code,
-        severity=RiskSeverity.INFO,
-        decision=RiskOutcome.APPROVED,
-        reason=reason,
-        evidence=evidence,
-    )
 
 
 def _money(value: Decimal) -> Decimal:
@@ -53,15 +34,15 @@ def _weight(value: Decimal) -> Decimal:
 
 def _require_portfolio(context: RiskContext, code: str) -> PortfolioSnapshot | RuleResult:
     if context.portfolio is None:
-        return _hard(code, "portfolio snapshot is required for exposure rules")
+        return hard_reject(code, "portfolio snapshot is required for exposure rules")
     if context.portfolio.equity <= ZERO:
-        return _hard(code, "account equity must be positive for exposure rules")
+        return hard_reject(code, "account equity must be positive for exposure rules")
     return context.portfolio
 
 
 def _require_exposure_inputs(context: RiskContext, code: str) -> ExposureInputs | RuleResult:
     if context.exposure_inputs is None:
-        return _hard(code, "exposure inputs are required", evidence="exposure_inputs=None")
+        return hard_reject(code, "exposure inputs are required", evidence="exposure_inputs=None")
     return context.exposure_inputs
 
 
@@ -88,14 +69,14 @@ def _baseline_after_open_orders(
         qty = canonicalize_decimal(order.quantity)
         if order.side is OrderSide.BUY:
             if order.limit_price is None:
-                return _hard(
+                return hard_reject(
                     code,
                     "open BUY missing limit_price (cannot project commitments)",
                     evidence=f"order_id={order.order_id}",
                 )
             limit = canonicalize_decimal(order.limit_price)
             if limit <= ZERO:
-                return _hard(
+                return hard_reject(
                     code,
                     "open BUY limit_price must be positive",
                     evidence=f"order_id={order.order_id}",
@@ -178,12 +159,12 @@ class MaxOrderNotionalRule:
         notional = _order_notional(context)
         limit = canonicalize_decimal(context.config.exposure.max_order_notional)
         if notional > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "order notional exceeds maximum",
                 evidence=f"notional={notional}; max={limit}",
             )
-        return _ok(self.code, "order notional within limit", evidence=f"notional={notional}")
+        return approve(self.code, "order notional within limit", evidence=f"notional={notional}")
 
 
 class SymbolWeightRule:
@@ -198,16 +179,18 @@ class SymbolWeightRule:
             return projected
         _cash, symbol_mv, equity = projected
         if equity <= ZERO:
-            return _hard(self.code, "projected equity must be positive")
+            return hard_reject(self.code, "projected equity must be positive")
         weight = _weight(symbol_mv / equity)
         limit = canonicalize_decimal(context.config.exposure.max_symbol_weight)
         if weight > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "projected symbol weight exceeds maximum",
                 evidence=f"weight={weight}; max={limit}",
             )
-        return _ok(self.code, "projected symbol weight within limit", evidence=f"weight={weight}")
+        return approve(
+            self.code, "projected symbol weight within limit", evidence=f"weight={weight}"
+        )
 
 
 class SectorExposureRule:
@@ -222,7 +205,7 @@ class SectorExposureRule:
             return inputs
         sector = _sector_for(inputs, context.candidate.instrument_id)
         if sector is None:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "missing sector metadata for candidate instrument",
                 evidence=f"instrument_id={context.candidate.instrument_id}",
@@ -233,7 +216,7 @@ class SectorExposureRule:
             return projected
         _projected_cash, _symbol_mv, equity = projected
         if equity <= ZERO:
-            return _hard(self.code, "projected equity must be positive")
+            return hard_reject(self.code, "projected equity must be positive")
 
         baseline = _baseline_after_open_orders(portfolio, self.code)
         if isinstance(baseline, RuleResult):
@@ -248,7 +231,7 @@ class SectorExposureRule:
                 continue
             pos_sector = _sector_for(inputs, iid)
             if pos_sector is None:
-                return _hard(
+                return hard_reject(
                     self.code,
                     "missing sector metadata for portfolio position",
                     evidence=f"instrument_id={iid}",
@@ -283,12 +266,12 @@ class SectorExposureRule:
         weight = _weight(sector_mv / equity)
         limit = canonicalize_decimal(context.config.exposure.max_sector_weight)
         if weight > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "projected sector weight exceeds maximum",
                 evidence=f"sector={sector}; weight={weight}; max={limit}",
             )
-        return _ok(
+        return approve(
             self.code,
             "projected sector weight within limit",
             evidence=f"sector={sector}; weight={weight}",
@@ -306,12 +289,12 @@ class DailyTurnoverRule:
         projected = _money(canonicalize_decimal(inputs.daily_turnover_to_date) + notional)
         limit = canonicalize_decimal(context.config.exposure.max_daily_turnover)
         if projected > limit:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "projected daily turnover exceeds maximum",
                 evidence=f"turnover={projected}; max={limit}",
             )
-        return _ok(
+        return approve(
             self.code, "projected daily turnover within limit", evidence=f"turnover={projected}"
         )
 
@@ -328,9 +311,9 @@ class MinCashReserveRule:
             return projected
         projected_cash, _symbol_mv, equity = projected
         if equity <= ZERO:
-            return _hard(self.code, "projected equity must be positive")
+            return hard_reject(self.code, "projected equity must be positive")
         if projected_cash < ZERO:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "projected cash would be negative",
                 evidence=f"projected_cash={projected_cash}",
@@ -338,12 +321,14 @@ class MinCashReserveRule:
         reserve = _weight(projected_cash / equity)
         minimum = canonicalize_decimal(context.config.exposure.min_cash_reserve_weight)
         if reserve < minimum:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "projected cash reserve weight below minimum",
                 evidence=f"reserve={reserve}; min={minimum}",
             )
-        return _ok(self.code, "projected cash reserve within limit", evidence=f"reserve={reserve}")
+        return approve(
+            self.code, "projected cash reserve within limit", evidence=f"reserve={reserve}"
+        )
 
 
 class DailyLossRule:
@@ -354,7 +339,7 @@ class DailyLossRule:
         if isinstance(inputs, RuleResult):
             return inputs
         if inputs.daily_unrealized_pnl is None:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "daily unrealized P&L is required (incomplete P&L fail closed)",
             )
@@ -365,12 +350,12 @@ class DailyLossRule:
         # Loss is negative P&L; reject when loss magnitude exceeds max_daily_loss.
         max_loss = canonicalize_decimal(context.config.exposure.max_daily_loss)
         if total < ZERO and abs(total) > max_loss:
-            return _hard(
+            return hard_reject(
                 self.code,
                 "daily realized+unrealized loss exceeds maximum",
                 evidence=f"daily_pnl={total}; max_loss={max_loss}",
             )
-        return _ok(self.code, "daily loss within limit", evidence=f"daily_pnl={total}")
+        return approve(self.code, "daily loss within limit", evidence=f"daily_pnl={total}")
 
 
 EXPOSURE_RULE_CODES: tuple[str, ...] = (
@@ -383,7 +368,7 @@ EXPOSURE_RULE_CODES: tuple[str, ...] = (
 )
 
 
-def build_exposure_rules() -> dict[str, object]:
+def build_exposure_rules() -> dict[str, RiskRule]:
     rules = (
         MaxOrderNotionalRule(),
         SymbolWeightRule(),
