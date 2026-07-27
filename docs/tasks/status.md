@@ -89,16 +89,15 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
-| Batch D — Part 3a (D3a) | Batch D | `P02-T9` | in_review |
+| Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
 Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
-**C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **Batch D —
-Part 3a (D3a)** is `in_review` for `P02-T9` (order state machine). C4a may
-start. Do not claim C3b until D3a merges; C4b still needs C4a. Coordinators own
+**C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **D3a is merged**
+(`3de469d`). C3b and C4a may start. C4b still needs C4a. Coordinators own
 `docs/tasks/status.md` updates for handoff; implementation agents must not
 rewrite another track's allowed paths.
 
@@ -131,29 +130,23 @@ rewrite another track's allowed paths.
   guards (`P02-T9`)
 - **Plan batch:** Batch D (early unlock for C3b)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-agent
-- **Integration branch:** `task/batch-d3a-order-state-machine`
+- **Integration branch:** `task/batch-d3a-order-state-machine` (deleted after merge)
 - **Base commit:** `32660fbb06b71c20fef54489182b4dc1ef7fa35e`
+- **Merge commit:** `3de469dc8f61814d6b3cbc6f501c83a06dcb1be3`
 - **Dependencies:** `P02-T3`, `P02-T7`, `P02-T8` (satisfied on main)
 - **Merge target:** `main` (squash)
-- **Allowed paths:** `src/ainvest/execution/state_machine.py`,
-  `src/ainvest/execution/__init__.py`, `tests/unit/execution/**`,
-  `docs/tasks/status.md` (D3a handoff only)
-- **Forbidden:** paper broker, Robinhood client, workflow (`P02-T10`), risk
-  rules, live enablement
-- **Safety posture:** Pure transition graph + CAS + persistence port; no broker
-  writes
-- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
-  (passed locally)
-- **Handoff notes:** Order + cancel command graphs match design.md §8;
-  expected-current CAS; duplicate event_id idempotent; SUBMIT_UNKNOWN /
-  CANCEL_UNKNOWN recovery-only; InMemory + AuditBacked persistence ports.
+- **Handoff PR:** [#42](https://github.com/likefudan/ainvest/pull/42)
+- **Handoff notes:** Order + cancel graphs match design.md §8; CAS;
+  recovery-only unknown paths; duplicate event_id idempotent; commit-then-seen
+  persistence with required atomic wrapper for audit-backed path. Review fixed
+  non-atomic audit apply and unbound same-state event ids before merge.
 - **Next after merge:** C3b (`P03-T14`) may start
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T9` | Implement the Order State Machine and Illegal-Transition Guards | `in_review` | cursor-agent | `task/batch-d3a-order-state-machine` | `32660fbb06b71c20fef54489182b4dc1ef7fa35e` | `P02-T3`, `P02-T7`, `P02-T8` | |
+| `P02-T9` | Implement the Order State Machine and Illegal-Transition Guards | `merged` | cursor-agent | `task/batch-d3a-order-state-machine` | `32660fbb06b71c20fef54489182b4dc1ef7fa35e` | `P02-T3`, `P02-T7`, `P02-T8` | [#42](https://github.com/likefudan/ainvest/pull/42) |
 
 ### Batch C — Part 1 (C1)
 
