@@ -322,11 +322,12 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 - **Batch:** Batch D — Part 4b (D4b) — Gate 1 acceptance (`P03-T17`)
 - **Plan batch:** Batch D (D4)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d4b
-- **Integration branch:** `task/batch-d4b-gate-1-acceptance`
+- **Integration branch:** `task/batch-d4b-gate-1-acceptance` (deleted after merge)
 - **Handoff PR:** [#71](https://github.com/likefudan/ainvest/pull/71)
 - **Base commit:** `36f51ebb795e04f64f91a4983bc65cdb953d86d0` (D4a merge)
+- **Merge commit:** (squash merge of #71 on `main`)
 - **Dependencies:** `P03-T16` + Phase 01–03 cards (all prior)
 - **Merge target:** `main` (squash); **second** of D4a→D4b
 - **Allowed paths:**
@@ -343,7 +344,7 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T17` | Gate 1: Accept the Deterministic Simulated Trading Loop | `in_review` | cursor-subagent-d4b | `task/batch-d4b-gate-1-acceptance` | `36f51ebb795e04f64f91a4983bc65cdb953d86d0` | `P03-T16` + P01–P03 | [#71](https://github.com/likefudan/ainvest/pull/71) |
+| `P03-T17` | Gate 1: Accept the Deterministic Simulated Trading Loop | `merged` | cursor-subagent-d4b | `task/batch-d4b-gate-1-acceptance` | `36f51ebb795e04f64f91a4983bc65cdb953d86d0` | `P03-T16` + P01–P03 | [#71](https://github.com/likefudan/ainvest/pull/71) |
 
 ### Batch C — Part 4b (C4b)
 
