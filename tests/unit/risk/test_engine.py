@@ -28,7 +28,6 @@ from ainvest.risk.models import (
     ExposureInputs,
     InstrumentMetadata,
     RiskContext,
-    RiskRuleConfig,
     RuleResult,
     SectorAssignment,
 )
@@ -38,16 +37,6 @@ from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome, RiskSeverity
-
-
-def _config() -> RiskRuleConfig:
-    return make_risk_config(
-        market_quality=make_market_quality(
-            proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
-            pretrade=make_phase_limits(age=30, spread="25", deviation="50", vol="300"),
-            max_clock_skew_seconds=5,
-        )
-    )
 
 
 def _context(
@@ -66,7 +55,13 @@ def _context(
         candidate=candidate or make_candidate(),
         quote=quote or make_quote(),
         instrument=instrument or make_instrument(),
-        config=_config(),
+        config=make_risk_config(
+            market_quality=make_market_quality(
+                proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
+                pretrade=make_phase_limits(age=30, spread="25", deviation="50", vol="300"),
+                max_clock_skew_seconds=5,
+            )
+        ),
         short_term_volatility_bps=Decimal(vol),
     )
 

@@ -16,9 +16,7 @@ from risk_fixtures import (
     make_risk_config,
 )
 
-from ainvest.data.calendar_port import FakeMarketCalendar
-from ainvest.risk.engine import evaluate_risk
-from ainvest.risk.models import EvaluationPhase, RiskContext, RiskRuleConfig
+from ainvest.risk.models import EvaluationPhase, RiskContext
 from ainvest.risk.rules.market_quality import (
     LimitDeviationRule,
     QuoteFreshnessRule,
@@ -27,16 +25,6 @@ from ainvest.risk.rules.market_quality import (
 )
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.risk import RiskOutcome
-
-
-def _config() -> RiskRuleConfig:
-    return make_risk_config(
-        market_quality=make_market_quality(
-            proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
-            pretrade=make_phase_limits(age=15, spread="20", deviation="25", vol="200"),
-            max_clock_skew_seconds=2,
-        )
-    )
 
 
 def _ctx(
@@ -57,50 +45,90 @@ def _ctx(
             maximum_notional=str(Decimal(limit_price) * Decimal("2")),
         ),
         quote=quote
-        or make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z"),
+        or make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T15:00:00Z"),
         instrument=make_instrument(),
-        config=_config(),
+        config=make_risk_config(
+            market_quality=make_market_quality(
+                proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
+                pretrade=make_phase_limits(age=15, spread="20", deviation="25", vol="200"),
+                max_clock_skew_seconds=2,
+            )
+        ),
         short_term_volatility_bps=None if vol is None else Decimal(vol),
     )
 
 
 @pytest.mark.unit
 def test_stale_quote_rejected() -> None:
+    # received_at matches as_of so rejection is from age, not clock skew.
     ctx = _ctx(
-        quote=make_fresh_quote(observed="2026-07-23T14:50:00Z", received="2026-07-23T14:50:01Z")
+        quote=make_fresh_quote(observed="2026-07-23T14:50:00Z", received="2026-07-23T15:00:00Z")
     )
-    assert QuoteFreshnessRule().evaluate(ctx).decision is RiskOutcome.REJECTED
+    result = QuoteFreshnessRule().evaluate(ctx)
+    assert result.decision is RiskOutcome.REJECTED
+    assert "quote age exceeds maximum" in (result.reason or "")
 
 
 @pytest.mark.unit
 def test_crossed_and_missing_bid_ask_rejected() -> None:
-    missing = make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z")
-    missing = missing.model_copy(update={"bid": None})
-    assert QuoteFreshnessRule().evaluate(_ctx(quote=missing)).decision is RiskOutcome.REJECTED
-    # Crossed markets are rejected by MarketQuote schema; rule also guards.
-    # Construct via model_construct bypass is not available on frozen DomainModel.
-    # Spread rule rejects invalid pairs when bid>ask if somehow present — covered
-    # by freshness requiring bid<=ask through schema. Use wide spread instead.
+    # Align received_at with as_of so clock-skew does not mask bid/ask checks.
+    missing_bid = make_fresh_quote(
+        observed="2026-07-23T14:59:50Z", received="2026-07-23T15:00:00Z"
+    ).model_copy(update={"bid": None})
+    missing_bid_result = QuoteFreshnessRule().evaluate(_ctx(quote=missing_bid))
+    assert missing_bid_result.decision is RiskOutcome.REJECTED
+    assert "bid and ask are required" in (missing_bid_result.reason or "")
+
+    missing_ask = make_fresh_quote(
+        observed="2026-07-23T14:59:50Z", received="2026-07-23T15:00:00Z"
+    ).model_copy(update={"ask": None})
+    missing_ask_result = QuoteFreshnessRule().evaluate(_ctx(quote=missing_ask))
+    assert missing_ask_result.decision is RiskOutcome.REJECTED
+    assert "bid and ask are required" in (missing_ask_result.reason or "")
+
+    # Schema rejects bid>ask on validate; construct + setattr reaches the rule guard.
+    fresh = make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T15:00:00Z")
+    crossed = MarketQuote.model_construct(
+        schema_version=fresh.schema_version,
+        instrument=fresh.instrument,
+        last_price=fresh.last_price,
+        bid=Decimal("215.00"),
+        ask=Decimal("214.00"),
+        currency=fresh.currency,
+        provenance=fresh.provenance,
+    )
+    crossed_ctx = _ctx()
+    object.__setattr__(crossed_ctx, "quote", crossed)
+    freshness = QuoteFreshnessRule().evaluate(crossed_ctx)
+    assert freshness.decision is RiskOutcome.REJECTED
+    assert "crossed market" in (freshness.reason or "").lower()
+    assert SpreadRule().evaluate(crossed_ctx).decision is RiskOutcome.REJECTED
 
 
 @pytest.mark.unit
 def test_spread_boundary() -> None:
-    # mid=214.50; spread 1.07 → ~50 bps exactly around boundary
-    # (ask-bid)/mid * 10000 = 1.0725/214.5 * 10000 ≈ 50.0
+    # mid=214.50; (ask-bid)/mid * 10000 = 1.0725/214.5 * 10000 = 50.0 exactly.
+    # Rule rejects only when spread_bps > limit, so equality is approved.
     quote = make_fresh_quote(
         observed="2026-07-23T14:59:50Z",
-        received="2026-07-23T14:59:51Z",
+        received="2026-07-23T15:00:00Z",
         bid="213.96375",
         ask="215.03625",
     )
-    ctx = _ctx(quote=quote)
-    # May be just over or under depending on quantization; assert rule runs.
-    result = SpreadRule().evaluate(ctx)
-    assert result.decision in {RiskOutcome.APPROVED, RiskOutcome.REJECTED}
+    assert SpreadRule().evaluate(_ctx(quote=quote)).decision is RiskOutcome.APPROVED
+
+    just_over = make_fresh_quote(
+        observed="2026-07-23T14:59:50Z",
+        received="2026-07-23T15:00:00Z",
+        bid="213.96",
+        ask="215.04",
+    )
+    # (215.04-213.96)/214.5 * 10000 ≈ 50.35 > 50
+    assert SpreadRule().evaluate(_ctx(quote=just_over)).decision is RiskOutcome.REJECTED
 
     wide = make_fresh_quote(
         observed="2026-07-23T14:59:50Z",
-        received="2026-07-23T14:59:51Z",
+        received="2026-07-23T15:00:00Z",
         bid="200.00",
         ask="230.00",
     )
@@ -132,7 +160,6 @@ def test_limit_deviation_and_phase_thresholds() -> None:
 @pytest.mark.unit
 def test_pretrade_stricter_spread_cannot_reuse_proposal_pass() -> None:
     """A quote that passes proposal spread can still fail pretrade thresholds."""
-    cal = FakeMarketCalendar()
     # ~40 bps spread: passes proposal max 50, fails pretrade max 20
     quote = make_fresh_quote(
         observed="2026-07-23T14:59:55Z",
@@ -140,15 +167,9 @@ def test_pretrade_stricter_spread_cannot_reuse_proposal_pass() -> None:
         bid="214.07",
         ask="214.93",
     )
-    proposal = evaluate_risk(_ctx(phase=EvaluationPhase.PROPOSAL, quote=quote), calendar=cal)
-    pretrade = evaluate_risk(_ctx(phase=EvaluationPhase.PRETRADE, quote=quote), calendar=cal)
-    # Proposal may still fail other rules; focus on spread rule outcomes.
-    from ainvest.risk.rules.market_quality import SpreadRule
-
     assert SpreadRule().evaluate(_ctx(phase=EvaluationPhase.PROPOSAL, quote=quote)).decision is (
         RiskOutcome.APPROVED
     )
     assert SpreadRule().evaluate(_ctx(phase=EvaluationPhase.PRETRADE, quote=quote)).decision is (
         RiskOutcome.REJECTED
     )
-    del proposal, pretrade
