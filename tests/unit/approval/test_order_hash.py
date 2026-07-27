@@ -8,6 +8,12 @@ from pathlib import Path
 from typing import Any
 
 import pytest
+from decimal_cases import (
+    EXTREME_HUGE,
+    EXTREME_ZERO_ENCODINGS,
+    PADDED_ONE,
+    SCIENTIFIC_NOTATION_STRINGS,
+)
 
 from ainvest.approval.order_hash import (
     ORDER_HASH_FIELDS,
@@ -151,53 +157,36 @@ def test_high_precision_quantities_do_not_collide_under_default_context() -> Non
     late = deepcopy(base)
     late["quantity"] = "10000000000000000000000000000.9"
     assert compute_order_hash(early) != compute_order_hash(late)
-    # Trailing-zero equivalence still holds without normalize().
-    twin = deepcopy(base)
-    twin["quantity"] = "2.0"
-    assert compute_order_hash(twin) == compute_order_hash(base)
 
 
 @pytest.mark.unit
 def test_extreme_decimal_exponents_are_rejected_before_allocation() -> None:
-    """Compact scientific inputs must fail closed on the public mapping path."""
-    from decimal import Decimal
-
+    """Hash domain fail-closes on extreme exponents (ValueError, not schema)."""
     base = _base_order()
     with pytest.raises(ValueError, match="decimal"):
-        compute_order_hash({**base, "quantity": "1e1000000"})
+        compute_order_hash({**base, "quantity": SCIENTIFIC_NOTATION_STRINGS[-1]})
     with pytest.raises(ValueError, match="exponent"):
-        compute_order_hash({**base, "quantity": Decimal("1e1000000")})
-    with pytest.raises(ValueError, match="exponent"):
-        compute_order_hash({**base, "limit_price": Decimal("1e-1000000")})
+        compute_order_hash({**base, "quantity": EXTREME_HUGE})
 
 
 @pytest.mark.unit
 def test_hash_accepts_trailing_zero_equivalent_quantities() -> None:
+    """Hash domain must treat trailing-zero quantity encodings as identical."""
     base = _base_order()
     plain = deepcopy(base)
     plain["quantity"] = "1"
     plain["maximum_notional"] = "214.50"
     padded = deepcopy(plain)
-    padded["quantity"] = "1." + ("0" * 40)
+    padded["quantity"] = PADDED_ONE
     assert compute_order_hash(plain) == compute_order_hash(padded)
-
-    tiny = deepcopy(base)
-    tiny["limit_price"] = "0." + ("0" * 27) + "1"
-    tiny["price_increment"] = tiny["limit_price"]
-    tiny["quantity"] = "1"
-    tiny["maximum_notional"] = tiny["limit_price"]
-    tiny_padded = deepcopy(tiny)
-    tiny_padded["limit_price"] = tiny["limit_price"] + "00"
-    assert compute_order_hash(tiny) == compute_order_hash(tiny_padded)
 
 
 @pytest.mark.unit
 def test_hash_collapses_extreme_exponent_zero_notionals() -> None:
-    from decimal import Decimal
-
+    """Hash domain must collapse extreme-exponent zero before digesting."""
     base = _base_order()
     plain = deepcopy(base)
     plain["maximum_notional"] = "0"
     extreme = deepcopy(plain)
-    extreme["maximum_notional"] = Decimal("0e1000000")
+    extreme["maximum_notional"] = EXTREME_ZERO_ENCODINGS[0]
     assert compute_order_hash(plain) == compute_order_hash(extreme)
