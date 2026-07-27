@@ -13,6 +13,7 @@ from ainvest.risk.models import (
     ExposureLimits,
     InstrumentMetadata,
     MarketQualityLimits,
+    OrderConflictLimits,
     PhaseMarketQualityLimits,
     RiskContext,
     RiskRuleConfig,
@@ -91,11 +92,16 @@ def make_allowlist_entry(
     )
 
 
+def make_order_conflicts(*, window_seconds: int = 300) -> OrderConflictLimits:
+    return OrderConflictLimits(duplicate_window_seconds=window_seconds)
+
+
 def make_risk_config(
     *,
     market_quality: MarketQualityLimits | None = None,
     exposure: ExposureLimits | None = None,
     allowlist: tuple[AllowlistEntry, ...] | None = None,
+    order_conflicts: OrderConflictLimits | None = None,
     rule_set_version: str = "risk-rules-1.0.0",
 ) -> RiskRuleConfig:
     return RiskRuleConfig(
@@ -103,6 +109,7 @@ def make_risk_config(
         eligibility=EligibilityLimits(allowlist=allowlist or (make_allowlist_entry(),)),
         market_quality=market_quality or make_market_quality(),
         exposure=exposure or make_exposure_limits(),
+        order_conflicts=order_conflicts or make_order_conflicts(),
     )
 
 

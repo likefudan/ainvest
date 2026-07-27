@@ -93,8 +93,8 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
 | Batch D — Part 1a (D1a) | Batch D | `P03-T4` | complete (merged) |
 | Batch D — Part 1b (D1b) | Batch D | `P03-T5` | complete (merged) |
-| Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_review |
-| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | not_started (after D2b) |
+| Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
+| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | in_review |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_progress (PR after D2) |
 | Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
 
@@ -198,6 +198,35 @@ rewrite another track's allowed paths.
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
 | `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_review` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | https://github.com/likefudan/ainvest/pull/65 |
+
+### Batch D — Part 2c (D2c)
+
+- **Batch:** Batch D — Part 2c (D2c) — Pre-trade risk re-evaluation (`P03-T12`)
+- **Plan batch:** Batch D (D2)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Owner/agent:** cursor-subagent-d2
+- **Integration branch:** `task/batch-d2c-pretrade-risk`
+- **Base commit:** `3e12ecc` (rebased onto post-D2b `main`)
+- **Dependencies:** `P03-T8`–`T11`, `P02-T7`, `P02-T9` (satisfied); D2b merged
+- **Merge target:** `main` (squash); **next** in Batch D merge queue after D2b
+- **Allowed paths:** `src/ainvest/risk/rules/orders.py`, `src/ainvest/risk/kill_switch.py`,
+  `src/ainvest/risk/pretrade.py`, `src/ainvest/risk/__init__.py`,
+  `src/ainvest/risk/rules/__init__.py`, `src/ainvest/risk/engine.py`,
+  `src/ainvest/risk/models.py` (context/config fields), `tests/unit/risk/**`,
+  `docs/tasks/status.md` (D2c section + summary row only)
+- **Forbidden:** strategy worker (D1), signal aggregation (D2b), workflow (D3), live broker,
+  auto-cancel of open orders (DEC-008)
+- **Handoff notes:** `KillSwitch` (configured+operational, alert, no auto-cancel);
+  order rules for proposal-hash / client-order-id / symbol-side window / open-order
+  conflicts; `evaluate_pretrade` re-fetches quote+portfolio and runs
+  `PRETRADE_RULE_CODES` with a new decision id (never reuses prior APPROVED).
+  Rebased onto `3e12ecc`; `./scripts/dev verify` passed (532 tests).
+- **PR:** https://github.com/likefudan/ainvest/pull/67
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T12` | Prevent Duplicate Orders and Re-run Risk Before Execution | `in_review` | cursor-subagent-d2 | `task/batch-d2c-pretrade-risk` | `3e12ecc` | `P03-T8`–`T11`, `P02-T7`, `P02-T9` | https://github.com/likefudan/ainvest/pull/67 |
 
 ### Batch D — Part 3b (D3b)
 
