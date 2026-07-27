@@ -1,0 +1,36 @@
+"""Stable machine-readable codes for strategy conformance results."""
+
+from __future__ import annotations
+
+from enum import StrEnum
+
+
+class ConformanceStatus(StrEnum):
+    """Outcome of one conformance check."""
+
+    PASSED = "PASSED"
+    FAILED = "FAILED"
+    SKIPPED = "SKIPPED"
+
+
+class ConformanceCode(StrEnum):
+    """Stable fail/pass codes for third-party CI parsing."""
+
+    OK = "CONFORMANCE_OK"
+    METADATA_INVALID = "CONFORMANCE_METADATA_INVALID"
+    API_INCOMPATIBLE = "CONFORMANCE_API_INCOMPATIBLE"
+    HOOK_INVALID = "CONFORMANCE_HOOK_INVALID"
+    PARAMS_INVALID = "CONFORMANCE_PARAMS_INVALID"
+    SIGNAL_INVALID = "CONFORMANCE_SIGNAL_INVALID"
+    NONDETERMINISTIC = "CONFORMANCE_NONDETERMINISTIC"
+    FUTURE_DATA = "CONFORMANCE_FUTURE_DATA"
+    TIMEOUT = "CONFORMANCE_TIMEOUT"
+    EXCEPTION = "CONFORMANCE_EXCEPTION"
+    NETWORK_ACCESS = "CONFORMANCE_NETWORK_ACCESS"
+    SECRET_ACCESS = "CONFORMANCE_SECRET_ACCESS"
+    BROKER_IMPORT = "CONFORMANCE_BROKER_IMPORT"
+    WORKER_FAILURE = "CONFORMANCE_WORKER_FAILURE"
+    INTERNAL = "CONFORMANCE_INTERNAL"
+
+
+__all__ = ["ConformanceCode", "ConformanceStatus"]
