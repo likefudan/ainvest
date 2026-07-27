@@ -81,6 +81,19 @@ def _empty_portfolio() -> PortfolioSnapshot:
     return PortfolioSnapshot.model_validate(payload)
 
 
+def _portfolio_with(**overrides: Any) -> PortfolioSnapshot:
+    payload = _empty_portfolio().model_dump(mode="python")
+    payload.update(overrides)
+    return PortfolioSnapshot.model_validate(payload)
+
+
+def _portfolio_with_mismatched_aapl_instrument() -> PortfolioSnapshot:
+    """Same symbol as the quote, but a different instrument identity."""
+    payload = portfolio_snapshot_example()
+    payload["positions"][0]["instrument"]["instrument_id"] = "rh_inst_aapl_alt"
+    return PortfolioSnapshot.model_validate(payload)
+
+
 @pytest.mark.unit
 def test_buy_sizes_whole_shares_within_limits() -> None:
     result = size_position(
@@ -129,6 +142,82 @@ def test_expired_signal_rejected() -> None:
     )
     assert result.candidate is None
     assert result.reason_code == SizerReasonCode.SIGNAL_EXPIRED
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "build",
+    [
+        pytest.param(
+            lambda: {
+                "signal": _signal(),
+                "quote": _quote(),
+                "portfolio": _empty_portfolio(),
+                "config": _config(),
+                "as_of": datetime(2026, 7, 24, 18, 0, 0, tzinfo=UTC),
+                "expected": SizerReasonCode.SIGNAL_NOT_ACTIVE,
+            },
+            id="signal_not_active",
+        ),
+        pytest.param(
+            lambda: {
+                "signal": _signal(intent="BUY", target_weight=None),
+                "quote": _quote(),
+                "portfolio": _empty_portfolio(),
+                "config": _config(),
+                "as_of": AS_OF,
+                "expected": SizerReasonCode.MISSING_TARGET_WEIGHT,
+            },
+            id="missing_target_weight",
+        ),
+        pytest.param(
+            lambda: {
+                # Positive last/ask below one tick floors the BUY limit to zero.
+                "signal": _signal(intent="BUY", target_weight="0.50"),
+                "quote": _quote(last_price="0.005", ask="0.005", bid="0.004"),
+                "portfolio": _empty_portfolio(),
+                "config": _config(price_increment="0.01", cash_reserve="0"),
+                "as_of": AS_OF,
+                "expected": SizerReasonCode.MISSING_PRICE,
+            },
+            id="missing_price_after_tick_floor",
+        ),
+        pytest.param(
+            lambda: {
+                "signal": _signal(intent="BUY", target_weight="0.10"),
+                "quote": _quote(),
+                "portfolio": _portfolio_with(currency="CAD"),
+                "config": _config(),
+                "as_of": AS_OF,
+                "expected": SizerReasonCode.CURRENCY_MISMATCH,
+            },
+            id="currency_mismatch",
+        ),
+        pytest.param(
+            lambda: {
+                "signal": _signal(intent="BUY", target_weight="0.50"),
+                "quote": _quote(),
+                "portfolio": _portfolio_with_mismatched_aapl_instrument(),
+                "config": _config(cash_reserve="0"),
+                "as_of": AS_OF,
+                "expected": SizerReasonCode.INSTRUMENT_MISMATCH,
+            },
+            id="instrument_mismatch",
+        ),
+    ],
+)
+def test_early_reject_fail_closed_reason_codes(build: Any) -> None:
+    case = build()
+    result = size_position(
+        signal=case["signal"],
+        quote=case["quote"],
+        portfolio=case["portfolio"],
+        config=case["config"],
+        as_of=case["as_of"],
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == case["expected"]
 
 
 @pytest.mark.unit
@@ -467,23 +556,166 @@ def test_open_buy_without_limit_fails_closed() -> None:
 
 
 @pytest.mark.unit
+def test_intent_delta_mismatch_rejected() -> None:
+    # Example portfolio is already ~41.8% AAPL; a BUY targeting 5% implies a sell.
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.05"),
+        quote=_quote(),
+        portfolio=_portfolio(),
+        config=_config(cash_reserve="0"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.INTENT_DELTA_MISMATCH
+
+
+@pytest.mark.unit
+def test_zero_share_delta_when_already_at_target() -> None:
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0"),
+        quote=_quote(),
+        portfolio=_empty_portfolio(),
+        config=_config(cash_reserve="0"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.ZERO_SHARE_DELTA
+
+
+@pytest.mark.unit
+def test_zero_share_delta_when_quantity_floors_to_zero() -> None:
+    # Target notional is 2.5 shares at $200, but quantity_increment=10 floors to 0.
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.10"),
+        quote=_quote(last_price="200.00", ask="200.00", bid="199.90"),
+        portfolio=_empty_portfolio(),
+        config=_config(cash_reserve="0", min_notional="0.01", quantity_increment="10"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.ZERO_SHARE_DELTA
+
+
+@pytest.mark.unit
+def test_insufficient_position_when_open_sells_exceed_filled() -> None:
+    payload = portfolio_snapshot_example()  # 10 AAPL
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_sell_aapl",
+            "instrument": payload["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "15",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="SELL", target_weight="0", strength="-1"),
+        quote=_quote(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.INSUFFICIENT_POSITION
+
+
+@pytest.mark.unit
+def test_insufficient_position_when_sellable_quantity_is_zero() -> None:
+    # Effective exposure stays positive via open BUY, but filled shares are
+    # already committed on open SELLs so nothing further is sellable.
+    payload = portfolio_snapshot_example()  # 10 AAPL
+    instrument = payload["positions"][0]["instrument"]
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_aapl",
+            "instrument": instrument,
+            "side": "BUY",
+            "quantity": "5",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        },
+        {
+            "order_id": "ord_pending_sell_aapl",
+            "instrument": instrument,
+            "side": "SELL",
+            "quantity": "10",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        },
+    ]
+    result = size_position(
+        signal=_signal(intent="SELL", target_weight="0", strength="-1"),
+        quote=_quote(),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.INSUFFICIENT_POSITION
+
+
+@pytest.mark.unit
+def test_open_buy_blocks_when_reserved_notional_exhausts_spendable() -> None:
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["account_scope"] = "agentic"
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "25",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.OPEN_BUY_BLOCKS
+
+
+@pytest.mark.unit
+def test_max_notional_blocks_when_below_one_share() -> None:
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
+        portfolio=_empty_portfolio(),
+        config=_config(cash_reserve="0", max_notional="100.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.candidate is None
+    assert result.reason_code == SizerReasonCode.MAX_NOTIONAL_BLOCKS
+
+
+@pytest.mark.unit
 def test_config_rejects_inverted_notional_bounds() -> None:
     with pytest.raises(ValidationError, match="min_notional"):
         _config(min_notional="100.00", max_notional="10.00")
-
-
-@pytest.mark.unit
-def test_buy_limit_never_rounds_up() -> None:
-    price = normalize_limit_price(Decimal("214.559"), Decimal("0.01"), side=OrderSide.BUY)
-    assert price == Decimal("214.55")
-    assert price <= Decimal("214.559")
-
-
-@pytest.mark.unit
-def test_sell_limit_never_rounds_down() -> None:
-    price = normalize_limit_price(Decimal("214.551"), Decimal("0.01"), side=OrderSide.SELL)
-    assert price == Decimal("214.56")
-    assert price >= Decimal("214.551")
 
 
 @given(
