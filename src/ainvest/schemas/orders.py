@@ -7,7 +7,6 @@ produce an OrderProposal.
 
 from __future__ import annotations
 
-from decimal import Decimal
 from enum import StrEnum
 from typing import Annotated, Any
 
@@ -30,6 +29,7 @@ from ainvest.schemas.common import (
     UtcDateTime,
     parse_decimal,
 )
+from ainvest.schemas.decimal_math import decimal_coeff_exp
 from ainvest.schemas.portfolio import AccountScope
 from ainvest.schemas.strategy import StrategyName, StrategyVersion
 
@@ -185,22 +185,6 @@ class OrderProposal(DomainModel):
         return self
 
 
-def _decimal_coeff_exp(value: Decimal) -> tuple[int, int]:
-    """Return ``(coefficient, exponent)`` for exact integer-scaled arithmetic.
-
-    Always re-canonicalizes so helpers never operate on extreme-exponent zeros
-    or unstripped trailing zeros.
-    """
-    canonical = parse_decimal(value)
-    sign, digits, exp = canonical.as_tuple()
-    if not isinstance(exp, int):
-        raise ValueError("NaN and Infinity are not allowed")
-    coefficient = int("".join(str(digit) for digit in digits) or "0")
-    if sign:
-        coefficient = -coefficient
-    return coefficient, exp
-
-
 def _require_increment_multiple(label: str, value: object, increment: object) -> None:
     """Require ``value`` to be an exact integer multiple of ``increment``.
 
@@ -211,8 +195,8 @@ def _require_increment_multiple(label: str, value: object, increment: object) ->
     step = parse_decimal(increment)
     if step <= 0:
         raise ValueError(f"{label} increment must be > 0")
-    amount_coeff, amount_exp = _decimal_coeff_exp(amount)
-    step_coeff, step_exp = _decimal_coeff_exp(step)
+    amount_coeff, amount_exp = decimal_coeff_exp(amount)
+    step_coeff, step_exp = decimal_coeff_exp(step)
     scale = min(amount_exp, step_exp)
     amount_int = amount_coeff * (10 ** (amount_exp - scale))
     step_int = step_coeff * (10 ** (step_exp - scale))
@@ -229,9 +213,9 @@ def _require_notional_within_limit(
     qty = parse_decimal(quantity)
     price = parse_decimal(limit_price)
     limit = parse_decimal(maximum_notional)
-    qty_coeff, qty_exp = _decimal_coeff_exp(qty)
-    price_coeff, price_exp = _decimal_coeff_exp(price)
-    limit_coeff, limit_exp = _decimal_coeff_exp(limit)
+    qty_coeff, qty_exp = decimal_coeff_exp(qty)
+    price_coeff, price_exp = decimal_coeff_exp(price)
+    limit_coeff, limit_exp = decimal_coeff_exp(limit)
     left_coeff = qty_coeff * price_coeff
     left_exp = qty_exp + price_exp
     scale = min(left_exp, limit_exp)
