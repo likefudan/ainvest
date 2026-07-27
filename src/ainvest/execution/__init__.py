@@ -3,8 +3,9 @@
 Execution is the only package allowed to receive broker write-tool access.
 Upstream research and strategy packages must not import this package.
 
-P03-T13 exposes the domain broker port and error taxonomy. Paper fill
-simulation (P03-T14) and Robinhood MCP clients land in later tasks.
+P03-T13 exposes the domain broker port and error taxonomy. P02-T9 exposes the
+order/cancel state machines. Paper fill simulation (P03-T14) and Robinhood MCP
+clients land in later tasks.
 """
 
 from ainvest.execution.broker import (
@@ -28,11 +29,37 @@ from ainvest.execution.broker import (
     cancel_is_confirmed_rejection,
     cancel_is_unknown_outcome,
 )
+from ainvest.execution.state_machine import (
+    CANCEL_EDGES,
+    CANCEL_TERMINAL,
+    ORDER_EDGES,
+    ORDER_TERMINAL,
+    AuditBackedStatePersistence,
+    CancelCommandState,
+    IllegalTransitionError,
+    InMemoryStatePersistence,
+    OrderLifecycleState,
+    PersistenceError,
+    StaleStateError,
+    StatePersistencePort,
+    TransitionResult,
+    is_cancel_transition_allowed,
+    is_order_transition_allowed,
+    legal_cancel_targets,
+    legal_order_targets,
+    transition_cancel,
+    transition_order,
+)
 
 __all__ = [
+    "CANCEL_EDGES",
+    "CANCEL_TERMINAL",
     "FORBIDDEN_REPLACE_METHOD_NAMES",
+    "ORDER_EDGES",
+    "ORDER_TERMINAL",
     "READ_METHOD_NAMES",
     "WRITE_METHOD_NAMES",
+    "AuditBackedStatePersistence",
     "BrokerAuthError",
     "BrokerError",
     "BrokerInvalidOrderError",
@@ -45,8 +72,22 @@ __all__ = [
     "BrokerTimeoutError",
     "BrokerUnknownOutcomeError",
     "BrokerWritePort",
+    "CancelCommandState",
+    "IllegalTransitionError",
+    "InMemoryStatePersistence",
+    "OrderLifecycleState",
+    "PersistenceError",
+    "StaleStateError",
+    "StatePersistencePort",
+    "TransitionResult",
     "assert_no_replace_operation",
     "assert_read_port_has_no_write_methods",
     "cancel_is_confirmed_rejection",
     "cancel_is_unknown_outcome",
+    "is_cancel_transition_allowed",
+    "is_order_transition_allowed",
+    "legal_cancel_targets",
+    "legal_order_targets",
+    "transition_cancel",
+    "transition_order",
 ]
