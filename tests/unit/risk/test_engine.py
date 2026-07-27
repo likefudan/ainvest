@@ -6,6 +6,15 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_instrument,
+    make_market_quality,
+    make_phase_limits,
+    make_quote,
+    make_risk_config,
+)
 
 from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.risk.engine import (
@@ -15,103 +24,30 @@ from ainvest.risk.engine import (
     evaluate_rules,
 )
 from ainvest.risk.models import (
-    AllowlistEntry,
-    EligibilityLimits,
     EvaluationPhase,
     ExposureInputs,
-    ExposureLimits,
     InstrumentMetadata,
-    MarketQualityLimits,
-    PhaseMarketQualityLimits,
     RiskContext,
     RiskRuleConfig,
     RuleResult,
     SectorAssignment,
 )
 from ainvest.risk.rules import DEFAULT_SCREENING_RULE_CODES
-from ainvest.schemas.common import AssetType
-from ainvest.schemas.examples import (
-    candidate_order_example,
-    market_quote_example,
-    portfolio_snapshot_example,
-)
+from ainvest.schemas.examples import portfolio_snapshot_example
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome, RiskSeverity
 
 
-def _phase_limits(
-    *,
-    age: int = 60,
-    spread: str = "50",
-    deviation: str = "100",
-    vol: str = "500",
-) -> PhaseMarketQualityLimits:
-    return PhaseMarketQualityLimits(
-        max_quote_age_seconds=age,
-        max_spread_bps=Decimal(spread),
-        max_limit_deviation_bps=Decimal(deviation),
-        max_short_term_volatility_bps=Decimal(vol),
-    )
-
-
 def _config() -> RiskRuleConfig:
-    return RiskRuleConfig(
-        rule_set_version="risk-rules-1.0.0",
-        eligibility=EligibilityLimits(
-            allowlist=(
-                AllowlistEntry(
-                    instrument_id="rh_inst_aapl_xnas",
-                    symbol="AAPL",
-                    exchange="XNAS",
-                    currency="USD",
-                    asset_type=AssetType.EQUITY,
-                ),
-            )
-        ),
-        market_quality=MarketQualityLimits(
-            proposal=_phase_limits(),
-            pretrade=_phase_limits(age=30, spread="25", deviation="50", vol="300"),
+    return make_risk_config(
+        market_quality=make_market_quality(
+            proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
+            pretrade=make_phase_limits(age=30, spread="25", deviation="50", vol="300"),
             max_clock_skew_seconds=5,
-        ),
-        exposure=ExposureLimits(
-            max_order_notional=Decimal("10000"),
-            max_symbol_weight=Decimal("0.50"),
-            max_sector_weight=Decimal("0.80"),
-            max_daily_turnover=Decimal("50000"),
-            min_cash_reserve_weight=Decimal("0.0"),
-            max_daily_loss=Decimal("10000"),
-        ),
+        )
     )
-
-
-def _instrument(**overrides: object) -> InstrumentMetadata:
-    payload = {
-        "instrument_id": "rh_inst_aapl_xnas",
-        "symbol": "AAPL",
-        "exchange": "XNAS",
-        "currency": "USD",
-        "asset_type": "EQUITY",
-        "tradable": True,
-        "price_increment": "0.01",
-        "quantity_increment": "1",
-    }
-    payload.update(overrides)
-    return InstrumentMetadata.model_validate(payload)
-
-
-def _candidate(**overrides: object) -> CandidateOrder:
-    payload = candidate_order_example()
-    payload["account_scope"] = "paper"
-    payload.update(overrides)
-    return CandidateOrder.model_validate(payload)
-
-
-def _quote(**overrides: object) -> MarketQuote:
-    payload = market_quote_example()
-    payload.update(overrides)
-    return MarketQuote.model_validate(payload)
 
 
 def _context(
@@ -123,14 +59,13 @@ def _context(
     instrument: InstrumentMetadata | None = None,
     vol: str = "10",
 ) -> RiskContext:
-    moment = as_of or datetime(2026, 7, 24, 18, 30, 0, tzinfo=UTC)
-    return RiskContext(
+    return make_context(
         risk_decision_id="risk_01HZYC4ATEST0001",
         phase=phase,
-        as_of=moment,
-        candidate=candidate or _candidate(),
-        quote=quote or _quote(),
-        instrument=instrument or _instrument(),
+        as_of=as_of or datetime(2026, 7, 24, 18, 30, 0, tzinfo=UTC),
+        candidate=candidate or make_candidate(),
+        quote=quote or make_quote(),
+        instrument=instrument or make_instrument(),
         config=_config(),
         short_term_volatility_bps=Decimal(vol),
     )
@@ -191,7 +126,7 @@ def test_happy_path_approved_with_digests() -> None:
     cal = FakeMarketCalendar()
     ctx = _context(as_of=datetime(2026, 7, 23, 15, 0, tzinfo=UTC))
     # Align quote observed_at with as_of window
-    quote = _quote(
+    quote = make_quote(
         provenance={
             "source": "test.quotes",
             "observed_at": "2026-07-23T14:59:50Z",

@@ -6,93 +6,36 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_fresh_quote,
+    make_instrument,
+    make_market_quality,
+    make_phase_limits,
+    make_risk_config,
+)
 
 from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.risk.engine import evaluate_risk
-from ainvest.risk.models import (
-    AllowlistEntry,
-    EligibilityLimits,
-    EvaluationPhase,
-    ExposureLimits,
-    InstrumentMetadata,
-    MarketQualityLimits,
-    PhaseMarketQualityLimits,
-    RiskContext,
-    RiskRuleConfig,
-)
+from ainvest.risk.models import EvaluationPhase, RiskContext, RiskRuleConfig
 from ainvest.risk.rules.market_quality import (
     LimitDeviationRule,
     QuoteFreshnessRule,
     SpreadRule,
     VolatilityRule,
 )
-from ainvest.schemas.common import AssetType
-from ainvest.schemas.examples import candidate_order_example, market_quote_example
 from ainvest.schemas.market import MarketQuote
-from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.risk import RiskOutcome
 
 
-def _limits(*, age: int, spread: str, deviation: str, vol: str) -> PhaseMarketQualityLimits:
-    return PhaseMarketQualityLimits(
-        max_quote_age_seconds=age,
-        max_spread_bps=Decimal(spread),
-        max_limit_deviation_bps=Decimal(deviation),
-        max_short_term_volatility_bps=Decimal(vol),
-    )
-
-
 def _config() -> RiskRuleConfig:
-    return RiskRuleConfig(
-        rule_set_version="risk-rules-1.0.0",
-        eligibility=EligibilityLimits(
-            allowlist=(
-                AllowlistEntry(
-                    instrument_id="rh_inst_aapl_xnas",
-                    symbol="AAPL",
-                    exchange="XNAS",
-                    asset_type=AssetType.EQUITY,
-                ),
-            )
-        ),
-        market_quality=MarketQualityLimits(
-            proposal=_limits(age=60, spread="50", deviation="100", vol="500"),
-            pretrade=_limits(age=15, spread="20", deviation="25", vol="200"),
+    return make_risk_config(
+        market_quality=make_market_quality(
+            proposal=make_phase_limits(age=60, spread="50", deviation="100", vol="500"),
+            pretrade=make_phase_limits(age=15, spread="20", deviation="25", vol="200"),
             max_clock_skew_seconds=2,
-        ),
-        exposure=ExposureLimits(
-            max_order_notional=Decimal("10000"),
-            max_symbol_weight=Decimal("0.50"),
-            max_sector_weight=Decimal("0.80"),
-            max_daily_turnover=Decimal("50000"),
-            min_cash_reserve_weight=Decimal("0.0"),
-            max_daily_loss=Decimal("10000"),
-        ),
-    )
-
-
-def _fresh_quote(
-    *,
-    observed: str,
-    received: str,
-    bid: str = "214.48",
-    ask: str = "214.52",
-) -> MarketQuote:
-    return MarketQuote.model_validate(
-        {
-            **market_quote_example(),
-            "last_price": "214.50",
-            "bid": bid,
-            "ask": ask,
-            "provenance": {
-                "source": "test",
-                "observed_at": observed,
-                "received_at": received,
-                "timezone": "UTC",
-                "is_delayed": False,
-                "quality_flags": [],
-            },
-        }
+        )
     )
 
 
@@ -105,33 +48,17 @@ def _ctx(
     limit_price: str = "214.50",
 ) -> RiskContext:
     moment = as_of or datetime(2026, 7, 23, 15, 0, 0, tzinfo=UTC)
-    cand = CandidateOrder.model_validate(
-        {
-            **candidate_order_example(),
-            "account_scope": "paper",
-            "limit_price": limit_price,
-            "maximum_notional": str(Decimal(limit_price) * Decimal("2")),
-        }
-    )
-    return RiskContext(
+    return make_context(
         risk_decision_id="risk_01HZYMQ000000001",
         phase=phase,
         as_of=moment,
-        candidate=cand,
-        quote=quote
-        or _fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z"),
-        instrument=InstrumentMetadata.model_validate(
-            {
-                "instrument_id": "rh_inst_aapl_xnas",
-                "symbol": "AAPL",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "tradable": True,
-                "price_increment": "0.01",
-                "quantity_increment": "1",
-            }
+        candidate=make_candidate(
+            limit_price=limit_price,
+            maximum_notional=str(Decimal(limit_price) * Decimal("2")),
         ),
+        quote=quote
+        or make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z"),
+        instrument=make_instrument(),
         config=_config(),
         short_term_volatility_bps=None if vol is None else Decimal(vol),
     )
@@ -139,13 +66,15 @@ def _ctx(
 
 @pytest.mark.unit
 def test_stale_quote_rejected() -> None:
-    ctx = _ctx(quote=_fresh_quote(observed="2026-07-23T14:50:00Z", received="2026-07-23T14:50:01Z"))
+    ctx = _ctx(
+        quote=make_fresh_quote(observed="2026-07-23T14:50:00Z", received="2026-07-23T14:50:01Z")
+    )
     assert QuoteFreshnessRule().evaluate(ctx).decision is RiskOutcome.REJECTED
 
 
 @pytest.mark.unit
 def test_crossed_and_missing_bid_ask_rejected() -> None:
-    missing = _fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z")
+    missing = make_fresh_quote(observed="2026-07-23T14:59:50Z", received="2026-07-23T14:59:51Z")
     missing = missing.model_copy(update={"bid": None})
     assert QuoteFreshnessRule().evaluate(_ctx(quote=missing)).decision is RiskOutcome.REJECTED
     # Crossed markets are rejected by MarketQuote schema; rule also guards.
@@ -158,7 +87,7 @@ def test_crossed_and_missing_bid_ask_rejected() -> None:
 def test_spread_boundary() -> None:
     # mid=214.50; spread 1.07 → ~50 bps exactly around boundary
     # (ask-bid)/mid * 10000 = 1.0725/214.5 * 10000 ≈ 50.0
-    quote = _fresh_quote(
+    quote = make_fresh_quote(
         observed="2026-07-23T14:59:50Z",
         received="2026-07-23T14:59:51Z",
         bid="213.96375",
@@ -169,7 +98,7 @@ def test_spread_boundary() -> None:
     result = SpreadRule().evaluate(ctx)
     assert result.decision in {RiskOutcome.APPROVED, RiskOutcome.REJECTED}
 
-    wide = _fresh_quote(
+    wide = make_fresh_quote(
         observed="2026-07-23T14:59:50Z",
         received="2026-07-23T14:59:51Z",
         bid="200.00",
@@ -193,7 +122,7 @@ def test_limit_deviation_and_phase_thresholds() -> None:
 
     # Same quote age ok for proposal (60s) but not pretrade (15s).
     # Keep received_at near as_of so clock-skew does not dominate.
-    quote = _fresh_quote(observed="2026-07-23T14:59:30Z", received="2026-07-23T15:00:00Z")
+    quote = make_fresh_quote(observed="2026-07-23T14:59:30Z", received="2026-07-23T15:00:00Z")
     proposal = _ctx(phase=EvaluationPhase.PROPOSAL, quote=quote)
     pretrade = _ctx(phase=EvaluationPhase.PRETRADE, quote=quote)
     assert QuoteFreshnessRule().evaluate(proposal).decision is RiskOutcome.APPROVED
@@ -205,7 +134,7 @@ def test_pretrade_stricter_spread_cannot_reuse_proposal_pass() -> None:
     """A quote that passes proposal spread can still fail pretrade thresholds."""
     cal = FakeMarketCalendar()
     # ~40 bps spread: passes proposal max 50, fails pretrade max 20
-    quote = _fresh_quote(
+    quote = make_fresh_quote(
         observed="2026-07-23T14:59:55Z",
         received="2026-07-23T14:59:56Z",
         bid="214.07",

@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from collections.abc import Sequence
 from datetime import UTC, datetime
-from typing import Any
+from typing import Any, Protocol
 
 from ainvest.audit.digests import digest_json, utf8_size
 from ainvest.audit.envelope import (
@@ -21,6 +21,28 @@ from ainvest.audit.redact import redact
 from ainvest.db.base import utc_now
 from ainvest.db.repositories import AuditRepository
 from ainvest.db.uow import UnitOfWork
+
+
+class AuditStoredEvent(Protocol):
+    """Opaque persisted audit row returned by ``AuditRepository``.
+
+    Architecture forbids importing ``ainvest.db.models`` here; this protocol
+    describes the attributes callers read without coupling to the ORM class.
+    """
+
+    event_id: str
+    event_type: str
+    correlation_id: str | None
+    causation_id: str | None
+    payload_json: dict[str, Any]
+    payload_truncated: bool
+    output_digest: str | None
+    error_detail: str | None
+    before_state: dict[str, Any] | None
+    after_state: dict[str, Any] | None
+
+
+type AuditStoredEventSeq = Sequence[AuditStoredEvent]
 
 
 def _as_event_type(value: AuditEventType | str) -> str:
@@ -104,24 +126,24 @@ class AuditService:
     def from_uow(cls, uow: UnitOfWork) -> AuditService:
         return cls(uow.audit_repo)
 
-    def append(self, envelope: AuditEventEnvelope) -> Any:
+    def append(self, envelope: AuditEventEnvelope) -> AuditStoredEvent:
         """Persist a new audit event. No update/delete is exposed."""
         return self._repo.append_fields(envelope_to_fields(envelope))
 
-    def append_idempotent(self, envelope: AuditEventEnvelope) -> tuple[Any, bool]:
+    def append_idempotent(self, envelope: AuditEventEnvelope) -> tuple[AuditStoredEvent, bool]:
         """Append; on duplicate ``event_id``, return the existing row."""
         return self._repo.append_fields_idempotent(
             envelope_to_fields(envelope),
             event_id=envelope.event_id,
         )
 
-    def list_for_subject(self, subject_type: str, subject_id: str) -> Sequence[Any]:
+    def list_for_subject(self, subject_type: str, subject_id: str) -> AuditStoredEventSeq:
         return self._repo.list_for_subject(subject_type, subject_id)
 
-    def list_by_correlation(self, correlation_id: str) -> Sequence[Any]:
+    def list_by_correlation(self, correlation_id: str) -> AuditStoredEventSeq:
         return self._repo.list_by_correlation(correlation_id)
 
-    def timeline_for_proposal(self, proposal_id: str) -> Sequence[Any]:
+    def timeline_for_proposal(self, proposal_id: str) -> AuditStoredEventSeq:
         """Reconstruct a proposal's audit timeline by subject id."""
         return self.list_for_subject("order_proposal", proposal_id)
 
@@ -143,7 +165,7 @@ def record_state_change(
     config_version: str | None = None,
     payload: dict[str, Any] | None = None,
     occurred_at: datetime | None = None,
-) -> Any:
+) -> AuditStoredEvent:
     """Helper for critical state changes that must produce an audit event."""
     envelope = AuditEventEnvelope(
         event_id=event_id,
@@ -166,6 +188,7 @@ def record_state_change(
 
 __all__ = [
     "AuditService",
+    "AuditStoredEvent",
     "envelope_to_fields",
     "record_state_change",
 ]

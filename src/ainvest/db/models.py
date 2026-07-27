@@ -33,7 +33,7 @@ from ainvest.db.base import (
 from ainvest.db.types import DecimalString, UtcDateTime
 
 
-class ResearchRun(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin):
+class ResearchRunRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin):
     """One research agent evaluation run."""
 
     __tablename__ = "research_runs"
@@ -71,10 +71,10 @@ class ResearchPacketRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVers
     as_of: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False, index=True)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    run: Mapped[ResearchRun | None] = relationship(back_populates="packets")
+    run: Mapped[ResearchRunRow | None] = relationship(back_populates="packets")
 
 
-class StrategyRun(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin):
+class StrategyRunRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin):
     """One strategy evaluation against a research/portfolio context."""
 
     __tablename__ = "strategy_runs"
@@ -118,7 +118,7 @@ class TradeSignalRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersion
     expires_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
 
-    strategy_run: Mapped[StrategyRun | None] = relationship(back_populates="signals")
+    strategy_run: Mapped[StrategyRunRow | None] = relationship(back_populates="signals")
 
 
 class RiskDecisionRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin):
@@ -420,8 +420,8 @@ __all__ = [
     "OrderProposalRow",
     "PortfolioSnapshotRow",
     "ResearchPacketRow",
-    "ResearchRun",
+    "ResearchRunRow",
     "RiskDecisionRow",
-    "StrategyRun",
+    "StrategyRunRow",
     "TradeSignalRow",
 ]
