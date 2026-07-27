@@ -5,11 +5,6 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from paper_fixtures import (
-    make_paper_proposal,
-    make_paper_proposal_and_approval,
-    make_submit_request,
-)
 from pydantic import ValidationError
 
 from ainvest.execution.broker import (
@@ -35,6 +30,11 @@ from ainvest.schemas.examples import (
     order_proposal_valid,
 )
 from ainvest.schemas.orders import OrderProposal
+from execution.paper_fixtures import (
+    make_paper_proposal,
+    make_paper_proposal_and_approval,
+    make_submit_request,
+)
 
 _OBSERVED = datetime(2026, 7, 24, 18, 30, 20, tzinfo=UTC)
 

@@ -9,12 +9,12 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
-from portfolio_fixtures import (
+from pydantic import ValidationError
+from shared.portfolio_fixtures import (
     make_cash_portfolio,
     make_open_order,
     with_open_orders,
 )
-from pydantic import ValidationError
 
 from ainvest.portfolio import (
     SizerReasonCode,

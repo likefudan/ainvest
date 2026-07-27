@@ -5,7 +5,7 @@ from __future__ import annotations
 from decimal import Decimal
 
 import pytest
-from portfolio_fixtures import (
+from shared.portfolio_fixtures import (
     make_cash_portfolio,
     make_open_order,
     with_open_orders,

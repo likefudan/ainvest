@@ -6,15 +6,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from risk_fixtures import (
-    make_candidate,
-    make_context,
-    make_instrument,
-    make_market_quality,
-    make_phase_limits,
-    make_quote,
-    make_risk_config,
-)
 
 from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.risk.engine import (
@@ -37,6 +28,15 @@ from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome, RiskSeverity
+from risk.risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_instrument,
+    make_market_quality,
+    make_phase_limits,
+    make_quote,
+    make_risk_config,
+)
 
 
 def _context(

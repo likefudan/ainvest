@@ -6,7 +6,6 @@ from typing import ClassVar
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from strategy_fixtures import DemoStrategy, make_metadata
 
 from ainvest.strategies import (
     PluginMetadata,
@@ -15,6 +14,7 @@ from ainvest.strategies import (
     StrategyParams,
     StrategyResult,
 )
+from strategies.strategy_fixtures import DemoStrategy, make_metadata
 
 
 @pytest.mark.unit

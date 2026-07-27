@@ -79,6 +79,7 @@ addopts = [
     "-ra",
 ]
 testpaths = ["tests"]
+pythonpath = ["tests/unit"]
 markers = [
     "unit: fast tests isolated from external processes and services",
     "contract: public interface and provider contract tests",
@@ -120,6 +121,7 @@ select = [
 python_version = "3.12"
 strict = true
 files = ["src", "tests"]
+mypy_path = ["tests/unit"]
 warn_unreachable = true
 exclude = [
     "(^|/)conftest\\.py$",

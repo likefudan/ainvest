@@ -7,7 +7,8 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from decimal_cases import (
+from pydantic import TypeAdapter, ValidationError
+from shared.decimal_cases import (
     EXTREME_HUGE,
     EXTREME_TINY,
     EXTREME_ZERO_ENCODINGS,
@@ -16,7 +17,6 @@ from decimal_cases import (
     TINY_FIXED,
     TINY_PADDED,
 )
-from pydantic import TypeAdapter, ValidationError
 
 from ainvest.schemas.common import (
     DECIMAL_STRING_PATTERN,
