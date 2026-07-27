@@ -92,8 +92,8 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
 | Batch D — Part 1a (D1a) | Batch D | `P03-T4` | complete (merged) |
-| Batch D — Part 1b (D1b) | Batch D | `P03-T5` | in_review |
-| Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_progress (PR after D1) |
+| Batch D — Part 1b (D1b) | Batch D | `P03-T5` | complete (merged) |
+| Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_review |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | not_started (after D2b) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_progress (PR after D2) |
 | Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
@@ -176,24 +176,27 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 2b (D2b) — Multi-strategy signal aggregation (`P03-T7`)
 - **Plan batch:** Batch D (D2)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress` (code parallel; **do not open formal PR until D1 merged**)
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-d2
 - **Integration branch:** `task/batch-d2b-signal-aggregation`
-- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
-- **Dependencies:** `P03-T6` (satisfied); rebase onto post-D1 `main` before PR
-- **Merge target:** `main` (squash); after D1a+D1b
+- **Base commit:** `2dd98a4` (rebased onto post-D1 `main`)
+- **Dependencies:** `P03-T6` (satisfied); D1a+D1b merged
+- **Merge target:** `main` (squash); **next** in Batch D merge queue after D1
 - **Allowed paths:** `src/ainvest/portfolio/signal_aggregation.py`,
   `src/ainvest/portfolio/__init__.py`, `docs/decisions/**` (aggregation ADR),
   `tests/unit/portfolio/**`,
   `docs/tasks/status.md` (D2b section + summary row + Active batch notes only)
 - **Forbidden:** pretrade/kill_switch (D2c), strategy worker (D1), workflow (D3),
   rewriting sizer behavior beyond calling it if needed
-- **Handoff notes:** ADR + deterministic aggregation; conflict → no trade or
-  NEEDS_REVIEW; never emit opposing orders for one symbol.
+- **Handoff notes:** ADR-020 / `DEC-020` accepted: conflict → `NEEDS_REVIEW` /
+  no trade; group by symbol + `generated_at` + expiry + strategy version;
+  never emit opposing orders for one symbol; strength never weighted as
+  probability. API: `aggregate_signals` / `SignalAggregationResult`.
+- **PR:** TBD (opened after rebase onto `2dd98a4`)
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_progress` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P03-T6` | hold until D1 |
+| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_review` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | TBD |
 
 ### Batch D — Part 3b (D3b)
 
