@@ -91,8 +91,8 @@ plan batch complete only when every card in that section has merged.
 | Batch C complete | Batch C | all of the above | complete |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
-| Batch D — Part 1a (D1a) | Batch D | `P03-T4` | in_review |
-| Batch D — Part 1b (D1b) | Batch D | `P03-T5` | not_started (after D1a) |
+| Batch D — Part 1a (D1a) | Batch D | `P03-T4` | complete (merged) |
+| Batch D — Part 1b (D1b) | Batch D | `P03-T5` | in_progress |
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_progress (PR after D1) |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | not_started (after D2b) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_progress (PR after D2) |
@@ -141,7 +141,34 @@ rewrite another track's allowed paths.
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `in_review` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T0`–`T2`, `P02-T8` | https://github.com/likefudan/ainvest/pull/63 |
+| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `complete` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T0`–`T2`, `P02-T8` | https://github.com/likefudan/ainvest/pull/63 |
+
+### Batch D — Part 1b (D1b)
+
+- **Batch:** Batch D — Part 1b (D1b) — Strategy conformance suite (`P03-T5`)
+- **Plan batch:** Batch D (D1)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress`
+- **Owner/agent:** cursor-subagent-d1
+- **Integration branch:** `task/batch-d1b-strategy-conformance`
+- **Base commit:** `861f5bf` (D1a merged)
+- **Dependencies:** `P03-T0`–`T4`, `P03-T13` (satisfied on main)
+- **Merge target:** `main` (squash); **second** in Batch D merge queue (after D1a)
+- **Allowed paths:** `src/ainvest/strategy_conformance/**`,
+  CLI entry point / `pyproject.toml` scripts,
+  `tests/unit/strategy_conformance/**`, `tests/integration/strategy_conformance/**`,
+  `docs/strategy-conformance.md` (third-party CI example),
+  `docs/tasks/status.md` (D1b section + summary row + Active batch notes only)
+- **Forbidden:** rewriting worker internals beyond calling public APIs; D2/D3 scope;
+  merging the PR
+- **Handoff notes:** Publishing `ainvest.strategy_conformance` +
+  `ainvest-strategy-conformance` CLI; JSON + human reports; isolation via
+  `evaluate_in_worker`.
+- **PR:** (pending)
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T5` | Publish the Strategy Conformance Test Suite | `in_progress` | cursor-subagent-d1 | `task/batch-d1b-strategy-conformance` | `861f5bf` | `P03-T0`–`T4`, `P03-T13` | (pending) |
 
 ### Batch D — Part 2b (D2b)
 
