@@ -94,7 +94,10 @@ First-release aggregation (`ainvest.portfolio.signal_aggregation`) is:
 ### Negative and trade-offs
 
 - Agreeing multi-strategy BUYs still require review until a later merge ADR.
-- Duplicate deliveries with any field drift (including strength) fail closed.
+- Duplicate collapse requires agreement on trade-relevant fields only
+  (intent, `target_weight`, `generated_at`, expiry, strategy identity/version,
+  and `strength`). Drift on those fields → `NEEDS_REVIEW`. Non-keys such as
+  `research_id` / `reason_codes` may still collapse to the lowest `signal_id`.
 
 ### Residual risks
 
