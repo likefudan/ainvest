@@ -31,6 +31,7 @@ from ainvest.risk.rules.market_quality import (
     SpreadRule,
     VolatilityRule,
 )
+from ainvest.risk.rules.orders import build_order_rules
 from ainvest.schemas.common import SCHEMA_VERSION_V1, DomainModel, SchemaVersion
 from ainvest.schemas.risk import (
     RiskDecision,
@@ -134,6 +135,18 @@ def compute_input_digest(context: RiskContext) -> str:
                     ],
                 }
             ),
+            "kill_switch": (
+                None if context.kill_switch is None else context.kill_switch.model_dump(mode="json")
+            ),
+            "client_order_id": context.client_order_id,
+            "proposal_order_hash": context.proposal_order_hash,
+            "recent_submissions": [
+                s.model_dump(mode="json")
+                for s in sorted(
+                    context.recent_submissions,
+                    key=lambda s: (s.client_order_id, s.submitted_at.isoformat()),
+                )
+            ],
         }
     )
 
@@ -228,7 +241,7 @@ def evaluate_rules(
 
 
 def build_default_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
-    """Instantiate the default screening + exposure rule set."""
+    """Instantiate the default screening + exposure + order rule set."""
     rules: dict[str, RiskRule] = {
         rule.code: rule
         for rule in (
@@ -244,6 +257,7 @@ def build_default_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
         )
     }
     rules.update(build_exposure_rules())
+    rules.update(build_order_rules())
     return rules
 
 

@@ -22,6 +22,7 @@ from ainvest.schemas.common import (
     MachineCode,
     Money,
     NonNegativeDecimal,
+    OrderSide,
     PnL,
     PositiveDecimal,
     SchemaVersion,
@@ -31,7 +32,7 @@ from ainvest.schemas.common import (
     Weight,
 )
 from ainvest.schemas.market import MarketQuote
-from ainvest.schemas.orders import CandidateOrder
+from ainvest.schemas.orders import CandidateOrder, OrderHashDigest
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome, RiskSeverity
 
@@ -129,6 +130,50 @@ class ExposureInputs(DomainModel):
     daily_unrealized_pnl: PnL | None = None
 
 
+class OrderConflictLimits(DomainModel):
+    """Duplicate / open-order conflict policy (P03-T12). No tradable defaults."""
+
+    duplicate_window_seconds: Annotated[int, Field(ge=1, le=86_400)]
+
+
+class RecentOrderSubmission(DomainModel):
+    """Prior submission used for duplicate detection (hash / client id / window)."""
+
+    client_order_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    order_hash: OrderHashDigest
+    instrument_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    symbol: Symbol
+    side: OrderSide
+    submitted_at: UtcDateTime
+    proposal_id: StableId | None = None
+
+
+class KillSwitchSnapshot(DomainModel):
+    """Immutable kill-switch view for one risk evaluation (DEC-008).
+
+    Configured and operational sources are independent; any active source blocks
+    new orders. This snapshot never triggers automatic cancellation.
+    """
+
+    configured_active: bool = False
+    operational_active: bool = False
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=512)] | None = None
+    updated_at: UtcDateTime | None = None
+
+    @property
+    def is_active(self) -> bool:
+        return self.configured_active or self.operational_active
+
+    @property
+    def active_sources(self) -> tuple[str, ...]:
+        sources: list[str] = []
+        if self.configured_active:
+            sources.append("CONFIGURED")
+        if self.operational_active:
+            sources.append("OPERATIONAL")
+        return tuple(sources)
+
+
 class RiskRuleConfig(DomainModel):
     """Rule configuration. Missing sections fail closed at construction."""
 
@@ -137,6 +182,7 @@ class RiskRuleConfig(DomainModel):
     eligibility: EligibilityLimits
     market_quality: MarketQualityLimits
     exposure: ExposureLimits
+    order_conflicts: OrderConflictLimits
 
 
 class RuleResult(DomainModel):
@@ -179,6 +225,10 @@ class RiskContext(DomainModel):
     portfolio: PortfolioSnapshot | None = None
     short_term_volatility_bps: NonNegativeDecimal | None = None
     exposure_inputs: ExposureInputs | None = None
+    kill_switch: KillSwitchSnapshot | None = None
+    recent_submissions: tuple[RecentOrderSubmission, ...] = ()
+    client_order_id: Annotated[str, StringConstraints(min_length=3, max_length=128)] | None = None
+    proposal_order_hash: OrderHashDigest | None = None
 
 
 ZERO = Decimal("0")
@@ -194,8 +244,11 @@ __all__ = [
     "ExposureInputs",
     "ExposureLimits",
     "InstrumentMetadata",
+    "KillSwitchSnapshot",
     "MarketQualityLimits",
+    "OrderConflictLimits",
     "PhaseMarketQualityLimits",
+    "RecentOrderSubmission",
     "RiskContext",
     "RiskRuleConfig",
     "RuleResult",
