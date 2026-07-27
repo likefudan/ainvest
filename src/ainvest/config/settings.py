@@ -1,24 +1,4 @@
-"""Centralized configuration loading with fail-closed safe defaults.
-
-All runtime configuration for ainvest must flow through this module. Other
-modules must not read arbitrary environment variables or parse YAML themselves.
-
-Configuration precedence (later sources override earlier ones):
-
-1. Built-in fail-closed defaults defined on the Settings models
-2. Optional YAML files (``risk`` / ``strategies`` via :func:`load_yaml_mapping`)
-3. Optional file-secret directory (Pydantic Settings)
-4. Optional ``.env`` file (Pydantic Settings)
-5. Environment variables
-6. Explicit keyword overrides passed to :func:`load_settings`
-
-Production (``AINVEST_ENV=production``) and all other environments reject unknown
-fields on Settings/YAML document models and reject unsafe mode combinations.
-Live trading additionally requires a complete WebAuthn configuration.
-
-Decision references: ``DEC-001``, ``DEC-002``, ``DEC-004``, ``DEC-005``,
-``DEC-006``.
-"""
+"""Settings models and load_settings with fail-closed safe defaults."""
 
 from __future__ import annotations
 
@@ -27,12 +7,10 @@ import re
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
-from enum import StrEnum
 from pathlib import Path
 from typing import Any, Final, Literal, Self
 from urllib.parse import urlsplit
 
-import yaml
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -46,39 +24,25 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
 
+from ainvest.config.documents import RiskLimitsDocument, StrategiesDocument
+from ainvest.config.errors import (
+    AinvestEnv,
+    ApprovalMethod,
+    ApprovalScope,
+    ConfigError,
+    TelegramTransport,
+    TradingMode,
+)
+from ainvest.config.yaml import _validation_error_message, load_yaml_mapping
+
 # Signed 64-bit bounds for Telegram numeric identities (DEC-005).
 _INT64_MIN: Final[int] = -(2**63)
 _INT64_MAX: Final[int] = 2**63 - 1
-
-_EXECUTABLE_YAML_PATTERN: Final[re.Pattern[str]] = re.compile(
-    r"(?:\beval\s*\(|\blambda\b|\b__import__\b|\bexec\s*\()",
-    re.IGNORECASE,
-)
 
 _RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(?=.{1,253}$)"
     r"(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)"
     r"(?:\.(?:[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?))*$"
-)
-
-_SECRET_FIELD_NAMES: Final[frozenset[str]] = frozenset(
-    {
-        "openai_api_key",
-        "bot_token",
-        "webhook_secret",
-        "database_password",
-        "robinhood_oauth_token",
-        "webauthn_server_secret",
-    }
-)
-
-CONFIG_PRECEDENCE: Final[tuple[str, ...]] = (
-    "built-in fail-closed defaults",
-    "optional YAML files (safe loader)",
-    "optional file-secret directory",
-    "optional .env file",
-    "environment variables",
-    "explicit load_settings overrides",
 )
 
 _YAML_SETTINGS_DATA: ContextVar[Mapping[str, Any] | None] = ContextVar(
@@ -87,152 +51,8 @@ _YAML_SETTINGS_DATA: ContextVar[Mapping[str, Any] | None] = ContextVar(
 )
 
 
-class ConfigError(ValueError):
-    """Raised when configuration is missing, invalid, or unsafe."""
-
-    def __init__(self, message: str, *, code: str = "CONFIG_INVALID") -> None:
-        self.code = code
-        super().__init__(message)
-
-
-class TradingMode(StrEnum):
-    """Supported runtime trading modes (design.md §12)."""
-
-    RESEARCH = "research"
-    PAPER = "paper"
-    LIVE = "live"
-
-
-class AinvestEnv(StrEnum):
-    """Deployment environment label."""
-
-    DEVELOPMENT = "development"
-    STAGING = "staging"
-    PRODUCTION = "production"
-
-
-class ApprovalMethod(StrEnum):
-    """Human approval method bound to an order hash."""
-
-    TELEGRAM = "telegram"
-    WEBAUTHN = "webauthn"
-
-
-class ApprovalScope(StrEnum):
-    """Broker/approval scope boundary (DEC-005, DEC-006)."""
-
-    PAPER = "paper"
-    LIVE = "live"
-
-
-class TelegramTransport(StrEnum):
-    """Telegram update transport. First release is long polling only."""
-
-    LONG_POLLING = "long_polling"
-
-
-def _redact_secrets_in_text(text: str) -> str:
-    """Replace likely secret assignments in error text with a placeholder."""
-    redacted = text
-    for name in _SECRET_FIELD_NAMES:
-        redacted = re.sub(
-            rf"({name}\s*[=:]\s*)([^\s,}}\]]+)",
-            r"\1***REDACTED***",
-            redacted,
-            flags=re.IGNORECASE,
-        )
-    redacted = re.sub(
-        r"SecretStr\('.*?'\)",
-        "SecretStr('***REDACTED***')",
-        redacted,
-    )
-    redacted = re.sub(
-        r"\b\d{8,12}:[A-Za-z0-9_-]{30,}\b",
-        "***REDACTED***",
-        redacted,
-    )
-    return redacted
-
-
-def _validation_error_message(exc: ValidationError) -> str:
-    """Format a ValidationError without echoing secret values."""
-    try:
-        body = exc.json(include_url=False, include_context=False, include_input=False)
-    except TypeError:  # pragma: no cover - older pydantic fallback
-        body = str(exc)
-    return _redact_secrets_in_text(body)
-
-
 def _is_int64(value: int) -> bool:
     return _INT64_MIN <= value <= _INT64_MAX
-
-
-def _reject_executable_yaml(node: object, *, path: str = "$") -> None:
-    """Reject YAML content that looks like executable configuration."""
-    if isinstance(node, str):
-        if _EXECUTABLE_YAML_PATTERN.search(node):
-            raise ConfigError(
-                f"Executable expression rejected in YAML at {path}",
-                code="CONFIG_YAML_EXECUTABLE",
-            )
-        return
-    if isinstance(node, Mapping):
-        for key, value in node.items():
-            key_path = f"{path}.{key}"
-            if isinstance(key, str):
-                _reject_executable_yaml(key, path=f"{path}@key")
-            _reject_executable_yaml(value, path=key_path)
-        return
-    if isinstance(node, list):
-        for index, item in enumerate(node):
-            _reject_executable_yaml(item, path=f"{path}[{index}]")
-        return
-    if isinstance(node, (int, float, bool)) or node is None:
-        return
-    raise ConfigError(
-        f"Unsupported YAML node type at {path}: {type(node).__name__}",
-        code="CONFIG_YAML_UNSAFE_TYPE",
-    )
-
-
-def load_yaml_mapping(path: Path | str) -> dict[str, Any]:
-    """Load a YAML mapping with :func:`yaml.safe_load` only.
-
-    Arbitrary objects, custom tags that construct Python types, ``eval``,
-    ``lambda``, and other executable configuration are rejected.
-    """
-    file_path = Path(path)
-    try:
-        raw = file_path.read_text(encoding="utf-8")
-    except OSError as exc:
-        raise ConfigError(
-            f"Unable to read YAML file: {file_path}",
-            code="CONFIG_YAML_UNREADABLE",
-        ) from exc
-
-    try:
-        loaded = yaml.safe_load(raw)
-    except yaml.YAMLError as exc:
-        raise ConfigError(
-            f"Invalid YAML syntax in {file_path}",
-            code="CONFIG_YAML_SYNTAX",
-        ) from exc
-
-    if loaded is None:
-        return {}
-    if not isinstance(loaded, dict):
-        raise ConfigError(
-            f"YAML root must be a mapping in {file_path}",
-            code="CONFIG_YAML_ROOT",
-        )
-    for key in loaded:
-        if not isinstance(key, str):
-            raise ConfigError(
-                f"YAML mapping keys must be strings in {file_path}",
-                code="CONFIG_YAML_KEY_TYPE",
-            )
-    _reject_executable_yaml(loaded)
-    return loaded
 
 
 class AISettings(BaseModel):
@@ -416,41 +236,6 @@ class WebAuthnSettings(BaseModel):
             and self.approval_scope is ApprovalScope.LIVE
             and self.bootstrap_closed
         )
-
-
-class RiskLimitsDocument(BaseModel):
-    """Structural container for risk YAML.
-
-    Concrete numeric owner limits are ``DEC-012`` and remain unresolved until
-    accepted. This model validates document shape only and never supplies
-    implicit tradable defaults (DEC-002).
-    """
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: str = "1"
-    limits: dict[str, Any] = Field(default_factory=dict)
-    instrument_allowlist: list[dict[str, Any]] = Field(default_factory=list)
-    notes: str | None = None
-
-    @model_validator(mode="after")
-    def _reject_executable_limit_values(self) -> Self:
-        _reject_executable_yaml({"limits": self.limits, "allowlist": self.instrument_allowlist})
-        return self
-
-
-class StrategiesDocument(BaseModel):
-    """Structural container for strategy instance YAML (DEC-011)."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-
-    schema_version: str = "1"
-    strategies: list[dict[str, Any]] = Field(default_factory=list)
-
-    @model_validator(mode="after")
-    def _reject_executable_strategy_values(self) -> Self:
-        _reject_executable_yaml({"strategies": self.strategies})
-        return self
 
 
 class _YamlSettingsSource(PydanticBaseSettingsSource):
