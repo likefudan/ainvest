@@ -85,7 +85,7 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 1 (C1) | Batch C | `P02-T6`–`P02-T8` | complete (merged) |
 | Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | complete (merged) |
 | Batch C — Part 3a (C3a) | Batch C | `P03-T13` | complete (merged) |
-| Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
+| Batch C — Part 3b (C3b) | Batch C | `P03-T14` | merged |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
@@ -97,9 +97,41 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
 **C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **D3a is merged**
-(`3de469d`). C3b and C4a may start. C4b still needs C4a. Coordinators own
-`docs/tasks/status.md` updates for handoff; implementation agents must not
-rewrite another track's allowed paths.
+(`3de469d`). **C3b is merged** (see C3b section). C4a may start. C4b still
+needs C4a. Coordinators own `docs/tasks/status.md` updates for handoff;
+implementation agents must not rewrite another track's allowed paths.
+
+### Batch C — Part 3b (C3b)
+
+- **Batch:** Batch C — Part 3b (C3b) — Deterministic Paper Broker and fill
+  simulator (`P03-T14`)
+- **Plan batch:** Batch C (after C1 + D3a)
+- **Coordinator:** cursor-agent / local
+- **Status:** `merged`
+- **Owner/agent:** cursor-subagent-c3b
+- **Integration branch:** `task/batch-c3b-paper-broker` (deleted after merge)
+- **Base commit:** `c60586c1ee1c76b49cd08884314c7957bcd031b2`
+- **Dependencies:** `P03-T13`, `P02-T9`, `P02-T6`–`P02-T8` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Handoff PR:** [#44](https://github.com/likefudan/ainvest/pull/44)
+- **Allowed paths:** `src/ainvest/execution/paper.py`,
+  `src/ainvest/execution/__init__.py`, `tests/unit/execution/**`,
+  `tests/contract/execution/**` (only if needed for Paper adapter),
+  `docs/tasks/status.md` (C3b section + summary row + Active batch notes only)
+- **Forbidden:** Robinhood MCP, live trading, risk engine rewrite, workflow
+  (`P02-T10`), reconciliation (`P03-T15`)
+- **Verification:** `./scripts/dev verify` and `./scripts/dev audit` passed
+  locally; CI Verify / Secret scan / Dependency audit green on #44
+- **Handoff notes:** `PaperBroker` implements cash/positions, submit/cancel,
+  partial/full fill from injected market events only; injected clock/RNG;
+  explicit `PaperCostModel` (fee/half-spread/slippage); idempotent submit by
+  `client_order_id`; read/write port views; no oversell/overdraft. Review fixed
+  fill timestamps when clock ahead of event and open-order-only cash reserves.
+- **Next after merge:** C4a (`P03-T8`/`T10`/`T11`) may start; C4b waits for C4a
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T14` | Build the Deterministic Paper Broker and Fill Simulator | `merged` | cursor-subagent-c3b | `task/batch-c3b-paper-broker` | `c60586c1ee1c76b49cd08884314c7957bcd031b2` | `P03-T13`, `P02-T9`, `P02-T6`–`P02-T8` | [#44](https://github.com/likefudan/ainvest/pull/44) |
 
 ### Batch D — Part 2a (D2a)
 
