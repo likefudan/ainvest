@@ -94,8 +94,8 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 1a (D1a) | Batch D | `P03-T4` | complete (merged) |
 | Batch D — Part 1b (D1b) | Batch D | `P03-T5` | complete (merged) |
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
-| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | in_review |
-| Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_progress (PR after D2) |
+| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
+| Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_review (#68) |
 | Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
@@ -233,24 +233,29 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 3b (D3b) — Domain commands/events (`P02-T10`)
 - **Plan batch:** Batch D (D3)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress` (code parallel; **do not open formal PR until D2 merged**)
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-d3
 - **Integration branch:** `task/batch-d3b-workflow-commands`
-- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
-- **Dependencies:** `P02-T9`, `P02-T8` (satisfied); rebase onto post-D2 `main` before PR
-- **Merge target:** `main` (squash); after D2b+D2c
+- **Handoff PR:** [#68](https://github.com/likefudan/ainvest/pull/68)
+- **Base commit:** `27631f272101f75a46c487e8b3be7f0ec7b992bc` (rebased onto post-D2 `main`)
+- **Tip commit:** see PR #68 head (feature `1f38f71` + status)
+- **Dependencies:** `P02-T9`, `P02-T8`, Batch D2 (`P03-T7`/`T12`) satisfied on main
+- **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/workflow/**`,
   `tests/unit/workflow/**`, `tests/contract/workflow/**` (if needed),
   `docs/tasks/status.md` (D3b section + summary row + Active batch notes only),
-  `pyproject.toml` (package discovery only if required)
-- **Forbidden:** reconciliation/ledger (D3c), pretrade (D2c), strategy worker (D1),
-  live broker, Temporal/durable queue implementation (interface only)
-- **Handoff notes:** Commands/events with correlation/causation/idempotency;
-  in-process dispatcher; distinguish retryable vs broker-write never-blind-retry.
+  `pyproject.toml` (package discovery only if required),
+  `docs/architecture/dependency-direction.md` + architecture tests (register `workflow`)
+- **Forbidden:** reconciliation/ledger (D3c), rewriting D1/D2, live broker,
+  Temporal/durable queue implementation (interface only)
+- **Handoff notes:** Rebased onto `27631f2`; `./scripts/dev verify` green (570 passed).
+  `ainvest.workflow` commands/events with correlation/causation/idempotency;
+  in-process dispatcher + IdempotencyStore; PURE / READ_ONLY_EXTERNAL / BROKER_WRITE.
+  Architecture matrix registers `workflow`. T15 draft remains held (no D3c PR).
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_progress` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P02-T9`, `P02-T8` | hold until D2 |
+| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_review` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `27631f272101f75a46c487e8b3be7f0ec7b992bc` | `P02-T9`, `P02-T8` | [#68](https://github.com/likefudan/ainvest/pull/68) |
 
 ### Batch C — Part 4b (C4b)
 

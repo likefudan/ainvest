@@ -39,6 +39,7 @@ def test_boundary_packages_exist_as_importable_modules() -> None:
     import ainvest.risk as risk
     import ainvest.schemas as schemas
     import ainvest.strategies as strategies
+    import ainvest.workflow as workflow
 
     modules = {
         "agents": agents,
@@ -51,6 +52,7 @@ def test_boundary_packages_exist_as_importable_modules() -> None:
         "risk": risk,
         "schemas": schemas,
         "strategies": strategies,
+        "workflow": workflow,
     }
     assert set(modules) == BOUNDARY_PACKAGES
     for name, module in modules.items():

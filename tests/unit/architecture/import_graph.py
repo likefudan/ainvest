@@ -25,20 +25,21 @@ BOUNDARY_PACKAGES: frozenset[str] = frozenset(
         "portfolio",
         "audit",
         "api",
+        "workflow",
     }
 )
 
 # Importer package -> packages it must never import.
 FORBIDDEN_EDGES: Mapping[str, frozenset[str]] = {
     "schemas": BOUNDARY_PACKAGES - {"schemas"},
-    "data": frozenset({"agents", "strategies", "risk", "approval", "execution", "api"}),
-    "agents": frozenset({"execution", "approval", "risk"}),
-    "strategies": frozenset({"execution", "approval", "risk", "agents"}),
-    "risk": frozenset({"approval", "execution", "agents", "strategies"}),
-    "approval": frozenset({"execution", "agents", "strategies"}),
-    "portfolio": frozenset({"execution", "approval", "agents", "strategies"}),
-    "audit": frozenset({"execution", "approval", "agents", "strategies", "risk"}),
-    # api and execution may depend on other packages; cycles are still forbidden.
+    "data": frozenset({"agents", "strategies", "risk", "approval", "execution", "api", "workflow"}),
+    "agents": frozenset({"execution", "approval", "risk", "workflow"}),
+    "strategies": frozenset({"execution", "approval", "risk", "agents", "workflow"}),
+    "risk": frozenset({"approval", "execution", "agents", "strategies", "workflow"}),
+    "approval": frozenset({"execution", "agents", "strategies", "workflow"}),
+    "portfolio": frozenset({"execution", "approval", "agents", "strategies", "workflow"}),
+    "audit": frozenset({"execution", "approval", "agents", "strategies", "risk", "workflow"}),
+    # api, execution, and workflow may depend on other packages; cycles forbidden.
 }
 
 # Domain/boundary packages must not pull in SQLAlchemy ORM APIs.

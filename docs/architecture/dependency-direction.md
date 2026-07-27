@@ -17,6 +17,7 @@ Boundary packages under `src/ainvest` follow the control-flow order from
 | `portfolio` | Positions, exposure, performance |
 | `audit` | Append-only audit events |
 | `api` | HTTPS approval and operator API |
+| `workflow` | Domain commands/events, correlation IDs, in-process dispatcher |
 
 ## Runtime control and data flow
 
@@ -37,23 +38,25 @@ Layers exchange **versioned Pydantic models**, not ORM instances.
 
 ## Python import direction
 
-All packages may import `schemas`. Orchestrators such as `api` and `execution`
-may import lower-level interfaces where the forbidden-edge matrix permits it.
-Runtime control flow must use dependency injection when following the data-flow
-arrows would otherwise create a forbidden reverse import.
+All packages may import `schemas`. Orchestrators such as `api`, `execution`, and
+`workflow` may import lower-level interfaces where the forbidden-edge matrix
+permits it. Runtime control flow must use dependency injection when following
+the data-flow arrows would otherwise create a forbidden reverse import.
+`workflow` defines command/event envelopes and may import `schemas` plus
+digest helpers from `audit`; lower packages must not import `workflow`.
 
 ## Forbidden Python imports (enforced by architecture tests)
 
 | Importer | Must not import |
 | --- | --- |
 | `schemas` | any other boundary package; `sqlalchemy` / ORM |
-| `data` | `agents`, `strategies`, `risk`, `approval`, `execution`, `api` |
-| `agents` | `execution`, `approval`, `risk` |
-| `strategies` | `execution`, `approval`, `risk`, `agents` |
-| `risk` | `approval`, `execution`, `agents`, `strategies` |
-| `approval` | `execution`, `agents`, `strategies` |
-| `portfolio` | `execution`, `approval`, `agents`, `strategies` |
-| `audit` | `execution`, `approval`, `agents`, `strategies`, `risk` |
+| `data` | `agents`, `strategies`, `risk`, `approval`, `execution`, `api`, `workflow` |
+| `agents` | `execution`, `approval`, `risk`, `workflow` |
+| `strategies` | `execution`, `approval`, `risk`, `agents`, `workflow` |
+| `risk` | `approval`, `execution`, `agents`, `strategies`, `workflow` |
+| `approval` | `execution`, `agents`, `strategies`, `workflow` |
+| `portfolio` | `execution`, `approval`, `agents`, `strategies`, `workflow` |
+| `audit` | `execution`, `approval`, `agents`, `strategies`, `risk`, `workflow` |
 
 Import cycles among boundary packages are forbidden.
 
