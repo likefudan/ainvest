@@ -97,19 +97,22 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | complete (merged) |
 | Batch D — Part 3c (D3c) | Batch D | `P03-T15` | complete (merged) |
-| Batch D — Part 4a (D4a) | Batch D | `P03-T16` | in_review |
-| Batch D — Part 4b (D4b) | Batch D | `P03-T17` | pending (after D4a) |
+| Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
+| Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
+| **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-**Batch D — Close Gate 1** (remaining: D4). D1–D3 complete on `main`
-(`da248c2` includes P03-T15). **Batch C is complete.**
+**Batch D complete — Gate 1 accepted** on `main` at
+`36f51ebb795e04f64f91a4983bc65cdb953d86d0` (D4a) with acceptance record
+[`docs/releases/phase-1-acceptance.md`](../releases/phase-1-acceptance.md)
+(D4b / `P03-T17`). **Batch C is complete.** Next coordination follows Batch E
+tracks in `IMPLEMENTATION_TODO.md` (research / paper approval / cross-cutting).
 
-Coordination: implement **D4a → D4b** serially (two PRs). D4 is
-**integration only** — do not rewrite D1–D3 modules. Coordinators own
-`docs/tasks/status.md` updates for handoff.
+Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
+**integration only** — did not rewrite D1–D3 modules.
 
 ### Batch D — Part 1a (D1a)
 
@@ -289,11 +292,12 @@ Coordination: implement **D4a → D4b** serially (two PRs). D4 is
 - **Batch:** Batch D — Part 4a (D4a) — Paper orchestration (`P03-T16`)
 - **Plan batch:** Batch D (D4)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d4a
-- **Integration branch:** `task/batch-d4a-paper-orchestration`
+- **Integration branch:** `task/batch-d4a-paper-orchestration` (deleted after merge)
 - **Handoff PR:** [#70](https://github.com/likefudan/ainvest/pull/70)
 - **Base commit:** `da248c2f67ebed8da9c31ed87b3ded062d085031` (post-D3c main)
+- **Merge commit:** `36f51ebb795e04f64f91a4983bc65cdb953d86d0`
 - **Dependencies:** `P03-T0`–`T15`, `P02-T10` (satisfied on main); D1–D3 merged
 - **Merge target:** `main` (squash); **first** of D4a→D4b
 - **Allowed paths:**
@@ -304,26 +308,24 @@ Coordination: implement **D4a → D4b** serially (two PRs). D4 is
   - `docs/tasks/status.md` (D4a section + summary row + Active batch notes only)
 - **Forbidden:** rewriting D1–D3 modules beyond imports/re-exports; Telegram;
   live broker; `docs/releases/` (D4b / P03-T17); auto-approve paths
-- **Handoff notes:** Composition root `ainvest.orchestrator` wires worker →
-  aggregate → sizer → risk → hash-bound proposal → explicit approval stub →
-  pre-trade → dispatcher `ExecuteOrder`/`Reconcile` → Paper fill →
-  `OrderReconciler` + ledger conservation. Never auto-approves; CLI
-  `--inject-approval` / tests only. Replayable flows covered in
-  `tests/integration/test_paper_flow.py`. `./scripts/dev verify` green.
+- **Handoff notes:** Merged via #70. Composition root `ainvest.orchestrator`
+  wires worker → aggregate → sizer → risk → hash-bound proposal → explicit
+  approval stub → pre-trade → dispatcher `ExecuteOrder`/`Reconcile` → Paper
+  fill → reconciler + ledger conservation. Never auto-approves.
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T16` | Orchestrate a Full Paper Flow from a Fixed ResearchPacket | `in_review` | cursor-subagent-d4a | `task/batch-d4a-paper-orchestration` | `da248c2f67ebed8da9c31ed87b3ded062d085031` | `P03-T0`–`T15`, `P02-T10` | [#70](https://github.com/likefudan/ainvest/pull/70) |
+| `P03-T16` | Orchestrate a Full Paper Flow from a Fixed ResearchPacket | `merged` | cursor-subagent-d4a | `task/batch-d4a-paper-orchestration` | `da248c2f67ebed8da9c31ed87b3ded062d085031` | `P03-T0`–`T15`, `P02-T10` | [#70](https://github.com/likefudan/ainvest/pull/70) |
 
 ### Batch D — Part 4b (D4b)
 
 - **Batch:** Batch D — Part 4b (D4b) — Gate 1 acceptance (`P03-T17`)
 - **Plan batch:** Batch D (D4)
 - **Coordinator:** cursor-agent / local
-- **Status:** `pending`
-- **Owner/agent:** (after D4a merges)
+- **Status:** `in_review`
+- **Owner/agent:** cursor-subagent-d4b
 - **Integration branch:** `task/batch-d4b-gate-1-acceptance`
-- **Base commit:** (D4a merge commit on main)
+- **Base commit:** `36f51ebb795e04f64f91a4983bc65cdb953d86d0` (D4a merge)
 - **Dependencies:** `P03-T16` + Phase 01–03 cards (all prior)
 - **Merge target:** `main` (squash); **second** of D4a→D4b
 - **Allowed paths:**
@@ -332,14 +334,15 @@ Coordination: implement **D4a → D4b** serially (two PRs). D4 is
   - `docs/tasks/status.md` (D4b + Batch D complete row)
 - **Forbidden:** rewriting orchestration beyond acceptance harness; new features;
   Telegram / live broker
-- **Handoff notes:** Produce Gate 1 acceptance record: empty SQLite → migrate →
-  fixed ResearchPacket → simulated fill → audit timeline export; verify worker
-  isolation, risk fail-closed, Paper idempotency, illegal SM rejection;
-  performance baseline + defect register (high/critical = 0).
+- **Handoff notes:** Gate 1 acceptance record produced from empty SQLite →
+  migrate → fixed ResearchPacket → simulated fill → audit timeline export;
+  worker isolation, risk fail-closed, Paper idempotency, illegal SM rejection
+  verified; performance baseline recorded; high/critical defects = 0.
+  See `docs/releases/phase-1-acceptance.md`. **Batch D complete.**
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T17` | Gate 1: Accept the Deterministic Simulated Trading Loop | `pending` | — | `task/batch-d4b-gate-1-acceptance` | (after D4a) | `P03-T16` + P01–P03 | |
+| `P03-T17` | Gate 1: Accept the Deterministic Simulated Trading Loop | `in_review` | cursor-subagent-d4b | `task/batch-d4b-gate-1-acceptance` | `36f51ebb795e04f64f91a4983bc65cdb953d86d0` | `P03-T16` + P01–P03 | |
 
 ### Batch C — Part 4b (C4b)
 
