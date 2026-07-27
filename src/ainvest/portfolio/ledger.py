@@ -334,14 +334,19 @@ class PortfolioLedger:
         Fills are sorted by ``(filled_at, fill_id)``. On any ``REJECTED`` result the
         ledger is restored to its pre-batch state so callers never observe a
         partial money rewrite alongside a failure / manual-review path.
-        Prior results that had reported ``APPLIED`` are rewritten to ``REJECTED``
-        with ``BATCH_ROLLED_BACK`` so callers cannot record fill IDs that never
-        stuck. ``DUPLICATE`` results do not trigger rollback and are preserved.
+
+        Prior ``APPLIED`` results are rewritten to ``REJECTED`` /
+        ``BATCH_ROLLED_BACK``. In-batch ``DUPLICATE`` results (fill_id absent
+        from the pre-batch ``seen_fills``) are rewritten the same way so
+        callers never see a stale ``entry_id`` for a fill that did not stick.
+        Pre-existing duplicates (already known before the batch) are preserved.
+        ``DUPLICATE`` results do not themselves trigger rollback.
         """
         ordered = sorted(fills, key=lambda item: (ensure_utc(item[0].filled_at), item[0].fill_id))
         if not ordered:
             return ()
         checkpoint = self._checkpoint()
+        pre_seen = frozenset(checkpoint.seen_fills)
         results: list[FillApplyResult] = []
         for fill, side, instrument, fee in ordered:
             result = self.apply_fill(fill, side=side, instrument=instrument, fee=fee)
@@ -350,7 +355,11 @@ class PortfolioLedger:
                 self._restore(checkpoint)
                 rewritten: list[FillApplyResult] = []
                 for prior in results[:-1]:
-                    if prior.status is LedgerApplyStatus.APPLIED:
+                    rolled_back_duplicate = (
+                        prior.status is LedgerApplyStatus.DUPLICATE
+                        and prior.fill_id not in pre_seen
+                    )
+                    if prior.status is LedgerApplyStatus.APPLIED or rolled_back_duplicate:
                         rewritten.append(
                             FillApplyResult(
                                 status=LedgerApplyStatus.REJECTED,

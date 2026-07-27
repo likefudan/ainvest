@@ -252,3 +252,39 @@ def test_apply_fills_atomic_rewrites_rolled_back_applied_results() -> None:
     assert results[0].reason_code == "BATCH_ROLLED_BACK"
     assert results[1].status is LedgerApplyStatus.REJECTED
     assert results[1].reason_code == "INSUFFICIENT_CASH"
+
+
+@pytest.mark.unit
+def test_apply_fills_atomic_rewrites_in_batch_duplicates_on_rollback() -> None:
+    """In-batch DUPLICATE must not keep a stale entry_id after rollback."""
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("250"),
+        as_of=AS_OF,
+    )
+    instrument = _instrument()
+    fill_ok = _fill(fill_id="fill_ok_100", quantity="1", price="100")
+    fill_fail = _fill(
+        fill_id="fill_fail_200",
+        quantity="1",
+        price="200",
+        filled_at=AS_OF + timedelta(seconds=1),
+    )
+    results = ledger.apply_fills_atomic(
+        (
+            (fill_ok, OrderSide.BUY, instrument, Decimal("0")),
+            (fill_ok, OrderSide.BUY, instrument, Decimal("0")),
+            (fill_fail, OrderSide.BUY, instrument, Decimal("0")),
+        )
+    )
+    assert ledger.cash == Decimal("250")
+    assert ledger.positions() == {}
+    assert ledger.applied_fill_ids == frozenset()
+    assert all(item.status is not LedgerApplyStatus.DUPLICATE for item in results)
+    assert all(item.status is not LedgerApplyStatus.APPLIED for item in results)
+    assert results[0].reason_code == "BATCH_ROLLED_BACK"
+    assert results[0].entry_id is None
+    assert results[1].reason_code == "BATCH_ROLLED_BACK"
+    assert results[1].entry_id is None
+    assert results[2].reason_code == "INSUFFICIENT_CASH"
