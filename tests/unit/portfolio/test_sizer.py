@@ -349,6 +349,48 @@ def test_open_buy_orders_reduce_spendable_buying_power() -> None:
 
 
 @pytest.mark.unit
+def test_paper_style_buying_power_does_not_double_count_open_buys() -> None:
+    """Paper nets open buys into buying_power; sizer must not subtract again."""
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["cash"] = "5000.00"
+    # Paper: buying_power = cash - open_buy_notional = 5000 - 4290 = 710.
+    payload["buying_power"] = "710.00"
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "20",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # Spendable remains 710 (not 710-4290).
+    assert result.candidate.quantity <= Decimal("3")
+    assert result.candidate.quantity * result.candidate.limit_price <= Decimal("710.00")
+    assert result.candidate.quantity >= Decimal("1")
+
+
+@pytest.mark.unit
 def test_open_buy_without_limit_fails_closed() -> None:
     portfolio = _empty_portfolio()
     payload = portfolio.model_dump(mode="python")

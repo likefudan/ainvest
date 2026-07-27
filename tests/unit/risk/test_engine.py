@@ -8,11 +8,17 @@ from decimal import Decimal
 import pytest
 
 from ainvest.data.calendar_port import FakeMarketCalendar
-from ainvest.risk.engine import aggregate_rule_results, evaluate_risk, evaluate_rules
+from ainvest.risk.engine import (
+    aggregate_rule_results,
+    compute_input_digest,
+    evaluate_risk,
+    evaluate_rules,
+)
 from ainvest.risk.models import (
     AllowlistEntry,
     EligibilityLimits,
     EvaluationPhase,
+    ExposureInputs,
     ExposureLimits,
     InstrumentMetadata,
     MarketQualityLimits,
@@ -20,15 +26,18 @@ from ainvest.risk.models import (
     RiskContext,
     RiskRuleConfig,
     RuleResult,
+    SectorAssignment,
 )
 from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES
 from ainvest.schemas.common import AssetType
 from ainvest.schemas.examples import (
     candidate_order_example,
     market_quote_example,
+    portfolio_snapshot_example,
 )
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
+from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome, RiskSeverity
 
 
@@ -201,3 +210,39 @@ def test_happy_path_approved_with_digests() -> None:
     assert out.input_digest.startswith("sha256:")
     assert out.config_digest.startswith("sha256:")
     assert out.decision.rule_set_version == "c4a-1.0.0"
+
+
+@pytest.mark.unit
+def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
+    base = _context(as_of=datetime(2026, 7, 23, 15, 0, tzinfo=UTC))
+    portfolio = PortfolioSnapshot.model_validate(portfolio_snapshot_example())
+    exposure = ExposureInputs(
+        sectors=(SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),),
+        daily_turnover_to_date=Decimal("100"),
+        daily_realized_pnl=Decimal("0"),
+        daily_unrealized_pnl=Decimal("0"),
+    )
+    with_port = base.model_copy(update={"portfolio": portfolio, "exposure_inputs": exposure})
+    digest_a = compute_input_digest(with_port)
+
+    mutated = portfolio.model_dump(mode="python")
+    mutated["open_orders"] = [
+        {
+            "order_id": "ord_digest_open_sell",
+            "instrument": mutated["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "1",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        }
+    ]
+    other_port = PortfolioSnapshot.model_validate(mutated)
+    digest_b = compute_input_digest(with_port.model_copy(update={"portfolio": other_port}))
+    assert digest_a != digest_b
+
+    other_exposure = exposure.model_copy(update={"daily_turnover_to_date": Decimal("200")})
+    digest_c = compute_input_digest(
+        with_port.model_copy(update={"exposure_inputs": other_exposure})
+    )
+    assert digest_a != digest_c

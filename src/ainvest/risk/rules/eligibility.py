@@ -160,12 +160,15 @@ class SideAndProductRule:
                     evidence=f"instrument_id={cand.instrument_id}",
                 )
             held = _held_qty(context.portfolio, cand.instrument_id)
-            if held < cand.quantity:
+            open_sells = _open_sell_qty(context.portfolio, cand.instrument_id)
+            sellable = held - open_sells
+            if sellable < cand.quantity:
                 return _hard(
                     self.code,
-                    "short sales are rejected (SELL exceeds held long)",
+                    "short sales are rejected (SELL exceeds sellable long)",
                     evidence=(
-                        f"held={held}; sell_qty={cand.quantity}; allows_short={meta.allows_short}"
+                        f"held={held}; open_sells={open_sells}; sellable={sellable}; "
+                        f"sell_qty={cand.quantity}; allows_short={meta.allows_short}"
                     ),
                 )
         return _ok(self.code, "side and product constraints satisfied")
@@ -205,6 +208,17 @@ def _held_qty(portfolio: object, instrument_id: str) -> Decimal:
         if position.instrument.instrument_id == instrument_id:
             return position.quantity
     return Decimal("0")
+
+
+def _open_sell_qty(portfolio: object, instrument_id: str) -> Decimal:
+    from ainvest.schemas.portfolio import PortfolioSnapshot
+
+    assert isinstance(portfolio, PortfolioSnapshot)
+    total = Decimal("0")
+    for order in portfolio.open_orders:
+        if order.instrument.instrument_id == instrument_id and order.side is OrderSide.SELL:
+            total += order.quantity
+    return total
 
 
 def register_eligibility_rules(calendar: MarketCalendar) -> None:

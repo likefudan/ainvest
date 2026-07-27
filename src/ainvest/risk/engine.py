@@ -62,6 +62,8 @@ def compute_input_digest(context: RiskContext) -> str:
     candidate = context.candidate
     quote = context.quote
     instrument = context.instrument
+    portfolio = context.portfolio
+    exposure = context.exposure_inputs
     return _sha256_digest(
         {
             "phase": context.phase.value,
@@ -82,6 +84,37 @@ def compute_input_digest(context: RiskContext) -> str:
                 if context.short_term_volatility_bps is not None
                 else None
             ),
+            "portfolio": (
+                None
+                if portfolio is None
+                else {
+                    "snapshot_id": portfolio.snapshot_id,
+                    "cash": str(portfolio.cash),
+                    "buying_power": str(portfolio.buying_power),
+                    "equity": str(portfolio.equity),
+                    "positions": [
+                        {
+                            "instrument_id": p.instrument.instrument_id,
+                            "quantity": str(p.quantity),
+                            "market_value": str(p.market_value),
+                        }
+                        for p in portfolio.positions
+                    ],
+                    "open_orders": [
+                        {
+                            "order_id": o.order_id,
+                            "instrument_id": o.instrument.instrument_id,
+                            "side": o.side.value,
+                            "quantity": str(o.quantity),
+                            "limit_price": (
+                                str(o.limit_price) if o.limit_price is not None else None
+                            ),
+                        }
+                        for o in portfolio.open_orders
+                    ],
+                }
+            ),
+            "exposure_inputs": (None if exposure is None else exposure.model_dump(mode="json")),
         }
     )
 

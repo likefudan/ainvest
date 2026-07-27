@@ -487,6 +487,10 @@ def _spendable_buying_power(
 ) -> Decimal | None:
     """Buying power remaining after cash reserve and open BUY notionals.
 
+    When ``buying_power`` already nets open-buy reserves (paper-style snapshots
+    where ``buying_power + open_buy_notional <= cash``), those notionals are not
+    subtracted again. Gross ``buying_power`` snapshots still reserve open buys.
+
     Returns ``None`` when an open BUY is missing a usable limit price.
     """
     buying_power = parse_decimal(portfolio.buying_power)
@@ -495,14 +499,20 @@ def _spendable_buying_power(
     after_reserve = cash - reserve
     if after_reserve < ZERO:
         after_reserve = ZERO
-    available = min(buying_power, after_reserve)
     open_buy_notional = _open_buy_reserved_notional(portfolio)
     if open_buy_notional is None:
         return None
-    remaining = available - open_buy_notional
-    if remaining < ZERO:
-        remaining = ZERO
-    return canonicalize_decimal(remaining)
+    # Paper exports buying_power = cash - open_buy_reserves. Detect that so we
+    # do not double-count the same commitment.
+    already_net = open_buy_notional > ZERO and buying_power + open_buy_notional <= cash + Decimal(
+        "0.000001"
+    )
+    available = min(buying_power, after_reserve)
+    if not already_net:
+        available = available - open_buy_notional
+    if available < ZERO:
+        available = ZERO
+    return canonicalize_decimal(available)
 
 
 def _coeff_exp(value: Decimal) -> tuple[int, int]:
