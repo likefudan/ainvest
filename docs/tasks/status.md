@@ -86,7 +86,7 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 2 (C2) | Batch C | `P03-T0`–`P03-T3` | complete (merged) |
 | Batch C — Part 3a (C3a) | Batch C | `P03-T13` | complete (merged) |
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | merged |
-| Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
+| Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | in_review |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
@@ -97,9 +97,40 @@ Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
 **C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **D3a is merged**
-(`3de469d`). **C3b is merged** (see C3b section). C4a may start. C4b still
-needs C4a. Coordinators own `docs/tasks/status.md` updates for handoff;
-implementation agents must not rewrite another track's allowed paths.
+(`3de469d`). **C3b is merged** (`380aedf`, [#44](https://github.com/likefudan/ainvest/pull/44)).
+**C4a is in review** on `task/batch-c4a-risk-framework` (base `380aedf`).
+C4b still needs C4a. Coordinators own `docs/tasks/status.md` updates for
+handoff; implementation agents must not rewrite another track's allowed paths.
+
+### Batch C — Part 4a (C4a)
+
+- **Batch:** Batch C — Part 4a (C4a) — Risk rule framework + eligibility +
+  market quality (`P03-T8`, `P03-T10`, `P03-T11`)
+- **Plan batch:** Batch C (after C1)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Owner/agent:** cursor-subagent-c4a
+- **Integration branch:** `task/batch-c4a-risk-framework`
+- **Base commit:** `380aedfad5bb67f34878b49273faa16365ffc58a`
+- **Dependencies:** `P02-T3`, `P02-T8`, `P02-T1` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/risk/{engine,models}.py`,
+  `src/ainvest/risk/rules/**`, `src/ainvest/risk/__init__.py`,
+  `src/ainvest/data/calendar_port.py`, `src/ainvest/data/__init__.py`,
+  `tests/unit/risk/**`, `tests/unit/data/**`,
+  `docs/tasks/status.md` (C4a section + summary row + Active batch notes only)
+- **Forbidden:** `exposure.py` (C4b), pretrade/kill_switch (P03-T12), live broker
+- **Verification:** `./scripts/dev verify` and `./scripts/dev audit` passed
+- **Handoff notes:** Composable risk engine with order-independent aggregation;
+  eligibility (allowlist, identity, session via FakeMarketCalendar); market
+  quality with separate proposal/pretrade thresholds; fail-closed on unknown
+  rules and exceptions. Digests on `RiskEngineOutput`.
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T8` | Build the Risk Rule Framework and Decision Aggregator | `in_review` | cursor-subagent-c4a | `task/batch-c4a-risk-framework` | `380aedfad5bb67f34878b49273faa16365ffc58a` | `P02-T3`, `P02-T8` | |
+| `P03-T10` | Enforce Asset Eligibility, Allowlist, Side, and Trading Session | `in_review` | cursor-subagent-c4a | `task/batch-c4a-risk-framework` | `380aedfad5bb67f34878b49273faa16365ffc58a` | `P03-T8` | |
+| `P03-T11` | Enforce Quote Freshness, Spread, Volatility, and Slippage | `in_review` | cursor-subagent-c4a | `task/batch-c4a-risk-framework` | `380aedfad5bb67f34878b49273faa16365ffc58a` | `P03-T8`, `P02-T1` | |
 
 ### Batch C — Part 3b (C3b)
 
