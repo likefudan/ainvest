@@ -81,7 +81,7 @@ JSON (`code` field), for example:
 | `CONFORMANCE_FUTURE_DATA` | Wall-clock APIs found in strategy source |
 | `CONFORMANCE_TIMEOUT` | Evaluation exceeded worker wall timeout |
 | `CONFORMANCE_EXCEPTION` | Evaluation crashed or raised |
-| `CONFORMANCE_PAPER_EXAMPLE` | Paper fixture evaluation failed |
+| `CONFORMANCE_WORKER_FAILURE` | Isolated worker failed (including Paper example evaluation) |
 | `CONFORMANCE_NETWORK_ACCESS` | Network imports or worker network denial |
 | `CONFORMANCE_SECRET_ACCESS` | Credential environment access attempted |
 | `CONFORMANCE_BROKER_IMPORT` | Broker / execution / approval imports |
