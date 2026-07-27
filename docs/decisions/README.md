@@ -5,7 +5,7 @@ ainvest. Accepted entries are authoritative under the source-precedence rules in
 `IMPLEMENTATION_TODO.md`. An execution agent must cite the relevant decision IDs
 in its task envelope and must not invent an unresolved owner value.
 
-Last reviewed: 2026-07-26
+Last reviewed: 2026-07-27
 
 ## Decision lifecycle
 
@@ -42,6 +42,7 @@ capability stays disabled.
 | `DEC-006` | Every live order requires a fixed HTTPS origin and a single-use Passkey/WebAuthn approval bound to the canonical order hash, with `approval_method=webauthn`, `approval_scope=live`. | `accepted` | Product owner | Accepted 2026-07-26 | Without the live origin, closed bootstrap, recovery-capable credentials, or a valid WebAuthn assertion, live broker writes remain disabled. | Phase 05 (`P05-T2`, `P05-T3`, `P05-T7`), Phase 07 (`P07-T1`, `P07-T6`), Phase 08 (`P08-T15`) |
 | `DEC-007` | The first release does not modify a live order in place. A replacement is cancellation followed by a new proposal, risk decision, canonical order hash, and approval. | `accepted` | Product owner | Accepted 2026-07-26 | Reject in-place replacement and never reuse the old approval for a changed order. Reconcile an uncertain cancellation before further action. | Phase 02 (`P02-T4`, `P02-T9`), Phase 05 (`P05-T0`, `P05-T6`), Phase 07 (`P07-T3`, `P07-T5`), Phase 08 (`P08-T13`, `P08-T15`) |
 | `DEC-008` | Until a separate owner policy is accepted, the kill switch blocks new submissions and alerts but does not automatically cancel existing orders. | `accepted` | Product owner | Accepted 2026-07-26 | Leave existing orders under normal reconciliation and operator-controlled cancellation; never issue blind bulk cancellation. | Phase 07 (`P07-T4`, `P07-T5`), Phase 08 (`P08-T5`, `P08-T14`, `P08-T15`) |
+| `DEC-020` | First-release multi-strategy signal aggregation fails closed: per-symbol conflicts become `NEEDS_REVIEW` / no trade; never emit opposing orders; do not weight `strength` as probability. | `accepted` | Engineering | Accepted 2026-07-27 | Exact duplicates collapse; disagreeing intent, `generated_at`, expiry, strategy version/identity, target weight, or strength → no selected signal. See `docs/decisions/adr-020-multi-strategy-signal-aggregation.md`. | Phase 03 (`P03-T7`, `P03-T6`, `P03-T16`) |
 
 ## Owner decisions required for the Paper release
 
