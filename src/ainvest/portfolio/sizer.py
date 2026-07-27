@@ -13,6 +13,11 @@ from typing import Annotated
 
 from pydantic import Field, StringConstraints, model_validator
 
+from ainvest.schemas.commitments import (
+    OpenBuyLimitError,
+    open_buy_reserved_notional,
+    open_order_side_quantities,
+)
 from ainvest.schemas.common import (
     DomainModel,
     MachineCode,
@@ -141,7 +146,9 @@ def size_position(
 
     position = _find_position(portfolio, quote)
     filled_qty = parse_decimal(position.quantity) if position is not None else ZERO
-    open_buy_qty, open_sell_qty = _open_order_quantities(portfolio, quote.instrument.instrument_id)
+    open_buy_qty, open_sell_qty = open_order_side_quantities(
+        portfolio, quote.instrument.instrument_id
+    )
     effective_qty = canonicalize_decimal(filled_qty + open_buy_qty - open_sell_qty)
     if effective_qty < ZERO:
         return SizingResult(
@@ -233,7 +240,7 @@ def size_position(
         if spendable <= ZERO:
             if parse_decimal(portfolio.buying_power) <= ZERO:
                 reason = SizerReasonCode.NON_POSITIVE_BUYING_POWER
-            elif parse_decimal(_open_buy_reserved_notional(portfolio) or ZERO) > ZERO:
+            elif open_buy_reserved_notional(portfolio) > ZERO:
                 reason = SizerReasonCode.OPEN_BUY_BLOCKS
             else:
                 reason = SizerReasonCode.CASH_RESERVE_BLOCKS_BUY
@@ -372,45 +379,6 @@ def _find_position(portfolio: PortfolioSnapshot, quote: MarketQuote) -> Position
     return None
 
 
-def _open_order_quantities(
-    portfolio: PortfolioSnapshot, instrument_id: str
-) -> tuple[Decimal, Decimal]:
-    """Return ``(open_buy_qty, open_sell_qty)`` for one instrument."""
-    buy_qty = ZERO
-    sell_qty = ZERO
-    for order in portfolio.open_orders:
-        if order.instrument.instrument_id != instrument_id:
-            continue
-        qty = parse_decimal(order.quantity)
-        if order.side is OrderSide.BUY:
-            buy_qty = canonicalize_decimal(buy_qty + qty)
-        elif order.side is OrderSide.SELL:
-            sell_qty = canonicalize_decimal(sell_qty + qty)
-    return buy_qty, sell_qty
-
-
-def _open_buy_reserved_notional(portfolio: PortfolioSnapshot) -> Decimal | None:
-    """Sum open BUY ``qty * limit_price``.
-
-    Returns ``None`` when any open BUY lacks a positive limit price so sizing
-    cannot safely reserve capital (fail closed).
-    """
-    reserved = ZERO
-    for order in portfolio.open_orders:
-        if order.side is not OrderSide.BUY:
-            continue
-        if order.limit_price is None:
-            return None
-        try:
-            limit = parse_decimal(order.limit_price)
-        except ValueError:
-            return None
-        if limit <= ZERO:
-            return None
-        reserved = canonicalize_decimal(reserved + parse_decimal(order.quantity) * limit)
-    return reserved
-
-
 def _reference_price(*, quote: MarketQuote, side: OrderSide) -> Decimal | None:
     """Prefer touch price when present; otherwise last. Fail closed if unusable."""
     try:
@@ -500,8 +468,9 @@ def _spendable_buying_power(
     if after_reserve < ZERO:
         after_reserve = ZERO
     # Always validate open BUY limits fail-closed, even when we trust paper BP.
-    open_buy_notional = _open_buy_reserved_notional(portfolio)
-    if open_buy_notional is None:
+    try:
+        open_buy_notional = open_buy_reserved_notional(portfolio)
+    except OpenBuyLimitError:
         return None
     available = min(buying_power, after_reserve)
     if portfolio.account_scope is not AccountScope.PAPER:

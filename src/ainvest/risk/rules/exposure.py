@@ -17,6 +17,11 @@ from ainvest.risk.models import (
 )
 from ainvest.risk.rules import RiskRule
 from ainvest.risk.rules.results import approve, hard_reject
+from ainvest.schemas.commitments import (
+    OpenBuyLimitError,
+    baseline_after_open_orders,
+    open_buy_extra_market_value,
+)
 from ainvest.schemas.common import OrderSide, canonicalize_decimal
 from ainvest.schemas.portfolio import PortfolioSnapshot
 
@@ -54,38 +59,11 @@ def _order_notional(context: RiskContext) -> Decimal:
 def _baseline_after_open_orders(
     portfolio: PortfolioSnapshot, code: str
 ) -> tuple[Decimal, dict[str, Decimal]] | RuleResult:
-    """Cash and per-instrument qty after committing open orders (fail closed).
-
-    Open BUYs reserve cash at ``qty * limit_price`` and increase effective qty.
-    Open SELLs reduce effective qty (cash is not credited until fill).
-    """
-    cash = canonicalize_decimal(portfolio.cash)
-    qty_by_id: dict[str, Decimal] = {
-        position.instrument.instrument_id: canonicalize_decimal(position.quantity)
-        for position in portfolio.positions
-    }
-    for order in portfolio.open_orders:
-        iid = order.instrument.instrument_id
-        qty = canonicalize_decimal(order.quantity)
-        if order.side is OrderSide.BUY:
-            if order.limit_price is None:
-                return hard_reject(
-                    code,
-                    "open BUY missing limit_price (cannot project commitments)",
-                    evidence=f"order_id={order.order_id}",
-                )
-            limit = canonicalize_decimal(order.limit_price)
-            if limit <= ZERO:
-                return hard_reject(
-                    code,
-                    "open BUY limit_price must be positive",
-                    evidence=f"order_id={order.order_id}",
-                )
-            cash = canonicalize_decimal(cash - qty * limit)
-            qty_by_id[iid] = canonicalize_decimal(qty_by_id.get(iid, ZERO) + qty)
-        else:
-            qty_by_id[iid] = canonicalize_decimal(qty_by_id.get(iid, ZERO) - qty)
-    return cash, qty_by_id
+    """Cash and per-instrument qty after committing open orders (fail closed)."""
+    try:
+        return baseline_after_open_orders(portfolio)
+    except OpenBuyLimitError as exc:
+        return hard_reject(code, exc.reason, evidence=f"order_id={exc.order_id}")
 
 
 def _projected_state(
@@ -101,13 +79,13 @@ def _projected_state(
     notional = _order_notional(context)
     mark = canonicalize_decimal(context.quote.last_price)
     qty = canonicalize_decimal(cand.quantity)
-    held = qty_by_id.get(cand.instrument_id, ZERO)
+    committed_qty = qty_by_id.get(cand.instrument_id, ZERO)
 
     if cand.side is OrderSide.BUY:
-        projected_qty = held + qty
+        projected_qty = committed_qty + qty
         projected_cash = _money(base_cash - notional)
     else:
-        projected_qty = held - qty
+        projected_qty = committed_qty - qty
         projected_cash = _money(base_cash + notional)
 
     filled_qty: dict[str, Decimal] = {
@@ -120,25 +98,16 @@ def _projected_state(
     }
 
     other_mv = ZERO
-    for iid, effective_qty in qty_by_id.items():
-        if iid == cand.instrument_id or effective_qty <= ZERO:
+    for instrument_id, effective_qty in qty_by_id.items():
+        if instrument_id == cand.instrument_id or effective_qty <= ZERO:
             continue
-        filled = filled_qty.get(iid, ZERO)
-        other_mv = _money(other_mv + filled_mv.get(iid, ZERO))
+        filled = filled_qty.get(instrument_id, ZERO)
+        other_mv = _money(other_mv + filled_mv.get(instrument_id, ZERO))
         extra = canonicalize_decimal(effective_qty - filled)
-        if extra <= ZERO:
-            continue
-        remaining = extra
-        for order in portfolio.open_orders:
-            if order.side is not OrderSide.BUY or order.instrument.instrument_id != iid:
-                continue
-            # limit_price validated in _baseline_after_open_orders
-            assert order.limit_price is not None
-            take = min(remaining, canonicalize_decimal(order.quantity))
-            other_mv = _money(other_mv + take * canonicalize_decimal(order.limit_price))
-            remaining = canonicalize_decimal(remaining - take)
-            if remaining <= ZERO:
-                break
+        if extra > ZERO:
+            other_mv = _money(
+                other_mv + open_buy_extra_market_value(portfolio, instrument_id, extra)
+            )
 
     symbol_mv = _money(projected_qty * mark)
     projected_equity = _money(projected_cash + other_mv + symbol_mv)
@@ -226,38 +195,31 @@ class SectorExposureRule:
         sector_mv = ZERO
         cand_id = context.candidate.instrument_id
         mark = canonicalize_decimal(context.quote.last_price)
-        for iid, effective_qty in qty_by_id.items():
-            if iid == cand_id or effective_qty <= ZERO:
+        for instrument_id, effective_qty in qty_by_id.items():
+            if instrument_id == cand_id or effective_qty <= ZERO:
                 continue
-            pos_sector = _sector_for(inputs, iid)
+            pos_sector = _sector_for(inputs, instrument_id)
             if pos_sector is None:
                 return hard_reject(
                     self.code,
                     "missing sector metadata for portfolio position",
-                    evidence=f"instrument_id={iid}",
+                    evidence=f"instrument_id={instrument_id}",
                 )
             if pos_sector != sector:
                 continue
             filled_mv = ZERO
             filled_qty = ZERO
             for position in portfolio.positions:
-                if position.instrument.instrument_id == iid:
+                if position.instrument.instrument_id == instrument_id:
                     filled_mv = canonicalize_decimal(position.market_value)
                     filled_qty = canonicalize_decimal(position.quantity)
                     break
             sector_mv = _money(sector_mv + filled_mv)
             extra = canonicalize_decimal(effective_qty - filled_qty)
             if extra > ZERO:
-                remaining = extra
-                for order in portfolio.open_orders:
-                    if order.side is not OrderSide.BUY or order.instrument.instrument_id != iid:
-                        continue
-                    assert order.limit_price is not None
-                    take = min(remaining, canonicalize_decimal(order.quantity))
-                    sector_mv = _money(sector_mv + take * canonicalize_decimal(order.limit_price))
-                    remaining = canonicalize_decimal(remaining - take)
-                    if remaining <= ZERO:
-                        break
+                sector_mv = _money(
+                    sector_mv + open_buy_extra_market_value(portfolio, instrument_id, extra)
+                )
 
         held = qty_by_id.get(cand_id, ZERO)
         qty = canonicalize_decimal(context.candidate.quantity)
