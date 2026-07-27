@@ -67,7 +67,7 @@ def _config(exposure: ExposureLimits | None = None) -> RiskRuleConfig:
         max_short_term_volatility_bps=Decimal("1000"),
     )
     return RiskRuleConfig(
-        rule_set_version="c4b-1.0.0",
+        rule_set_version="risk-rules-1.0.0",
         eligibility=EligibilityLimits(
             allowlist=(
                 AllowlistEntry(
