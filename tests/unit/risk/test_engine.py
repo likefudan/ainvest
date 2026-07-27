@@ -299,6 +299,4 @@ def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
     )
     assert compute_input_digest(
         with_port.model_copy(update={"exposure_inputs": swapped_sectors})
-    ) == compute_input_digest(
-        with_port.model_copy(update={"exposure_inputs": ordered_sectors})
-    )
+    ) == compute_input_digest(with_port.model_copy(update={"exposure_inputs": ordered_sectors}))
