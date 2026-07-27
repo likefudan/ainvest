@@ -123,11 +123,66 @@ def test_raising_plugin_fails_exceptions() -> None:
     assert result.code is ConformanceCode.EXCEPTION
 
 
+def test_raising_plugin_network_preserves_worker_failure() -> None:
+    definition = definition_for(RaisingStrategy)
+    result = check_network_isolation(definition)
+    assert result.status is ConformanceStatus.FAILED
+    assert result.code is ConformanceCode.WORKER_FAILURE
+
+
+def test_raising_plugin_secret_preserves_worker_failure() -> None:
+    definition = definition_for(RaisingStrategy)
+    result = check_secret_access(definition)
+    assert result.status is ConformanceStatus.FAILED
+    assert result.code is ConformanceCode.WORKER_FAILURE
+
+
+def test_raising_plugin_paper_preserves_worker_failure() -> None:
+    from ainvest.strategy_conformance.checks.behavior import check_paper_example
+
+    definition = definition_for(RaisingStrategy)
+    result = check_paper_example(definition)
+    assert result.status is ConformanceStatus.FAILED
+    assert result.code is ConformanceCode.WORKER_FAILURE
+
+
 def test_nondeterministic_plugin_fails_determinism() -> None:
     definition = definition_for(NondeterministicStrategy)
     result = check_determinism(definition)
     assert result.status is ConformanceStatus.FAILED
     assert result.code is ConformanceCode.NONDETERMINISTIC
+
+
+def test_nondeterministic_plugin_fails_future_data() -> None:
+    definition = definition_for(NondeterministicStrategy)
+    result = check_no_future_data(definition)
+    assert result.status is ConformanceStatus.FAILED
+    assert result.code is ConformanceCode.FUTURE_DATA
+    assert "time.time_ns" in result.details.get("offenders", "")
+
+
+def test_bare_time_import_fails_future_data() -> None:
+    from strategy_conformance.invalid.bare_time import BareTimeStrategy
+
+    definition = definition_for(BareTimeStrategy)
+    result = check_no_future_data(definition)
+    assert result.status is ConformanceStatus.FAILED
+    assert result.code is ConformanceCode.FUTURE_DATA
+    assert "time.time" in result.details.get("offenders", "")
+
+
+def test_module_imports_forbidden_fails_closed_on_missing_source() -> None:
+    from ainvest.strategy_conformance.checks._util import (
+        FORBIDDEN_NETWORK_MODULES,
+        SourceScanError,
+        module_imports_forbidden,
+    )
+
+    with pytest.raises(SourceScanError):
+        module_imports_forbidden(
+            "/nonexistent/path/for/conformance_scan.py",
+            FORBIDDEN_NETWORK_MODULES,
+        )
 
 
 def test_secret_probe_fails_secret_access() -> None:

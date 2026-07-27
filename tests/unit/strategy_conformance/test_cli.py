@@ -41,3 +41,11 @@ def test_main_unknown_strategy_exits_2(capsys: pytest.CaptureFixture[str]) -> No
     code = main(["--strategy", "does_not_exist_strategy"])
     assert code == 2
     assert "failed to load strategy" in capsys.readouterr().err
+
+
+def test_main_plugin_id_without_version_exits_2(capsys: pytest.CaptureFixture[str]) -> None:
+    code = main(["--strategy", "moving_average", "--plugin-id", "moving_average"])
+    assert code == 2
+    err = capsys.readouterr().err
+    assert "failed to load strategy" in err
+    assert "--plugin-version" in err

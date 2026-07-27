@@ -7,6 +7,7 @@ from ainvest.strategies.worker import WorkerFailureCode, WorkerStatus
 from ainvest.strategy_conformance.checks._util import (
     FORBIDDEN_BROKER_MODULES,
     FORBIDDEN_NETWORK_MODULES,
+    SourceScanError,
     failed,
     module_imports_forbidden,
     passed,
@@ -31,7 +32,14 @@ def check_broker_imports(definition: StrategyDefinition) -> CheckResult:
                 code=ConformanceCode.BROKER_IMPORT,
                 message="unable to locate strategy source for broker import scan",
             )
-        offenders = module_imports_forbidden(path, FORBIDDEN_BROKER_MODULES)
+        try:
+            offenders = module_imports_forbidden(path, FORBIDDEN_BROKER_MODULES)
+        except SourceScanError as exc:
+            return failed(
+                "broker_imports",
+                code=ConformanceCode.BROKER_IMPORT,
+                message=str(exc),
+            )
         if offenders:
             return failed(
                 "broker_imports",
@@ -53,15 +61,27 @@ def check_network_isolation(definition: StrategyDefinition) -> CheckResult:
 
     def _run() -> CheckResult:
         path = strategy_source_path(definition)
-        if path is not None:
+        if path is None:
+            return failed(
+                "network",
+                code=ConformanceCode.NETWORK_ACCESS,
+                message="unable to locate strategy source for network import scan",
+            )
+        try:
             offenders = module_imports_forbidden(path, FORBIDDEN_NETWORK_MODULES)
-            if offenders:
-                return failed(
-                    "network",
-                    code=ConformanceCode.NETWORK_ACCESS,
-                    message="strategy imports network client modules",
-                    details={"imports": ",".join(offenders)},
-                )
+        except SourceScanError as exc:
+            return failed(
+                "network",
+                code=ConformanceCode.NETWORK_ACCESS,
+                message=str(exc),
+            )
+        if offenders:
+            return failed(
+                "network",
+                code=ConformanceCode.NETWORK_ACCESS,
+                message="strategy imports network client modules",
+                details={"imports": ",".join(offenders)},
+            )
         context = make_paper_context(
             strategy_name=definition.name,
             strategy_version=definition.version,
@@ -82,14 +102,10 @@ def check_network_isolation(definition: StrategyDefinition) -> CheckResult:
                 message=record.failure_message or "strategy attempted network access",
                 details={"worker_code": str(record.failure_code)},
             )
+        # Preserve WORKER_FAILURE (or other mapped codes) for unrelated failures.
         early = require_worker_success(record, check_id="network")
         if early is not None:
-            return failed(
-                "network",
-                code=ConformanceCode.NETWORK_ACCESS,
-                message=early.message,
-                details=early.details,
-            )
+            return early
         return passed(
             "network",
             message="strategy evaluates successfully with worker network blocked",
@@ -122,14 +138,10 @@ def check_secret_access(definition: StrategyDefinition) -> CheckResult:
                 message=record.failure_message or "strategy attempted secret environment access",
                 details={"worker_code": str(record.failure_code)},
             )
+        # Preserve WORKER_FAILURE (or other mapped codes) for unrelated failures.
         early = require_worker_success(record, check_id="secret_access")
         if early is not None:
-            return failed(
-                "secret_access",
-                code=ConformanceCode.SECRET_ACCESS,
-                message=early.message,
-                details=early.details,
-            )
+            return early
         return passed(
             "secret_access",
             message="strategy evaluates successfully without credential environment access",

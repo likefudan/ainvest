@@ -62,7 +62,10 @@ def resolve_definition(
     allowlist = None
     if plugin_id is not None:
         if not plugin_version:
-            raise SystemExit("--plugin-version is required when --plugin-id is set")
+            raise StrategyError(
+                "--plugin-version is required when --plugin-id is set",
+                code="STRATEGY_INVALID",
+            )
         allowlist = {plugin_id: plugin_version}
     registry = load_strategy_registry(
         RegistryLoadConfig(allowlist=allowlist) if allowlist else RegistryLoadConfig(),

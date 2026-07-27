@@ -6,8 +6,12 @@ import ast
 from pathlib import Path
 
 from ainvest.strategies.definitions import StrategyDefinition
-from ainvest.strategies.worker import WorkerFailureCode, WorkerLimits, WorkerStatus
-from ainvest.strategies.worker.digests import digest_json
+from ainvest.strategies.worker import (
+    WorkerFailureCode,
+    WorkerLimits,
+    WorkerStatus,
+    digest_json,
+)
 from ainvest.strategy_conformance.checks._util import (
     DEFAULT_WORKER_LIMITS,
     failed,
@@ -21,6 +25,7 @@ from ainvest.strategy_conformance.codes import ConformanceCode
 from ainvest.strategy_conformance.fixtures import make_paper_context
 from ainvest.strategy_conformance.models import CheckResult
 
+# Fully-qualified wall-clock call labels (after import alias resolution).
 _FORBIDDEN_CLOCK_CALLS: frozenset[str] = frozenset(
     {
         "datetime.now",
@@ -32,6 +37,7 @@ _FORBIDDEN_CLOCK_CALLS: frozenset[str] = frozenset(
         "datetime.date.today",
         "date.today",
         "time.time",
+        "time.time_ns",
         "time.localtime",
         "time.gmtime",
         "time.monotonic",
@@ -41,6 +47,19 @@ _FORBIDDEN_CLOCK_CALLS: frozenset[str] = frozenset(
         "pendulum.now",
     }
 )
+
+# Names imported from wall-clock modules that are forbidden when called bare.
+_FORBIDDEN_TIME_IMPORTS: frozenset[str] = frozenset(
+    {
+        "time",
+        "time_ns",
+        "localtime",
+        "gmtime",
+        "monotonic",
+        "perf_counter",
+    }
+)
+_FORBIDDEN_DATETIME_IMPORTS: frozenset[str] = frozenset({"now", "utcnow", "today"})
 
 
 def check_determinism(definition: StrategyDefinition) -> CheckResult:
@@ -208,12 +227,8 @@ def check_paper_example(definition: StrategyDefinition) -> CheckResult:
         )
         early = require_worker_success(record, check_id="paper_example")
         if early is not None:
-            return failed(
-                "paper_example",
-                code=ConformanceCode.PAPER_EXAMPLE,
-                message=early.message,
-                details=early.details,
-            )
+            # Preserve root-cause worker/conformance code (do not overwrite).
+            return early
         assert record.result is not None
         return passed(
             "paper_example",
@@ -224,25 +239,65 @@ def check_paper_example(definition: StrategyDefinition) -> CheckResult:
     return timed(_run)
 
 
+def _import_aliases(tree: ast.AST) -> dict[str, str]:
+    """Map local names to fully-qualified wall-clock call labels when applicable."""
+    aliases: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                local = alias.asname or alias.name.split(".", 1)[0]
+                if alias.name == "time" or alias.name.startswith("time."):
+                    aliases[local] = "time"
+                elif alias.name in {"datetime", "arrow", "pendulum"} or alias.name.startswith(
+                    "datetime."
+                ):
+                    aliases[local] = alias.name
+        elif isinstance(node, ast.ImportFrom) and node.module:
+            module = node.module
+            for alias in node.names:
+                if alias.name == "*":
+                    continue
+                local = alias.asname or alias.name
+                if module == "time" and alias.name in _FORBIDDEN_TIME_IMPORTS:
+                    aliases[local] = f"time.{alias.name}"
+                elif (
+                    module in {"datetime", "datetime.datetime"}
+                    and alias.name in _FORBIDDEN_DATETIME_IMPORTS
+                ):
+                    aliases[local] = f"datetime.{alias.name}"
+                elif module == "datetime.date" and alias.name == "today":
+                    aliases[local] = "datetime.date.today"
+                elif module == "datetime" and alias.name == "date":
+                    aliases[local] = "datetime.date"
+                elif module == "datetime" and alias.name == "datetime":
+                    aliases[local] = "datetime.datetime"
+    return aliases
+
+
 def _find_clock_calls(tree: ast.AST) -> tuple[str, ...]:
+    aliases = _import_aliases(tree)
     found: list[str] = []
     for node in ast.walk(tree):
         if not isinstance(node, ast.Call):
             continue
-        label = _call_label(node.func)
+        label = _resolved_call_label(node.func, aliases)
         if label is not None and label in _FORBIDDEN_CLOCK_CALLS:
             found.append(label)
     return tuple(sorted(set(found)))
 
 
-def _call_label(node: ast.AST) -> str | None:
+def _resolved_call_label(node: ast.AST, aliases: dict[str, str]) -> str | None:
     if isinstance(node, ast.Name):
-        return node.id
+        # Bare call: `time()` after `from time import time`.
+        return aliases.get(node.id, node.id)
     if isinstance(node, ast.Attribute):
-        base = _call_label(node.value)
-        if base is None:
+        if isinstance(node.value, ast.Name):
+            base = aliases.get(node.value.id, node.value.id)
+            return f"{base}.{node.attr}"
+        base_label = _resolved_call_label(node.value, aliases)
+        if base_label is None:
             return node.attr
-        return f"{base}.{node.attr}"
+        return f"{base_label}.{node.attr}"
     return None
 
 

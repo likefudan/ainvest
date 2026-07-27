@@ -16,6 +16,11 @@ from ainvest.strategy_conformance.models import CheckResult
 
 CheckFn = Callable[[StrategyDefinition], CheckResult]
 
+
+class SourceScanError(ValueError):
+    """Raised when strategy source cannot be read or parsed for static scans."""
+
+
 DEFAULT_WORKER_LIMITS = WorkerLimits(
     wall_timeout_seconds=10.0,
     cpu_seconds=10.0,
@@ -129,12 +134,15 @@ def strategy_source_path(definition: StrategyDefinition) -> str | None:
 
 
 def module_imports_forbidden(path: str, forbidden: frozenset[str]) -> tuple[str, ...]:
-    """Return forbidden module prefixes imported by ``path`` (AST only)."""
+    """Return forbidden module prefixes imported by ``path`` (AST only).
+
+    Fail closed: unreadable or invalid source raises ``SourceScanError``.
+    """
     try:
         source = Path(path).read_text(encoding="utf-8")
         tree = ast.parse(source)
-    except (OSError, SyntaxError, ValueError):
-        return ()
+    except (OSError, SyntaxError, ValueError) as exc:
+        raise SourceScanError(f"unable to parse strategy source at {path}: {exc}") from exc
     found: list[str] = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -159,6 +167,7 @@ __all__ = [
     "FORBIDDEN_BROKER_MODULES",
     "FORBIDDEN_NETWORK_MODULES",
     "CheckFn",
+    "SourceScanError",
     "failed",
     "module_imports_forbidden",
     "passed",
