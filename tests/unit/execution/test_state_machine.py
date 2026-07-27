@@ -3,9 +3,11 @@
 from __future__ import annotations
 
 from datetime import UTC, datetime
+from typing import cast
 
 import pytest
 
+from ainvest.audit import AuditEventEnvelope, AuditService
 from ainvest.execution.state_machine import (
     CANCEL_EDGES,
     CANCEL_TERMINAL,
@@ -326,6 +328,81 @@ def test_audit_backed_marks_seen_only_after_successful_commit() -> None:
     assert result.idempotent is False
     assert calls == [("APPROVED", "SUBMITTING")]
     assert port.has_event("evt_audit_ok") is True
+
+
+@pytest.mark.unit
+def test_with_audit_service_success_marks_event_seen() -> None:
+    applied: list[tuple[str, str, str, str]] = []
+    envelopes: list[AuditEventEnvelope] = []
+
+    class _FakeAudit:
+        def append(self, envelope: AuditEventEnvelope) -> AuditEventEnvelope:
+            envelopes.append(envelope)
+            return envelope
+
+    def apply_business_state(machine: str, subject_id: str, before: str, after: str) -> None:
+        applied.append((machine, subject_id, before, after))
+
+    def atomic(unit: object) -> None:
+        assert callable(unit)
+        unit()
+
+    port = AuditBackedStatePersistence.with_audit_service(
+        cast(AuditService, _FakeAudit()),
+        apply_business_state=apply_business_state,
+        atomic=atomic,
+    )
+    result = transition_order(
+        current=OrderLifecycleState.APPROVED,
+        expected_current=OrderLifecycleState.APPROVED,
+        target=OrderLifecycleState.SUBMITTING,
+        subject_id=SUBJECT,
+        event_id="evt_with_audit_ok",
+        persistence=port,
+        occurred_at=AS_OF,
+    )
+    assert result.idempotent is False
+    assert applied == [("order", SUBJECT, "APPROVED", "SUBMITTING")]
+    assert len(envelopes) == 1
+    assert envelopes[0].event_id == "evt_with_audit_ok"
+    assert envelopes[0].before_state == {"state": "APPROVED"}
+    assert envelopes[0].after_state == {"state": "SUBMITTING"}
+    assert port.has_event("evt_with_audit_ok") is True
+
+
+@pytest.mark.unit
+def test_with_audit_service_failure_does_not_mark_event_seen() -> None:
+    applied: list[tuple[str, str, str, str]] = []
+
+    class _FakeAudit:
+        def append(self, envelope: AuditEventEnvelope) -> AuditEventEnvelope:
+            del envelope
+            raise AssertionError("audit must not run when atomic fails")
+
+    def apply_business_state(machine: str, subject_id: str, before: str, after: str) -> None:
+        applied.append((machine, subject_id, before, after))
+
+    def atomic(unit: object) -> None:
+        del unit
+        raise RuntimeError("uow rollback")
+
+    port = AuditBackedStatePersistence.with_audit_service(
+        cast(AuditService, _FakeAudit()),
+        apply_business_state=apply_business_state,
+        atomic=atomic,
+    )
+    with pytest.raises(PersistenceError, match="uow rollback"):
+        transition_order(
+            current=OrderLifecycleState.APPROVED,
+            expected_current=OrderLifecycleState.APPROVED,
+            target=OrderLifecycleState.SUBMITTING,
+            subject_id=SUBJECT,
+            event_id="evt_with_audit_fail",
+            persistence=port,
+            occurred_at=AS_OF,
+        )
+    assert applied == []
+    assert port.has_event("evt_with_audit_fail") is False
 
 
 @pytest.mark.unit

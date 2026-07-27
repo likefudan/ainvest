@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 from datetime import UTC, date, datetime
-from decimal import Decimal
 
 import pytest
 from portfolio_fixtures import make_open_order, with_open_orders
-from risk_fixtures import make_candidate, make_fresh_quote, make_instrument, make_risk_config
+from risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_fresh_quote,
+    make_instrument,
+)
 
 from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.risk.engine import evaluate_risk
-from ainvest.risk.models import EvaluationPhase, RiskContext
+from ainvest.risk.models import InstrumentMetadata, RiskContext
 from ainvest.risk.rules import DEFAULT_SCREENING_RULE_CODES
 from ainvest.risk.rules.eligibility import (
     AllowlistRule,
@@ -19,27 +23,30 @@ from ainvest.risk.rules.eligibility import (
     SessionRule,
     SideAndProductRule,
 )
-from ainvest.schemas.examples import candidate_order_example, portfolio_snapshot_example
+from ainvest.schemas.examples import portfolio_snapshot_example
 from ainvest.schemas.orders import CandidateOrder
+from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome
 
 
-def _ctx(**updates: object) -> RiskContext:
-    defaults: dict[str, object] = {
-        "risk_decision_id": "risk_01HZYELIG0000001",
-        "phase": EvaluationPhase.PROPOSAL,
-        "as_of": datetime(2026, 7, 23, 15, 0, tzinfo=UTC),
-        "candidate": make_candidate(),
-        "quote": make_fresh_quote(
+def _ctx(
+    *,
+    as_of: datetime | None = None,
+    candidate: CandidateOrder | None = None,
+    instrument: InstrumentMetadata | None = None,
+    portfolio: PortfolioSnapshot | None = None,
+) -> RiskContext:
+    return make_context(
+        risk_decision_id="risk_01HZYELIG0000001",
+        as_of=as_of,
+        candidate=candidate,
+        instrument=instrument,
+        portfolio=portfolio,
+        quote=make_fresh_quote(
             observed="2026-07-23T14:59:50Z",
             received="2026-07-23T14:59:55Z",
         ),
-        "instrument": make_instrument(),
-        "config": make_risk_config(),
-        "short_term_volatility_bps": Decimal("10"),
-    }
-    defaults.update(updates)
-    return RiskContext.model_validate(defaults)
+    )
 
 
 @pytest.mark.unit
@@ -58,10 +65,7 @@ def test_reject_leveraged_margin_and_short_sell() -> None:
     shortable = make_instrument(allows_short=True)
     buy_ok = _ctx(instrument=shortable)
     assert SideAndProductRule().evaluate(buy_ok).decision is RiskOutcome.APPROVED
-    sell = CandidateOrder.model_validate(
-        {**candidate_order_example(), "account_scope": "paper", "side": "SELL"}
-    )
-    sell_ctx = _ctx(instrument=shortable, candidate=sell, portfolio=None)
+    sell_ctx = _ctx(instrument=shortable, candidate=make_candidate(side="SELL"), portfolio=None)
     assert SideAndProductRule().evaluate(sell_ctx).decision is RiskOutcome.REJECTED
 
 
@@ -77,15 +81,7 @@ def test_sell_rejects_when_open_sells_consume_held() -> None:
             symbol="AAPL",
         ),
     )
-    sell = CandidateOrder.model_validate(
-        {
-            **candidate_order_example(),
-            "account_scope": "paper",
-            "side": "SELL",
-            "quantity": "5",
-            "maximum_notional": "1072.50",
-        }
-    )
+    sell = make_candidate(side="SELL", quantity="5", maximum_notional="1072.50")
     ctx = _ctx(candidate=sell, portfolio=portfolio)
     result = SideAndProductRule().evaluate(ctx)
     assert result.decision is RiskOutcome.REJECTED
