@@ -6,14 +6,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from risk.risk_fixtures import (
-    make_candidate,
-    make_context,
-    make_exposure_limits,
-    make_instrument,
-    make_quote,
-    make_risk_config,
-)
 from shared.portfolio_fixtures import (
     AAPL_INSTRUMENT,
     MSFT_INSTRUMENT,
@@ -41,6 +33,14 @@ from ainvest.schemas.examples import portfolio_snapshot_example
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome
+from risk.risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_exposure_limits,
+    make_instrument,
+    make_quote,
+    make_risk_config,
+)
 
 
 def _ctx(

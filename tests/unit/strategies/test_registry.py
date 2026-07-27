@@ -5,7 +5,6 @@ from __future__ import annotations
 from typing import ClassVar
 
 import pytest
-from strategies.strategy_fixtures import DemoPlugin, DemoStrategy, make_metadata
 
 from ainvest.config import TradingMode
 from ainvest.strategies import (
@@ -15,6 +14,7 @@ from ainvest.strategies import (
     StrategyRegistry,
     hookimpl,
 )
+from strategies.strategy_fixtures import DemoPlugin, DemoStrategy, make_metadata
 
 
 class SecondStrategy(DemoStrategy):

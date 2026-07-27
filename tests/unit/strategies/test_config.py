@@ -8,7 +8,6 @@ from typing import cast
 
 import pytest
 import yaml
-from strategies.strategy_fixtures import DemoPlugin, make_metadata
 
 from ainvest.config import TradingMode
 from ainvest.strategies import (
@@ -22,6 +21,7 @@ from ainvest.strategies import (
     parse_duration,
 )
 from ainvest.strategies.reference.moving_average.strategy import MovingAverageParams
+from strategies.strategy_fixtures import DemoPlugin, make_metadata
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_YAML = REPO_ROOT / "config" / "strategies.example.yaml"

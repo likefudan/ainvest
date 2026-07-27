@@ -7,15 +7,6 @@ from decimal import Decimal
 from random import Random
 
 import pytest
-from execution.paper_fixtures import (
-    FixedClock,
-    make_cancel_command,
-    make_cost_model,
-    make_market_event,
-    make_paper_broker,
-    make_paper_proposal,
-    submit_paper,
-)
 from pydantic import ValidationError
 
 from ainvest.execution.broker import (
@@ -34,6 +25,15 @@ from ainvest.execution.paper import (
 )
 from ainvest.schemas.broker import BrokerOrderStatus, CancelStatus
 from ainvest.schemas.portfolio import AccountScope
+from execution.paper_fixtures import (
+    FixedClock,
+    make_cancel_command,
+    make_cost_model,
+    make_market_event,
+    make_paper_broker,
+    make_paper_proposal,
+    submit_paper,
+)
 
 
 @pytest.mark.unit

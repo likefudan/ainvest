@@ -7,13 +7,13 @@ from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
-from strategies.strategy_fixtures import context_payload, make_context
 
 from ainvest.schemas.strategy import SignalIntent, parse_strategy_context
 from ainvest.strategies.reference.moving_average.strategy import (
     MovingAverageParams,
     MovingAverageStrategy,
 )
+from strategies.strategy_fixtures import context_payload, make_context
 
 
 @pytest.mark.unit

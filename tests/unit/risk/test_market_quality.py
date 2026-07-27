@@ -6,15 +6,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from risk.risk_fixtures import (
-    make_candidate,
-    make_context,
-    make_fresh_quote,
-    make_instrument,
-    make_market_quality,
-    make_phase_limits,
-    make_risk_config,
-)
 
 from ainvest.risk.models import EvaluationPhase, RiskContext
 from ainvest.risk.rules.market_quality import (
@@ -25,6 +16,15 @@ from ainvest.risk.rules.market_quality import (
 )
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.risk import RiskOutcome
+from risk.risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_fresh_quote,
+    make_instrument,
+    make_market_quality,
+    make_phase_limits,
+    make_risk_config,
+)
 
 
 def _ctx(

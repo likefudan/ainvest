@@ -5,12 +5,6 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pytest
-from risk.risk_fixtures import (
-    make_candidate,
-    make_context,
-    make_fresh_quote,
-    make_instrument,
-)
 from shared.portfolio_fixtures import make_open_order, with_open_orders
 
 from ainvest.data.calendar_port import FakeMarketCalendar
@@ -27,6 +21,12 @@ from ainvest.schemas.examples import portfolio_snapshot_example
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome
+from risk.risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_fresh_quote,
+    make_instrument,
+)
 
 
 def _ctx(

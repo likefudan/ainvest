@@ -5,8 +5,9 @@ from __future__ import annotations
 from collections.abc import Iterator
 
 import pytest
-from db.memory_sqlite import iter_memory_session_factory
 from sqlalchemy.orm import Session, sessionmaker
+
+from db.memory_sqlite import iter_memory_session_factory
 
 
 @pytest.fixture
