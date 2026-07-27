@@ -9,6 +9,11 @@ from typing import Any
 import pytest
 from hypothesis import given, settings
 from hypothesis import strategies as st
+from portfolio_fixtures import (
+    make_cash_portfolio,
+    make_open_order,
+    with_open_orders,
+)
 from pydantic import ValidationError
 
 from ainvest.portfolio import (
@@ -65,20 +70,7 @@ def _config(**overrides: Any) -> SizingConfig:
 
 def _empty_portfolio() -> PortfolioSnapshot:
     """Cash-only portfolio so target-weight buys have a clear delta."""
-    payload = portfolio_snapshot_example()
-    payload["cash"] = "5000.00"
-    payload["buying_power"] = "5000.00"
-    payload["equity"] = "5000.00"
-    payload["positions"] = []
-    payload["exposure"] = {
-        "cash": "5000.00",
-        "equity": "5000.00",
-        "gross_market_value": "0",
-        "net_market_value": "0",
-        "largest_position_weight": "0",
-        "position_count": 0,
-    }
-    return PortfolioSnapshot.model_validate(payload)
+    return make_cash_portfolio(cash="5000.00")
 
 
 def _portfolio_with(**overrides: Any) -> PortfolioSnapshot:
@@ -223,23 +215,10 @@ def test_early_reject_fail_closed_reason_codes(build: Any) -> None:
 @pytest.mark.unit
 def test_non_positive_buying_power_rejected() -> None:
     """BUY must fail closed when buying power is zero; SELL is tested separately."""
-    payload = portfolio_snapshot_example()
-    payload["cash"] = "100.00"
-    payload["buying_power"] = "0"
-    payload["equity"] = "100.00"
-    payload["positions"] = []
-    payload["exposure"] = {
-        "cash": "100.00",
-        "equity": "100.00",
-        "gross_market_value": "0",
-        "net_market_value": "0",
-        "largest_position_weight": "0",
-        "position_count": 0,
-    }
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=make_cash_portfolio(cash="100.00", buying_power="0"),
         config=_config(cash_reserve="0"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -373,22 +352,20 @@ def test_sell_allowed_when_buying_power_is_zero() -> None:
 
 @pytest.mark.unit
 def test_open_sell_orders_reduce_sellable_quantity() -> None:
-    payload = portfolio_snapshot_example()  # 10 AAPL
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_sell_aapl",
-            "instrument": payload["positions"][0]["instrument"],
-            "side": "SELL",
-            "quantity": "8",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        }
-    ]
+    portfolio = with_open_orders(
+        portfolio_snapshot_example(),  # 10 AAPL
+        make_open_order(
+            order_id="ord_pending_sell_aapl",
+            side="SELL",
+            quantity="8",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="SELL", target_weight="0", strength="-1"),
         quote=_quote(),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -402,31 +379,20 @@ def test_open_sell_orders_reduce_sellable_quantity() -> None:
 @pytest.mark.unit
 def test_open_buy_orders_reduce_spendable_buying_power() -> None:
     """Gross (non-paper) BP still reserves open BUY notionals for other symbols."""
-    portfolio = _empty_portfolio()
-    payload = portfolio.model_dump(mode="python")
-    payload["account_scope"] = "agentic"
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_msft",
-            "instrument": {
-                "instrument_id": "rh_inst_msft_xnas",
-                "symbol": "MSFT",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "identity_as_of": "2026-07-24T18:30:00Z",
-            },
-            "side": "BUY",
-            "quantity": "20",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "MSFT",
-        }
-    ]
+    portfolio = with_open_orders(
+        make_cash_portfolio(cash="5000.00", account_scope="agentic"),
+        make_open_order(
+            order_id="ord_pending_buy_msft",
+            side="BUY",
+            quantity="20",
+            limit_price="214.50",
+            symbol="MSFT",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -441,33 +407,21 @@ def test_open_buy_orders_reduce_spendable_buying_power() -> None:
 @pytest.mark.unit
 def test_paper_style_buying_power_does_not_double_count_open_buys() -> None:
     """Paper nets open buys (and fees) into buying_power; sizer must not subtract again."""
-    portfolio = _empty_portfolio()
-    payload = portfolio.model_dump(mode="python")
-    payload["cash"] = "5000.00"
     # Paper with fees: buying_power = cash - (open_buy_notional + fees) ≈ 705.71.
-    payload["buying_power"] = "705.71"
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_msft",
-            "instrument": {
-                "instrument_id": "rh_inst_msft_xnas",
-                "symbol": "MSFT",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "identity_as_of": "2026-07-24T18:30:00Z",
-            },
-            "side": "BUY",
-            "quantity": "20",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "MSFT",
-        }
-    ]
+    portfolio = with_open_orders(
+        make_cash_portfolio(cash="5000.00", buying_power="705.71"),
+        make_open_order(
+            order_id="ord_pending_buy_msft",
+            side="BUY",
+            quantity="20",
+            limit_price="214.50",
+            symbol="MSFT",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -482,36 +436,24 @@ def test_paper_style_buying_power_does_not_double_count_open_buys() -> None:
 @pytest.mark.unit
 def test_margin_style_buying_power_still_reserves_open_buys() -> None:
     """Non-paper BP < cash for margin reasons must still reserve open buys."""
-    portfolio = _empty_portfolio()
-    payload = portfolio.model_dump(mode="python")
-    payload["account_scope"] = "agentic"
-    payload["cash"] = "5000.00"
-    payload["buying_power"] = "3000.00"
-    payload["equity"] = "5000.00"
-    payload["exposure"]["cash"] = "5000.00"
-    payload["exposure"]["equity"] = "5000.00"
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_msft",
-            "instrument": {
-                "instrument_id": "rh_inst_msft_xnas",
-                "symbol": "MSFT",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "identity_as_of": "2026-07-24T18:30:00Z",
-            },
-            "side": "BUY",
-            "quantity": "5",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "200.00",
-            "symbol": "MSFT",
-        }
-    ]
+    portfolio = with_open_orders(
+        make_cash_portfolio(
+            cash="5000.00",
+            buying_power="3000.00",
+            account_scope="agentic",
+        ),
+        make_open_order(
+            order_id="ord_pending_buy_msft",
+            side="BUY",
+            quantity="5",
+            limit_price="200.00",
+            symbol="MSFT",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(last_price="200.00", ask="200.00", bid="199.90"),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -524,29 +466,19 @@ def test_margin_style_buying_power_still_reserves_open_buys() -> None:
 
 @pytest.mark.unit
 def test_open_buy_without_limit_fails_closed() -> None:
-    portfolio = _empty_portfolio()
-    payload = portfolio.model_dump(mode="python")
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_no_limit",
-            "instrument": {
-                "instrument_id": "rh_inst_msft_xnas",
-                "symbol": "MSFT",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "identity_as_of": "2026-07-24T18:30:00Z",
-            },
-            "side": "BUY",
-            "quantity": "5",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "symbol": "MSFT",
-        }
-    ]
+    portfolio = with_open_orders(
+        _empty_portfolio(),
+        make_open_order(
+            order_id="ord_pending_buy_no_limit",
+            side="BUY",
+            quantity="5",
+            symbol="MSFT",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.10"),
         quote=_quote(),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -601,22 +533,20 @@ def test_zero_share_delta_when_quantity_floors_to_zero() -> None:
 
 @pytest.mark.unit
 def test_insufficient_position_when_open_sells_exceed_filled() -> None:
-    payload = portfolio_snapshot_example()  # 10 AAPL
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_sell_aapl",
-            "instrument": payload["positions"][0]["instrument"],
-            "side": "SELL",
-            "quantity": "15",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        }
-    ]
+    portfolio = with_open_orders(
+        portfolio_snapshot_example(),  # 10 AAPL
+        make_open_order(
+            order_id="ord_pending_sell_aapl",
+            side="SELL",
+            quantity="15",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="SELL", target_weight="0", strength="-1"),
         quote=_quote(),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -629,32 +559,27 @@ def test_insufficient_position_when_open_sells_exceed_filled() -> None:
 def test_insufficient_position_when_sellable_quantity_is_zero() -> None:
     # Effective exposure stays positive via open BUY, but filled shares are
     # already committed on open SELLs so nothing further is sellable.
-    payload = portfolio_snapshot_example()  # 10 AAPL
-    instrument = payload["positions"][0]["instrument"]
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_aapl",
-            "instrument": instrument,
-            "side": "BUY",
-            "quantity": "5",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        },
-        {
-            "order_id": "ord_pending_sell_aapl",
-            "instrument": instrument,
-            "side": "SELL",
-            "quantity": "10",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        },
-    ]
+    portfolio = with_open_orders(
+        portfolio_snapshot_example(),  # 10 AAPL
+        make_open_order(
+            order_id="ord_pending_buy_aapl",
+            side="BUY",
+            quantity="5",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+        make_open_order(
+            order_id="ord_pending_sell_aapl",
+            side="SELL",
+            quantity="10",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="SELL", target_weight="0", strength="-1"),
         quote=_quote(),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -665,31 +590,20 @@ def test_insufficient_position_when_sellable_quantity_is_zero() -> None:
 
 @pytest.mark.unit
 def test_open_buy_blocks_when_reserved_notional_exhausts_spendable() -> None:
-    portfolio = _empty_portfolio()
-    payload = portfolio.model_dump(mode="python")
-    payload["account_scope"] = "agentic"
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_pending_buy_msft",
-            "instrument": {
-                "instrument_id": "rh_inst_msft_xnas",
-                "symbol": "MSFT",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "identity_as_of": "2026-07-24T18:30:00Z",
-            },
-            "side": "BUY",
-            "quantity": "25",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "MSFT",
-        }
-    ]
+    portfolio = with_open_orders(
+        make_cash_portfolio(cash="5000.00", account_scope="agentic"),
+        make_open_order(
+            order_id="ord_pending_buy_msft",
+            side="BUY",
+            quantity="25",
+            limit_price="214.50",
+            symbol="MSFT",
+        ),
+    )
     result = size_position(
         signal=_signal(intent="BUY", target_weight="0.50"),
         quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
-        portfolio=PortfolioSnapshot.model_validate(payload),
+        portfolio=portfolio,
         config=_config(cash_reserve="0", min_notional="1.00"),
         as_of=AS_OF,
         candidate_id=CANDIDATE_ID,
@@ -776,20 +690,7 @@ def test_property_buy_never_exceeds_max_notional_or_buying_power(
     last_price: Decimal,
     equity: Decimal,
 ) -> None:
-    payload = portfolio_snapshot_example()
-    payload["cash"] = str(equity)
-    payload["buying_power"] = str(equity)
-    payload["equity"] = str(equity)
-    payload["positions"] = []
-    payload["exposure"] = {
-        "cash": str(equity),
-        "equity": str(equity),
-        "gross_market_value": "0",
-        "net_market_value": "0",
-        "largest_position_weight": "0",
-        "position_count": 0,
-    }
-    portfolio = PortfolioSnapshot.model_validate(payload)
+    portfolio = make_cash_portfolio(cash=equity)
     config = _config(cash_reserve="0", max_notional="2500.00", min_notional="1.00")
     quote_payload = market_quote_example()
     quote_payload["last_price"] = str(last_price)

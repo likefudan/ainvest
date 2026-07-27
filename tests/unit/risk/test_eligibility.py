@@ -6,6 +6,7 @@ from datetime import UTC, date, datetime
 from decimal import Decimal
 
 import pytest
+from portfolio_fixtures import make_open_order, with_open_orders
 from risk_fixtures import make_candidate, make_fresh_quote, make_instrument, make_risk_config
 
 from ainvest.data.calendar_port import FakeMarketCalendar
@@ -18,7 +19,7 @@ from ainvest.risk.rules.eligibility import (
     SessionRule,
     SideAndProductRule,
 )
-from ainvest.schemas.examples import candidate_order_example
+from ainvest.schemas.examples import candidate_order_example, portfolio_snapshot_example
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.risk import RiskOutcome
 
@@ -66,22 +67,16 @@ def test_reject_leveraged_margin_and_short_sell() -> None:
 
 @pytest.mark.unit
 def test_sell_rejects_when_open_sells_consume_held() -> None:
-    from ainvest.schemas.examples import portfolio_snapshot_example
-    from ainvest.schemas.portfolio import PortfolioSnapshot
-
-    payload = portfolio_snapshot_example()  # 10 AAPL
-    payload["open_orders"] = [
-        {
-            "order_id": "ord_open_sell_aapl",
-            "instrument": payload["positions"][0]["instrument"],
-            "side": "SELL",
-            "quantity": "8",
-            "submitted_at": "2026-07-24T18:29:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        }
-    ]
-    portfolio = PortfolioSnapshot.model_validate(payload)
+    portfolio = with_open_orders(
+        portfolio_snapshot_example(),  # 10 AAPL
+        make_open_order(
+            order_id="ord_open_sell_aapl",
+            side="SELL",
+            quantity="8",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+    )
     sell = CandidateOrder.model_validate(
         {
             **candidate_order_example(),
