@@ -32,6 +32,30 @@ from ainvest.db.models import (
 )
 
 
+def _insert_idempotent[T](
+    session: Session,
+    row: T,
+    *,
+    lookup: Callable[[], T | None],
+    conflict_message: str,
+) -> tuple[T, bool]:
+    """Insert using a savepoint; on conflict, read and return the existing row.
+
+    Returns ``(row, created)`` where ``created`` is False on idempotent hit.
+    Never parses database error text — only the IntegrityError type is used.
+    """
+    try:
+        with session.begin_nested():
+            session.add(row)
+            session.flush()
+        return row, True
+    except IntegrityError:
+        existing = lookup()
+        if existing is None:
+            raise PersistenceError(conflict_message) from None
+        return existing, False
+
+
 class ProposalRepository:
     """Persistence helpers for order proposals."""
 
@@ -63,16 +87,12 @@ class ProposalRepository:
         Returns ``(row, created)`` where ``created`` is False on idempotent hit.
         Never parses database error text — only the IntegrityError type is used.
         """
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("proposal conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="proposal conflict without existing row",
+        )
 
     def update_status_if_version(
         self,
@@ -145,16 +165,12 @@ class ApprovalRepository:
         *,
         find_existing: Callable[[], ApprovalChallengeRow | None],
     ) -> tuple[ApprovalChallengeRow, bool]:
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("challenge conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="challenge conflict without existing row",
+        )
 
     def consume_challenge_once(
         self,
@@ -215,16 +231,12 @@ class ApprovalRepository:
         *,
         find_existing: Callable[[], ApprovalEventRow | None],
     ) -> tuple[ApprovalEventRow, bool]:
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("approval event conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="approval event conflict without existing row",
+        )
 
 
 class BrokerOrderRepository:
@@ -261,16 +273,12 @@ class BrokerOrderRepository:
         *,
         find_existing: Callable[[], BrokerOrderRow | None],
     ) -> tuple[BrokerOrderRow, bool]:
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("broker order conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="broker order conflict without existing row",
+        )
 
     def update_status_if_version(
         self,
@@ -312,16 +320,12 @@ class BrokerOrderRepository:
         *,
         find_existing: Callable[[], BrokerFillRow | None],
     ) -> tuple[BrokerFillRow, bool]:
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("broker fill conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="broker fill conflict without existing row",
+        )
 
     def get_fill(self, fill_id: str) -> BrokerFillRow | None:
         return self._session.scalar(select(BrokerFillRow).where(BrokerFillRow.fill_id == fill_id))
@@ -350,16 +354,12 @@ class AuditRepository:
         *,
         find_existing: Callable[[], AuditEventRow | None],
     ) -> tuple[AuditEventRow, bool]:
-        try:
-            with self._session.begin_nested():
-                self._session.add(row)
-                self._session.flush()
-            return row, True
-        except IntegrityError:
-            existing = find_existing()
-            if existing is None:
-                raise PersistenceError("audit event conflict without existing row") from None
-            return existing, False
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=find_existing,
+            conflict_message="audit event conflict without existing row",
+        )
 
     def append_fields_idempotent(
         self,
