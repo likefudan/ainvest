@@ -233,22 +233,81 @@ class InMemoryStatePersistence:
 
 
 class AuditBackedStatePersistence:
-    """Persist via caller-supplied business mutator + :class:`AuditService`.
+    """Persist via a single atomic commit callback + audit helpers.
 
-    The mutator and audit append are invoked sequentially. Callers that need
-    true DB atomicity must wrap both in a Unit of Work commit.
+    ``commit`` MUST apply the business state change and append the audit event
+    in one atomic unit (typically a Unit of Work). This class only tracks
+    ``event_id`` idempotency after ``commit`` returns successfully.
     """
 
     def __init__(
         self,
+        *,
+        commit: Callable[..., None],
+        seen_event_ids: set[str] | None = None,
+    ) -> None:
+        self._commit = commit
+        self._seen = seen_event_ids if seen_event_ids is not None else set()
+
+    @classmethod
+    def with_audit_service(
+        cls,
         audit: AuditService,
         *,
         apply_business_state: Callable[[MachineKind, str, str, str], None],
+        atomic: Callable[[Callable[[], None]], None] | None = None,
         seen_event_ids: set[str] | None = None,
-    ) -> None:
-        self._audit = audit
-        self._apply = apply_business_state
-        self._seen = seen_event_ids if seen_event_ids is not None else set()
+    ) -> AuditBackedStatePersistence:
+        """Build a port that audits through ``record_state_change``.
+
+        ``atomic`` wraps the combined business+audit work. Default runs the
+        unit directly (tests / single-process). Production must pass a UoW
+        wrapper so a mid-flight failure rolls both sides back.
+        """
+        run_atomic = atomic or (lambda work: work())
+
+        def commit(
+            *,
+            machine: MachineKind,
+            subject_id: str,
+            before: str,
+            after: str,
+            event_id: str,
+            correlation_id: str | None,
+            causation_id: str | None,
+            actor_type: ActorType,
+            actor_id: str,
+            payload: Mapping[str, str] | None,
+            occurred_at: datetime,
+        ) -> None:
+            subject_type = "order_lifecycle" if machine == "order" else "cancel_command"
+            event_type = (
+                AuditEventType.PROPOSAL_STATUS_CHANGED
+                if machine == "order"
+                else AuditEventType.BROKER_ORDER_STATUS_CHANGED
+            )
+
+            def unit() -> None:
+                apply_business_state(machine, subject_id, before, after)
+                record_state_change(
+                    audit,
+                    event_id=event_id,
+                    event_type=event_type,
+                    actor_type=actor_type,
+                    actor_id=actor_id,
+                    subject_type=subject_type,
+                    subject_id=subject_id,
+                    before={"state": before},
+                    after={"state": after},
+                    correlation_id=correlation_id,
+                    causation_id=causation_id,
+                    payload=dict(payload or {}),
+                    occurred_at=occurred_at,
+                )
+
+            run_atomic(unit)
+
+        return cls(commit=commit, seen_event_ids=seen_event_ids)
 
     def has_event(self, event_id: str) -> bool:
         return event_id in self._seen
@@ -270,26 +329,17 @@ class AuditBackedStatePersistence:
     ) -> None:
         if event_id in self._seen:
             return
-        self._apply(machine, subject_id, before, after)
-        subject_type = "order_lifecycle" if machine == "order" else "cancel_command"
-        event_type = (
-            AuditEventType.PROPOSAL_STATUS_CHANGED
-            if machine == "order"
-            else AuditEventType.BROKER_ORDER_STATUS_CHANGED
-        )
-        record_state_change(
-            self._audit,
-            event_id=event_id,
-            event_type=event_type,
-            actor_type=actor_type,
-            actor_id=actor_id,
-            subject_type=subject_type,
+        self._commit(
+            machine=machine,
             subject_id=subject_id,
-            before={"state": before},
-            after={"state": after},
+            before=before,
+            after=after,
+            event_id=event_id,
             correlation_id=correlation_id,
             causation_id=causation_id,
-            payload=dict(payload or {}),
+            actor_type=actor_type,
+            actor_id=actor_id,
+            payload=payload,
             occurred_at=occurred_at,
         )
         self._seen.add(event_id)
@@ -434,8 +484,30 @@ def _transition(
     if current != expected_current:
         raise StaleStateError(f"stale transition: live={current!r} expected={expected_current!r}")
 
-    # Duplicate delivery of a transition that already landed.
+    clock = occurred_at or datetime.now(UTC)
+    if clock.tzinfo is None:
+        raise ValueError("occurred_at must be timezone-aware UTC")
+
+    # Already in target: still bind event_id so it cannot be reused later.
     if current == target:
+        try:
+            persistence.persist_transition(
+                machine=machine,
+                subject_id=subject_id,
+                before=current,
+                after=current,
+                event_id=event_id,
+                correlation_id=correlation_id,
+                causation_id=causation_id,
+                actor_type=actor_type,
+                actor_id=actor_id,
+                payload=payload,
+                occurred_at=clock,
+            )
+        except PersistenceError:
+            raise
+        except Exception as exc:
+            raise PersistenceError(str(exc)) from exc
         return TransitionResult(
             machine=machine,
             before=current,
@@ -448,10 +520,6 @@ def _transition(
 
     if not allow(current, target):
         raise IllegalTransitionError(f"illegal {machine} transition: {current!r} -> {target!r}")
-
-    clock = occurred_at or datetime.now(UTC)
-    if clock.tzinfo is None:
-        raise ValueError("occurred_at must be timezone-aware UTC")
 
     try:
         persistence.persist_transition(

@@ -11,6 +11,7 @@ from ainvest.execution.state_machine import (
     CANCEL_TERMINAL,
     ORDER_EDGES,
     ORDER_TERMINAL,
+    AuditBackedStatePersistence,
     CancelCommandState,
     IllegalTransitionError,
     InMemoryStatePersistence,
@@ -256,7 +257,7 @@ def test_duplicate_event_id_is_idempotent() -> None:
 
 
 @pytest.mark.unit
-def test_same_state_target_is_idempotent_without_persist() -> None:
+def test_same_state_target_binds_event_id() -> None:
     store = InMemoryStatePersistence()
     result = transition_order(
         current=OrderLifecycleState.SUBMITTED,
@@ -268,7 +269,63 @@ def test_same_state_target_is_idempotent_without_persist() -> None:
         occurred_at=AS_OF,
     )
     assert result.idempotent is True
-    assert store.records == []
+    assert store.has_event("evt_noop") is True
+    assert len(store.records) == 1
+    assert store.records[0]["before"] == store.records[0]["after"] == "SUBMITTED"
+
+    # Bound event_id cannot drive a different edge later.
+    replay = transition_order(
+        current=OrderLifecycleState.SUBMITTED,
+        expected_current=OrderLifecycleState.SUBMITTED,
+        target=OrderLifecycleState.FILLED,
+        subject_id=SUBJECT,
+        event_id="evt_noop",
+        persistence=store,
+        occurred_at=AS_OF,
+    )
+    assert replay.idempotent is True
+    assert len(store.records) == 1
+
+
+@pytest.mark.unit
+def test_audit_backed_commit_failure_does_not_mark_event_seen() -> None:
+    def boom(**_kwargs: object) -> None:
+        raise RuntimeError("commit failed")
+
+    port = AuditBackedStatePersistence(commit=boom)
+    with pytest.raises(PersistenceError, match="commit failed"):
+        transition_order(
+            current=OrderLifecycleState.APPROVED,
+            expected_current=OrderLifecycleState.APPROVED,
+            target=OrderLifecycleState.SUBMITTING,
+            subject_id=SUBJECT,
+            event_id="evt_audit_fail",
+            persistence=port,
+            occurred_at=AS_OF,
+        )
+    assert port.has_event("evt_audit_fail") is False
+
+
+@pytest.mark.unit
+def test_audit_backed_marks_seen_only_after_successful_commit() -> None:
+    calls: list[tuple[str, str]] = []
+
+    def commit(**kwargs: object) -> None:
+        calls.append((str(kwargs["before"]), str(kwargs["after"])))
+
+    port = AuditBackedStatePersistence(commit=commit)
+    result = transition_order(
+        current=OrderLifecycleState.APPROVED,
+        expected_current=OrderLifecycleState.APPROVED,
+        target=OrderLifecycleState.SUBMITTING,
+        subject_id=SUBJECT,
+        event_id="evt_audit_ok",
+        persistence=port,
+        occurred_at=AS_OF,
+    )
+    assert result.idempotent is False
+    assert calls == [("APPROVED", "SUBMITTING")]
+    assert port.has_event("evt_audit_ok") is True
 
 
 @pytest.mark.unit
