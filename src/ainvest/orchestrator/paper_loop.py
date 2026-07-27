@@ -641,10 +641,24 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
 
     # 9. Broker submit via dispatcher (idempotent; no blind retry).
     clock_moment = as_of
+    portfolio_cash = canonicalize_decimal(config.portfolio.cash)
+    if portfolio_cash != canonicalize_decimal(config.opening_cash):
+        return _result(
+            state,
+            terminal=PaperFlowTerminal.FAILED,
+            correlation_id=config.correlation_id,
+            proposal=proposal,
+            challenge_id=challenge.challenge_id,
+            approval_event_id=approval.event_id,
+            error=(
+                "paper broker opening_cash must match portfolio.cash "
+                f"(opening_cash={config.opening_cash}, portfolio.cash={portfolio_cash})"
+            ),
+        )
     broker = PaperBroker(
         cost_model=costs,
         clock=lambda: clock_moment,
-        initial_cash=config.opening_cash,
+        initial_cash=portfolio_cash,
     )
     uses_local_broker = config.write_port is None and not config.raise_unknown_on_submit
     write_port: BrokerWritePort
@@ -901,6 +915,44 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             client_order_id=config.client_order_id,
             broker_order_id=exec_event.broker_order_id,
             error=blind_error,
+        )
+
+    if exec_event.outcome is CommandOutcome.REJECTED:
+        # Confirmed broker rejection: SUBMITTING -> SUBMITTED -> REJECTED (design §8).
+        _transition(
+            state,
+            target=OrderLifecycleState.SUBMITTED,
+            subject_id=proposal.proposal_id,
+            correlation_id=config.correlation_id,
+            as_of=as_of,
+        )
+        _transition(
+            state,
+            target=OrderLifecycleState.REJECTED,
+            subject_id=proposal.proposal_id,
+            correlation_id=config.correlation_id,
+            as_of=as_of,
+        )
+        _record(
+            state,
+            name="execute_order",
+            as_of=as_of,
+            payload={
+                "outcome": "REJECTED",
+                "reason_code": exec_event.reason_code,
+            },
+            event_type=AuditEventType.BROKER_ORDER_STATUS_CHANGED,
+            subject_id=proposal.proposal_id,
+        )
+        return _result(
+            state,
+            terminal=PaperFlowTerminal.FAILED,
+            correlation_id=config.correlation_id,
+            proposal=proposal,
+            challenge_id=challenge.challenge_id,
+            approval_event_id=approval.event_id,
+            client_order_id=config.client_order_id,
+            error=f"submit rejected: {exec_event.reason_code}",
         )
 
     if exec_event.outcome is not CommandOutcome.SUCCEEDED or exec_event.broker_order_id is None:
