@@ -192,11 +192,12 @@ rewrite another track's allowed paths.
   no trade; group by symbol + `generated_at` + expiry + strategy version;
   never emit opposing orders for one symbol; strength never weighted as
   probability. API: `aggregate_signals` / `SignalAggregationResult`.
-- **PR:** TBD (opened after rebase onto `2dd98a4`)
+  Rebased onto `2dd98a4`; `./scripts/dev verify` passed (518 tests).
+- **PR:** https://github.com/likefudan/ainvest/pull/65
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_review` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | TBD |
+| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_review` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | https://github.com/likefudan/ainvest/pull/65 |
 
 ### Batch D — Part 3b (D3b)
 
