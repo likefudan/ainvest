@@ -190,14 +190,12 @@ def _held_qty(portfolio: object, instrument_id: str) -> Decimal:
 
 
 def _open_sell_qty(portfolio: object, instrument_id: str) -> Decimal:
+    from ainvest.schemas.commitments import open_order_side_quantities
     from ainvest.schemas.portfolio import PortfolioSnapshot
 
     assert isinstance(portfolio, PortfolioSnapshot)
-    total = Decimal("0")
-    for order in portfolio.open_orders:
-        if order.instrument.instrument_id == instrument_id and order.side is OrderSide.SELL:
-            total += order.quantity
-    return total
+    _buy_qty, sell_qty = open_order_side_quantities(portfolio, instrument_id)
+    return sell_qty
 
 
 __all__ = [
