@@ -165,8 +165,7 @@ class SideAndProductRule:
                     self.code,
                     "short sales are rejected (SELL exceeds held long)",
                     evidence=(
-                        f"held={held}; sell_qty={cand.quantity}; "
-                        f"allows_short={meta.allows_short}"
+                        f"held={held}; sell_qty={cand.quantity}; allows_short={meta.allows_short}"
                     ),
                 )
         return _ok(self.code, "side and product constraints satisfied")
