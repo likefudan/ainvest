@@ -6,7 +6,13 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from portfolio_fixtures import make_cash_portfolio, make_open_order, with_open_orders
+from portfolio_fixtures import (
+    AAPL_INSTRUMENT,
+    MSFT_INSTRUMENT,
+    make_cash_portfolio,
+    make_open_order,
+    with_open_orders,
+)
 from risk_fixtures import (
     make_candidate,
     make_context,
@@ -236,3 +242,98 @@ def test_symbol_weight_includes_open_buy_qty() -> None:
     )
     # Effective AAPL qty 10+20+10=40 → weight well above 0.60.
     assert SymbolWeightRule().evaluate(ctx).decision is RiskOutcome.REJECTED
+
+
+@pytest.mark.unit
+def test_sector_aggregates_sibling_filled_and_open_buy() -> None:
+    # cash 4000 + AAPL MV 2000 + MSFT MV 2000 = equity 8000 (weights 0.25/0.25).
+    # Open BUY 2 MSFT @ 400 → sibling extra MV 800.
+    # Candidate BUY 2 AAPL @ 214.50 (mark 214.50): projected AAPL qty 12 → MV 2574.
+    # sector_mv = 2000 + 800 + 2574 = 5374; projected equity 8145 → weight ≈ 0.6598.
+    payload = {
+        **portfolio_snapshot_example(),
+        "cash": "4000.00",
+        "buying_power": "4000.00",
+        "equity": "8000.00",
+        "positions": [
+            {
+                "instrument": AAPL_INSTRUMENT,
+                "quantity": "10",
+                "market_value": "2000.00",
+                "portfolio_weight": "0.2500",
+                "average_cost": "200.00",
+                "unrealized_pnl": "0",
+                "currency": "USD",
+            },
+            {
+                "instrument": MSFT_INSTRUMENT,
+                "quantity": "5",
+                "market_value": "2000.00",
+                "portfolio_weight": "0.2500",
+                "average_cost": "400.00",
+                "unrealized_pnl": "0",
+                "currency": "USD",
+            },
+        ],
+        "exposure": {
+            "cash": "4000.00",
+            "equity": "8000.00",
+            "gross_market_value": "4000.00",
+            "net_market_value": "4000.00",
+            "largest_position_weight": "0.2500",
+            "position_count": 2,
+        },
+    }
+    portfolio = with_open_orders(
+        payload,
+        make_open_order(
+            order_id="ord_open_buy_msft",
+            side="BUY",
+            quantity="2",
+            limit_price="400.00",
+            symbol="MSFT",
+        ),
+    )
+    cand = make_candidate(
+        quantity="2",
+        limit_price="214.50",
+        maximum_notional="429.00",
+    )
+    sectors = (
+        SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),
+        SectorAssignment(instrument_id="rh_inst_msft_xnas", sector="TECH"),
+    )
+    inputs = ExposureInputs(
+        sectors=sectors,
+        daily_turnover_to_date=Decimal("0"),
+        daily_realized_pnl=Decimal("0"),
+        daily_unrealized_pnl=Decimal("0"),
+    )
+    reject_ctx = _ctx(
+        exposure=make_exposure_limits(max_sector="0.65", max_notional="5000", min_cash="0"),
+        candidate=cand,
+        portfolio=portfolio,
+        inputs=inputs,
+    )
+    assert SectorExposureRule().evaluate(reject_ctx).decision is RiskOutcome.REJECTED
+
+    approve_ctx = _ctx(
+        exposure=make_exposure_limits(max_sector="0.66", max_notional="5000", min_cash="0"),
+        candidate=cand,
+        portfolio=portfolio,
+        inputs=inputs,
+    )
+    assert SectorExposureRule().evaluate(approve_ctx).decision is RiskOutcome.APPROVED
+
+    missing_sibling = _ctx(
+        exposure=make_exposure_limits(max_sector="0.80", max_notional="5000", min_cash="0"),
+        candidate=cand,
+        portfolio=portfolio,
+        inputs=ExposureInputs(
+            sectors=(SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),),
+            daily_turnover_to_date=Decimal("0"),
+            daily_realized_pnl=Decimal("0"),
+            daily_unrealized_pnl=Decimal("0"),
+        ),
+    )
+    assert SectorExposureRule().evaluate(missing_sibling).decision is RiskOutcome.REJECTED
