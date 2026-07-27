@@ -226,7 +226,8 @@ class RiskContext(DomainModel):
     short_term_volatility_bps: NonNegativeDecimal | None = None
     exposure_inputs: ExposureInputs | None = None
     kill_switch: KillSwitchSnapshot | None = None
-    recent_submissions: tuple[RecentOrderSubmission, ...] = ()
+    # None = history unavailable (fail closed at PRETRADE). () = explicitly empty window.
+    recent_submissions: tuple[RecentOrderSubmission, ...] | None = None
     client_order_id: Annotated[str, StringConstraints(min_length=3, max_length=128)] | None = None
     proposal_order_hash: OrderHashDigest | None = None
 

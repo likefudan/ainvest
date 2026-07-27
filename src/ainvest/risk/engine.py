@@ -140,13 +140,17 @@ def compute_input_digest(context: RiskContext) -> str:
             ),
             "client_order_id": context.client_order_id,
             "proposal_order_hash": context.proposal_order_hash,
-            "recent_submissions": [
-                s.model_dump(mode="json")
-                for s in sorted(
-                    context.recent_submissions,
-                    key=lambda s: (s.client_order_id, s.submitted_at.isoformat()),
-                )
-            ],
+            "recent_submissions": (
+                None
+                if context.recent_submissions is None
+                else [
+                    s.model_dump(mode="json")
+                    for s in sorted(
+                        context.recent_submissions,
+                        key=lambda s: (s.client_order_id, s.submitted_at.isoformat()),
+                    )
+                ]
+            ),
         }
     )
 

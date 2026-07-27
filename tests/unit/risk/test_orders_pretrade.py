@@ -144,6 +144,8 @@ def _pretrade_request(**overrides: Any) -> PretradeRequest:
         "client_order_id": "client_ord_new",
         "proposal_order_hash": HASH_B,
         "prior_proposal_decision_id": "risk_01HZYPROPOSAL001",
+        # Explicit empty window (not None / unavailable).
+        "recent_submissions": (),
         "exposure_inputs": _exposure(),
         "short_term_volatility_bps": Decimal("10"),
     }
@@ -208,6 +210,65 @@ def test_duplicate_symbol_side_window() -> None:
     outside = _submission(submitted_at="2026-07-24T17:00:00Z")
     ok = DuplicateSymbolSideWindowRule().evaluate(_order_ctx(recent_submissions=(outside,)))
     assert ok.decision is RiskOutcome.APPROVED
+
+
+@pytest.mark.unit
+def test_duplicate_window_matches_instrument_id_ignoring_symbol() -> None:
+    """Ticker rename / symbol drift must not bypass instrument+side window checks."""
+    prior = _submission(
+        instrument_id="rh_inst_aapl_xnas",
+        symbol="AAPL.OLD",
+        side="BUY",
+        submitted_at="2026-07-24T18:26:00Z",
+    )
+    result = DuplicateSymbolSideWindowRule().evaluate(_order_ctx(recent_submissions=(prior,)))
+    assert result.decision is RiskOutcome.REJECTED
+    assert result.evidence is not None
+    assert "instrument_id=rh_inst_aapl_xnas" in result.evidence
+    assert "prior_symbol=AAPL.OLD" in result.evidence
+
+
+@pytest.mark.unit
+def test_unavailable_recent_submissions_fail_closed_at_pretrade() -> None:
+    for rule in (
+        DuplicateProposalHashRule(),
+        DuplicateClientOrderIdRule(),
+        DuplicateSymbolSideWindowRule(),
+    ):
+        result = rule.evaluate(_order_ctx(recent_submissions=None))
+        assert result.decision is RiskOutcome.REJECTED
+        assert result.evidence == "recent_submissions=None"
+
+    output = evaluate_pretrade(
+        _pretrade_request(recent_submissions=None),
+        market_data=_FakeMarketData(quote=_quote(), portfolio=_portfolio()),
+        kill_switch=KillSwitch(),
+        calendar=CALENDAR,
+    )
+    assert output.decision.outcome is RiskOutcome.REJECTED
+    codes = {v.rule_code for v in output.decision.violations}
+    assert "ORDERS_DUPLICATE_PROPOSAL_HASH" in codes
+    assert "ORDERS_DUPLICATE_CLIENT_ORDER_ID" in codes
+    assert "ORDERS_DUPLICATE_SYMBOL_SIDE_WINDOW" in codes
+
+
+@pytest.mark.unit
+def test_explicit_empty_recent_submissions_allows_duplicate_checks_to_pass() -> None:
+    ctx = _order_ctx(recent_submissions=())
+    assert DuplicateProposalHashRule().evaluate(ctx).decision is RiskOutcome.APPROVED
+    assert DuplicateClientOrderIdRule().evaluate(ctx).decision is RiskOutcome.APPROVED
+    assert DuplicateSymbolSideWindowRule().evaluate(ctx).decision is RiskOutcome.APPROVED
+
+
+@pytest.mark.unit
+def test_kill_switch_configured_deactivate_records_changed_source() -> None:
+    switch = KillSwitch(configured_active=True)
+    switch.set_configured(False, reason="policy clear", as_of=AS_OF)
+    assert not switch.is_active()
+    alerts = switch.drain_alerts()
+    assert len(alerts) == 1
+    assert alerts[0].kind is KillSwitchAlertKind.DEACTIVATED
+    assert alerts[0].sources == ("CONFIGURED",)
 
 
 @pytest.mark.unit

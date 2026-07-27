@@ -1,8 +1,8 @@
 """Duplicate and open-order conflict rules (P03-T12).
 
 Detects duplicate submissions by proposal hash, client order ID, and
-symbol/side time window, plus opposing or overlapping open orders. Kill-switch
-blocking of new orders also lives here as a hard rule.
+instrument/side time window, plus opposing or overlapping open orders.
+Kill-switch blocking of new orders also lives here as a hard rule.
 """
 
 from __future__ import annotations
@@ -20,6 +20,19 @@ from ainvest.schemas.common import OrderSide
 
 if TYPE_CHECKING:
     from ainvest.risk.rules import RiskRule
+
+
+def _require_recent_submissions(context: RiskContext, code: str) -> RuleResult | None:
+    """Fail closed at PRETRADE when submission history was not loaded."""
+    if context.recent_submissions is not None:
+        return None
+    if context.phase is EvaluationPhase.PRETRADE:
+        return hard_reject(
+            code,
+            "recent submission history is required for pre-trade duplicate checks",
+            evidence="recent_submissions=None",
+        )
+    return approve(code, "recent submissions not supplied at proposal phase")
 
 
 class KillSwitchRule:
@@ -54,6 +67,11 @@ class DuplicateProposalHashRule:
     code = "ORDERS_DUPLICATE_PROPOSAL_HASH"
 
     def evaluate(self, context: RiskContext) -> RuleResult:
+        missing_history = _require_recent_submissions(context, self.code)
+        if missing_history is not None:
+            return missing_history
+        assert context.recent_submissions is not None
+
         if context.proposal_order_hash is None:
             if context.phase is EvaluationPhase.PRETRADE:
                 return hard_reject(
@@ -82,6 +100,11 @@ class DuplicateClientOrderIdRule:
     code = "ORDERS_DUPLICATE_CLIENT_ORDER_ID"
 
     def evaluate(self, context: RiskContext) -> RuleResult:
+        missing_history = _require_recent_submissions(context, self.code)
+        if missing_history is not None:
+            return missing_history
+        assert context.recent_submissions is not None
+
         if context.client_order_id is None:
             if context.phase is EvaluationPhase.PRETRADE:
                 return hard_reject(
@@ -105,27 +128,35 @@ class DuplicateClientOrderIdRule:
 
 
 class DuplicateSymbolSideWindowRule:
-    """Reject same symbol+side submissions inside the configured time window."""
+    """Reject same instrument+side submissions inside the configured time window.
+
+    Matching is by ``instrument_id`` and ``side`` (canonical identity). Symbol is
+    evidence-only and must not gate the reject decision (ticker rename / drift).
+    """
 
     code = "ORDERS_DUPLICATE_SYMBOL_SIDE_WINDOW"
 
     def evaluate(self, context: RiskContext) -> RuleResult:
+        missing_history = _require_recent_submissions(context, self.code)
+        if missing_history is not None:
+            return missing_history
+        assert context.recent_submissions is not None
+
         window = context.config.order_conflicts.duplicate_window_seconds
         cand = context.candidate
         cutoff = context.as_of - timedelta(seconds=window)
         for prior in context.recent_submissions:
             if prior.submitted_at < cutoff:
                 continue
-            if (
-                prior.symbol == cand.symbol
-                and prior.instrument_id == cand.instrument_id
-                and prior.side is cand.side
-            ):
+            if prior.instrument_id == cand.instrument_id and prior.side is cand.side:
                 return hard_reject(
                     self.code,
-                    "duplicate symbol/side submission within the configured window",
+                    "duplicate instrument/side submission within the configured window",
                     evidence=(
-                        f"symbol={cand.symbol}; side={cand.side.value}; "
+                        f"instrument_id={cand.instrument_id}; "
+                        f"candidate_symbol={cand.symbol}; "
+                        f"prior_symbol={prior.symbol}; "
+                        f"side={cand.side.value}; "
                         f"window_seconds={window}; "
                         f"prior_client_order_id={prior.client_order_id}; "
                         f"prior_submitted_at={prior.submitted_at.isoformat()}"
@@ -133,7 +164,7 @@ class DuplicateSymbolSideWindowRule:
                 )
         return approve(
             self.code,
-            "no recent same-symbol/side submission in the duplicate window",
+            "no recent same-instrument/side submission in the duplicate window",
             evidence=f"window_seconds={window}",
         )
 

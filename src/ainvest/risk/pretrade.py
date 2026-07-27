@@ -57,6 +57,10 @@ class PretradeRequest(DomainModel):
 
     ``risk_decision_id`` must be a new id. ``prior_proposal_decision_id`` is
     retained for audit correlation only and must never equal ``risk_decision_id``.
+
+    ``recent_submissions`` must be an explicit load: ``None`` means history is
+    unavailable (duplicate rules hard-reject). An empty tuple means the window
+    was loaded and contained no prior submissions.
     """
 
     risk_decision_id: StableId
@@ -67,7 +71,8 @@ class PretradeRequest(DomainModel):
     client_order_id: ClientOrderId
     proposal_order_hash: OrderHashDigest
     prior_proposal_decision_id: StableId | None = None
-    recent_submissions: tuple[RecentOrderSubmission, ...] = ()
+    # None = history unavailable (fail closed). () = explicitly loaded empty window.
+    recent_submissions: tuple[RecentOrderSubmission, ...] | None = None
     exposure_inputs: ExposureInputs | None = None
     short_term_volatility_bps: NonNegativeDecimal | None = None
 

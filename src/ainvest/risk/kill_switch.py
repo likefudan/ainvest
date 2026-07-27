@@ -71,12 +71,13 @@ class KillSwitch:
         self._reason = reason
         self._updated_at = clock
         kind = KillSwitchAlertKind.ACTIVATED if active else KillSwitchAlertKind.DEACTIVATED
+        # Record the source that changed, not remaining active sources after the flip.
         self._alerts.append(
             KillSwitchAlert(
                 kind=kind,
                 reason=reason,
                 observed_at=clock,
-                sources=self.snapshot().active_sources or ("CONFIGURED",),
+                sources=("CONFIGURED",),
             )
         )
 
@@ -119,12 +120,13 @@ class KillSwitch:
         self._updated_at = clock
         if already_off:
             return
+        # Record the source that changed (OPERATIONAL), not remaining active sources.
         self._alerts.append(
             KillSwitchAlert(
                 kind=KillSwitchAlertKind.DEACTIVATED,
                 reason=reason,
                 observed_at=clock,
-                sources=self.snapshot().active_sources,
+                sources=("OPERATIONAL",),
                 operator_id=operator_id,
             )
         )
