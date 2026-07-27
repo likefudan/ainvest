@@ -6,5 +6,7 @@ import sys
 from pathlib import Path
 
 _DIR = Path(__file__).resolve().parent
-if str(_DIR) not in sys.path:
-    sys.path.insert(0, str(_DIR))
+_SHARED = _DIR.parent / "shared"
+for _path in (_DIR, _SHARED):
+    if str(_path) not in sys.path:
+        sys.path.insert(0, str(_path))

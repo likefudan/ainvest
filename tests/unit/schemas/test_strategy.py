@@ -9,6 +9,7 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
+from portfolio_fixtures import make_cash_portfolio, make_instrument, make_open_order
 from pydantic import ValidationError
 
 from ainvest.schemas.portfolio import (
@@ -283,19 +284,7 @@ def test_portfolio_reconciles_derived_exposure_values() -> None:
     with pytest.raises(ValidationError, match="portfolio_weight"):
         PortfolioSnapshot.model_validate(payload)
 
-    empty = _portfolio_example()
-    empty["positions"] = []
-    empty["cash"] = "100.00"
-    empty["buying_power"] = "100.00"
-    empty["equity"] = "100.00"
-    empty["exposure"] = {
-        "cash": "100.00",
-        "equity": "100.00",
-        "gross_market_value": "0",
-        "net_market_value": "0",
-        "largest_position_weight": "0",
-        "position_count": 0,
-    }
+    empty = make_cash_portfolio(cash="100.00").model_dump(mode="python")
     assert PortfolioSnapshot.model_validate(empty).exposure.position_count == 0
 
 
@@ -306,49 +295,44 @@ def test_portfolio_rejects_future_instrument_identity_and_duplicate_orders() -> 
     assert isinstance(positions, list)
     position = positions[0]
     assert isinstance(position, dict)
-    position["instrument"] = _instrument(identity_as_of="2099-01-01T00:00:00Z")
+    position["instrument"] = make_instrument(identity_as_of="2099-01-01T00:00:00Z")
     with pytest.raises(ValidationError, match="identity_as_of"):
         PortfolioSnapshot.model_validate(payload)
 
     payload = _portfolio_example()
-    order = {
-        "order_id": "ord_open_1",
-        "instrument": _instrument(identity_as_of="2099-01-01T00:00:00Z"),
-        "side": "BUY",
-        "quantity": "1",
-        "submitted_at": "2026-07-24T18:00:00Z",
-        "limit_price": "214.50",
-        "symbol": "AAPL",
-    }
+    order = make_open_order(
+        order_id="ord_open_1",
+        side="BUY",
+        quantity="1",
+        limit_price="214.50",
+        instrument=make_instrument(identity_as_of="2099-01-01T00:00:00Z"),
+        submitted_at="2026-07-24T18:00:00Z",
+    )
     payload["open_orders"] = [order]
     with pytest.raises(ValidationError, match="identity_as_of"):
         PortfolioSnapshot.model_validate(payload)
 
     payload = _portfolio_example()
-    good_order = {
-        "order_id": "ord_open_1",
-        "instrument": _instrument(),
-        "side": "BUY",
-        "quantity": "1",
-        "submitted_at": "2026-07-24T18:00:00Z",
-        "limit_price": "214.50",
-        "symbol": "AAPL",
-    }
+    good_order = make_open_order(
+        order_id="ord_open_1",
+        side="BUY",
+        quantity="1",
+        limit_price="214.50",
+        submitted_at="2026-07-24T18:00:00Z",
+    )
     payload["open_orders"] = [good_order, {**good_order}]
     with pytest.raises(ValidationError, match="order_id"):
         PortfolioSnapshot.model_validate(payload)
 
     payload = _portfolio_example()
     payload["open_orders"] = [
-        {
-            "order_id": "ord_open_1",
-            "instrument": _instrument(),
-            "side": "BUY",
-            "quantity": "1",
-            "submitted_at": "2026-07-24T19:00:00Z",
-            "limit_price": "214.50",
-            "symbol": "AAPL",
-        }
+        make_open_order(
+            order_id="ord_open_1",
+            side="BUY",
+            quantity="1",
+            limit_price="214.50",
+            submitted_at="2026-07-24T19:00:00Z",
+        )
     ]
     with pytest.raises(ValidationError, match="submitted_at"):
         PortfolioSnapshot.model_validate(payload)
