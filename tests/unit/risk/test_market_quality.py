@@ -13,6 +13,7 @@ from ainvest.risk.models import (
     AllowlistEntry,
     EligibilityLimits,
     EvaluationPhase,
+    ExposureLimits,
     InstrumentMetadata,
     MarketQualityLimits,
     PhaseMarketQualityLimits,
@@ -58,6 +59,14 @@ def _config() -> RiskRuleConfig:
             proposal=_limits(age=60, spread="50", deviation="100", vol="500"),
             pretrade=_limits(age=15, spread="20", deviation="25", vol="200"),
             max_clock_skew_seconds=2,
+        ),
+        exposure=ExposureLimits(
+            max_order_notional=Decimal("10000"),
+            max_symbol_weight=Decimal("0.50"),
+            max_sector_weight=Decimal("0.80"),
+            max_daily_turnover=Decimal("50000"),
+            min_cash_reserve_weight=Decimal("0.0"),
+            max_daily_loss=Decimal("10000"),
         ),
     )
 

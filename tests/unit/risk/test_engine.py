@@ -13,6 +13,7 @@ from ainvest.risk.models import (
     AllowlistEntry,
     EligibilityLimits,
     EvaluationPhase,
+    ExposureLimits,
     InstrumentMetadata,
     MarketQualityLimits,
     PhaseMarketQualityLimits,
@@ -20,6 +21,7 @@ from ainvest.risk.models import (
     RiskRuleConfig,
     RuleResult,
 )
+from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES
 from ainvest.schemas.common import AssetType
 from ainvest.schemas.examples import (
     candidate_order_example,
@@ -63,6 +65,14 @@ def _config() -> RiskRuleConfig:
             proposal=_phase_limits(),
             pretrade=_phase_limits(age=30, spread="25", deviation="50", vol="300"),
             max_clock_skew_seconds=5,
+        ),
+        exposure=ExposureLimits(
+            max_order_notional=Decimal("10000"),
+            max_symbol_weight=Decimal("0.50"),
+            max_sector_weight=Decimal("0.80"),
+            max_daily_turnover=Decimal("50000"),
+            min_cash_reserve_weight=Decimal("0.0"),
+            max_daily_loss=Decimal("10000"),
         ),
     )
 
@@ -186,7 +196,7 @@ def test_happy_path_approved_with_digests() -> None:
         ask="214.52",
     )
     ctx = ctx.model_copy(update={"quote": quote})
-    out = evaluate_risk(ctx, calendar=cal)
+    out = evaluate_risk(ctx, calendar=cal, rule_codes=DEFAULT_C4A_RULE_CODES)
     assert out.decision.outcome is RiskOutcome.APPROVED
     assert out.input_digest.startswith("sha256:")
     assert out.config_digest.startswith("sha256:")
