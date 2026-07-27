@@ -46,3 +46,37 @@ def sample_proposal_kwargs(**overrides: object) -> dict[str, object]:
     }
     base.update(overrides)
     return base
+
+
+def sample_broker_order_kwargs(**overrides: object) -> dict[str, object]:
+    created = utc()
+    base: dict[str, object] = {
+        "broker_order_id": "brk_order_001",
+        "client_order_id": "client_ord_001",
+        "proposal_id": "ordp_01HZYTEST0000001",
+        "order_hash": ORDER_HASH,
+        "account_scope": "paper",
+        "side": "BUY",
+        "status": "ACCEPTED",
+        "submitted_at": created,
+        "broker_updated_at": created,
+        "idempotency_key": "idem_broker_001",
+        "payload_json": {},
+        "version": 1,
+    }
+    base.update(overrides)
+    return base
+
+
+def sample_fill_kwargs(**overrides: object) -> dict[str, object]:
+    created = utc()
+    base: dict[str, object] = {
+        "fill_id": "fill_01HZYTEST0000001",
+        "broker_order_id": "brk_order_001",
+        "quantity": Decimal("1"),
+        "price": Decimal("214.50"),
+        "filled_at": created,
+        "payload_json": {},
+    }
+    base.update(overrides)
+    return base

@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import UTC, datetime
 
 import pytest
@@ -17,19 +16,7 @@ from ainvest.audit import (
     record_state_change,
 )
 from ainvest.audit.envelope import MAX_AUDIT_PAYLOAD_BYTES
-from ainvest.db.session import create_all_tables, create_db_engine, create_session_factory
 from ainvest.db.uow import UnitOfWork
-
-
-@pytest.fixture
-def session_factory() -> Iterator[sessionmaker[Session]]:
-    engine = create_db_engine("sqlite+pysqlite:///:memory:")
-    create_all_tables(engine)
-    factory = create_session_factory(engine)
-    try:
-        yield factory
-    finally:
-        engine.dispose()
 
 
 @pytest.mark.unit
