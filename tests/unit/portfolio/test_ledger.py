@@ -212,3 +212,43 @@ def test_negative_opening_cash_fails_closed() -> None:
             opening_cash=Decimal("-1"),
             as_of=AS_OF,
         )
+
+
+@pytest.mark.unit
+def test_apply_fills_atomic_rewrites_rolled_back_applied_results() -> None:
+    """Rolled-back prior fills must not report APPLIED after batch failure."""
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("250"),
+        as_of=AS_OF,
+    )
+    instrument = _instrument()
+    results = ledger.apply_fills_atomic(
+        (
+            (
+                _fill(fill_id="fill_ok_100", quantity="1", price="100"),
+                OrderSide.BUY,
+                instrument,
+                Decimal("0"),
+            ),
+            (
+                _fill(
+                    fill_id="fill_fail_200",
+                    quantity="1",
+                    price="200",
+                    filled_at=AS_OF + timedelta(seconds=1),
+                ),
+                OrderSide.BUY,
+                instrument,
+                Decimal("0"),
+            ),
+        )
+    )
+    assert ledger.cash == Decimal("250")
+    assert ledger.applied_fill_ids == frozenset()
+    assert all(item.status is not LedgerApplyStatus.APPLIED for item in results)
+    assert results[0].status is LedgerApplyStatus.REJECTED
+    assert results[0].reason_code == "BATCH_ROLLED_BACK"
+    assert results[1].status is LedgerApplyStatus.REJECTED
+    assert results[1].reason_code == "INSUFFICIENT_CASH"

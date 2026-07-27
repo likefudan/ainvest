@@ -68,6 +68,7 @@ class DiscrepancyCode(StrEnum):
     STATUS_MISMATCH = "STATUS_MISMATCH"
     UNKNOWN_FILL = "UNKNOWN_FILL"
     FILL_QUANTITY_MISMATCH = "FILL_QUANTITY_MISMATCH"
+    LEDGER_REJECTED = "LEDGER_REJECTED"
     MULTIPLE_BROKER_MATCHES = "MULTIPLE_BROKER_MATCHES"
     BROKER_ORDER_UNKNOWN_STATUS = "BROKER_ORDER_UNKNOWN_STATUS"
 
@@ -302,14 +303,18 @@ class OrderReconciler:
         if local.broker_order_id is not None and broker.broker_order_id != local.broker_order_id:
             codes.append(DiscrepancyCode.BROKER_ORDER_ID_MISMATCH)
 
+        known_broker_order_ids = {order.broker_order_id for order in broker_orders}
         order_fills = sorted(
             (fill for fill in broker_fills if fill.broker_order_id == broker.broker_order_id),
             key=lambda item: (ensure_utc(item.filled_at), item.fill_id),
         )
-        orphan_fills = [
-            fill for fill in broker_fills if fill.broker_order_id != broker.broker_order_id
+        # Sibling fills for other known broker orders in this feed are ignored for
+        # this order's reconcile. Only fills whose broker_order_id is absent from
+        # the provided broker_orders set are UNKNOWN_FILL.
+        unknown_fills = [
+            fill for fill in broker_fills if fill.broker_order_id not in known_broker_order_ids
         ]
-        if orphan_fills:
+        if unknown_fills:
             codes.append(DiscrepancyCode.UNKNOWN_FILL)
 
         known = set(local.known_fill_ids)
@@ -362,6 +367,7 @@ class OrderReconciler:
             DiscrepancyCode.BROKER_ORDER_ID_MISMATCH,
             DiscrepancyCode.SIDE_MISMATCH,
             DiscrepancyCode.FILL_QUANTITY_MISMATCH,
+            DiscrepancyCode.LEDGER_REJECTED,
             DiscrepancyCode.UNKNOWN_FILL,
         }
         if hard.intersection(unique_codes):
@@ -386,7 +392,11 @@ class OrderReconciler:
             ]
             apply_results = ledger.apply_fills_atomic(batch)
             rejected = next(
-                (item for item in apply_results if item.status is LedgerApplyStatus.REJECTED),
+                (
+                    item
+                    for item in reversed(apply_results)
+                    if item.status is LedgerApplyStatus.REJECTED
+                ),
                 None,
             )
             if rejected is not None:
@@ -394,8 +404,8 @@ class OrderReconciler:
                     local=local,
                     observed=observed,
                     reconciliation_id=reconciliation_id,
-                    codes=(DiscrepancyCode.FILL_QUANTITY_MISMATCH,),
-                    reason_code=rejected.reason_code or "LEDGER_REJECTED",
+                    codes=(DiscrepancyCode.LEDGER_REJECTED,),
+                    reason_code=rejected.reason_code or DiscrepancyCode.LEDGER_REJECTED.value,
                     message=(
                         "matched fill could not be applied to ledger; refusing silent rewrite"
                     ),
@@ -589,10 +599,14 @@ def apply_matched_fills(
     instrument: InstrumentIdentity,
     fees: Mapping[str, Decimal] | None = None,
 ) -> tuple[FillApplyResult, ...]:
-    """Apply fills to a ledger in ``(filled_at, fill_id)`` order (idempotent)."""
+    """Apply fills atomically in ``(filled_at, fill_id)`` order (idempotent).
+
+    Uses :meth:`PortfolioLedger.apply_fills_atomic` so a mid-batch rejection
+    never leaves partial money mutations.
+    """
     fee_map = fees or {}
     payload = [(fill, side, instrument, fee_map.get(fill.fill_id, ZERO)) for fill in fills]
-    return ledger.apply_fills_sorted(payload)
+    return ledger.apply_fills_atomic(payload)
 
 
 def _unique(codes: Sequence[DiscrepancyCode]) -> list[DiscrepancyCode]:

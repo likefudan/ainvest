@@ -334,7 +334,9 @@ class PortfolioLedger:
         Fills are sorted by ``(filled_at, fill_id)``. On any ``REJECTED`` result the
         ledger is restored to its pre-batch state so callers never observe a
         partial money rewrite alongside a failure / manual-review path.
-        ``DUPLICATE`` results do not trigger rollback.
+        Prior results that had reported ``APPLIED`` are rewritten to ``REJECTED``
+        with ``BATCH_ROLLED_BACK`` so callers cannot record fill IDs that never
+        stuck. ``DUPLICATE`` results do not trigger rollback and are preserved.
         """
         ordered = sorted(fills, key=lambda item: (ensure_utc(item[0].filled_at), item[0].fill_id))
         if not ordered:
@@ -346,7 +348,20 @@ class PortfolioLedger:
             results.append(result)
             if result.status is LedgerApplyStatus.REJECTED:
                 self._restore(checkpoint)
-                return tuple(results)
+                rewritten: list[FillApplyResult] = []
+                for prior in results[:-1]:
+                    if prior.status is LedgerApplyStatus.APPLIED:
+                        rewritten.append(
+                            FillApplyResult(
+                                status=LedgerApplyStatus.REJECTED,
+                                fill_id=prior.fill_id,
+                                reason_code="BATCH_ROLLED_BACK",
+                            )
+                        )
+                    else:
+                        rewritten.append(prior)
+                rewritten.append(result)
+                return tuple(rewritten)
         return tuple(results)
 
     def _checkpoint(self) -> _LedgerCheckpoint:

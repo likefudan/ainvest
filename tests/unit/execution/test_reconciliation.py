@@ -311,6 +311,42 @@ def test_apply_matched_fills_helper_sorts_and_dedupes() -> None:
 
 
 @pytest.mark.unit
+def test_apply_matched_fills_helper_is_atomic_on_reject() -> None:
+    """Public helper must not leave partial cash mutations on mid-batch reject."""
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("250"),
+        as_of=AS_OF,
+    )
+    instrument = _instrument()
+    fills = (
+        _fill(fill_id="fill_ok_100", quantity="1", price="100"),
+        _fill(
+            fill_id="fill_fail_200",
+            quantity="1",
+            price="200",
+            filled_at=AS_OF + timedelta(seconds=1),
+        ),
+    )
+    results = apply_matched_fills(
+        ledger,
+        fills=fills,
+        side=OrderSide.BUY,
+        instrument=instrument,
+    )
+    assert ledger.cash == Decimal("250")
+    assert ledger.positions() == {}
+    assert ledger.applied_fill_ids == frozenset()
+    assert [item.status for item in results] == [
+        LedgerApplyStatus.REJECTED,
+        LedgerApplyStatus.REJECTED,
+    ]
+    assert results[0].reason_code == "BATCH_ROLLED_BACK"
+    assert results[1].reason_code == "INSUFFICIENT_CASH"
+
+
+@pytest.mark.unit
 def test_status_mismatch_manual_review() -> None:
     reconciler = OrderReconciler(alert_sink=InMemoryAlertSink())
     report = reconciler.reconcile(
@@ -352,6 +388,9 @@ def test_partial_ledger_apply_rolls_back_on_reject() -> None:
     )
     assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
     assert report.requires_manual_review
+    assert DiscrepancyCode.LEDGER_REJECTED in report.discrepancy_codes
+    assert DiscrepancyCode.FILL_QUANTITY_MISMATCH not in report.discrepancy_codes
+    assert report.reason_code == "INSUFFICIENT_CASH"
     assert ledger.cash == Decimal("250")
     assert ledger.positions() == {}
     assert ledger.applied_fill_ids == frozenset()
@@ -403,6 +442,45 @@ def test_orphan_fill_assigns_unknown_fill() -> None:
     assert report.outcome is ReconciliationOutcome.MANUAL_REVIEW
     assert DiscrepancyCode.UNKNOWN_FILL in report.discrepancy_codes
     assert DiscrepancyCode.UNKNOWN_FILL.value in alerts.alerts[0].details
+
+
+@pytest.mark.unit
+def test_sibling_fill_in_shared_feed_is_not_unknown_fill() -> None:
+    """Own + sibling fills with both broker orders present → MATCHED (clean)."""
+    alerts = InMemoryAlertSink()
+    reconciler = OrderReconciler(alert_sink=alerts)
+    ledger = PortfolioLedger(
+        account_scope=AccountScope.PAPER,
+        currency="USD",
+        opening_cash=Decimal("10000"),
+        as_of=AS_OF,
+    )
+    sibling_order = _broker_order(
+        client_order_id="client_ord_sibling",
+        broker_order_id="paper_client_ord_sibling",
+        status=BrokerOrderStatus.PARTIALLY_FILLED,
+    )
+    own_order = _broker_order(status=BrokerOrderStatus.FILLED)
+    own_fill = _fill(fill_id="fill_own_1", quantity="2", price="214")
+    sibling_fill = _fill(
+        fill_id="fill_sibling_1",
+        quantity="1",
+        price="210",
+        broker_order_id="paper_client_ord_sibling",
+    )
+    report = reconciler.reconcile(
+        _local(),
+        broker_orders=(own_order, sibling_order),
+        broker_fills=(own_fill, sibling_fill),
+        observed_at=AS_OF,
+        reconciliation_id="recon_01HZYSIBLINGFILL01",
+        ledger=ledger,
+    )
+    assert report.outcome is ReconciliationOutcome.MATCHED
+    assert DiscrepancyCode.UNKNOWN_FILL not in report.discrepancy_codes
+    assert report.new_fill_ids == ("fill_own_1",)
+    assert ledger.position_quantity("rh_inst_aapl") == Decimal("2")
+    assert alerts.alerts == []
 
 
 @pytest.mark.unit
