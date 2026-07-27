@@ -238,7 +238,7 @@ rewrite another track's allowed paths.
 - **Integration branch:** `task/batch-d3b-workflow-commands`
 - **Handoff PR:** [#68](https://github.com/likefudan/ainvest/pull/68)
 - **Base commit:** `27631f272101f75a46c487e8b3be7f0ec7b992bc` (rebased onto post-D2 `main`)
-- **Tip commit:** `0fa73b625bd77b6f37d191bea10d3406dd37bbb1`
+- **Tip commit:** see PR #68 head (feature `1f38f71` + status)
 - **Dependencies:** `P02-T9`, `P02-T8`, Batch D2 (`P03-T7`/`T12`) satisfied on main
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/workflow/**`,
