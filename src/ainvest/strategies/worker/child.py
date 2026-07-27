@@ -12,7 +12,11 @@ from typing import Any, TextIO
 
 from ainvest.strategies.definitions import PluginMetadata, StrategyDefinition, StrategyResult
 from ainvest.strategies.worker.codes import WorkerFailureCode, WorkerStatus
-from ainvest.strategies.worker.env import assert_no_secrets_in_environ, scrub_environ
+from ainvest.strategies.worker.env import (
+    SecretEnvironmentAccessError,
+    assert_no_secrets_in_environ,
+    scrub_environ,
+)
 from ainvest.strategies.worker.isolation import (
     NetworkAccessDeniedError,
     apply_isolation,
@@ -36,15 +40,14 @@ def _load_strategy_type(module_name: str, qualname: str) -> type[Any]:
 
 
 def _classify_exception(exc: BaseException) -> tuple[WorkerFailureCode, str]:
+    if isinstance(exc, SecretEnvironmentAccessError):
+        return WorkerFailureCode.SECRET_ACCESS, str(exc)[:512]
     if isinstance(exc, NetworkAccessDeniedError):
         return WorkerFailureCode.NETWORK_DENIED, str(exc)[:512]
     if isinstance(exc, MemoryError):
         return WorkerFailureCode.OOM, "strategy worker memory limit exceeded"
-    if isinstance(exc, KeyError) and any(
-        token in str(exc).upper()
-        for token in ("SECRET", "TOKEN", "PASSWORD", "API_KEY", "OPENAI", "TELEGRAM", "BROKER")
-    ):
-        return WorkerFailureCode.SECRET_ACCESS, "strategy attempted secret environment access"
+    if isinstance(exc, RuntimeError) and str(exc).startswith("sensitive environment keys present"):
+        return WorkerFailureCode.SECRET_ACCESS, str(exc)[:512]
     message = str(exc).strip() or exc.__class__.__name__
     return WorkerFailureCode.EVALUATION_ERROR, message[:512]
 

@@ -23,9 +23,12 @@ so oversized ``bytearray`` requests fail closed with ``MemoryError``.
 
 from __future__ import annotations
 
+import contextlib
 import os
+import shutil
 import signal
 import socket
+import stat
 import sys
 import tempfile
 import threading
@@ -43,12 +46,14 @@ from ainvest.strategies.worker.codes import (
     ENV_WALL_TIMEOUT,
     ENV_WORKDIR,
 )
+from ainvest.strategies.worker.env import bind_worker_paths, install_secret_env_guard
 from ainvest.strategies.worker.protocol import WorkerLimits
 
 _ORIGINAL_SOCKET: type[socket.socket] | None = None
 _ORIGINAL_CREATE_CONNECTION: Callable[..., Any] | None = None
 _MEMORY_WATCHDOG: threading.Thread | None = None
 _MEMORY_WATCHDOG_STOP = threading.Event()
+_WORKER_DIR_PREFIX: str = "ainvest-strategy-worker-"
 
 
 @dataclass(frozen=True, slots=True)
@@ -195,22 +200,70 @@ def restore_network() -> None:
         _ORIGINAL_CREATE_CONNECTION = None
 
 
-def prepare_workdir(*, read_only: bool) -> Path:
-    """Create a dedicated worker directory; optionally make it read-only."""
-    workdir = Path(tempfile.mkdtemp(prefix="ainvest-strategy-worker-"))
-    os.chdir(workdir)
-    if read_only:
-        os.chmod(workdir, 0o555)
+def create_worker_workdir() -> Path:
+    """Create a dedicated worker directory tree (home + writable tmp)."""
+    workdir = Path(tempfile.mkdtemp(prefix=_WORKER_DIR_PREFIX))
+    (workdir / "home").mkdir(exist_ok=True)
+    (workdir / "tmp").mkdir(exist_ok=True)
     return workdir
 
 
-def apply_isolation(limits: WorkerLimits) -> AppliedLimits:
+def prepare_workdir(workdir: Path | None = None, *, read_only: bool) -> Path:
+    """Activate a worker directory; optionally make the tree root read-only.
+
+    ``tmp/`` remains writable so tempfile APIs stay inside the sandbox. ``HOME``
+    points at ``home/`` so ``Path.home()`` cannot see the host home directory.
+    """
+    root = workdir if workdir is not None else create_worker_workdir()
+    bind_worker_paths(dict(os.environ), root)
+    # Apply path bindings into the live process environment.
+    os.environ["HOME"] = str(root / "home")
+    os.environ["PWD"] = str(root)
+    os.environ["TMPDIR"] = str(root / "tmp")
+    os.environ["TMP"] = str(root / "tmp")
+    os.environ["TEMP"] = str(root / "tmp")
+    os.environ[ENV_WORKDIR] = str(root)
+    os.chdir(root)
+    if read_only:
+        # Keep tmp writable; lock down root and home against host-style writes.
+        os.chmod(root / "home", 0o555)
+        os.chmod(root, 0o555)
+    return root
+
+
+def cleanup_worker_workdir(workdir: Path | None) -> None:
+    """Best-effort removal of a worker temp directory (even if marked read-only)."""
+    if workdir is None:
+        return
+    path = Path(workdir)
+    if not path.exists():
+        return
+
+    def _onexc(func: Callable[[Any], Any], name: str, _exc: BaseException) -> None:
+        with contextlib.suppress(OSError):
+            os.chmod(name, stat.S_IRWXU)
+            func(name)
+
+    # Restore write bits on the tree so rmtree can delete read-only dirs.
+    with contextlib.suppress(OSError):
+        for root, dirs, files in os.walk(path):
+            with contextlib.suppress(OSError):
+                os.chmod(root, 0o700)
+            for name in dirs + files:
+                with contextlib.suppress(OSError):
+                    os.chmod(os.path.join(root, name), 0o700)
+    shutil.rmtree(path, onexc=_onexc)
+
+
+def apply_isolation(limits: WorkerLimits, *, workdir: Path | None = None) -> AppliedLimits:
     """Apply resource, network, and filesystem isolation for this worker."""
+    # Guard after the child environ has been scrubbed so host secret keys are gone
+    # and only intentional denied-key probes raise SecretEnvironmentAccessError.
+    install_secret_env_guard()
     cpu_applied = apply_cpu_limit(limits.cpu_seconds)
     mem_rlimit = apply_memory_rlimit(limits.memory_limit_bytes)
     mem_watchdog = False
     if limits.memory_limit_bytes is not None:
-        # Ensure child code can observe the limit via environ as well as rlimit.
         os.environ[ENV_MEMORY_LIMIT] = str(limits.memory_limit_bytes)
         mem_watchdog = start_memory_watchdog(limits.memory_limit_bytes)
 
@@ -219,16 +272,24 @@ def apply_isolation(limits: WorkerLimits) -> AppliedLimits:
         block_network()
         network_blocked = True
 
-    workdir: Path | None = None
-    if limits.read_only_workdir:
-        workdir = prepare_workdir(read_only=True)
+    active_workdir: Path | None = None
+    existing = workdir
+    if existing is None:
+        raw = os.environ.get(ENV_WORKDIR)
+        if raw:
+            existing = Path(raw)
+    if limits.read_only_workdir or existing is not None:
+        active_workdir = prepare_workdir(
+            existing,
+            read_only=limits.read_only_workdir,
+        )
 
     return AppliedLimits(
         cpu_rlimit_applied=cpu_applied,
         memory_rlimit_applied=mem_rlimit or mem_watchdog,
         memory_watchdog_applied=mem_watchdog,
         network_blocked=network_blocked,
-        read_only_workdir=workdir,
+        read_only_workdir=active_workdir,
     )
 
 
@@ -267,7 +328,7 @@ def inject_limit_environ(
     limits: WorkerLimits,
     workdir: Path | None,
 ) -> None:
-    """Copy limit knobs into the child environment (non-secret)."""
+    """Copy limit knobs and workdir path bindings into the child environment."""
     environ[ENV_WALL_TIMEOUT] = str(limits.wall_timeout_seconds)
     if limits.cpu_seconds is not None:
         environ[ENV_CPU_SECONDS] = str(limits.cpu_seconds)
@@ -277,6 +338,7 @@ def inject_limit_environ(
     environ[ENV_READ_ONLY_WORKDIR] = "1" if limits.read_only_workdir else "0"
     if workdir is not None:
         environ[ENV_WORKDIR] = str(workdir)
+        bind_worker_paths(environ, workdir)
 
 
 __all__ = [
@@ -286,6 +348,8 @@ __all__ = [
     "apply_isolation",
     "apply_memory_rlimit",
     "block_network",
+    "cleanup_worker_workdir",
+    "create_worker_workdir",
     "enforce_memory_allocation",
     "inject_limit_environ",
     "limits_from_environ",

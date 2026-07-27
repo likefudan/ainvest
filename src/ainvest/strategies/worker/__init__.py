@@ -8,7 +8,11 @@ expectations.
 
 from ainvest.strategies.worker.codes import WorkerFailureCode, WorkerStatus
 from ainvest.strategies.worker.digests import digest_json, sha256_digest
-from ainvest.strategies.worker.env import is_sensitive_env_key, scrub_environ
+from ainvest.strategies.worker.env import (
+    SecretEnvironmentAccessError,
+    is_sensitive_env_key,
+    scrub_environ,
+)
 from ainvest.strategies.worker.protocol import (
     StrategyRef,
     WorkerLimits,
@@ -27,6 +31,7 @@ from ainvest.strategies.worker.runner import (
 )
 
 __all__ = [
+    "SecretEnvironmentAccessError",
     "StrategyRef",
     "WorkerFailureCode",
     "WorkerLimits",

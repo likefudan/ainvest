@@ -3,13 +3,17 @@
 from __future__ import annotations
 
 import os
-from collections.abc import Iterator
+from collections.abc import Generator, Iterator
 
 import pytest
 
 from ainvest.strategies.worker.child import evaluate_request, os_environ_clear_and_update
 from ainvest.strategies.worker.codes import WorkerFailureCode, WorkerStatus
-from ainvest.strategies.worker.env import assert_no_secrets_in_environ, scrub_environ
+from ainvest.strategies.worker.env import (
+    assert_no_secrets_in_environ,
+    scrub_environ,
+    uninstall_secret_env_guard,
+)
 from ainvest.strategies.worker.isolation import (
     NetworkAccessDeniedError,
     block_network,
@@ -19,6 +23,13 @@ from ainvest.strategies.worker.isolation import (
 from ainvest.strategies.worker.runner import build_request
 from strategies.strategy_fixtures import make_context
 from strategies.worker_probes import HealthyProbeStrategy, NetworkAccessStrategy, definition_for
+
+
+@pytest.fixture(autouse=True)
+def _no_lingering_secret_guard() -> Generator[None, None, None]:
+    uninstall_secret_env_guard()
+    yield
+    uninstall_secret_env_guard()
 
 
 @pytest.fixture

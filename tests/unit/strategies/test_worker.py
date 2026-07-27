@@ -332,5 +332,14 @@ def test_worker_request_is_json_only(monkeypatch: pytest.MonkeyPatch) -> None:
     assert isinstance(captured["stdin"], str)
     parsed = json.loads(captured["stdin"])
     assert parsed["schema_version"] == "1.0"
-    assert "OPENAI_API_KEY" not in (captured["env"] or {})
-    assert "sk-should-not-leak-into-child" not in json.dumps(captured["env"] or {})
+    child_env = captured["env"] or {}
+    assert "OPENAI_API_KEY" not in child_env
+    assert "sk-should-not-leak-into-child" not in json.dumps(child_env)
+    # Host HOME must not leak; child HOME is rebound under the worker workdir.
+    assert "HOME" in child_env
+    assert "ainvest-strategy-worker-" in child_env["HOME"]
+    assert child_env["HOME"].endswith(os.path.join("home").replace("\\", "/")) or child_env[
+        "HOME"
+    ].endswith("/home")
+    assert "TMPDIR" in child_env
+    assert child_env["TMPDIR"].endswith("/tmp") or child_env["TMPDIR"].endswith(os.sep + "tmp")

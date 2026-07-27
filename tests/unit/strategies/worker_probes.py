@@ -85,8 +85,49 @@ class SecretAccessStrategy:
     def evaluate(self, context: StrategyContext) -> StrategyResult:
         del context, self._params
         # Attempt to read a credential that must never be present in the worker.
+        # The secret-env guard raises SecretEnvironmentAccessError for denied keys.
         value = os.environ["OPENAI_API_KEY"]
         return StrategyResult(diagnostics=StrategyDiagnostics(notes=(value[:4],)))
+
+
+class BenignKeyErrorStrategy:
+    name: ClassVar[str] = "probe_keyerror"
+    version: ClassVar[str] = "1.0.0"
+    params_model: ClassVar[type[BaseModel]] = ProbeParams
+
+    def __init__(self, params: ProbeParams) -> None:
+        self._params = params
+
+    def evaluate(self, context: StrategyContext) -> StrategyResult:
+        del context, self._params
+        # Message contains TOKEN but is not a denied env-key probe.
+        data: dict[str, str] = {}
+        return StrategyResult(diagnostics=StrategyDiagnostics(notes=(data["missing_token_field"],)))
+
+
+class HomePathStrategy:
+    name: ClassVar[str] = "probe_home"
+    version: ClassVar[str] = "1.0.0"
+    params_model: ClassVar[type[BaseModel]] = ProbeParams
+
+    def __init__(self, params: ProbeParams) -> None:
+        self._params = params
+
+    def evaluate(self, context: StrategyContext) -> StrategyResult:
+        del context, self._params
+        from pathlib import Path
+
+        home = Path.home()
+        env_file = home / ".env"
+        return StrategyResult(
+            diagnostics=StrategyDiagnostics(
+                notes=(
+                    f"home={home}",
+                    f"env_exists={env_file.exists()}",
+                    f"tmpdir={os.environ.get('TMPDIR', '')}",
+                ),
+            ),
+        )
 
 
 class NetworkAccessStrategy:
@@ -144,7 +185,9 @@ def definition_for(strategy_type: type[Any], *, plugin_id: str | None = None) ->
 
 
 __all__ = [
+    "BenignKeyErrorStrategy",
     "HealthyProbeStrategy",
+    "HomePathStrategy",
     "InvalidOutputStrategy",
     "NetworkAccessStrategy",
     "OomStrategy",

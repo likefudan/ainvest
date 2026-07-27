@@ -25,7 +25,11 @@ from ainvest.strategies.definitions import StrategyDefinition
 from ainvest.strategies.worker.codes import WorkerFailureCode, WorkerStatus
 from ainvest.strategies.worker.digests import digest_json
 from ainvest.strategies.worker.env import scrub_environ
-from ainvest.strategies.worker.isolation import inject_limit_environ
+from ainvest.strategies.worker.isolation import (
+    cleanup_worker_workdir,
+    create_worker_workdir,
+    inject_limit_environ,
+)
 from ainvest.strategies.worker.protocol import (
     StrategyRef,
     WorkerLimits,
@@ -36,6 +40,7 @@ from ainvest.strategies.worker.protocol import (
 
 _SIGKILL_CODES = frozenset({-signal.SIGKILL, 128 + signal.SIGKILL, 137})
 _SIGXCPU_CODES = frozenset({-getattr(signal, "SIGXCPU", 24), 128 + getattr(signal, "SIGXCPU", 24)})
+_REAP_TIMEOUT_SECONDS = 2.0
 
 
 @dataclass(frozen=True, slots=True)
@@ -118,6 +123,15 @@ def build_request(
     )
 
 
+def _signal_number(returncode: int) -> int | None:
+    """Return the signal number for a negative or 128+N exit status."""
+    if returncode < 0:
+        return -returncode
+    if returncode >= 128:
+        return returncode - 128
+    return None
+
+
 def _classify_exit(
     *,
     returncode: int | None,
@@ -129,12 +143,18 @@ def _classify_exit(
         return WorkerFailureCode.TIMEOUT, "strategy worker wall-clock timeout exceeded"
     if returncode is None:
         return WorkerFailureCode.CRASH, "strategy worker terminated without an exit code"
-    if returncode in _SIGKILL_CODES or returncode in _SIGXCPU_CODES:
-        if memory_limit is not None and returncode in _SIGKILL_CODES:
+    if returncode in _SIGKILL_CODES:
+        if memory_limit is not None:
             return WorkerFailureCode.OOM, "strategy worker killed after exceeding memory limit"
-        if returncode in _SIGXCPU_CODES:
-            return WorkerFailureCode.TIMEOUT, "strategy worker exceeded CPU time limit"
-        return WorkerFailureCode.CRASH, "strategy worker killed by signal"
+        return WorkerFailureCode.CRASH, "strategy worker killed by SIGKILL"
+    if returncode in _SIGXCPU_CODES:
+        return WorkerFailureCode.TIMEOUT, "strategy worker exceeded CPU time limit"
+    sig = _signal_number(returncode)
+    if sig is not None:
+        return (
+            WorkerFailureCode.CRASH,
+            f"strategy worker terminated by signal {sig}",
+        )
     return None
 
 
@@ -222,6 +242,30 @@ def _kill_process_group(proc: subprocess.Popen[str]) -> None:
             proc.kill()
 
 
+def _reap_after_timeout(
+    proc: subprocess.Popen[str],
+) -> tuple[str, str, int | None]:
+    """Reap a timed-out worker without raising or orphaning the process group.
+
+    Nested ``TimeoutExpired`` from ``communicate`` is caught, the process group
+    is killed again, and we fall back to a non-blocking poll so the caller always
+    receives a fail-closed ``TIMEOUT``/``CRASH`` record.
+    """
+    stdout = ""
+    stderr = ""
+    try:
+        stdout, stderr = proc.communicate(timeout=_REAP_TIMEOUT_SECONDS)
+    except subprocess.TimeoutExpired:
+        _kill_process_group(proc)
+        with contextlib.suppress(subprocess.TimeoutExpired):
+            stdout, stderr = proc.communicate(timeout=_REAP_TIMEOUT_SECONDS)
+        if proc.poll() is None:
+            _kill_process_group(proc)
+            with contextlib.suppress(OSError):
+                proc.wait(timeout=_REAP_TIMEOUT_SECONDS)
+    return stdout, stderr, proc.returncode
+
+
 def run_worker(
     request: WorkerRequest,
     *,
@@ -231,8 +275,9 @@ def run_worker(
     """Spawn one isolated worker child and classify the outcome fail-closed."""
     started = time.perf_counter()
     resolved_plugin_id = plugin_id or request.strategy.plugin_id
+    workdir = create_worker_workdir()
     env = scrub_environ()
-    inject_limit_environ(env, request.limits, workdir=None)
+    inject_limit_environ(env, request.limits, workdir=workdir)
     env.setdefault("PYTHONPATH", os.environ.get("PYTHONPATH", ""))
 
     payload = request.model_dump_json()
@@ -245,35 +290,39 @@ def run_worker(
     stdout = ""
     returncode: int | None = None
     try:
-        proc = subprocess.Popen(
-            cmd,
-            stdin=subprocess.PIPE,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            text=True,
-            env=env,
-            start_new_session=True,
-        )
+        try:
+            proc = subprocess.Popen(
+                cmd,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                env=env,
+                start_new_session=True,
+            )
+        except OSError as exc:
+            duration_ms = (time.perf_counter() - started) * 1000.0
+            return _failed_record(
+                request,
+                plugin_id=resolved_plugin_id,
+                code=WorkerFailureCode.INTERNAL_ERROR,
+                message=f"failed to spawn strategy worker: {exc}"[:512],
+                duration_ms=duration_ms,
+                exit_code=None,
+            )
+
         try:
             stdout, _stderr = proc.communicate(
                 input=payload,
                 timeout=request.limits.wall_timeout_seconds,
             )
+            returncode = proc.returncode
         except subprocess.TimeoutExpired:
             timed_out = True
             _kill_process_group(proc)
-            stdout, _stderr = proc.communicate(timeout=2)
-        returncode = proc.returncode
-    except OSError as exc:
-        duration_ms = (time.perf_counter() - started) * 1000.0
-        return _failed_record(
-            request,
-            plugin_id=resolved_plugin_id,
-            code=WorkerFailureCode.INTERNAL_ERROR,
-            message=f"failed to spawn strategy worker: {exc}"[:512],
-            duration_ms=duration_ms,
-            exit_code=None,
-        )
+            stdout, _stderr, returncode = _reap_after_timeout(proc)
+    finally:
+        cleanup_worker_workdir(workdir)
 
     duration_ms = (time.perf_counter() - started) * 1000.0
 
