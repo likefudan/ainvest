@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-07-26
+Last updated: 2026-07-27
 
 ## Status vocabulary
 
@@ -91,18 +91,103 @@ plan batch complete only when every card in that section has merged.
 | Batch C complete | Batch C | all of the above | complete |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
+| Batch D — Part 1a (D1a) | Batch D | `P03-T4` | in_progress |
+| Batch D — Part 1b (D1b) | Batch D | `P03-T5` | not_started (after D1a) |
+| Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_progress (PR after D1) |
+| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | not_started (after D2b) |
+| Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_progress (PR after D2) |
+| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
-**C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **D3a is merged**
-(`3de469d`). **C3b is merged** (`380aedf`, [#44](https://github.com/likefudan/ainvest/pull/44)).
-**C4a is merged** (`f3641dd`, [#45](https://github.com/likefudan/ainvest/pull/45)).
-**C4b is merged** (see C4b section). **Batch C is complete.**
-Coordinators own `docs/tasks/status.md` updates for handoff; implementation
-agents must not rewrite another track's allowed paths.
+**Batch D — Close Gate 1** (remaining cards). Early unlocks already merged:
+`P03-T6` (D2a), `P02-T9` (D3a). **Batch C is complete.**
+
+Coordination: implement D1 / D2 / D3 tracks **in parallel** on separate branches, but
+**merge PRs serially** `D1 → D2 → D3`. Within each track, **two PRs**
+(`D1a→D1b`, `D2b→D2c`, `D3b→D3c`). After a predecessor merges, the next branch
+rebases onto latest `main`, re-reviews locally, then opens its PR. Only the
+coordinator opens the next formal PR in the merge queue. Coordinators own
+`docs/tasks/status.md` updates for handoff; implementation agents must not
+rewrite another track's allowed paths.
+
+### Batch D — Part 1a (D1a)
+
+- **Batch:** Batch D — Part 1a (D1a) — Strategy worker isolation (`P03-T4`)
+- **Plan batch:** Batch D (D1)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress`
+- **Owner/agent:** cursor-subagent-d1
+- **Integration branch:** `task/batch-d1a-strategy-worker`
+- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
+- **Dependencies:** `P03-T0`–`T2`, `P02-T8` (satisfied on main)
+- **Merge target:** `main` (squash); **first** in Batch D merge queue
+- **Allowed paths:** `src/ainvest/strategies/worker/**`,
+  `src/ainvest/strategies/__init__.py` (re-exports only),
+  `tests/unit/strategies/**`, `tests/integration/strategies/**`,
+  `docs/development.md` (worker isolation notes only),
+  `docs/tasks/status.md` (D1a section + summary row + Active batch notes only),
+  `pyproject.toml` (entry points / package data only if required)
+- **Forbidden:** `strategy_conformance/` (D1b), portfolio aggregation (D2),
+  pretrade/kill_switch (D2c), workflow (D3), live broker, rewriting registry
+  load semantics beyond worker invocation hooks
+- **Handoff notes:** Implement isolated strategy workers with versioned JSON I/O,
+  timeouts/resource limits, scrubbed env, fail-closed classification; one worker
+  failure must not stop others.
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `in_progress` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P03-T0`–`T2`, `P02-T8` | pending |
+
+### Batch D — Part 2b (D2b)
+
+- **Batch:** Batch D — Part 2b (D2b) — Multi-strategy signal aggregation (`P03-T7`)
+- **Plan batch:** Batch D (D2)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress` (code parallel; **do not open formal PR until D1 merged**)
+- **Owner/agent:** cursor-subagent-d2
+- **Integration branch:** `task/batch-d2b-signal-aggregation`
+- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
+- **Dependencies:** `P03-T6` (satisfied); rebase onto post-D1 `main` before PR
+- **Merge target:** `main` (squash); after D1a+D1b
+- **Allowed paths:** `src/ainvest/portfolio/signal_aggregation.py`,
+  `src/ainvest/portfolio/__init__.py`, `docs/decisions/**` (aggregation ADR),
+  `tests/unit/portfolio/**`,
+  `docs/tasks/status.md` (D2b section + summary row + Active batch notes only)
+- **Forbidden:** pretrade/kill_switch (D2c), strategy worker (D1), workflow (D3),
+  rewriting sizer behavior beyond calling it if needed
+- **Handoff notes:** ADR + deterministic aggregation; conflict → no trade or
+  NEEDS_REVIEW; never emit opposing orders for one symbol.
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_progress` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P03-T6` | hold until D1 |
+
+### Batch D — Part 3b (D3b)
+
+- **Batch:** Batch D — Part 3b (D3b) — Domain commands/events (`P02-T10`)
+- **Plan batch:** Batch D (D3)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress` (code parallel; **do not open formal PR until D2 merged**)
+- **Owner/agent:** cursor-subagent-d3
+- **Integration branch:** `task/batch-d3b-workflow-commands`
+- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
+- **Dependencies:** `P02-T9`, `P02-T8` (satisfied); rebase onto post-D2 `main` before PR
+- **Merge target:** `main` (squash); after D2b+D2c
+- **Allowed paths:** `src/ainvest/workflow/**`,
+  `tests/unit/workflow/**`, `tests/contract/workflow/**` (if needed),
+  `docs/tasks/status.md` (D3b section + summary row + Active batch notes only),
+  `pyproject.toml` (package discovery only if required)
+- **Forbidden:** reconciliation/ledger (D3c), pretrade (D2c), strategy worker (D1),
+  live broker, Temporal/durable queue implementation (interface only)
+- **Handoff notes:** Commands/events with correlation/causation/idempotency;
+  in-process dispatcher; distinguish retryable vs broker-write never-blind-retry.
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_progress` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P02-T9`, `P02-T8` | hold until D2 |
 
 ### Batch C — Part 4b (C4b)
 
