@@ -7,8 +7,8 @@ from copy import deepcopy
 from typing import Any
 
 import pytest
-from decimal_cases import EXTREME_ZERO_ENCODINGS
 from pydantic import ValidationError
+from shared.decimal_cases import EXTREME_ZERO_ENCODINGS
 
 from ainvest.approval.order_hash import (
     attach_order_hash,

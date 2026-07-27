@@ -8,7 +8,7 @@ from pathlib import Path
 from typing import Any
 
 import pytest
-from decimal_cases import (
+from shared.decimal_cases import (
     EXTREME_HUGE,
     EXTREME_ZERO_ENCODINGS,
     PADDED_ONE,

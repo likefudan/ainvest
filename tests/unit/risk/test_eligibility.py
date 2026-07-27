@@ -5,13 +5,13 @@ from __future__ import annotations
 from datetime import UTC, date, datetime
 
 import pytest
-from portfolio_fixtures import make_open_order, with_open_orders
-from risk_fixtures import (
+from risk.risk_fixtures import (
     make_candidate,
     make_context,
     make_fresh_quote,
     make_instrument,
 )
+from shared.portfolio_fixtures import make_open_order, with_open_orders
 
 from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.risk.engine import evaluate_risk

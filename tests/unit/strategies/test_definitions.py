@@ -6,7 +6,7 @@ from typing import ClassVar
 
 import pytest
 from pydantic import BaseModel, ConfigDict, Field, ValidationError
-from strategy_fixtures import DemoStrategy, make_metadata
+from strategies.strategy_fixtures import DemoStrategy, make_metadata
 
 from ainvest.strategies import (
     PluginMetadata,

@@ -5,7 +5,7 @@ from __future__ import annotations
 from datetime import UTC, datetime
 
 import pytest
-from paper_fixtures import (
+from execution.paper_fixtures import (
     make_paper_proposal,
     make_paper_proposal_and_approval,
     make_submit_request,

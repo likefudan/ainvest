@@ -6,20 +6,20 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from portfolio_fixtures import (
-    AAPL_INSTRUMENT,
-    MSFT_INSTRUMENT,
-    make_cash_portfolio,
-    make_open_order,
-    with_open_orders,
-)
-from risk_fixtures import (
+from risk.risk_fixtures import (
     make_candidate,
     make_context,
     make_exposure_limits,
     make_instrument,
     make_quote,
     make_risk_config,
+)
+from shared.portfolio_fixtures import (
+    AAPL_INSTRUMENT,
+    MSFT_INSTRUMENT,
+    make_cash_portfolio,
+    make_open_order,
+    with_open_orders,
 )
 
 from ainvest.risk.models import (

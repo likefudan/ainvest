@@ -8,7 +8,7 @@ from typing import cast
 
 import pytest
 import yaml
-from strategy_fixtures import DemoPlugin, make_metadata
+from strategies.strategy_fixtures import DemoPlugin, make_metadata
 
 from ainvest.config import TradingMode
 from ainvest.strategies import (

@@ -6,15 +6,6 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from helpers import (
-    ORDER_HASH,
-    TOKEN_HASH,
-    later,
-    sample_broker_order_kwargs,
-    sample_fill_kwargs,
-    sample_proposal_kwargs,
-    utc,
-)
 from sqlalchemy.orm import Session, sessionmaker
 
 from ainvest.db.errors import ConcurrentModificationError, PersistenceError
@@ -26,6 +17,15 @@ from ainvest.db.models import (
     OrderProposalRow,
 )
 from ainvest.db.uow import UnitOfWork
+from db.helpers import (
+    ORDER_HASH,
+    TOKEN_HASH,
+    later,
+    sample_broker_order_kwargs,
+    sample_fill_kwargs,
+    sample_proposal_kwargs,
+    utc,
+)
 
 
 @pytest.mark.unit

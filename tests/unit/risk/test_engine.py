@@ -6,7 +6,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from risk_fixtures import (
+from risk.risk_fixtures import (
     make_candidate,
     make_context,
     make_instrument,

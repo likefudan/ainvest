@@ -9,8 +9,8 @@ from decimal import Decimal
 from typing import Any
 
 import pytest
-from portfolio_fixtures import make_cash_portfolio, make_instrument, make_open_order
 from pydantic import ValidationError
+from shared.portfolio_fixtures import make_cash_portfolio, make_instrument, make_open_order
 
 from ainvest.schemas.portfolio import (
     AccountScope,

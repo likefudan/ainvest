@@ -7,7 +7,7 @@ from decimal import Decimal
 from random import Random
 
 import pytest
-from paper_fixtures import (
+from execution.paper_fixtures import (
     FixedClock,
     make_cancel_command,
     make_cost_model,
