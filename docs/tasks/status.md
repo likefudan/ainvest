@@ -95,8 +95,8 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 1b (D1b) | Batch D | `P03-T5` | complete (merged) |
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
-| Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_review (#68) |
-| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
+| Batch D — Part 3b (D3b) | Batch D | `P02-T10` | complete (merged) |
+| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | in_progress |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -256,6 +256,31 @@ rewrite another track's allowed paths.
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
 | `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_review` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `27631f272101f75a46c487e8b3be7f0ec7b992bc` | `P02-T9`, `P02-T8` | [#68](https://github.com/likefudan/ainvest/pull/68) |
+
+### Batch D — Part 3c (D3c)
+
+- **Batch:** Batch D — Part 3c (D3c) — Reconciliation + portfolio ledger (`P03-T15`)
+- **Plan batch:** Batch D (D3)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_progress` (draft on branch; **do not open formal PR until D3b merged**)
+- **Owner/agent:** cursor-subagent-d3
+- **Integration branch:** `task/batch-d3c-reconciliation-ledger`
+- **Base commit:** `b189f71a8feffe5255f7a653d398086f90934378`
+- **Dependencies:** `P03-T14`, `P02-T6`–`T8` (satisfied on main); rebase after D3b before PR
+- **Merge target:** `main` (squash); after D3b
+- **Allowed paths:** `src/ainvest/execution/reconciliation.py`,
+  `src/ainvest/portfolio/ledger.py`,
+  `src/ainvest/execution/__init__.py` / `portfolio/__init__.py` (re-exports),
+  `tests/unit/execution/**`, `tests/unit/portfolio/**` (ledger/reconcile),
+  `docs/tasks/status.md` (D3c section + summary row only)
+- **Forbidden:** opening PR before D3b; rewriting T10; D1/D2 paths
+- **Handoff notes:** `PortfolioLedger` with idempotent fills + conservation;
+  `OrderReconciler` compares client IDs/qty/price/state, routes discrepancies to
+  MANUAL_REVIEW with alerts (never silent money rewrite). **No PR opened.**
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T15` | Reconcile Paper Orders and Maintain the Portfolio Ledger | `in_progress` | cursor-subagent-d3 | `task/batch-d3c-reconciliation-ledger` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T14`, `P02-T6`–`T8` | hold until D3b |
 
 ### Batch C — Part 4b (C4b)
 

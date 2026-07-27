@@ -5,7 +5,7 @@ Upstream research and strategy packages must not import this package.
 
 P03-T13 exposes the domain broker port and error taxonomy. P02-T9 exposes the
 order/cancel state machines. P03-T14 exposes the deterministic Paper Broker
-and fill simulator.
+and fill simulator. P03-T15 exposes paper order reconciliation.
 """
 
 from ainvest.execution.broker import (
@@ -38,6 +38,18 @@ from ainvest.execution.paper import (
     as_read_port,
     as_write_port,
 )
+from ainvest.execution.reconciliation import (
+    AlertSeverity,
+    AlertSink,
+    DiscrepancyCode,
+    InMemoryAlertSink,
+    LocalOrderExpectation,
+    OrderReconciler,
+    OrderReconciliationReport,
+    ReconciliationAlert,
+    apply_matched_fills,
+    expected_broker_statuses,
+)
 from ainvest.execution.state_machine import (
     CANCEL_EDGES,
     CANCEL_TERMINAL,
@@ -68,6 +80,8 @@ __all__ = [
     "ORDER_TERMINAL",
     "READ_METHOD_NAMES",
     "WRITE_METHOD_NAMES",
+    "AlertSeverity",
+    "AlertSink",
     "AuditBackedStatePersistence",
     "BrokerAuthError",
     "BrokerError",
@@ -82,24 +96,32 @@ __all__ = [
     "BrokerUnknownOutcomeError",
     "BrokerWritePort",
     "CancelCommandState",
+    "DiscrepancyCode",
     "IllegalTransitionError",
+    "InMemoryAlertSink",
     "InMemoryStatePersistence",
+    "LocalOrderExpectation",
     "OrderLifecycleState",
+    "OrderReconciler",
+    "OrderReconciliationReport",
     "PaperBroker",
     "PaperClock",
     "PaperCostModel",
     "PaperMarketEvent",
     "PaperRejectReason",
     "PersistenceError",
+    "ReconciliationAlert",
     "StaleStateError",
     "StatePersistencePort",
     "TransitionResult",
+    "apply_matched_fills",
     "as_read_port",
     "as_write_port",
     "assert_no_replace_operation",
     "assert_read_port_has_no_write_methods",
     "cancel_is_confirmed_rejection",
     "cancel_is_unknown_outcome",
+    "expected_broker_statuses",
     "is_cancel_transition_allowed",
     "is_order_transition_allowed",
     "legal_cancel_targets",
