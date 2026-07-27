@@ -264,6 +264,7 @@ class AuditBackedStatePersistence:
         one transactional unit (e.g. Unit of Work). Without it, a mid-flight
         failure can leave business state applied without an audit row.
         """
+
         def commit(
             *,
             machine: MachineKind,
