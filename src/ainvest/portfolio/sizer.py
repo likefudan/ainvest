@@ -30,12 +30,7 @@ from ainvest.schemas.common import (
     ensure_utc,
     parse_decimal,
 )
-from ainvest.schemas.decimal_math import (
-    ceil_to_increment as _ceil_to_increment,
-)
-from ainvest.schemas.decimal_math import (
-    floor_to_increment as _floor_to_increment,
-)
+from ainvest.schemas.decimal_math import ceil_to_increment, floor_to_increment
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder, OrderType, TimeInForce
 from ainvest.schemas.portfolio import AccountScope, PortfolioSnapshot, PositionSnapshot
@@ -208,7 +203,7 @@ def size_position(
             as_of=clock,
         )
 
-    limit_price = _normalize_limit_price(reference_price, price_inc, side=side)
+    limit_price = normalize_limit_price(reference_price, price_inc, side=side)
     if limit_price <= ZERO:
         return SizingResult(
             reason_code=SizerReasonCode.MISSING_PRICE,
@@ -217,7 +212,7 @@ def size_position(
         )
 
     raw_qty = canonicalize_decimal(abs(delta_value) / limit_price)
-    quantity = _floor_to_increment(raw_qty, qty_inc)
+    quantity = floor_to_increment(raw_qty, qty_inc)
     if quantity <= ZERO:
         return SizingResult(
             reason_code=SizerReasonCode.ZERO_SHARE_DELTA,
@@ -227,7 +222,7 @@ def size_position(
 
     if side is OrderSide.SELL:
         # Never sell shares already committed on open sell orders.
-        sellable = _floor_to_increment(filled_qty - open_sell_qty, qty_inc)
+        sellable = floor_to_increment(filled_qty - open_sell_qty, qty_inc)
         if sellable <= ZERO:
             return SizingResult(
                 reason_code=SizerReasonCode.INSUFFICIENT_POSITION,
@@ -255,7 +250,7 @@ def size_position(
                 candidate=None,
                 as_of=clock,
             )
-        max_by_cash = _floor_to_increment(spendable / limit_price, qty_inc)
+        max_by_cash = floor_to_increment(spendable / limit_price, qty_inc)
         if max_by_cash <= ZERO:
             return SizingResult(
                 reason_code=SizerReasonCode.CASH_RESERVE_BLOCKS_BUY,
@@ -266,7 +261,7 @@ def size_position(
 
     max_notional = parse_decimal(config.max_notional)
     min_notional = parse_decimal(config.min_notional)
-    max_by_notional = _floor_to_increment(max_notional / limit_price, qty_inc)
+    max_by_notional = floor_to_increment(max_notional / limit_price, qty_inc)
     if max_by_notional <= ZERO:
         return SizingResult(
             reason_code=SizerReasonCode.MAX_NOTIONAL_BLOCKS,
@@ -408,7 +403,7 @@ def _reference_price(*, quote: MarketQuote, side: OrderSide) -> Decimal | None:
     return last
 
 
-def _normalize_limit_price(price: Decimal, increment: Decimal, *, side: OrderSide) -> Decimal:
+def normalize_limit_price(price: Decimal, increment: Decimal, *, side: OrderSide) -> Decimal:
     """Snap to tick in the capital-safe direction.
 
     BUY floors (never pay more than the reference). SELL ceils (never receive
@@ -419,8 +414,8 @@ def _normalize_limit_price(price: Decimal, increment: Decimal, *, side: OrderSid
     price = parse_decimal(price)
     increment = parse_decimal(increment)
     if side is OrderSide.BUY:
-        return _floor_to_increment(price, increment)
-    return _ceil_to_increment(price, increment)
+        return floor_to_increment(price, increment)
+    return ceil_to_increment(price, increment)
 
 
 def _spendable_buying_power(
@@ -451,12 +446,6 @@ def _spendable_buying_power(
     if available < ZERO:
         available = ZERO
     return canonicalize_decimal(available)
-
-
-# Public helpers for tests and downstream pure math consumers.
-normalize_limit_price = _normalize_limit_price
-floor_to_increment = _floor_to_increment
-ceil_to_increment = _ceil_to_increment
 
 
 __all__ = [

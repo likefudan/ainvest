@@ -6,18 +6,20 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
+from risk_fixtures import (
+    make_candidate,
+    make_context,
+    make_exposure_limits,
+    make_instrument,
+    make_quote,
+    make_risk_config,
+)
 
 from ainvest.risk.models import (
-    AllowlistEntry,
-    EligibilityLimits,
     EvaluationPhase,
     ExposureInputs,
     ExposureLimits,
-    InstrumentMetadata,
-    MarketQualityLimits,
-    PhaseMarketQualityLimits,
     RiskContext,
-    RiskRuleConfig,
     SectorAssignment,
 )
 from ainvest.risk.rules.exposure import (
@@ -28,13 +30,10 @@ from ainvest.risk.rules.exposure import (
     SectorExposureRule,
     SymbolWeightRule,
 )
-from ainvest.schemas.common import AssetType
 from ainvest.schemas.examples import (
     candidate_order_example,
-    market_quote_example,
     portfolio_snapshot_example,
 )
-from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder
 from ainvest.schemas.portfolio import PortfolioSnapshot
 from ainvest.schemas.risk import RiskOutcome
@@ -49,39 +48,13 @@ def _exposure(
     min_cash: str = "0.10",
     max_loss: str = "100",
 ) -> ExposureLimits:
-    return ExposureLimits(
-        max_order_notional=Decimal(max_notional),
-        max_symbol_weight=Decimal(max_symbol),
-        max_sector_weight=Decimal(max_sector),
-        max_daily_turnover=Decimal(max_turnover),
-        min_cash_reserve_weight=Decimal(min_cash),
-        max_daily_loss=Decimal(max_loss),
-    )
-
-
-def _config(exposure: ExposureLimits | None = None) -> RiskRuleConfig:
-    phase = PhaseMarketQualityLimits(
-        max_quote_age_seconds=120,
-        max_spread_bps=Decimal("100"),
-        max_limit_deviation_bps=Decimal("500"),
-        max_short_term_volatility_bps=Decimal("1000"),
-    )
-    return RiskRuleConfig(
-        rule_set_version="risk-rules-1.0.0",
-        eligibility=EligibilityLimits(
-            allowlist=(
-                AllowlistEntry(
-                    instrument_id="rh_inst_aapl_xnas",
-                    symbol="AAPL",
-                    exchange="XNAS",
-                    asset_type=AssetType.EQUITY,
-                ),
-            )
-        ),
-        market_quality=MarketQualityLimits(
-            proposal=phase, pretrade=phase, max_clock_skew_seconds=30
-        ),
-        exposure=exposure or _exposure(),
+    return make_exposure_limits(
+        max_notional=max_notional,
+        max_symbol=max_symbol,
+        max_sector=max_sector,
+        max_turnover=max_turnover,
+        min_cash=min_cash,
+        max_loss=max_loss,
     )
 
 
@@ -94,22 +67,15 @@ def _ctx(
     include_portfolio: bool = True,
     include_inputs: bool = True,
 ) -> RiskContext:
-    cand = candidate or CandidateOrder.model_validate(
-        {
-            **candidate_order_example(),
-            "account_scope": "paper",
-            "quantity": "2",
-            "limit_price": "214.50",
-            "maximum_notional": "429.00",
-        }
+    cand = candidate or make_candidate(
+        quantity="2",
+        limit_price="214.50",
+        maximum_notional="429.00",
     )
-    quote = MarketQuote.model_validate(
-        {
-            **market_quote_example(),
-            "last_price": "214.50",
-            "bid": "214.40",
-            "ask": "214.60",
-        }
+    quote = make_quote(
+        last_price="214.50",
+        bid="214.40",
+        ask="214.60",
     )
     port = portfolio
     if include_portfolio and port is None:
@@ -122,25 +88,14 @@ def _ctx(
             daily_realized_pnl=Decimal("0"),
             daily_unrealized_pnl=Decimal("0"),
         )
-    return RiskContext(
+    return make_context(
         risk_decision_id="risk_01HZYEXPOSURE0001",
         phase=EvaluationPhase.PROPOSAL,
         as_of=datetime(2026, 7, 23, 15, 0, tzinfo=UTC),
         candidate=cand,
         quote=quote,
-        instrument=InstrumentMetadata.model_validate(
-            {
-                "instrument_id": "rh_inst_aapl_xnas",
-                "symbol": "AAPL",
-                "exchange": "XNAS",
-                "currency": "USD",
-                "asset_type": "EQUITY",
-                "tradable": True,
-                "price_increment": "0.01",
-                "quantity_increment": "1",
-            }
-        ),
-        config=_config(exposure),
+        instrument=make_instrument(),
+        config=make_risk_config(exposure=exposure or _exposure()),
         portfolio=port,
         short_term_volatility_bps=Decimal("10"),
         exposure_inputs=exp_in,

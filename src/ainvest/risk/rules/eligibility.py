@@ -7,7 +7,9 @@ from decimal import Decimal
 from ainvest.data.calendar_port import MarketCalendar, SessionStatus
 from ainvest.risk.models import RiskContext, RuleResult
 from ainvest.risk.rules.results import approve, hard_reject
+from ainvest.schemas.commitments import open_order_side_quantities
 from ainvest.schemas.common import AssetType, OrderSide, canonicalize_decimal
+from ainvest.schemas.portfolio import PortfolioSnapshot
 
 
 class AssetClassRule:
@@ -179,21 +181,14 @@ class SessionRule:
         return approve(self.code, "regular trading session is open")
 
 
-def _held_qty(portfolio: object, instrument_id: str) -> Decimal:
-    from ainvest.schemas.portfolio import PortfolioSnapshot
-
-    assert isinstance(portfolio, PortfolioSnapshot)
+def _held_qty(portfolio: PortfolioSnapshot, instrument_id: str) -> Decimal:
     for position in portfolio.positions:
         if position.instrument.instrument_id == instrument_id:
             return position.quantity
     return Decimal("0")
 
 
-def _open_sell_qty(portfolio: object, instrument_id: str) -> Decimal:
-    from ainvest.schemas.commitments import open_order_side_quantities
-    from ainvest.schemas.portfolio import PortfolioSnapshot
-
-    assert isinstance(portfolio, PortfolioSnapshot)
+def _open_sell_qty(portfolio: PortfolioSnapshot, instrument_id: str) -> Decimal:
     _buy_qty, sell_qty = open_order_side_quantities(portfolio, instrument_id)
     return sell_qty
 

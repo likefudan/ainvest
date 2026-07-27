@@ -1,7 +1,8 @@
-"""Strategy API version surface for plugin compatibility (P02-T5 / design §5.3).
+"""Strategy API version surface for plugin compatibility (P02-T5 / P03-T0).
 
-Full pluggy hooks arrive in P03-T0. This module defines the version constant and
-range helpers so plugins can already declare ``ainvest_strategy_api`` support.
+Defines the host ``ainvest_strategy_api`` version constant and range helpers.
+Pluggy hook specs live in ``ainvest.strategies.hooks``; plugins declare a
+supported version range against this module.
 """
 
 from __future__ import annotations

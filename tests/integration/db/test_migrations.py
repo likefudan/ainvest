@@ -15,7 +15,7 @@ from sqlalchemy import create_engine, inspect, select, text
 from ainvest.db.models import (
     OrderProposalRow,
     ResearchPacketRow,
-    ResearchRun,
+    ResearchRunRow,
     RiskDecisionRow,
     TradeSignalRow,
 )
@@ -87,7 +87,7 @@ def test_sqlite_domain_round_trip(tmp_path: Path) -> None:
 
     with factory() as session:
         session.add(
-            ResearchRun(
+            ResearchRunRow(
                 run_id="rrun_01HZYTEST0000001",
                 symbol="AAPL",
                 status="COMPLETED",

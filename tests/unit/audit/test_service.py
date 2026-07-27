@@ -143,4 +143,8 @@ def test_proposal_timeline_reconstructable(session_factory: sessionmaker[Session
             "APPROVAL_CHALLENGE_CREATED",
             "APPROVAL_CONSUMED",
         ]
-        assert [item.after_state["step"] for item in timeline] == [1, 2, 3]
+        assert [item.after_state["step"] for item in timeline if item.after_state is not None] == [
+            1,
+            2,
+            3,
+        ]
