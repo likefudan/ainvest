@@ -69,11 +69,15 @@ def consume_challenge(
     *,
     as_of: datetime,
     store: ApprovalStubStore,
-    approved: bool = True,
+    approved: bool,
     event_id: str = FIXED_APPROVAL_EVENT_ID,
     approver_identity: str = "stub_approver_d4a",
 ) -> ApprovalEvent:
-    """Consume a one-time challenge. Expired challenges never become APPROVED."""
+    """Consume a one-time challenge.
+
+    ``approved`` is required and must be passed explicitly — this stub never
+    defaults to approval. Expired challenges never become APPROVED.
+    """
     clock = ensure_utc(as_of)
     challenge = store.challenges.get(challenge_id)
     if challenge is None:

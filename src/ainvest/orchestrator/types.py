@@ -8,6 +8,7 @@ from decimal import Decimal
 from enum import StrEnum
 from typing import Any
 
+from ainvest.audit.envelope import AuditEventEnvelope
 from ainvest.execution.state_machine import OrderLifecycleState
 
 # Weekday regular session (11:00 America/New_York) — aligned with risk fixtures.
@@ -65,6 +66,7 @@ class PaperFlowResult:
     correlation_id: str
     steps: list[StepRecord]
     digests: dict[str, str]
+    audit_events: list[AuditEventEnvelope] = field(default_factory=list)
     proposal_id: str | None = None
     order_hash: str | None = None
     challenge_id: str | None = None

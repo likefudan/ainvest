@@ -108,12 +108,14 @@ def test_paper_flow_unknown_broker_then_reconcile() -> None:
     port = _UnknownWritePort()
     result = run_paper_flow(make_paper_flow_config(inject_approval=True, write_port=port))
     assert result.terminal is PaperFlowTerminal.SUBMIT_UNKNOWN
-    assert result.lifecycle is OrderLifecycleState.RECONCILING
+    assert result.lifecycle is OrderLifecycleState.MANUAL_REVIEW
     assert port.submit_calls == 1
     assert "reconcile_after_unknown" in {step.name for step in result.steps}
     assert "blind_retry_blocked" in {step.name for step in result.steps}
     assert result.error is not None
     assert "blind" in result.error.lower() or "SUBMIT_UNKNOWN" in result.error
+    assert len(result.audit_events) >= 3
+    assert all(event.correlation_id == result.correlation_id for event in result.audit_events)
 
 
 @pytest.mark.integration

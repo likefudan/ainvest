@@ -15,6 +15,7 @@ from typing import Any, cast
 
 from ainvest.approval import attach_order_hash, parse_order_proposal
 from ainvest.audit.digests import digest_json
+from ainvest.audit.envelope import ActorType, AuditEventEnvelope, AuditEventType
 from ainvest.data import FakeMarketCalendar
 from ainvest.execution import (
     BrokerSubmitOutcome,
@@ -144,12 +145,17 @@ class PaperFlowConfig:
 
 @dataclass
 class _FlowState:
+    correlation_id: str = FIXED_CORRELATION_ID
     steps: list[StepRecord] = field(default_factory=list)
     digests: dict[str, str] = field(default_factory=dict)
+    audit_events: list[AuditEventEnvelope] = field(default_factory=list)
     lifecycle: OrderLifecycleState = OrderLifecycleState.SIGNAL_CREATED
     persistence: InMemoryStatePersistence = field(default_factory=InMemoryStatePersistence)
     event_seq: int = 0
+    audit_seq: int = 0
     prior_broker_outcome: CommandOutcome | None = None
+    last_recon_outcome: str | None = None
+    last_recon_reason: str | None = None
 
 
 class _FixedPretradeMarketData:
@@ -229,6 +235,8 @@ def _record(
     as_of: datetime,
     digests: Mapping[str, str] | None = None,
     payload: Mapping[str, Any] | None = None,
+    event_type: AuditEventType | str = AuditEventType.GENERIC,
+    subject_id: str | None = None,
 ) -> None:
     step_digests = dict(digests or {})
     state.digests.update(step_digests)
@@ -239,6 +247,24 @@ def _record(
             lifecycle=state.lifecycle,
             digests=step_digests,
             payload=dict(payload or {}),
+        )
+    )
+    state.audit_seq += 1
+    output = next(iter(step_digests.values()), None) if step_digests else None
+    state.audit_events.append(
+        AuditEventEnvelope(
+            event_id=f"aud_01HZYD4ASTEP{state.audit_seq:06d}",
+            event_type=event_type,
+            occurred_at=as_of,
+            correlation_id=state.correlation_id,
+            actor_type=ActorType.SYSTEM,
+            actor_id="paper_orchestrator",
+            subject_type="paper_flow",
+            subject_id=subject_id or name,
+            input_digest=step_digests.get("risk_input") or step_digests.get("order_hash"),
+            output_digest=output if output and str(output).startswith("sha256:") else None,
+            after_state={"lifecycle": state.lifecycle.value, "step": name},
+            payload={key: str(value) for key, value in dict(payload or {}).items()},
         )
     )
 
@@ -302,6 +328,7 @@ def _result(
         correlation_id=correlation_id,
         steps=list(state.steps),
         digests=dict(state.digests),
+        audit_events=list(state.audit_events),
         proposal_id=proposal.proposal_id if proposal is not None else None,
         order_hash=proposal.order_hash if proposal is not None else None,
         challenge_id=challenge_id,
@@ -318,7 +345,7 @@ def _result(
 def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
     """Run the fixed ResearchPacket → paper fill loop once."""
     as_of = ensure_utc(config.as_of)
-    state = _FlowState()
+    state = _FlowState(correlation_id=config.correlation_id)
     calendar = FakeMarketCalendar()
     approval_store = ApprovalStubStore()
     costs = config.cost_model or PaperCostModel(
@@ -619,6 +646,7 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         clock=lambda: clock_moment,
         initial_cash=config.opening_cash,
     )
+    uses_local_broker = config.write_port is None and not config.raise_unknown_on_submit
     write_port: BrokerWritePort
     if config.write_port is not None:
         write_port = config.write_port
@@ -702,16 +730,61 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
 
     def _handle_reconcile(command: WorkflowCommand) -> ReconciledEvent:
         recon = cast(ReconcileCommand, command)
+        broker_orders = broker.get_orders(AccountScope.PAPER)
+        broker_fills = broker.get_fills(AccountScope.PAPER)
+        # Schema ReconciliationResult requires broker_order_id or cancel_id.
+        # When UNKNOWN submit left no broker order, classify without constructing
+        # an invalid ReconciliationResult (missing both IDs).
+        if not broker_orders and recon.broker_order_id is None:
+            state.last_recon_outcome = ReconciliationOutcome.MANUAL_REVIEW.value
+            state.last_recon_reason = "MISSING_BROKER_ORDER"
+            return ReconciledEvent(
+                event_id="evt_01HZYD4ARECONOK001",
+                correlation_id=recon.correlation_id,
+                causation_id=recon.command_id,
+                idempotency_id=recon.idempotency_id,
+                occurred_at=as_of,
+                outcome=CommandOutcome.NEEDS_REVIEW,
+                reason_code="MISSING_BROKER_ORDER",
+                reconciliation_id=config.reconciliation_id,
+                proposal_id=recon.proposal_id or proposal.proposal_id,
+                broker_order_id=None,
+            )
+        local = LocalOrderExpectation(
+            client_order_id=config.client_order_id,
+            proposal_id=proposal.proposal_id,
+            side=proposal.side,
+            expected_quantity=proposal.quantity,
+            expected_limit_price=proposal.limit_price,
+            instrument=_instrument_identity(proposal, as_of=as_of),
+            local_lifecycle=state.lifecycle,
+            broker_order_id=recon.broker_order_id,
+        )
+        report = OrderReconciler().reconcile(
+            local,
+            broker_orders=broker_orders,
+            broker_fills=broker_fills,
+            observed_at=as_of,
+            reconciliation_id=config.reconciliation_id,
+        )
+        state.last_recon_outcome = report.outcome.value
+        state.last_recon_reason = report.reason_code
+        outcome = (
+            CommandOutcome.NEEDS_REVIEW
+            if report.requires_manual_review
+            else CommandOutcome.SUCCEEDED
+        )
         return ReconciledEvent(
             event_id="evt_01HZYD4ARECONOK001",
             correlation_id=recon.correlation_id,
             causation_id=recon.command_id,
             idempotency_id=recon.idempotency_id,
             occurred_at=as_of,
-            outcome=CommandOutcome.SUCCEEDED,
+            outcome=outcome,
+            reason_code=report.reason_code,
             reconciliation_id=config.reconciliation_id,
             proposal_id=recon.proposal_id or proposal.proposal_id,
-            broker_order_id=recon.broker_order_id,
+            broker_order_id=recon.broker_order_id or report.broker_order_id,
         )
 
     dispatcher.register(CommandType.EXECUTE_ORDER, _handle_execute)
@@ -751,6 +824,8 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             name="execute_order",
             as_of=as_of,
             payload={"outcome": "SUBMIT_UNKNOWN"},
+            event_type=AuditEventType.BROKER_ORDER_STATUS_CHANGED,
+            subject_id=proposal.proposal_id,
         )
         # Must reconcile before any new ExecuteOrder.
         _transition(
@@ -768,11 +843,39 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             issued_at=as_of,
             proposal_id=proposal.proposal_id,
             client_order_id=config.client_order_id,
+            broker_order_id=exec_event.broker_order_id,
         )
-        dispatcher.dispatch(recon_cmd)
-        _record(state, name="reconcile_after_unknown", as_of=as_of)
+        recon_event = dispatcher.dispatch(recon_cmd)
+        assert isinstance(recon_event, ReconciledEvent)
+        if recon_event.outcome is CommandOutcome.NEEDS_REVIEW:
+            _transition(
+                state,
+                target=OrderLifecycleState.MANUAL_REVIEW,
+                subject_id=proposal.proposal_id,
+                correlation_id=config.correlation_id,
+                as_of=as_of,
+            )
+        elif recon_event.outcome is CommandOutcome.SUCCEEDED:
+            _transition(
+                state,
+                target=OrderLifecycleState.SUBMITTED,
+                subject_id=proposal.proposal_id,
+                correlation_id=config.correlation_id,
+                as_of=as_of,
+            )
+        _record(
+            state,
+            name="reconcile_after_unknown",
+            as_of=as_of,
+            payload={
+                "outcome": state.last_recon_outcome,
+                "reason_code": state.last_recon_reason,
+            },
+            event_type=AuditEventType.OPERATOR_ACTION,
+            subject_id=proposal.proposal_id,
+        )
 
-        # Blind retry with a *new* idempotency id must fail.
+        # Blind retry with a *new* write attempt must fail closed.
         blind_error: str | None = None
         try:
             ensure_not_blind_broker_retry(
@@ -796,6 +899,7 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             challenge_id=challenge.challenge_id,
             approval_event_id=approval.event_id,
             client_order_id=config.client_order_id,
+            broker_order_id=exec_event.broker_order_id,
             error=blind_error,
         )
 
@@ -811,6 +915,22 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             error=f"submit failed: {exec_event.outcome.value}",
         )
 
+    if not uses_local_broker:
+        return _result(
+            state,
+            terminal=PaperFlowTerminal.FAILED,
+            correlation_id=config.correlation_id,
+            proposal=proposal,
+            challenge_id=challenge.challenge_id,
+            approval_event_id=approval.event_id,
+            client_order_id=config.client_order_id,
+            broker_order_id=exec_event.broker_order_id,
+            error=(
+                "fill injection requires the local PaperBroker write path; "
+                "custom write_port submits cannot be filled from a separate broker"
+            ),
+        )
+
     broker_order_id = exec_event.broker_order_id
     _transition(
         state,
@@ -824,6 +944,8 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         name="execute_order",
         as_of=as_of,
         payload={"broker_order_id": broker_order_id, "outcome": "SUBMITTED"},
+        event_type=AuditEventType.BROKER_ORDER_CREATED,
+        subject_id=proposal.proposal_id,
     )
 
     # 10. Inject market event → fill(s).

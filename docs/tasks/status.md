@@ -292,6 +292,7 @@ Coordination: implement **D4a → D4b** serially (two PRs). D4 is
 - **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-d4a
 - **Integration branch:** `task/batch-d4a-paper-orchestration`
+- **Handoff PR:** [#70](https://github.com/likefudan/ainvest/pull/70)
 - **Base commit:** `da248c2f67ebed8da9c31ed87b3ded062d085031` (post-D3c main)
 - **Dependencies:** `P03-T0`–`T15`, `P02-T10` (satisfied on main); D1–D3 merged
 - **Merge target:** `main` (squash); **first** of D4a→D4b
@@ -312,7 +313,7 @@ Coordination: implement **D4a → D4b** serially (two PRs). D4 is
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T16` | Orchestrate a Full Paper Flow from a Fixed ResearchPacket | `in_review` | cursor-subagent-d4a | `task/batch-d4a-paper-orchestration` | `da248c2f67ebed8da9c31ed87b3ded062d085031` | `P03-T0`–`T15`, `P02-T10` | |
+| `P03-T16` | Orchestrate a Full Paper Flow from a Fixed ResearchPacket | `in_review` | cursor-subagent-d4a | `task/batch-d4a-paper-orchestration` | `da248c2f67ebed8da9c31ed87b3ded062d085031` | `P03-T0`–`T15`, `P02-T10` | [#70](https://github.com/likefudan/ainvest/pull/70) |
 
 ### Batch D — Part 4b (D4b)
 
