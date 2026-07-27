@@ -4,8 +4,8 @@ Execution is the only package allowed to receive broker write-tool access.
 Upstream research and strategy packages must not import this package.
 
 P03-T13 exposes the domain broker port and error taxonomy. P02-T9 exposes the
-order/cancel state machines. Paper fill simulation (P03-T14) and Robinhood MCP
-clients land in later tasks.
+order/cancel state machines. P03-T14 exposes the deterministic Paper Broker
+and fill simulator.
 """
 
 from ainvest.execution.broker import (
@@ -28,6 +28,15 @@ from ainvest.execution.broker import (
     assert_read_port_has_no_write_methods,
     cancel_is_confirmed_rejection,
     cancel_is_unknown_outcome,
+)
+from ainvest.execution.paper import (
+    PaperBroker,
+    PaperClock,
+    PaperCostModel,
+    PaperMarketEvent,
+    PaperRejectReason,
+    as_read_port,
+    as_write_port,
 )
 from ainvest.execution.state_machine import (
     CANCEL_EDGES,
@@ -76,10 +85,17 @@ __all__ = [
     "IllegalTransitionError",
     "InMemoryStatePersistence",
     "OrderLifecycleState",
+    "PaperBroker",
+    "PaperClock",
+    "PaperCostModel",
+    "PaperMarketEvent",
+    "PaperRejectReason",
     "PersistenceError",
     "StaleStateError",
     "StatePersistencePort",
     "TransitionResult",
+    "as_read_port",
+    "as_write_port",
     "assert_no_replace_operation",
     "assert_read_port_has_no_write_methods",
     "cancel_is_confirmed_rejection",
