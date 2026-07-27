@@ -88,46 +88,72 @@ plan batch complete only when every card in that section has merged.
 | Batch C — Part 3b (C3b) | Batch C | `P03-T14` | after C1 and Batch D `P02-T9` |
 | Batch C — Part 4a (C4a) | Batch C | `P03-T8`, `P03-T10`, `P03-T11` | after C1 (`P02-T8`) |
 | Batch C — Part 4b (C4b) | Batch C | `P03-T9` | after C4a and Batch D `P03-T6` |
-| Batch D — Part 2a (D2a) | Batch D | `P03-T6` | in review |
-| Batch D — Part 3a (D3a) | Batch D | `P02-T9` | after D2a |
+| Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
+| Batch D — Part 3a (D3a) | Batch D | `P02-T9` | in_review |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
 Parallel Batch C. **C1 is merged** (`6732046`). **C2 is merged** (`c1fa310`).
-**C3a is merged** (`1404978`). C4a may start. Do not claim C3b/C4b until their
-prerequisites land. **Batch D — Part 2a (D2a)** is `in_review` for `P03-T6`
-(position sizer). Do not claim D3a (`P02-T9`) until D2a is merged.
-Coordinators own `docs/tasks/status.md` updates for handoff; implementation
-agents must not rewrite another track's allowed paths.
+**C3a is merged** (`1404978`). **D2a is merged** (`32660fb`). **Batch D —
+Part 3a (D3a)** is `in_review` for `P02-T9` (order state machine). C4a may
+start. Do not claim C3b until D3a merges; C4b still needs C4a. Coordinators own
+`docs/tasks/status.md` updates for handoff; implementation agents must not
+rewrite another track's allowed paths.
 
 ### Batch D — Part 2a (D2a)
 
 - **Batch:** Batch D — Part 2a (D2a) — Single-strategy Position Sizer (`P03-T6`)
 - **Plan batch:** Batch D (early unlock for C4b)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d2a
-- **Integration branch:** `task/batch-d2a-position-sizer`
+- **Integration branch:** `task/batch-d2a-position-sizer` (deleted after merge)
 - **Base commit:** `00b772a2c4c4af84c3e317e8bd0a2f237515364e`
+- **Merge commit:** `33292d775ec9b2e3d6638c88dce851a6f64dde4a`
+- **Follow-up:** [#41](https://github.com/likefudan/ainvest/pull/41) (`32660fb`)
+  — SELL when BP=0; open-order reserves
 - **Dependencies:** `P02-T2`, `P02-T3`, `P01-T4` (satisfied on main)
 - **Merge target:** `main` (squash)
-- **Allowed paths:** `src/ainvest/portfolio/sizer.py`,
-  `src/ainvest/portfolio/__init__.py`, `tests/unit/portfolio/**`,
-  `docs/tasks/status.md`
-- **Verification:** `./scripts/dev verify` and `./scripts/dev audit` passed
-  locally
+- **Handoff PR:** [#40](https://github.com/likefudan/ainvest/pull/40)
 - **Handoff notes:** `size_position` converts target-weight `TradeSignal` +
   quote + portfolio + `SizingConfig` into a whole-share `CandidateOrder` or a
-  stable no-trade reason. Decimal-only arithmetic; capital-safe tick rounding;
-  cash reserve / min-max notional / buying-power clamps; no risk approval and
-  no broker writes. Property tests cover increments and buy limits. Unlocks
-  C4b after merge (still needs C4a).
+  stable no-trade reason. Unlocks C4b after C4a.
 
 | Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T6` | Implement the Single-Strategy Position Sizer | `in_review` | cursor-subagent-d2a | `task/batch-d2a-position-sizer` | `00b772a2c4c4af84c3e317e8bd0a2f237515364e` | `P02-T2`, `P02-T3`, `P01-T4` | |
+| `P03-T6` | Implement the Single-Strategy Position Sizer | `merged` | cursor-subagent-d2a | `task/batch-d2a-position-sizer` | `00b772a2c4c4af84c3e317e8bd0a2f237515364e` | `P02-T2`, `P02-T3`, `P01-T4` | [#40](https://github.com/likefudan/ainvest/pull/40), [#41](https://github.com/likefudan/ainvest/pull/41) |
+
+### Batch D — Part 3a (D3a)
+
+- **Batch:** Batch D — Part 3a (D3a) — Order state machine and illegal-transition
+  guards (`P02-T9`)
+- **Plan batch:** Batch D (early unlock for C3b)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Owner/agent:** cursor-agent
+- **Integration branch:** `task/batch-d3a-order-state-machine`
+- **Base commit:** `32660fbb06b71c20fef54489182b4dc1ef7fa35e`
+- **Dependencies:** `P02-T3`, `P02-T7`, `P02-T8` (satisfied on main)
+- **Merge target:** `main` (squash)
+- **Allowed paths:** `src/ainvest/execution/state_machine.py`,
+  `src/ainvest/execution/__init__.py`, `tests/unit/execution/**`,
+  `docs/tasks/status.md` (D3a handoff only)
+- **Forbidden:** paper broker, Robinhood client, workflow (`P02-T10`), risk
+  rules, live enablement
+- **Safety posture:** Pure transition graph + CAS + persistence port; no broker
+  writes
+- **Verification contract:** `./scripts/dev verify` and `./scripts/dev audit`
+  (passed locally)
+- **Handoff notes:** Order + cancel command graphs match design.md §8;
+  expected-current CAS; duplicate event_id idempotent; SUBMIT_UNKNOWN /
+  CANCEL_UNKNOWN recovery-only; InMemory + AuditBacked persistence ports.
+- **Next after merge:** C3b (`P03-T14`) may start
+
+| Task | Title | Status | Owner/agent | Branch | Base commit | Dependencies | Handoff PR |
+|---|---|---|---|---|---|---|---|
+| `P02-T9` | Implement the Order State Machine and Illegal-Transition Guards | `in_review` | cursor-agent | `task/batch-d3a-order-state-machine` | `32660fbb06b71c20fef54489182b4dc1ef7fa35e` | `P02-T3`, `P02-T7`, `P02-T8` | |
 
 ### Batch C — Part 1 (C1)
 
