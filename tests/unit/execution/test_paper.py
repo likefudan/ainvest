@@ -245,6 +245,7 @@ def test_cancel_idempotency_broker_order_id_conflict_raises() -> None:
         make_cancel_command(
             proposal=first_proposal,
             broker_order_id=first.broker_order.broker_order_id,
+            cancel_id="cncl_01HZYSHARED0001",
             idempotency_key="cancel-key-shared",
         )
     )
@@ -253,7 +254,7 @@ def test_cancel_idempotency_broker_order_id_conflict_raises() -> None:
             make_cancel_command(
                 proposal=second_proposal,
                 broker_order_id=second.broker_order.broker_order_id,
-                cancel_id="cncl_01HZYEXAMPLE0002",
+                cancel_id="cncl_01HZYSHARED0001",
                 idempotency_key="cancel-key-shared",
             )
         )
