@@ -119,3 +119,31 @@ def test_baseline_after_open_orders_adjusts_cash_and_qty() -> None:
     assert cash == Decimal("2750.00")  # 3000 - 2*100 - 1*50; sells do not credit cash
     assert qty_by_id["rh_inst_aapl_xnas"] == Decimal("9")  # 10 + 2 - 3
     assert qty_by_id["rh_inst_msft_xnas"] == Decimal("1")
+
+
+@pytest.mark.unit
+def test_open_buy_extra_market_value_marks_unfilled_buys() -> None:
+    from ainvest.schemas.commitments import open_buy_extra_market_value
+
+    portfolio = with_open_orders(
+        portfolio_snapshot_example(),  # 10 AAPL filled
+        make_open_order(
+            order_id="ord_buy_aapl_a",
+            side="BUY",
+            quantity="3",
+            limit_price="214.50",
+            symbol="AAPL",
+        ),
+        make_open_order(
+            order_id="ord_buy_aapl_b",
+            side="BUY",
+            quantity="2",
+            limit_price="200.00",
+            symbol="AAPL",
+        ),
+    )
+    # Price first 4 of the 5 open-buy shares in FIFO order order.
+    assert open_buy_extra_market_value(portfolio, "rh_inst_aapl_xnas", Decimal("4")) == Decimal(
+        "843.50"
+    )  # 3*214.50 + 1*200
+    assert open_buy_extra_market_value(portfolio, "rh_inst_aapl_xnas", Decimal("0")) == Decimal("0")
