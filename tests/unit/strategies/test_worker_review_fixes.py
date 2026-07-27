@@ -188,7 +188,8 @@ def test_classify_exit_crash_signals() -> None:
 
 @pytest.mark.unit
 def test_reap_after_timeout_never_raises() -> None:
-    calls = {"n": 0}
+    """``communicate`` and ``wait`` TimeoutExpired must not escape the reap helper."""
+    calls = {"communicate": 0, "wait": 0}
 
     class _StickyProc:
         returncode: int | None = None
@@ -198,27 +199,26 @@ def test_reap_after_timeout_never_raises() -> None:
             self, input: str | None = None, timeout: float | None = None
         ) -> tuple[str, str]:
             del input
-            calls["n"] += 1
-            if calls["n"] <= 2:
-                raise subprocess.TimeoutExpired(cmd="worker", timeout=timeout or 1)
-            self.returncode = -signal.SIGKILL
-            return "", ""
+            calls["communicate"] += 1
+            raise subprocess.TimeoutExpired(cmd="worker", timeout=timeout or 1)
 
         def poll(self) -> int | None:
-            return self.returncode
+            # Stay alive so the wait fallback is exercised.
+            return None
 
         def wait(self, timeout: float | None = None) -> int:
-            del timeout
-            self.returncode = -signal.SIGKILL
-            return -signal.SIGKILL
+            calls["wait"] += 1
+            raise subprocess.TimeoutExpired(cmd="worker", timeout=timeout or 1)
 
         def kill(self) -> None:
-            self.returncode = -signal.SIGKILL
+            return None
 
     proc = _StickyProc()
     stdout, _stderr, code = _reap_after_timeout(proc)  # type: ignore[arg-type]
     assert stdout == ""
-    assert code == -signal.SIGKILL
+    assert code is None  # never reaped; still fail-closed without raising
+    assert calls["communicate"] >= 2
+    assert calls["wait"] == 1
 
 
 @pytest.mark.unit

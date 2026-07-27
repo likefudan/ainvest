@@ -247,9 +247,9 @@ def _reap_after_timeout(
 ) -> tuple[str, str, int | None]:
     """Reap a timed-out worker without raising or orphaning the process group.
 
-    Nested ``TimeoutExpired`` from ``communicate`` is caught, the process group
-    is killed again, and we fall back to a non-blocking poll so the caller always
-    receives a fail-closed ``TIMEOUT``/``CRASH`` record.
+    Nested ``TimeoutExpired`` from ``communicate`` or ``wait`` is caught, the
+    process group is killed again, and we always return so the caller can emit a
+    fail-closed ``TIMEOUT``/``CRASH`` record — this function never raises.
     """
     stdout = ""
     stderr = ""
@@ -261,7 +261,8 @@ def _reap_after_timeout(
             stdout, stderr = proc.communicate(timeout=_REAP_TIMEOUT_SECONDS)
         if proc.poll() is None:
             _kill_process_group(proc)
-            with contextlib.suppress(OSError):
+            # ``wait`` raises TimeoutExpired (a SubprocessError), not OSError.
+            with contextlib.suppress(subprocess.TimeoutExpired, OSError):
                 proc.wait(timeout=_REAP_TIMEOUT_SECONDS)
     return stdout, stderr, proc.returncode
 
