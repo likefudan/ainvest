@@ -2,34 +2,30 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 
 import pytest
-from helpers import ORDER_HASH, TOKEN_HASH, later, sample_proposal_kwargs, utc
+from helpers import (
+    ORDER_HASH,
+    TOKEN_HASH,
+    later,
+    sample_broker_order_kwargs,
+    sample_fill_kwargs,
+    sample_proposal_kwargs,
+    utc,
+)
 from sqlalchemy.orm import Session, sessionmaker
 
-from ainvest.db.errors import ConcurrentModificationError
+from ainvest.db.errors import ConcurrentModificationError, PersistenceError
 from ainvest.db.models import (
     ApprovalChallengeRow,
     ApprovalEventRow,
+    BrokerFillRow,
     BrokerOrderRow,
     OrderProposalRow,
 )
-from ainvest.db.session import create_all_tables, create_db_engine, create_session_factory
 from ainvest.db.uow import UnitOfWork
-
-
-@pytest.fixture
-def session_factory() -> Iterator[sessionmaker[Session]]:
-    engine = create_db_engine("sqlite+pysqlite:///:memory:")
-    create_all_tables(engine)
-    factory = create_session_factory(engine)
-    try:
-        yield factory
-    finally:
-        engine.dispose()
 
 
 @pytest.mark.unit
@@ -86,6 +82,49 @@ def test_proposal_idempotent_create_returns_existing(
         )
         assert created_again is False
         assert second.proposal_id == first.proposal_id
+
+
+@pytest.mark.unit
+def test_proposal_update_status_if_version_succeeds(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None
+        updated = uow.proposals.update_status_if_version(
+            "ordp_01HZYTEST0000001",
+            expected_version=1,
+            new_status="APPROVED",
+            extra_values={"payload_json": {"approved": True}},
+        )
+        assert updated.status == "APPROVED"
+        assert updated.version == 2
+        assert updated.payload_json == {"approved": True}
+
+
+@pytest.mark.unit
+def test_proposal_update_status_if_version_conflict_leaves_row_unchanged(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None
+        with pytest.raises(ConcurrentModificationError, match="version 99 lost race"):
+            uow.proposals.update_status_if_version(
+                "ordp_01HZYTEST0000001",
+                expected_version=99,
+                new_status="APPROVED",
+            )
+        row = uow.proposals.get_by_proposal_id("ordp_01HZYTEST0000001")
+        assert row is not None
+        assert row.status == "PENDING_APPROVAL"
+        assert row.version == 1
 
 
 @pytest.mark.unit
@@ -162,25 +201,11 @@ def test_concurrent_challenge_consume_succeeds_once(
 def test_broker_order_client_order_id_idempotent(
     session_factory: sessionmaker[Session],
 ) -> None:
-    created = utc()
     with UnitOfWork(session_factory) as uow:
         assert uow.proposals is not None and uow.broker_orders is not None
         uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
         first, created_flag = uow.broker_orders.create_idempotent(
-            BrokerOrderRow(
-                broker_order_id="brk_order_001",
-                client_order_id="client_ord_001",
-                proposal_id="ordp_01HZYTEST0000001",
-                order_hash=ORDER_HASH,
-                account_scope="paper",
-                side="BUY",
-                status="ACCEPTED",
-                submitted_at=created,
-                broker_updated_at=created,
-                idempotency_key="idem_broker_001",
-                payload_json={},
-                version=1,
-            ),
+            BrokerOrderRow(**sample_broker_order_kwargs()),
             find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
                 "client_ord_001"
             ),
@@ -188,18 +213,10 @@ def test_broker_order_client_order_id_idempotent(
         assert created_flag is True
         second, created_again = uow.broker_orders.create_idempotent(
             BrokerOrderRow(
-                broker_order_id="brk_order_002",
-                client_order_id="client_ord_001",
-                proposal_id="ordp_01HZYTEST0000001",
-                order_hash=ORDER_HASH,
-                account_scope="paper",
-                side="BUY",
-                status="ACCEPTED",
-                submitted_at=created,
-                broker_updated_at=created,
-                idempotency_key="idem_broker_002",
-                payload_json={},
-                version=1,
+                **sample_broker_order_kwargs(
+                    broker_order_id="brk_order_002",
+                    idempotency_key="idem_broker_002",
+                )
             ),
             find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
                 "client_ord_001"
@@ -213,24 +230,17 @@ def test_broker_order_client_order_id_idempotent(
 def test_broker_order_allows_null_broker_order_id(
     session_factory: sessionmaker[Session],
 ) -> None:
-    created = utc()
     with UnitOfWork(session_factory) as uow:
         assert uow.proposals is not None and uow.broker_orders is not None
         uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
         row, created_flag = uow.broker_orders.create_idempotent(
             BrokerOrderRow(
-                broker_order_id=None,
-                client_order_id="client_ord_unknown",
-                proposal_id="ordp_01HZYTEST0000001",
-                order_hash=ORDER_HASH,
-                account_scope="paper",
-                side="BUY",
-                status="SUBMIT_UNKNOWN",
-                submitted_at=created,
-                broker_updated_at=created,
-                idempotency_key="idem_broker_unknown",
-                payload_json={},
-                version=1,
+                **sample_broker_order_kwargs(
+                    broker_order_id=None,
+                    client_order_id="client_ord_unknown",
+                    status="SUBMIT_UNKNOWN",
+                    idempotency_key="idem_broker_unknown",
+                )
             ),
             find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
                 "client_ord_unknown"
@@ -239,3 +249,127 @@ def test_broker_order_allows_null_broker_order_id(
         assert created_flag is True
         assert row.broker_order_id is None
         assert row.status == "SUBMIT_UNKNOWN"
+
+
+@pytest.mark.unit
+def test_broker_order_update_status_if_version_succeeds(
+    session_factory: sessionmaker[Session],
+) -> None:
+    updated_at = later(utc(), 30)
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None and uow.broker_orders is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+        uow.broker_orders.create_idempotent(
+            BrokerOrderRow(**sample_broker_order_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
+                "client_ord_001"
+            ),
+        )
+
+    with UnitOfWork(session_factory) as uow:
+        assert uow.broker_orders is not None
+        updated = uow.broker_orders.update_status_if_version(
+            "client_ord_001",
+            expected_version=1,
+            new_status="FILLED",
+            broker_updated_at=updated_at,
+        )
+        assert updated.status == "FILLED"
+        assert updated.version == 2
+        assert updated.broker_updated_at == updated_at
+
+
+@pytest.mark.unit
+def test_broker_order_update_status_if_version_conflict_leaves_row_unchanged(
+    session_factory: sessionmaker[Session],
+) -> None:
+    created = utc()
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None and uow.broker_orders is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+        uow.broker_orders.create_idempotent(
+            BrokerOrderRow(**sample_broker_order_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
+                "client_ord_001"
+            ),
+        )
+
+    with UnitOfWork(session_factory) as uow:
+        assert uow.broker_orders is not None
+        with pytest.raises(ConcurrentModificationError, match="version 99 lost race"):
+            uow.broker_orders.update_status_if_version(
+                "client_ord_001",
+                expected_version=99,
+                new_status="FILLED",
+                broker_updated_at=later(created, 30),
+            )
+        row = uow.broker_orders.get_by_client_order_id("client_ord_001")
+        assert row is not None
+        assert row.status == "ACCEPTED"
+        assert row.version == 1
+        assert row.broker_updated_at == created
+
+
+@pytest.mark.unit
+def test_broker_fill_add_idempotent_insert_and_replay(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None and uow.broker_orders is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+        uow.broker_orders.create_idempotent(
+            BrokerOrderRow(**sample_broker_order_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
+                "client_ord_001"
+            ),
+        )
+        first, created = uow.broker_orders.add_fill_idempotent(
+            BrokerFillRow(**sample_fill_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_fill("fill_01HZYTEST0000001"),  # type: ignore[union-attr]
+        )
+        assert created is True
+        assert first.fill_id == "fill_01HZYTEST0000001"
+        assert first.quantity == Decimal("1")
+
+        second, created_again = uow.broker_orders.add_fill_idempotent(
+            BrokerFillRow(
+                **sample_fill_kwargs(
+                    quantity=Decimal("9"),
+                    price=Decimal("1.00"),
+                )
+            ),
+            find_existing=lambda: uow.broker_orders.get_fill("fill_01HZYTEST0000001"),  # type: ignore[union-attr]
+        )
+        assert created_again is False
+        assert second.fill_id == first.fill_id
+        assert second.quantity == Decimal("1")
+        assert second.price == Decimal("214.50")
+
+
+@pytest.mark.unit
+def test_broker_fill_add_idempotent_conflict_without_existing_raises(
+    session_factory: sessionmaker[Session],
+) -> None:
+    with UnitOfWork(session_factory) as uow:
+        assert uow.proposals is not None and uow.broker_orders is not None
+        uow.proposals.add(OrderProposalRow(**sample_proposal_kwargs()))
+        uow.broker_orders.create_idempotent(
+            BrokerOrderRow(**sample_broker_order_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_by_client_order_id(  # type: ignore[union-attr]
+                "client_ord_001"
+            ),
+        )
+        first, created = uow.broker_orders.add_fill_idempotent(
+            BrokerFillRow(**sample_fill_kwargs()),
+            find_existing=lambda: uow.broker_orders.get_fill("fill_01HZYTEST0000001"),  # type: ignore[union-attr]
+        )
+        assert created is True
+
+        with pytest.raises(PersistenceError, match="broker fill conflict without existing row"):
+            uow.broker_orders.add_fill_idempotent(
+                BrokerFillRow(**sample_fill_kwargs(quantity=Decimal("2"))),
+                find_existing=lambda: None,
+            )
+        # Original fill remains; failed insert rolled back via savepoint.
+        assert uow.broker_orders.get_fill(first.fill_id) is not None
+        assert uow.broker_orders.get_fill(first.fill_id).quantity == Decimal("1")  # type: ignore[union-attr]

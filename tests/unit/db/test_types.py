@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-from collections.abc import Iterator
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -11,19 +10,7 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session, sessionmaker
 
 from ainvest.db.models import PortfolioSnapshotRow
-from ainvest.db.session import create_all_tables, create_db_engine, create_session_factory
 from ainvest.db.types import DecimalString, UtcDateTime
-
-
-@pytest.fixture
-def session_factory() -> Iterator[sessionmaker[Session]]:
-    engine = create_db_engine("sqlite+pysqlite:///:memory:")
-    create_all_tables(engine)
-    factory = create_session_factory(engine)
-    try:
-        yield factory
-    finally:
-        engine.dispose()
 
 
 @pytest.mark.unit
