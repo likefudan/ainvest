@@ -327,7 +327,7 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 - **Integration branch:** `task/batch-d4b-gate-1-acceptance` (deleted after merge)
 - **Handoff PR:** [#71](https://github.com/likefudan/ainvest/pull/71)
 - **Base commit:** `36f51ebb795e04f64f91a4983bc65cdb953d86d0` (D4a merge)
-- **Merge commit:** (squash merge of #71 on `main`)
+- **Merge commit:** `41976373b64c72c231fd76ac7be809659ac1902a`
 - **Dependencies:** `P03-T16` + Phase 01–03 cards (all prior)
 - **Merge target:** `main` (squash); **second** of D4a→D4b
 - **Allowed paths:**
