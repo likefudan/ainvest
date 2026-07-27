@@ -278,3 +278,27 @@ def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
         with_port.model_copy(update={"portfolio": PortfolioSnapshot.model_validate(reordered)})
     )
     assert digest_d == digest_e
+
+    swapped_sectors = ExposureInputs(
+        sectors=(
+            SectorAssignment(instrument_id="rh_inst_msft_xnas", sector="TECH"),
+            SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),
+        ),
+        daily_turnover_to_date=Decimal("100"),
+        daily_realized_pnl=Decimal("0"),
+        daily_unrealized_pnl=Decimal("0"),
+    )
+    ordered_sectors = ExposureInputs(
+        sectors=(
+            SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),
+            SectorAssignment(instrument_id="rh_inst_msft_xnas", sector="TECH"),
+        ),
+        daily_turnover_to_date=Decimal("100"),
+        daily_realized_pnl=Decimal("0"),
+        daily_unrealized_pnl=Decimal("0"),
+    )
+    assert compute_input_digest(
+        with_port.model_copy(update={"exposure_inputs": swapped_sectors})
+    ) == compute_input_digest(
+        with_port.model_copy(update={"exposure_inputs": ordered_sectors})
+    )

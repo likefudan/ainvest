@@ -120,7 +120,20 @@ def compute_input_digest(context: RiskContext) -> str:
                     ],
                 }
             ),
-            "exposure_inputs": (None if exposure is None else exposure.model_dump(mode="json")),
+            "exposure_inputs": (
+                None
+                if exposure is None
+                else {
+                    **exposure.model_dump(mode="json"),
+                    "sectors": [
+                        s.model_dump(mode="json")
+                        for s in sorted(
+                            exposure.sectors,
+                            key=lambda s: (s.instrument_id, s.sector),
+                        )
+                    ],
+                }
+            ),
         }
     )
 
