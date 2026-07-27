@@ -1,0 +1,161 @@
+"""Risk engine domain models (P03-T8).
+
+Immutable evaluation inputs and per-rule results. Exposure-limit config lives
+in C4b; this module owns the shared context and market-quality / eligibility
+configuration required by C4a.
+"""
+
+from __future__ import annotations
+
+from decimal import Decimal
+from enum import StrEnum
+from typing import Annotated
+
+from pydantic import Field, StringConstraints, model_validator
+
+from ainvest.schemas.common import (
+    SCHEMA_VERSION_V1,
+    AssetType,
+    CurrencyCode,
+    DomainModel,
+    ExchangeMic,
+    MachineCode,
+    NonNegativeDecimal,
+    PositiveDecimal,
+    SchemaVersion,
+    StableId,
+    Symbol,
+    UtcDateTime,
+)
+from ainvest.schemas.market import MarketQuote
+from ainvest.schemas.orders import CandidateOrder
+from ainvest.schemas.portfolio import PortfolioSnapshot
+from ainvest.schemas.risk import RiskOutcome, RiskSeverity
+
+
+class EvaluationPhase(StrEnum):
+    """When risk is evaluated; thresholds may differ by phase (P03-T11)."""
+
+    PROPOSAL = "PROPOSAL"
+    PRETRADE = "PRETRADE"
+
+
+class InstrumentMetadata(DomainModel):
+    """Broker-validated instrument facts required by eligibility rules."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    instrument_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    symbol: Symbol
+    exchange: ExchangeMic
+    currency: CurrencyCode
+    asset_type: AssetType
+    tradable: bool
+    price_increment: PositiveDecimal
+    quantity_increment: PositiveDecimal
+    is_leveraged_or_inverse: bool = False
+    allows_short: bool = False
+    allows_margin: bool = False
+    is_option: bool = False
+    is_crypto: bool = False
+
+
+class AllowlistEntry(DomainModel):
+    """One allowlisted ordinary US equity/ETF identity."""
+
+    instrument_id: Annotated[str, StringConstraints(min_length=3, max_length=128)]
+    symbol: Symbol
+    exchange: ExchangeMic
+    currency: CurrencyCode = "USD"
+    asset_type: AssetType
+
+
+class EligibilityLimits(DomainModel):
+    """Explicit eligibility policy (no implicit allow-all)."""
+
+    allowlist: tuple[AllowlistEntry, ...] = Field(min_length=1)
+
+
+class PhaseMarketQualityLimits(DomainModel):
+    """Market-quality thresholds for one evaluation phase."""
+
+    max_quote_age_seconds: Annotated[int, Field(ge=1, le=86_400)]
+    max_spread_bps: NonNegativeDecimal
+    max_limit_deviation_bps: NonNegativeDecimal
+    max_short_term_volatility_bps: NonNegativeDecimal
+
+
+class MarketQualityLimits(DomainModel):
+    """Separate proposal vs pre-trade market-quality thresholds (P03-T11)."""
+
+    proposal: PhaseMarketQualityLimits
+    pretrade: PhaseMarketQualityLimits
+    max_clock_skew_seconds: Annotated[int, Field(ge=0, le=3600)]
+
+
+class RiskRuleConfig(DomainModel):
+    """C4a rule configuration. Missing sections fail closed at construction."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    rule_set_version: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    eligibility: EligibilityLimits
+    market_quality: MarketQualityLimits
+
+
+class RuleResult(DomainModel):
+    """Single rule outcome (P03-T8 checklist)."""
+
+    rule_code: MachineCode
+    severity: RiskSeverity
+    decision: RiskOutcome
+    reason: Annotated[str, StringConstraints(min_length=1, max_length=512)]
+    evidence: Annotated[str, StringConstraints(min_length=1, max_length=1024)] | None = None
+
+    @model_validator(mode="after")
+    def _severity_matches_decision(self) -> RuleResult:
+        if self.severity is RiskSeverity.HARD and self.decision is not RiskOutcome.REJECTED:
+            raise ValueError("HARD severity requires REJECTED decision")
+        if self.severity is RiskSeverity.REVIEW and self.decision is RiskOutcome.APPROVED:
+            raise ValueError("REVIEW severity cannot APPROVE")
+        if self.decision is RiskOutcome.REJECTED and self.severity is not RiskSeverity.HARD:
+            raise ValueError("REJECTED decision requires HARD severity")
+        if self.decision is RiskOutcome.NEEDS_REVIEW and self.severity is not RiskSeverity.REVIEW:
+            raise ValueError("NEEDS_REVIEW decision requires REVIEW severity")
+        if self.decision is RiskOutcome.APPROVED and self.severity not in {
+            RiskSeverity.INFO,
+        }:
+            raise ValueError("APPROVED decision requires INFO severity")
+        return self
+
+
+class RiskContext(DomainModel):
+    """Immutable inputs for one risk evaluation."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    risk_decision_id: StableId
+    phase: EvaluationPhase
+    as_of: UtcDateTime
+    candidate: CandidateOrder
+    quote: MarketQuote
+    instrument: InstrumentMetadata
+    config: RiskRuleConfig
+    portfolio: PortfolioSnapshot | None = None
+    short_term_volatility_bps: NonNegativeDecimal | None = None
+
+
+ZERO = Decimal("0")
+BPS_DENOM = Decimal("10000")
+
+
+__all__ = [
+    "BPS_DENOM",
+    "ZERO",
+    "AllowlistEntry",
+    "EligibilityLimits",
+    "EvaluationPhase",
+    "InstrumentMetadata",
+    "MarketQualityLimits",
+    "PhaseMarketQualityLimits",
+    "RiskContext",
+    "RiskRuleConfig",
+    "RuleResult",
+]
