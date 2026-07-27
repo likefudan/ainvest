@@ -41,6 +41,15 @@ from ainvest.strategies.registry import (
     StrategyRegistry,
     load_strategy_registry,
 )
+from ainvest.strategies.worker import (
+    WorkerFailureCode,
+    WorkerLimits,
+    WorkerRunRecord,
+    WorkerRunSpec,
+    WorkerStatus,
+    evaluate_in_worker,
+    evaluate_many_in_workers,
+)
 
 __all__ = [
     "ENTRY_POINT_GROUP",
@@ -62,9 +71,16 @@ __all__ = [
     "StrategyRegistry",
     "StrategyResult",
     "UniverseConfig",
+    "WorkerFailureCode",
+    "WorkerLimits",
+    "WorkerRunRecord",
+    "WorkerRunSpec",
+    "WorkerStatus",
     "assert_strategy_api_compatible",
     "auditable_instance_dict",
     "bind_strategy_instances",
+    "evaluate_in_worker",
+    "evaluate_many_in_workers",
     "format_duration",
     "hookimpl",
     "hookspec",

@@ -114,3 +114,26 @@ Use compatible version ranges in `pyproject.toml`. APScheduler is deliberately c
 
 Never put credentials in dependency URLs, `.env` files committed to Git, tests, fixtures, logs, or
 lock-file configuration.
+
+## Strategy worker isolation
+
+Strategy plugins run in isolated child processes via
+`python -m ainvest.strategies.worker`. The host and child exchange **versioned JSON
+only** (`WorkerRequest` / `WorkerResponse`); ORM objects, sockets, and credentials
+must never cross that boundary.
+
+Each worker:
+
+- receives a scrubbed environment (broker / OpenAI / Telegram / DB / Passkey secrets removed)
+- enforces wall-clock timeout plus best-effort CPU and memory limits
+- blocks in-process socket construction by default
+- uses a dedicated working directory that is read-only when practical
+
+**Network isolation expectations:** the in-process socket block is fail-closed for
+ordinary strategy code, but it is not a kernel sandbox. Production and CI should
+also deny egress at the OS/container layer (`docker --network=none`, a network
+namespace, or a Kubernetes NetworkPolicy). On macOS local development, rely on the
+in-process block; do not treat it as a capability-safe sandbox.
+
+Use `evaluate_in_worker` / `evaluate_many_in_workers` from `ainvest.strategies`. A
+failure in one worker must not stop other strategy runs in the same batch.

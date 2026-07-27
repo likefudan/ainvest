@@ -91,7 +91,7 @@ plan batch complete only when every card in that section has merged.
 | Batch C complete | Batch C | all of the above | complete |
 | Batch D — Part 2a (D2a) | Batch D | `P03-T6` | complete (merged) |
 | Batch D — Part 3a (D3a) | Batch D | `P02-T9` | complete (merged) |
-| Batch D — Part 1a (D1a) | Batch D | `P03-T4` | in_progress |
+| Batch D — Part 1a (D1a) | Batch D | `P03-T4` | in_review |
 | Batch D — Part 1b (D1b) | Batch D | `P03-T5` | not_started (after D1a) |
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | in_progress (PR after D1) |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | not_started (after D2b) |
@@ -118,10 +118,10 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 1a (D1a) — Strategy worker isolation (`P03-T4`)
 - **Plan batch:** Batch D (D1)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_progress`
+- **Status:** `in_review`
 - **Owner/agent:** cursor-subagent-d1
 - **Integration branch:** `task/batch-d1a-strategy-worker`
-- **Base commit:** `d7522b60ddd7bd304e6e0609fad7afa599e5bdef`
+- **Base commit:** `b189f71a8feffe5255f7a653d398086f90934378` (includes claim #62)
 - **Dependencies:** `P03-T0`–`T2`, `P02-T8` (satisfied on main)
 - **Merge target:** `main` (squash); **first** in Batch D merge queue
 - **Allowed paths:** `src/ainvest/strategies/worker/**`,
@@ -133,13 +133,15 @@ rewrite another track's allowed paths.
 - **Forbidden:** `strategy_conformance/` (D1b), portfolio aggregation (D2),
   pretrade/kill_switch (D2c), workflow (D3), live broker, rewriting registry
   load semantics beyond worker invocation hooks
-- **Handoff notes:** Implement isolated strategy workers with versioned JSON I/O,
-  timeouts/resource limits, scrubbed env, fail-closed classification; one worker
-  failure must not stop others.
+- **Handoff notes:** Isolated strategy workers with versioned JSON I/O,
+  wall/CPU/memory limits, scrubbed env, socket block + documented container
+  network expectations; fail-closed classification; one worker failure does not
+  stop the batch. `./scripts/dev verify` passed (463 tests).
+- **PR:** https://github.com/likefudan/ainvest/pull/63
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `in_progress` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `d7522b60ddd7bd304e6e0609fad7afa599e5bdef` | `P03-T0`–`T2`, `P02-T8` | pending |
+| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `in_review` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T0`–`T2`, `P02-T8` | https://github.com/likefudan/ainvest/pull/63 |
 
 ### Batch D — Part 2b (D2b)
 
