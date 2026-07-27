@@ -27,7 +27,7 @@ from ainvest.schemas.common import (
 )
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.orders import CandidateOrder, OrderType, TimeInForce
-from ainvest.schemas.portfolio import PortfolioSnapshot, PositionSnapshot
+from ainvest.schemas.portfolio import AccountScope, PortfolioSnapshot, PositionSnapshot
 from ainvest.schemas.strategy import SignalIntent, TradeSignal
 
 ZERO = Decimal("0")
@@ -487,6 +487,10 @@ def _spendable_buying_power(
 ) -> Decimal | None:
     """Buying power remaining after cash reserve and open BUY notionals.
 
+    Paper snapshots already net open-buy reserves (including fees) into
+    ``buying_power``; those notionals are not subtracted again. Non-paper
+    snapshots treat ``buying_power`` as gross and reserve open BUY notionals.
+
     Returns ``None`` when an open BUY is missing a usable limit price.
     """
     buying_power = parse_decimal(portfolio.buying_power)
@@ -495,14 +499,16 @@ def _spendable_buying_power(
     after_reserve = cash - reserve
     if after_reserve < ZERO:
         after_reserve = ZERO
-    available = min(buying_power, after_reserve)
+    # Always validate open BUY limits fail-closed, even when we trust paper BP.
     open_buy_notional = _open_buy_reserved_notional(portfolio)
     if open_buy_notional is None:
         return None
-    remaining = available - open_buy_notional
-    if remaining < ZERO:
-        remaining = ZERO
-    return canonicalize_decimal(remaining)
+    available = min(buying_power, after_reserve)
+    if portfolio.account_scope is not AccountScope.PAPER:
+        available = available - open_buy_notional
+    if available < ZERO:
+        available = ZERO
+    return canonicalize_decimal(available)
 
 
 def _coeff_exp(value: Decimal) -> tuple[int, int]:

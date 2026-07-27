@@ -62,6 +62,8 @@ def compute_input_digest(context: RiskContext) -> str:
     candidate = context.candidate
     quote = context.quote
     instrument = context.instrument
+    portfolio = context.portfolio
+    exposure = context.exposure_inputs
     return _sha256_digest(
         {
             "phase": context.phase.value,
@@ -81,6 +83,56 @@ def compute_input_digest(context: RiskContext) -> str:
                 str(context.short_term_volatility_bps)
                 if context.short_term_volatility_bps is not None
                 else None
+            ),
+            "portfolio": (
+                None
+                if portfolio is None
+                else {
+                    "snapshot_id": portfolio.snapshot_id,
+                    "cash": str(portfolio.cash),
+                    "buying_power": str(portfolio.buying_power),
+                    "equity": str(portfolio.equity),
+                    "positions": [
+                        {
+                            "instrument_id": p.instrument.instrument_id,
+                            "quantity": str(p.quantity),
+                            "market_value": str(p.market_value),
+                        }
+                        for p in sorted(
+                            portfolio.positions,
+                            key=lambda p: p.instrument.instrument_id,
+                        )
+                    ],
+                    "open_orders": [
+                        {
+                            "order_id": o.order_id,
+                            "instrument_id": o.instrument.instrument_id,
+                            "side": o.side.value,
+                            "quantity": str(o.quantity),
+                            "limit_price": (
+                                str(o.limit_price) if o.limit_price is not None else None
+                            ),
+                        }
+                        for o in sorted(
+                            portfolio.open_orders,
+                            key=lambda o: (o.order_id, o.instrument.instrument_id),
+                        )
+                    ],
+                }
+            ),
+            "exposure_inputs": (
+                None
+                if exposure is None
+                else {
+                    **exposure.model_dump(mode="json"),
+                    "sectors": [
+                        s.model_dump(mode="json")
+                        for s in sorted(
+                            exposure.sectors,
+                            key=lambda s: (s.instrument_id, s.sector),
+                        )
+                    ],
+                }
             ),
         }
     )

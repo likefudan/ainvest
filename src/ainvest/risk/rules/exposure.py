@@ -70,33 +70,94 @@ def _order_notional(context: RiskContext) -> Decimal:
     return _money(canonicalize_decimal(cand.quantity) * canonicalize_decimal(cand.limit_price))
 
 
+def _baseline_after_open_orders(
+    portfolio: PortfolioSnapshot, code: str
+) -> tuple[Decimal, dict[str, Decimal]] | RuleResult:
+    """Cash and per-instrument qty after committing open orders (fail closed).
+
+    Open BUYs reserve cash at ``qty * limit_price`` and increase effective qty.
+    Open SELLs reduce effective qty (cash is not credited until fill).
+    """
+    cash = canonicalize_decimal(portfolio.cash)
+    qty_by_id: dict[str, Decimal] = {
+        position.instrument.instrument_id: canonicalize_decimal(position.quantity)
+        for position in portfolio.positions
+    }
+    for order in portfolio.open_orders:
+        iid = order.instrument.instrument_id
+        qty = canonicalize_decimal(order.quantity)
+        if order.side is OrderSide.BUY:
+            if order.limit_price is None:
+                return _hard(
+                    code,
+                    "open BUY missing limit_price (cannot project commitments)",
+                    evidence=f"order_id={order.order_id}",
+                )
+            limit = canonicalize_decimal(order.limit_price)
+            if limit <= ZERO:
+                return _hard(
+                    code,
+                    "open BUY limit_price must be positive",
+                    evidence=f"order_id={order.order_id}",
+                )
+            cash = canonicalize_decimal(cash - qty * limit)
+            qty_by_id[iid] = canonicalize_decimal(qty_by_id.get(iid, ZERO) + qty)
+        else:
+            qty_by_id[iid] = canonicalize_decimal(qty_by_id.get(iid, ZERO) - qty)
+    return cash, qty_by_id
+
+
 def _projected_state(
-    context: RiskContext, portfolio: PortfolioSnapshot
-) -> tuple[Decimal, Decimal, Decimal]:
+    context: RiskContext, portfolio: PortfolioSnapshot, *, rule_code: str
+) -> tuple[Decimal, Decimal, Decimal] | RuleResult:
     """Return (projected_cash, projected_symbol_mv, projected_equity)."""
+    baseline = _baseline_after_open_orders(portfolio, rule_code)
+    if isinstance(baseline, RuleResult):
+        return baseline
+    base_cash, qty_by_id = baseline
+
     cand = context.candidate
     notional = _order_notional(context)
     mark = canonicalize_decimal(context.quote.last_price)
     qty = canonicalize_decimal(cand.quantity)
-
-    held = ZERO
-    for position in portfolio.positions:
-        if position.instrument.instrument_id == cand.instrument_id:
-            held = canonicalize_decimal(position.quantity)
-            break
+    held = qty_by_id.get(cand.instrument_id, ZERO)
 
     if cand.side is OrderSide.BUY:
         projected_qty = held + qty
-        projected_cash = _money(portfolio.cash - notional)
+        projected_cash = _money(base_cash - notional)
     else:
         projected_qty = held - qty
-        projected_cash = _money(portfolio.cash + notional)
+        projected_cash = _money(base_cash + notional)
+
+    filled_qty: dict[str, Decimal] = {
+        position.instrument.instrument_id: canonicalize_decimal(position.quantity)
+        for position in portfolio.positions
+    }
+    filled_mv: dict[str, Decimal] = {
+        position.instrument.instrument_id: canonicalize_decimal(position.market_value)
+        for position in portfolio.positions
+    }
 
     other_mv = ZERO
-    for position in portfolio.positions:
-        if position.instrument.instrument_id == cand.instrument_id:
+    for iid, effective_qty in qty_by_id.items():
+        if iid == cand.instrument_id or effective_qty <= ZERO:
             continue
-        other_mv = _money(other_mv + position.market_value)
+        filled = filled_qty.get(iid, ZERO)
+        other_mv = _money(other_mv + filled_mv.get(iid, ZERO))
+        extra = canonicalize_decimal(effective_qty - filled)
+        if extra <= ZERO:
+            continue
+        remaining = extra
+        for order in portfolio.open_orders:
+            if order.side is not OrderSide.BUY or order.instrument.instrument_id != iid:
+                continue
+            # limit_price validated in _baseline_after_open_orders
+            assert order.limit_price is not None
+            take = min(remaining, canonicalize_decimal(order.quantity))
+            other_mv = _money(other_mv + take * canonicalize_decimal(order.limit_price))
+            remaining = canonicalize_decimal(remaining - take)
+            if remaining <= ZERO:
+                break
 
     symbol_mv = _money(projected_qty * mark)
     projected_equity = _money(projected_cash + other_mv + symbol_mv)
@@ -132,7 +193,10 @@ class SymbolWeightRule:
         portfolio = _require_portfolio(context, self.code)
         if isinstance(portfolio, RuleResult):
             return portfolio
-        _cash, symbol_mv, equity = _projected_state(context, portfolio)
+        projected = _projected_state(context, portfolio, rule_code=self.code)
+        if isinstance(projected, RuleResult):
+            return projected
+        _cash, symbol_mv, equity = projected
         if equity <= ZERO:
             return _hard(self.code, "projected equity must be positive")
         weight = _weight(symbol_mv / equity)
@@ -164,29 +228,55 @@ class SectorExposureRule:
                 evidence=f"instrument_id={context.candidate.instrument_id}",
             )
 
-        _projected_cash, _symbol_mv, equity = _projected_state(context, portfolio)
+        projected = _projected_state(context, portfolio, rule_code=self.code)
+        if isinstance(projected, RuleResult):
+            return projected
+        _projected_cash, _symbol_mv, equity = projected
         if equity <= ZERO:
             return _hard(self.code, "projected equity must be positive")
 
-        # Rebuild position market values after trade for the candidate's sector.
+        baseline = _baseline_after_open_orders(portfolio, self.code)
+        if isinstance(baseline, RuleResult):
+            return baseline
+        _base_cash, qty_by_id = baseline
+
         sector_mv = ZERO
         cand_id = context.candidate.instrument_id
         mark = canonicalize_decimal(context.quote.last_price)
-        held = ZERO
-        for position in portfolio.positions:
-            if position.instrument.instrument_id == cand_id:
-                held = canonicalize_decimal(position.quantity)
+        for iid, effective_qty in qty_by_id.items():
+            if iid == cand_id or effective_qty <= ZERO:
                 continue
-            pos_sector = _sector_for(inputs, position.instrument.instrument_id)
+            pos_sector = _sector_for(inputs, iid)
             if pos_sector is None:
                 return _hard(
                     self.code,
                     "missing sector metadata for portfolio position",
-                    evidence=f"instrument_id={position.instrument.instrument_id}",
+                    evidence=f"instrument_id={iid}",
                 )
-            if pos_sector == sector:
-                sector_mv = _money(sector_mv + position.market_value)
+            if pos_sector != sector:
+                continue
+            filled_mv = ZERO
+            filled_qty = ZERO
+            for position in portfolio.positions:
+                if position.instrument.instrument_id == iid:
+                    filled_mv = canonicalize_decimal(position.market_value)
+                    filled_qty = canonicalize_decimal(position.quantity)
+                    break
+            sector_mv = _money(sector_mv + filled_mv)
+            extra = canonicalize_decimal(effective_qty - filled_qty)
+            if extra > ZERO:
+                remaining = extra
+                for order in portfolio.open_orders:
+                    if order.side is not OrderSide.BUY or order.instrument.instrument_id != iid:
+                        continue
+                    assert order.limit_price is not None
+                    take = min(remaining, canonicalize_decimal(order.quantity))
+                    sector_mv = _money(sector_mv + take * canonicalize_decimal(order.limit_price))
+                    remaining = canonicalize_decimal(remaining - take)
+                    if remaining <= ZERO:
+                        break
 
+        held = qty_by_id.get(cand_id, ZERO)
         qty = canonicalize_decimal(context.candidate.quantity)
         projected_qty = held + qty if context.candidate.side is OrderSide.BUY else held - qty
         sector_mv = _money(sector_mv + projected_qty * mark)
@@ -233,7 +323,10 @@ class MinCashReserveRule:
         portfolio = _require_portfolio(context, self.code)
         if isinstance(portfolio, RuleResult):
             return portfolio
-        projected_cash, _symbol_mv, equity = _projected_state(context, portfolio)
+        projected = _projected_state(context, portfolio, rule_code=self.code)
+        if isinstance(projected, RuleResult):
+            return projected
+        projected_cash, _symbol_mv, equity = projected
         if equity <= ZERO:
             return _hard(self.code, "projected equity must be positive")
         if projected_cash < ZERO:

@@ -170,6 +170,39 @@ def test_reject_leveraged_margin_and_short_sell() -> None:
 
 
 @pytest.mark.unit
+def test_sell_rejects_when_open_sells_consume_held() -> None:
+    from ainvest.schemas.examples import portfolio_snapshot_example
+    from ainvest.schemas.portfolio import PortfolioSnapshot
+
+    payload = portfolio_snapshot_example()  # 10 AAPL
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_open_sell_aapl",
+            "instrument": payload["positions"][0]["instrument"],
+            "side": "SELL",
+            "quantity": "8",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        }
+    ]
+    portfolio = PortfolioSnapshot.model_validate(payload)
+    sell = CandidateOrder.model_validate(
+        {
+            **candidate_order_example(),
+            "account_scope": "paper",
+            "side": "SELL",
+            "quantity": "5",
+            "maximum_notional": "1072.50",
+        }
+    )
+    ctx = _ctx(candidate=sell, portfolio=portfolio)
+    result = SideAndProductRule().evaluate(ctx)
+    assert result.decision is RiskOutcome.REJECTED
+    assert "sellable" in (result.evidence or "")
+
+
+@pytest.mark.unit
 def test_allowlist_miss_rejects() -> None:
     ctx = _ctx(
         candidate=CandidateOrder.model_validate(

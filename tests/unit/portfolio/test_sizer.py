@@ -312,9 +312,10 @@ def test_open_sell_orders_reduce_sellable_quantity() -> None:
 
 @pytest.mark.unit
 def test_open_buy_orders_reduce_spendable_buying_power() -> None:
-    """Open BUY notionals reserve cash even for a different symbol."""
+    """Gross (non-paper) BP still reserves open BUY notionals for other symbols."""
     portfolio = _empty_portfolio()
     payload = portfolio.model_dump(mode="python")
+    payload["account_scope"] = "agentic"
     payload["open_orders"] = [
         {
             "order_id": "ord_pending_buy_msft",
@@ -346,6 +347,90 @@ def test_open_buy_orders_reduce_spendable_buying_power() -> None:
     # 20*214.50=4290 reserved from 5000 => <=710 spendable => at most 3 shares.
     assert result.candidate.quantity <= Decimal("3")
     assert result.candidate.quantity * result.candidate.limit_price <= Decimal("710.00")
+
+
+@pytest.mark.unit
+def test_paper_style_buying_power_does_not_double_count_open_buys() -> None:
+    """Paper nets open buys (and fees) into buying_power; sizer must not subtract again."""
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["cash"] = "5000.00"
+    # Paper with fees: buying_power = cash - (open_buy_notional + fees) ≈ 705.71.
+    payload["buying_power"] = "705.71"
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "20",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="214.50", ask="214.50", bid="214.40"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # Spendable remains fee-adjusted BP (not BP - 4290).
+    assert result.candidate.quantity * result.candidate.limit_price <= Decimal("705.71")
+    assert result.candidate.quantity >= Decimal("1")
+
+
+@pytest.mark.unit
+def test_margin_style_buying_power_still_reserves_open_buys() -> None:
+    """Non-paper BP < cash for margin reasons must still reserve open buys."""
+    portfolio = _empty_portfolio()
+    payload = portfolio.model_dump(mode="python")
+    payload["account_scope"] = "agentic"
+    payload["cash"] = "5000.00"
+    payload["buying_power"] = "3000.00"
+    payload["equity"] = "5000.00"
+    payload["exposure"]["cash"] = "5000.00"
+    payload["exposure"]["equity"] = "5000.00"
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_pending_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "5",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "200.00",
+            "symbol": "MSFT",
+        }
+    ]
+    result = size_position(
+        signal=_signal(intent="BUY", target_weight="0.50"),
+        quote=_quote(last_price="200.00", ask="200.00", bid="199.90"),
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        config=_config(cash_reserve="0", max_notional="5000.00", min_notional="1.00"),
+        as_of=AS_OF,
+        candidate_id=CANDIDATE_ID,
+    )
+    assert result.reason_code == SizerReasonCode.SIZED_TO_TARGET_WEIGHT
+    assert result.candidate is not None
+    # Spendable = min(3000, 5000) - 1000 = 2000, not 3000.
+    assert result.candidate.quantity * result.candidate.limit_price <= Decimal("2000.00")
 
 
 @pytest.mark.unit

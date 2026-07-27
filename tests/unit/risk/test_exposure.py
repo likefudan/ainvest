@@ -231,3 +231,97 @@ def test_daily_loss_incomplete_and_breach() -> None:
         ),
     )
     assert DailyLossRule().evaluate(ok).decision is RiskOutcome.APPROVED
+
+
+@pytest.mark.unit
+def test_min_cash_rejects_when_open_buys_already_commit_cash() -> None:
+    payload = portfolio_snapshot_example()
+    payload["cash"] = "500.00"
+    payload["buying_power"] = "100.00"
+    payload["equity"] = "500.00"
+    payload["positions"] = []
+    payload["exposure"] = {
+        "cash": "500.00",
+        "equity": "500.00",
+        "gross_market_value": "0",
+        "net_market_value": "0",
+        "largest_position_weight": "0",
+        "position_count": 0,
+    }
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_open_buy_msft",
+            "instrument": {
+                "instrument_id": "rh_inst_msft_xnas",
+                "symbol": "MSFT",
+                "exchange": "XNAS",
+                "currency": "USD",
+                "asset_type": "EQUITY",
+                "identity_as_of": "2026-07-24T18:30:00Z",
+            },
+            "side": "BUY",
+            "quantity": "2",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "200.00",
+            "symbol": "MSFT",
+        }
+    ]
+    # New AAPL buy notional 429; cash after open buy = 100; projected cash negative.
+    cand = CandidateOrder.model_validate(
+        {
+            **candidate_order_example(),
+            "account_scope": "paper",
+            "quantity": "2",
+            "limit_price": "214.50",
+            "maximum_notional": "429.00",
+        }
+    )
+    ctx = _ctx(
+        exposure=_exposure(min_cash="0"),
+        candidate=cand,
+        portfolio=PortfolioSnapshot.model_validate(payload),
+        include_inputs=True,
+        inputs=ExposureInputs(
+            sectors=(
+                SectorAssignment(instrument_id="rh_inst_aapl_xnas", sector="TECH"),
+                SectorAssignment(instrument_id="rh_inst_msft_xnas", sector="TECH"),
+            ),
+            daily_turnover_to_date=Decimal("0"),
+            daily_realized_pnl=Decimal("0"),
+            daily_unrealized_pnl=Decimal("0"),
+        ),
+    )
+    result = MinCashReserveRule().evaluate(ctx)
+    assert result.decision is RiskOutcome.REJECTED
+
+
+@pytest.mark.unit
+def test_symbol_weight_includes_open_buy_qty() -> None:
+    payload = portfolio_snapshot_example()  # 10 AAPL, cash 3000, equity 5154.20
+    payload["open_orders"] = [
+        {
+            "order_id": "ord_open_buy_aapl",
+            "instrument": payload["positions"][0]["instrument"],
+            "side": "BUY",
+            "quantity": "20",
+            "submitted_at": "2026-07-24T18:29:00Z",
+            "limit_price": "214.50",
+            "symbol": "AAPL",
+        }
+    ]
+    cand = CandidateOrder.model_validate(
+        {
+            **candidate_order_example(),
+            "account_scope": "paper",
+            "quantity": "10",
+            "limit_price": "214.50",
+            "maximum_notional": "2145.00",
+        }
+    )
+    ctx = _ctx(
+        exposure=_exposure(max_symbol="0.60", max_notional="5000", min_cash="0"),
+        candidate=cand,
+        portfolio=PortfolioSnapshot.model_validate(payload),
+    )
+    # Effective AAPL qty 10+20+10=40 → weight well above 0.60.
+    assert SymbolWeightRule().evaluate(ctx).decision is RiskOutcome.REJECTED
