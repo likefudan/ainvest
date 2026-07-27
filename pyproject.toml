@@ -68,6 +68,7 @@ default-groups = ["dev", "test"]
 
 [project.scripts]
 ainvest-strategy-conformance = "ainvest.strategy_conformance.cli:main"
+ainvest-paper-flow = "ainvest.orchestrator.cli:main"
 
 [project.entry-points."ainvest.strategies"]
 moving_average = "ainvest.strategies.reference.moving_average.plugin:plugin"
