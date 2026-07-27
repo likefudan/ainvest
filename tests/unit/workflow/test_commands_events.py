@@ -6,6 +6,7 @@ from datetime import UTC, datetime
 from typing import cast
 
 import pytest
+from pydantic import ValidationError
 
 from ainvest.schemas.risk import RiskOutcome
 from ainvest.workflow import (
@@ -26,6 +27,7 @@ from ainvest.workflow import (
     InMemoryIdempotencyStore,
     InProcessCommandDispatcher,
     ManualReviewResolution,
+    ManualReviewResolvedEvent,
     OrderExecutedEvent,
     PositionSizedEvent,
     ReconcileCommand,
@@ -39,6 +41,7 @@ from ainvest.workflow import (
     WorkflowCommand,
     WorkflowEvent,
     allows_blind_retry,
+    command_digest,
     continue_trace,
     ensure_not_blind_broker_retry,
     is_broker_write,
@@ -140,6 +143,81 @@ def test_manual_review_requires_operator_actor() -> None:
     )
     assert cmd.actor_kind is ActorKind.OPERATOR
     assert cmd.retry_semantics is RetrySemantics.PURE_RETRYABLE
+
+
+@pytest.mark.unit
+def test_manual_review_rejects_system_actor_id() -> None:
+    correlation_id, command_id, idempotency_id = _trace_ids()
+    with pytest.raises(ValueError, match="non-system operator actor_id"):
+        ResolveManualReviewCommand(
+            command_id=command_id,
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=AS_OF,
+            actor_id="system",
+            subject_id="ordp_01HZYMANUALREVIEW01",
+            resolution=ManualReviewResolution.CONFIRM_SUBMITTED,
+            reason_code="OPERATOR_CONFIRMED",
+            reason="broker fill observed offline",
+        )
+
+
+@pytest.mark.unit
+def test_cancel_requires_operator_and_rejects_system() -> None:
+    correlation_id, command_id, idempotency_id = _trace_ids()
+    with pytest.raises(ValidationError):
+        CancelOrderCommand(  # type: ignore[call-arg]
+            command_id=command_id,
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=AS_OF,
+            cancel_id="canc_01HZYCANCELORDER001",
+            proposal_id="ordp_01HZYCANCELORDER001",
+            broker_order_id="broker_ord_1",
+            order_hash=ORDER_HASH,
+            reason_code="OPERATOR_REQUEST",
+        )
+    with pytest.raises(ValueError, match="non-system operator actor_id"):
+        CancelOrderCommand(
+            command_id=command_id,
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=AS_OF,
+            actor_id="system",
+            cancel_id="canc_01HZYCANCELORDER001",
+            proposal_id="ordp_01HZYCANCELORDER001",
+            broker_order_id="broker_ord_1",
+            order_hash=ORDER_HASH,
+            reason_code="OPERATOR_REQUEST",
+        )
+    with pytest.raises(ValidationError):
+        CancelOrderCommand(
+            command_id=command_id,
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=AS_OF,
+            actor_kind=ActorKind.SYSTEM,  # type: ignore[arg-type]
+            actor_id="op_01",
+            cancel_id="canc_01HZYCANCELORDER001",
+            proposal_id="ordp_01HZYCANCELORDER001",
+            broker_order_id="broker_ord_1",
+            order_hash=ORDER_HASH,
+            reason_code="OPERATOR_REQUEST",
+        )
+    cancel = CancelOrderCommand(
+        command_id=command_id,
+        correlation_id=correlation_id,
+        idempotency_id=idempotency_id,
+        issued_at=AS_OF,
+        actor_id="op_99",
+        cancel_id="canc_01HZYCANCELORDER001",
+        proposal_id="ordp_01HZYCANCELORDER001",
+        broker_order_id="broker_ord_1",
+        order_hash=ORDER_HASH,
+        reason_code="OPERATOR_REQUEST",
+    )
+    assert cancel.actor_kind is ActorKind.OPERATOR
+    assert cancel.actor_id == "op_99"
 
 
 @pytest.mark.unit
@@ -524,3 +602,147 @@ def test_handler_result_independent_of_hidden_counter() -> None:
 
     assert results[0].candidate_id == results[1].candidate_id
     assert results[0].idempotency_id != results[1].idempotency_id
+
+
+@pytest.mark.unit
+def test_command_digest_ignores_attempt_scoped_fields() -> None:
+    correlation_id = start_trace().correlation_id
+    idempotency_id = new_idempotency_id()
+    first = SizePositionCommand(
+        command_id=new_command_id(),
+        correlation_id=correlation_id,
+        idempotency_id=idempotency_id,
+        issued_at=AS_OF,
+        signal_id="sig_01HZYDIGESTIGNORE01",
+    )
+    retry = SizePositionCommand(
+        command_id=new_command_id(),
+        correlation_id=correlation_id,
+        idempotency_id=idempotency_id,
+        issued_at=datetime(2026, 7, 27, 15, 0, 0, tzinfo=UTC),
+        signal_id="sig_01HZYDIGESTIGNORE01",
+    )
+    assert first.command_id != retry.command_id
+    assert first.issued_at != retry.issued_at
+    assert command_digest(first) == command_digest(retry)
+
+
+@pytest.mark.unit
+def test_dispatch_replays_when_retry_mints_new_command_id() -> None:
+    correlation_id = start_trace().correlation_id
+    idempotency_id = new_idempotency_id()
+    calls = {"n": 0}
+
+    def handler(cmd: WorkflowCommand) -> WorkflowEvent:
+        calls["n"] += 1
+        sized = cast(SizePositionCommand, cmd)
+        return PositionSizedEvent(
+            event_id=new_event_id(),
+            correlation_id=sized.correlation_id,
+            causation_id=sized.command_id,
+            idempotency_id=sized.idempotency_id,
+            occurred_at=AS_OF,
+            outcome=CommandOutcome.SUCCEEDED,
+            signal_id=sized.signal_id,
+            candidate_id="cand_01HZYDIGESTRETRY01",
+        )
+
+    bus = InProcessCommandDispatcher()
+    bus.register(CommandType.SIZE_POSITION, handler)
+    first = bus.dispatch(
+        SizePositionCommand(
+            command_id=new_command_id(),
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=AS_OF,
+            signal_id="sig_01HZYDIGESTRETRY01",
+        )
+    )
+    replay = bus.dispatch(
+        SizePositionCommand(
+            command_id=new_command_id(),
+            correlation_id=correlation_id,
+            idempotency_id=idempotency_id,
+            issued_at=datetime(2026, 7, 27, 16, 0, 0, tzinfo=UTC),
+            signal_id="sig_01HZYDIGESTRETRY01",
+        )
+    )
+    assert calls["n"] == 1
+    assert first == replay
+
+
+@pytest.mark.unit
+def test_handler_wrong_event_type_not_stored() -> None:
+    correlation_id, command_id, idempotency_id = _trace_ids()
+    command = SizePositionCommand(
+        command_id=command_id,
+        correlation_id=correlation_id,
+        idempotency_id=idempotency_id,
+        issued_at=AS_OF,
+        signal_id="sig_01HZYWRONGEVENT0001",
+    )
+
+    def wrong_handler(cmd: WorkflowCommand) -> WorkflowEvent:
+        return StrategyEvaluatedEvent(
+            event_id=new_event_id(),
+            correlation_id=cmd.correlation_id,
+            causation_id=cmd.command_id,
+            idempotency_id=cmd.idempotency_id,
+            occurred_at=AS_OF,
+            outcome=CommandOutcome.SUCCEEDED,
+            strategy_run_id="srun_01HZYWRONGEVENT001",
+        )
+
+    store = InMemoryIdempotencyStore()
+    bus = InProcessCommandDispatcher(store=store)
+    bus.register(CommandType.SIZE_POSITION, wrong_handler)
+    with pytest.raises(ValueError, match="STRATEGY_EVALUATED"):
+        bus.dispatch(command)
+    assert len(store) == 0
+
+
+@pytest.mark.unit
+def test_handler_may_return_command_rejected() -> None:
+    correlation_id, command_id, idempotency_id = _trace_ids()
+    command = SizePositionCommand(
+        command_id=command_id,
+        correlation_id=correlation_id,
+        idempotency_id=idempotency_id,
+        issued_at=AS_OF,
+        signal_id="sig_01HZYREJECTEVENT001",
+    )
+
+    def reject_handler(cmd: WorkflowCommand) -> WorkflowEvent:
+        return CommandRejectedEvent(
+            event_id=new_event_id(),
+            correlation_id=cmd.correlation_id,
+            causation_id=cmd.command_id,
+            idempotency_id=cmd.idempotency_id,
+            occurred_at=AS_OF,
+            outcome=CommandOutcome.REJECTED,
+            reason_code="SIZING_REJECTED",
+            command_type=CommandType.SIZE_POSITION,
+            subject_id=cast(SizePositionCommand, cmd).signal_id,
+        )
+
+    bus = InProcessCommandDispatcher()
+    bus.register(CommandType.SIZE_POSITION, reject_handler)
+    event = bus.dispatch(command)
+    assert event.event_type is EventType.COMMAND_REJECTED
+    assert bus.dispatch(command) == event
+
+
+@pytest.mark.unit
+def test_manual_review_resolved_event_uses_resolution_enum() -> None:
+    correlation_id, command_id, idempotency_id = _trace_ids()
+    event = ManualReviewResolvedEvent(
+        event_id=new_event_id(),
+        correlation_id=correlation_id,
+        causation_id=command_id,
+        idempotency_id=idempotency_id,
+        occurred_at=AS_OF,
+        outcome=CommandOutcome.SUCCEEDED,
+        subject_id="ordp_01HZYMANUALREVIEW01",
+        resolution=ManualReviewResolution.CONFIRM_SUBMITTED,
+    )
+    assert event.resolution is ManualReviewResolution.CONFIRM_SUBMITTED

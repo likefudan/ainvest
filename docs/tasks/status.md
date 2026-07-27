@@ -94,7 +94,7 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 1a (D1a) | Batch D | `P03-T4` | complete (merged) |
 | Batch D — Part 1b (D1b) | Batch D | `P03-T5` | complete (merged) |
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
-| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | in_review |
+| Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | in_review (#68) |
 | Batch D — Part 3c (D3c) | Batch D | `P03-T15` | not_started (after D3b) |
 

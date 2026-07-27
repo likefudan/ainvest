@@ -12,7 +12,13 @@ from collections.abc import Callable, Mapping, MutableMapping
 from typing import Protocol, runtime_checkable
 
 from ainvest.workflow.commands import WorkflowCommand
-from ainvest.workflow.events import CommandOutcome, WorkflowEvent
+from ainvest.workflow.events import (
+    COMMAND_TO_EVENT_TYPE,
+    CommandOutcome,
+    CommandRejectedEvent,
+    EventType,
+    WorkflowEvent,
+)
 from ainvest.workflow.ids import require_same_correlation
 from ainvest.workflow.semantics import CommandType, is_broker_write
 
@@ -23,6 +29,9 @@ _UNCERTAIN_BROKER_OUTCOMES = frozenset(
         CommandOutcome.CANCEL_UNKNOWN,
     }
 )
+
+# Per-attempt transport metadata: must not affect idempotent business identity.
+_DIGEST_EXCLUDE_FIELDS = frozenset({"command_id", "issued_at"})
 
 
 class DuplicateCommandError(ValueError):
@@ -110,13 +119,18 @@ class InMemoryIdempotencyStore:
 
 
 def command_digest(command: WorkflowCommand) -> str:
-    """Stable digest of the command body for idempotency conflict detection.
+    """Stable digest of business intent for idempotency conflict detection.
 
-    Uses canonical JSON so key order and Decimal/datetime encoding are stable.
+    Excludes attempt-scoped transport fields (``command_id``, ``issued_at``) so a
+    retry that keeps ``idempotency_id`` and the business payload but mints a new
+    ``command_id`` still replays. Uses canonical JSON for stable encoding.
     """
     from ainvest.audit.digests import digest_json
 
-    return digest_json(command.model_dump(mode="json"))
+    payload = command.model_dump(mode="json")
+    for key in _DIGEST_EXCLUDE_FIELDS:
+        payload.pop(key, None)
+    return digest_json(payload)
 
 
 def ensure_not_blind_broker_retry(
@@ -187,7 +201,7 @@ class InProcessCommandDispatcher:
 
 
 def _validate_handler_result(command: WorkflowCommand, event: WorkflowEvent) -> None:
-    """Fail closed when a handler breaks the correlation/causation contract."""
+    """Fail closed when a handler breaks the correlation/causation/type contract."""
     require_same_correlation(command.correlation_id, event.correlation_id)
     if event.idempotency_id != command.idempotency_id:
         msg = f"event idempotency_id {event.idempotency_id!r} != command {command.idempotency_id!r}"
@@ -195,6 +209,22 @@ def _validate_handler_result(command: WorkflowCommand, event: WorkflowEvent) -> 
     if event.causation_id != command.command_id:
         msg = f"event causation_id {event.causation_id!r} != command_id {command.command_id!r}"
         raise ValueError(msg)
+
+    expected = COMMAND_TO_EVENT_TYPE[command.command_type]
+    if event.event_type is EventType.COMMAND_REJECTED:
+        if not isinstance(event, CommandRejectedEvent):
+            raise ValueError("COMMAND_REJECTED event_type requires CommandRejectedEvent")
+        if event.command_type is not command.command_type:
+            raise ValueError(
+                f"COMMAND_REJECTED command_type {event.command_type.value} "
+                f"!= dispatched {command.command_type.value}"
+            )
+        return
+    if event.event_type is not expected:
+        raise ValueError(
+            f"handler returned {event.event_type.value} for {command.command_type.value}; "
+            f"expected {expected.value} or COMMAND_REJECTED"
+        )
 
 
 __all__ = [

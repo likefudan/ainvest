@@ -21,6 +21,7 @@ from ainvest.schemas.common import (
     UtcDateTime,
 )
 from ainvest.schemas.risk import RiskOutcome
+from ainvest.workflow.commands import ManualReviewResolution
 from ainvest.workflow.ids import (
     CausationId,
     CorrelationId,
@@ -165,7 +166,7 @@ class OrderCancelledEvent(EventEnvelope):
 class ManualReviewResolvedEvent(EventEnvelope):
     event_type: Literal[EventType.MANUAL_REVIEW_RESOLVED] = EventType.MANUAL_REVIEW_RESOLVED
     subject_id: StableId
-    resolution: Annotated[str, StringConstraints(min_length=1, max_length=64)]
+    resolution: ManualReviewResolution
 
 
 class ReconciledEvent(EventEnvelope):

@@ -42,6 +42,8 @@ InputDigest = Annotated[
 ]
 ReasonText = Annotated[str, StringConstraints(min_length=1, max_length=512)]
 
+_DEFAULT_SYSTEM_ACTOR_ID = "system"
+
 
 class ActorKind(StrEnum):
     """Who issued the command."""
@@ -60,6 +62,15 @@ class ManualReviewResolution(StrEnum):
     CONFIRM_REJECTED = "CONFIRM_REJECTED"
     CONFIRM_NOT_APPLIED = "CONFIRM_NOT_APPLIED"
     KEEP_MANUAL_REVIEW = "KEEP_MANUAL_REVIEW"
+
+
+def require_real_operator(*, actor_kind: ActorKind, actor_id: str) -> None:
+    """Fail closed unless a privileged command names a real operator identity."""
+    if actor_kind is not ActorKind.OPERATOR:
+        raise ValueError("privileged command requires actor_kind=OPERATOR")
+    normalized = actor_id.strip()
+    if not normalized or normalized.casefold() == _DEFAULT_SYSTEM_ACTOR_ID:
+        raise ValueError("privileged command requires a non-system operator actor_id")
 
 
 class CommandEnvelope(DomainModel):
@@ -172,6 +183,7 @@ class CancelOrderCommand(CommandEnvelope):
     """Cancel a working broker order (separate cancel idempotency ID).
 
     Retry semantics are ``BROKER_WRITE``: never blind-retry an uncertain cancel.
+    Cancellation is privileged (design §5.6): requires an authenticated operator.
     """
 
     command_type: Literal[CommandType.CANCEL_ORDER] = CommandType.CANCEL_ORDER
@@ -181,6 +193,14 @@ class CancelOrderCommand(CommandEnvelope):
     order_hash: OrderHashDigest
     reason_code: MachineCode
     reason: ReasonText | None = None
+    # Operator identity is mandatory for privileged actions (design §1.2 #29 / §5.6).
+    actor_kind: Literal[ActorKind.OPERATOR] = ActorKind.OPERATOR
+    actor_id: ActorId  # required; must not default to "system"
+
+    @model_validator(mode="after")
+    def _require_operator(self) -> CancelOrderCommand:
+        require_real_operator(actor_kind=self.actor_kind, actor_id=self.actor_id)
+        return self
 
 
 class ResolveManualReviewCommand(CommandEnvelope):
@@ -193,6 +213,12 @@ class ResolveManualReviewCommand(CommandEnvelope):
     reason: ReasonText
     # Operator identity is mandatory for privileged actions (design §1.2 #29).
     actor_kind: Literal[ActorKind.OPERATOR] = ActorKind.OPERATOR
+    actor_id: ActorId  # required; must not default to "system"
+
+    @model_validator(mode="after")
+    def _require_operator(self) -> ResolveManualReviewCommand:
+        require_real_operator(actor_kind=self.actor_kind, actor_id=self.actor_id)
+        return self
 
 
 class ReconcileCommand(CommandEnvelope):
@@ -266,4 +292,5 @@ __all__ = [
     "SizePositionCommand",
     "WorkflowCommand",
     "allocate_command_id",
+    "require_real_operator",
 ]

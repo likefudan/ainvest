@@ -28,6 +28,7 @@ from ainvest.workflow.commands import (
     SizePositionCommand,
     WorkflowCommand,
     allocate_command_id,
+    require_real_operator,
 )
 from ainvest.workflow.dispatcher import (
     BlindBrokerRetryError,
@@ -146,6 +147,7 @@ __all__ = [
     "new_correlation_id",
     "new_event_id",
     "new_idempotency_id",
+    "require_real_operator",
     "require_same_correlation",
     "retry_semantics_for",
     "start_trace",
