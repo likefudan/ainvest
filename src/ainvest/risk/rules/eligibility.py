@@ -144,12 +144,6 @@ class SideAndProductRule:
                 "margin trading is rejected",
                 evidence=f"instrument_id={meta.instrument_id}",
             )
-        if meta.allows_short:
-            return _hard(
-                self.code,
-                "short selling is rejected",
-                evidence=f"instrument_id={meta.instrument_id}",
-            )
         if meta.is_leveraged_or_inverse:
             return _hard(
                 self.code,
@@ -157,6 +151,8 @@ class SideAndProductRule:
                 evidence=f"instrument_id={meta.instrument_id}",
             )
         if cand.side is OrderSide.SELL:
+            # Long-only: SELL may only reduce an existing long. Instruments that
+            # are short-enabled at the broker still require portfolio proof.
             if context.portfolio is None:
                 return _hard(
                     self.code,
@@ -167,8 +163,11 @@ class SideAndProductRule:
             if held < cand.quantity:
                 return _hard(
                     self.code,
-                    "SELL quantity exceeds held long position (no shorts)",
-                    evidence=f"held={held}; sell_qty={cand.quantity}",
+                    "short sales are rejected (SELL exceeds held long)",
+                    evidence=(
+                        f"held={held}; sell_qty={cand.quantity}; "
+                        f"allows_short={meta.allows_short}"
+                    ),
                 )
         return _ok(self.code, "side and product constraints satisfied")
 

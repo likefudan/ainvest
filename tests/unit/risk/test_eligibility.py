@@ -120,8 +120,8 @@ def test_reject_option_and_crypto_flags() -> None:
 
 
 @pytest.mark.unit
-def test_reject_leveraged_margin_and_short_flags() -> None:
-    for flag in ("is_leveraged_or_inverse", "allows_margin", "allows_short"):
+def test_reject_leveraged_margin_and_short_sell() -> None:
+    for flag in ("is_leveraged_or_inverse", "allows_margin"):
         meta = {
             "instrument_id": "rh_inst_aapl_xnas",
             "symbol": "AAPL",
@@ -135,6 +135,28 @@ def test_reject_leveraged_margin_and_short_flags() -> None:
         }
         ctx = _ctx(instrument=InstrumentMetadata.model_validate(meta))
         assert SideAndProductRule().evaluate(ctx).decision is RiskOutcome.REJECTED
+
+    # allows_short alone must not block BUY; oversell SELL is rejected.
+    shortable = InstrumentMetadata.model_validate(
+        {
+            "instrument_id": "rh_inst_aapl_xnas",
+            "symbol": "AAPL",
+            "exchange": "XNAS",
+            "currency": "USD",
+            "asset_type": "EQUITY",
+            "tradable": True,
+            "price_increment": "0.01",
+            "quantity_increment": "1",
+            "allows_short": True,
+        }
+    )
+    buy_ok = _ctx(instrument=shortable)
+    assert SideAndProductRule().evaluate(buy_ok).decision is RiskOutcome.APPROVED
+    sell = CandidateOrder.model_validate(
+        {**candidate_order_example(), "account_scope": "paper", "side": "SELL"}
+    )
+    sell_ctx = _ctx(instrument=shortable, candidate=sell, portfolio=None)
+    assert SideAndProductRule().evaluate(sell_ctx).decision is RiskOutcome.REJECTED
 
 
 @pytest.mark.unit

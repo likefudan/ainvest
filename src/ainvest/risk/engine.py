@@ -16,14 +16,20 @@ from pydantic import StringConstraints
 
 from ainvest.data.calendar_port import MarketCalendar
 from ainvest.risk.models import RiskContext, RiskRuleConfig, RuleResult
-from ainvest.risk.rules import (
-    DEFAULT_C4A_RULE_CODES,
-    RiskRule,
-    clear_registry,
-    resolve_rules,
+from ainvest.risk.rules import DEFAULT_C4A_RULE_CODES, RiskRule
+from ainvest.risk.rules.eligibility import (
+    AllowlistRule,
+    AssetClassRule,
+    IdentityConsistencyRule,
+    SessionRule,
+    SideAndProductRule,
 )
-from ainvest.risk.rules.eligibility import register_eligibility_rules
-from ainvest.risk.rules.market_quality import register_market_quality_rules
+from ainvest.risk.rules.market_quality import (
+    LimitDeviationRule,
+    QuoteFreshnessRule,
+    SpreadRule,
+    VolatilityRule,
+)
 from ainvest.schemas.common import SCHEMA_VERSION_V1, DomainModel, SchemaVersion
 from ainvest.schemas.risk import (
     RiskDecision,
@@ -168,29 +174,38 @@ def evaluate_rules(
     )
 
 
+def build_c4a_rules(calendar: MarketCalendar) -> dict[str, RiskRule]:
+    """Instantiate the standard C4a rule set bound to ``calendar``."""
+    rules: tuple[RiskRule, ...] = (
+        AssetClassRule(),
+        AllowlistRule(),
+        IdentityConsistencyRule(),
+        SideAndProductRule(),
+        SessionRule(calendar),
+        QuoteFreshnessRule(),
+        SpreadRule(),
+        VolatilityRule(),
+        LimitDeviationRule(),
+    )
+    return {rule.code: rule for rule in rules}
+
+
 def evaluate_risk(
     context: RiskContext,
     *,
     calendar: MarketCalendar,
     rule_codes: Sequence[str] | None = DEFAULT_C4A_RULE_CODES,
 ) -> RiskEngineOutput:
-    """Evaluate with the standard C4a registry (unknown codes fail closed)."""
-    clear_registry()
-    register_eligibility_rules(calendar)
-    register_market_quality_rules()
-    try:
-        try:
-            rules = resolve_rules(rule_codes)
-        except KeyError as exc:
-            return evaluate_rules(
-                context,
-                [
-                    _UnknownRule(str(exc.args[0] if exc.args else "UNKNOWN")),
-                ],
-            )
-        return evaluate_rules(context, rules)
-    finally:
-        clear_registry()
+    """Evaluate with the standard C4a rules (unknown codes fail closed)."""
+    available = build_c4a_rules(calendar)
+    codes = tuple(DEFAULT_C4A_RULE_CODES if rule_codes is None else rule_codes)
+    selected: list[RiskRule] = []
+    for code in codes:
+        rule = available.get(code)
+        if rule is None:
+            return evaluate_rules(context, [_UnknownRule(code)])
+        selected.append(rule)
+    return evaluate_rules(context, selected)
 
 
 class _UnknownRule:
@@ -213,6 +228,7 @@ class _UnknownRule:
 __all__ = [
     "RiskEngineOutput",
     "aggregate_rule_results",
+    "build_c4a_rules",
     "compute_config_digest",
     "compute_input_digest",
     "evaluate_risk",

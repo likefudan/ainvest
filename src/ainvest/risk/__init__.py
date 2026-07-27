@@ -7,6 +7,7 @@ Risk may reject candidate orders. It must not import ``ainvest.approval`` or
 from ainvest.risk.engine import (
     RiskEngineOutput,
     aggregate_rule_results,
+    build_c4a_rules,
     compute_config_digest,
     compute_input_digest,
     evaluate_risk,
@@ -45,6 +46,7 @@ __all__ = [
     "RiskRuleConfig",
     "RuleResult",
     "aggregate_rule_results",
+    "build_c4a_rules",
     "clear_registry",
     "compute_config_digest",
     "compute_input_digest",
