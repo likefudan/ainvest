@@ -96,22 +96,20 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 2b (D2b) | Batch D | `P03-T7` | complete (merged) |
 | Batch D — Part 2c (D2c) | Batch D | `P03-T12` | merged (#67) |
 | Batch D — Part 3b (D3b) | Batch D | `P02-T10` | complete (merged) |
-| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | in_review (#69) |
+| Batch D — Part 3c (D3c) | Batch D | `P03-T15` | complete (merged) |
+| Batch D — Part 4a (D4a) | Batch D | `P03-T16` | in_review |
+| Batch D — Part 4b (D4b) | Batch D | `P03-T17` | pending (after D4a) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-**Batch D — Close Gate 1** (remaining cards). Early unlocks already merged:
-`P03-T6` (D2a), `P02-T9` (D3a). **Batch C is complete.**
+**Batch D — Close Gate 1** (remaining: D4). D1–D3 complete on `main`
+(`da248c2` includes P03-T15). **Batch C is complete.**
 
-Coordination: implement D1 / D2 / D3 tracks **in parallel** on separate branches, but
-**merge PRs serially** `D1 → D2 → D3`. Within each track, **two PRs**
-(`D1a→D1b`, `D2b→D2c`, `D3b→D3c`). After a predecessor merges, the next branch
-rebases onto latest `main`, re-reviews locally, then opens its PR. Only the
-coordinator opens the next formal PR in the merge queue. Coordinators own
-`docs/tasks/status.md` updates for handoff; implementation agents must not
-rewrite another track's allowed paths.
+Coordination: implement **D4a → D4b** serially (two PRs). D4 is
+**integration only** — do not rewrite D1–D3 modules. Coordinators own
+`docs/tasks/status.md` updates for handoff.
 
 ### Batch D — Part 1a (D1a)
 
@@ -262,11 +260,12 @@ rewrite another track's allowed paths.
 - **Batch:** Batch D — Part 3c (D3c) — Reconciliation + portfolio ledger (`P03-T15`)
 - **Plan batch:** Batch D (D3)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d3
-- **Integration branch:** `task/batch-d3c-reconciliation-ledger`
+- **Integration branch:** `task/batch-d3c-reconciliation-ledger` (deleted after merge)
 - **Handoff PR:** [#69](https://github.com/likefudan/ainvest/pull/69)
-- **Base commit:** `efec55b5e5f6c5b53dbf87475afa5353981f917a` (rebased onto post-D3b `main`)
+- **Base commit:** `efec55b5e5f6c5b53dbf87475afa5353981f917a`
+- **Merge commit:** `da248c2f67ebed8da9c31ed87b3ded062d085031`
 - **Dependencies:** `P03-T14`, `P02-T6`–`T8`, `P02-T10` (satisfied on main)
 - **Merge target:** `main` (squash)
 - **Allowed paths:** `src/ainvest/execution/reconciliation.py`,
@@ -275,14 +274,72 @@ rewrite another track's allowed paths.
   `tests/unit/execution/**`, `tests/unit/portfolio/**` (ledger/reconcile),
   `docs/tasks/status.md` (D3c section + summary row only)
 - **Forbidden:** rewriting T10 / D1 / D2 paths beyond type imports
-- **Handoff notes:** Rebased onto `efec55b`; `./scripts/dev verify` green (593 passed).
-  `PortfolioLedger` with idempotent fills + conservation; `OrderReconciler`
-  compares client IDs/qty/price/state and routes discrepancies to MANUAL_REVIEW
-  with alerts (never silent money rewrite).
+- **Handoff notes:** Merged via #69. `PortfolioLedger` with idempotent fills +
+  conservation; `OrderReconciler` compares client IDs/qty/price/state and routes
+  discrepancies to MANUAL_REVIEW with alerts (never silent money rewrite).
+  Atomic fill batches rewrite in-batch `DUPLICATE` results to `BATCH_ROLLED_BACK`
+  on rollback.
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T15` | Reconcile Paper Orders and Maintain the Portfolio Ledger | `in_review` | cursor-subagent-d3 | `task/batch-d3c-reconciliation-ledger` | `efec55b5e5f6c5b53dbf87475afa5353981f917a` | `P03-T14`, `P02-T6`–`T8` | [#69](https://github.com/likefudan/ainvest/pull/69) |
+| `P03-T15` | Reconcile Paper Orders and Maintain the Portfolio Ledger | `merged` | cursor-subagent-d3 | `task/batch-d3c-reconciliation-ledger` | `efec55b5e5f6c5b53dbf87475afa5353981f917a` | `P03-T14`, `P02-T6`–`T8` | [#69](https://github.com/likefudan/ainvest/pull/69) |
+
+### Batch D — Part 4a (D4a)
+
+- **Batch:** Batch D — Part 4a (D4a) — Paper orchestration (`P03-T16`)
+- **Plan batch:** Batch D (D4)
+- **Coordinator:** cursor-agent / local
+- **Status:** `in_review`
+- **Owner/agent:** cursor-subagent-d4a
+- **Integration branch:** `task/batch-d4a-paper-orchestration`
+- **Handoff PR:** [#70](https://github.com/likefudan/ainvest/pull/70)
+- **Base commit:** `da248c2f67ebed8da9c31ed87b3ded062d085031` (post-D3c main)
+- **Dependencies:** `P03-T0`–`T15`, `P02-T10` (satisfied on main); D1–D3 merged
+- **Merge target:** `main` (squash); **first** of D4a→D4b
+- **Allowed paths:**
+  - `src/ainvest/orchestrator.py` and/or `src/ainvest/orchestrator/**`
+  - CLI entry (`pyproject.toml` scripts + thin CLI module under orchestrator)
+  - `tests/integration/test_paper_flow.py` and fixtures under
+    `tests/fixtures/paper/` or `tests/integration/paper/`
+  - `docs/tasks/status.md` (D4a section + summary row + Active batch notes only)
+- **Forbidden:** rewriting D1–D3 modules beyond imports/re-exports; Telegram;
+  live broker; `docs/releases/` (D4b / P03-T17); auto-approve paths
+- **Handoff notes:** Composition root `ainvest.orchestrator` wires worker →
+  aggregate → sizer → risk → hash-bound proposal → explicit approval stub →
+  pre-trade → dispatcher `ExecuteOrder`/`Reconcile` → Paper fill →
+  `OrderReconciler` + ledger conservation. Never auto-approves; CLI
+  `--inject-approval` / tests only. Replayable flows covered in
+  `tests/integration/test_paper_flow.py`. `./scripts/dev verify` green.
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T16` | Orchestrate a Full Paper Flow from a Fixed ResearchPacket | `in_review` | cursor-subagent-d4a | `task/batch-d4a-paper-orchestration` | `da248c2f67ebed8da9c31ed87b3ded062d085031` | `P03-T0`–`T15`, `P02-T10` | [#70](https://github.com/likefudan/ainvest/pull/70) |
+
+### Batch D — Part 4b (D4b)
+
+- **Batch:** Batch D — Part 4b (D4b) — Gate 1 acceptance (`P03-T17`)
+- **Plan batch:** Batch D (D4)
+- **Coordinator:** cursor-agent / local
+- **Status:** `pending`
+- **Owner/agent:** (after D4a merges)
+- **Integration branch:** `task/batch-d4b-gate-1-acceptance`
+- **Base commit:** (D4a merge commit on main)
+- **Dependencies:** `P03-T16` + Phase 01–03 cards (all prior)
+- **Merge target:** `main` (squash); **second** of D4a→D4b
+- **Allowed paths:**
+  - `docs/releases/phase-1-acceptance.md`
+  - optional Gate-1 harness under `scripts/` or CLI flag
+  - `docs/tasks/status.md` (D4b + Batch D complete row)
+- **Forbidden:** rewriting orchestration beyond acceptance harness; new features;
+  Telegram / live broker
+- **Handoff notes:** Produce Gate 1 acceptance record: empty SQLite → migrate →
+  fixed ResearchPacket → simulated fill → audit timeline export; verify worker
+  isolation, risk fail-closed, Paper idempotency, illegal SM rejection;
+  performance baseline + defect register (high/critical = 0).
+
+| Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
+|---|---|---|---|---|---|---|---|
+| `P03-T17` | Gate 1: Accept the Deterministic Simulated Trading Loop | `pending` | — | `task/batch-d4b-gate-1-acceptance` | (after D4a) | `P03-T16` + P01–P03 | |
 
 ### Batch C — Part 4b (C4b)
 
