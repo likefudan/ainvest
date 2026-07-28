@@ -10,6 +10,10 @@ from typing import Any, NoReturn, TypeVar
 from pydantic import BaseModel, ValidationError
 
 from ainvest.data.models import (
+    CorporateAction,
+    CorporateActionObservation,
+    CorporateActionRequest,
+    DividendObservation,
     FakeDataset,
     FilingReference,
     FundamentalObservation,
@@ -27,6 +31,8 @@ from ainvest.data.models import (
     PriceBookRequest,
     QuoteRequest,
     ReportingPeriod,
+    SecFundamentalObservation,
+    SplitObservation,
 )
 from ainvest.data.ports import (
     DataAuthError,
@@ -61,14 +67,24 @@ from ainvest.schemas.research import EvidenceCitation, EvidenceKind
 
 ItemT = TypeVar(
     "ItemT",
-    MarketQuote,
-    PriceBook,
-    OhlcvBar,
-    FundamentalObservation,
-    NewsEventObservation,
-    InstrumentMetadataObservation,
+    bound=(
+        MarketQuote
+        | PriceBook
+        | OhlcvBar
+        | FundamentalObservation
+        | CorporateActionObservation
+        | NewsEventObservation
+        | InstrumentMetadataObservation
+    ),
 )
 ModelT = TypeVar("ModelT", bound=BaseModel)
+PaginatedFakeRequest = (
+    OhlcvRequest
+    | FundamentalRequest
+    | CorporateActionRequest
+    | NewsEventRequest
+    | InstrumentMetadataRequest
+)
 
 _ERROR_TYPES: Mapping[DataErrorCode, type[DataProviderError]] = {
     DataErrorCode.AUTH: DataAuthError,
@@ -237,6 +253,28 @@ class DeterministicFakeDataProvider:
         )
         return self._page(filtered, request, DataOperation.NEWS_EVENTS)
 
+    def get_corporate_actions(
+        self,
+        request: CorporateActionRequest,
+    ) -> ObservationPage[CorporateAction]:
+        self._raise_injected(DataOperation.CORPORATE_ACTIONS)
+        known_by_id = {
+            item.instrument.instrument_id: item for item in self._dataset.instrument_metadata
+        }
+        self._require_all(
+            request.instrument_ids,
+            known_by_id,
+            DataOperation.CORPORATE_ACTIONS,
+        )
+        requested_ids = set(request.instrument_ids)
+        filtered = tuple(
+            action
+            for action in self._dataset.corporate_actions
+            if action.instrument.instrument_id in requested_ids
+            and request.effective_from <= action.effective_date < request.effective_to
+        )
+        return self._page(filtered, request, DataOperation.CORPORATE_ACTIONS)
+
     def get_instrument_metadata(
         self,
         request: InstrumentMetadataRequest,
@@ -266,7 +304,7 @@ class DeterministicFakeDataProvider:
     def _page(
         self,
         items: tuple[ItemT, ...],
-        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+        request: PaginatedFakeRequest,
         operation: DataOperation,
         *,
         extra_flags: tuple[QualityFlag, ...] = (),
@@ -283,7 +321,7 @@ class DeterministicFakeDataProvider:
     def _select_page(
         self,
         items: tuple[ItemT, ...],
-        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+        request: PaginatedFakeRequest,
         operation: DataOperation,
     ) -> tuple[tuple[ItemT, ...], str | None]:
         offset = self._decode_cursor(request.cursor, operation, request)
@@ -363,7 +401,7 @@ class DeterministicFakeDataProvider:
         self,
         offset: int,
         operation: DataOperation,
-        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+        request: PaginatedFakeRequest,
     ) -> str:
         digest = self._request_digest(request)
         return f"{self._dataset.dataset_id}:{operation.value}:{digest}:{offset}"
@@ -372,7 +410,7 @@ class DeterministicFakeDataProvider:
         self,
         cursor: str | None,
         operation: DataOperation,
-        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+        request: PaginatedFakeRequest,
     ) -> int:
         if cursor is None:
             return 0
@@ -386,7 +424,7 @@ class DeterministicFakeDataProvider:
 
     @staticmethod
     def _request_digest(
-        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+        request: PaginatedFakeRequest,
     ) -> str:
         filters = request.model_dump(
             mode="json",
@@ -455,6 +493,11 @@ def fixture_dataset() -> FakeDataset:
             _bar(spy, "2026-07-23T00:00:00Z", "631", "638", "630", "636.12", source),
         ),
         fundamentals=(_fundamental(aapl, envelope),),
+        corporate_actions=(
+            _split(aapl, source),
+            _dividend(aapl, source),
+            _dividend(spy, source, missing_pay_date=True),
+        ),
         news_events=(
             _news_event(
                 source=source,
@@ -528,7 +571,12 @@ def _instrument(
     )
 
 
-def _provenance(*, source: str, observed_at: str) -> Provenance:
+def _provenance(
+    *,
+    source: str,
+    observed_at: str,
+    quality_flags: tuple[QualityFlag, ...] = (),
+) -> Provenance:
     return Provenance.model_validate(
         {
             "source": source,
@@ -536,7 +584,7 @@ def _provenance(*, source: str, observed_at: str) -> Provenance:
             "received_at": "2026-07-24T18:30:00Z",
             "timezone": "UTC",
             "is_delayed": False,
-            "quality_flags": (),
+            "quality_flags": quality_flags,
         }
     )
 
@@ -614,6 +662,47 @@ def _metadata(
     )
 
 
+def _split(instrument: InstrumentIdentity, source: str) -> SplitObservation:
+    return SplitObservation.model_validate(
+        {
+            "action_id": "action_aapl_split_20260615",
+            "instrument": instrument,
+            "effective_date": "2026-06-15",
+            "declared_date": "2026-05-01",
+            "split_ratio": "4",
+            "provenance": _provenance(
+                source=source,
+                observed_at="2026-06-15T13:30:00Z",
+            ),
+        }
+    )
+
+
+def _dividend(
+    instrument: InstrumentIdentity,
+    source: str,
+    *,
+    missing_pay_date: bool = False,
+) -> DividendObservation:
+    flags = (QualityFlag.PARTIAL, QualityFlag.MISSING_FIELDS) if missing_pay_date else ()
+    return DividendObservation.model_validate(
+        {
+            "action_id": f"action_{instrument.symbol.lower()}_dividend_20260710",
+            "instrument": instrument,
+            "effective_date": "2026-07-10",
+            "declared_date": "2026-06-20",
+            "cash_amount": "0.25",
+            "currency": instrument.currency,
+            "pay_date": None if missing_pay_date else "2026-07-17",
+            "provenance": _provenance(
+                source=source,
+                observed_at="2026-07-10T13:30:00Z",
+                quality_flags=flags,
+            ),
+        }
+    )
+
+
 def _filing(source: str) -> FilingReference:
     return FilingReference.model_validate(
         {
@@ -657,7 +746,7 @@ def _citation(
 def _fundamental(
     instrument: InstrumentIdentity,
     provenance: Provenance,
-) -> FundamentalObservation:
+) -> SecFundamentalObservation:
     filing = _filing(provenance.source)
     snapshot = FundamentalSnapshot.model_validate(
         {
@@ -674,7 +763,7 @@ def _fundamental(
             "provenance": provenance,
         }
     )
-    return FundamentalObservation.model_validate(
+    return SecFundamentalObservation.model_validate(
         {
             "instrument": instrument,
             "snapshot": snapshot,

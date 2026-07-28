@@ -15,6 +15,8 @@ from enum import StrEnum
 from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from ainvest.data.models import (
+    CorporateAction,
+    CorporateActionRequest,
     FundamentalObservation,
     FundamentalRequest,
     InstrumentMetadataObservation,
@@ -40,6 +42,7 @@ class DataOperation(StrEnum):
     """Stable operation identifiers for errors, metrics, and tests."""
 
     DATASET = "DATASET"
+    CORPORATE_ACTIONS = "CORPORATE_ACTIONS"
     QUOTES = "QUOTES"
     PRICE_BOOKS = "PRICE_BOOKS"
     OHLCV = "OHLCV"
@@ -247,6 +250,23 @@ class InstrumentMetadataPort(Protocol):
 
 
 @runtime_checkable
+class CorporateActionPort(Protocol):
+    """Normalized splits and cash dividends for research/offline use."""
+
+    @property
+    def source_id(self) -> SourceId:
+        """Stable provider/capability identifier."""
+        ...
+
+    def get_corporate_actions(
+        self,
+        request: CorporateActionRequest,
+    ) -> ObservationPage[CorporateAction]:
+        """Return actions or a provenanced empty page for a valid known window."""
+        ...
+
+
+@runtime_checkable
 class LiveQuotePort(QuotePort, Protocol):
     """Robinhood MCP live quote capability, with no automatic fallback."""
 
@@ -273,6 +293,7 @@ class LivePriceBookPort(PriceBookPort, Protocol):
 __all__ = [
     "ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY",
     "ROBINHOOD_LIVE_QUOTE_CAPABILITY",
+    "CorporateActionPort",
     "DataAuthError",
     "DataConflictError",
     "DataErrorCode",

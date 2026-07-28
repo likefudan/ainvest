@@ -8,7 +8,12 @@ Must not import consumer packages (``agents``, ``strategies``, ``risk``,
 from ainvest.data.calendar_port import FakeMarketCalendar, MarketCalendar, SessionStatus
 from ainvest.data.fakes import DeterministicFakeDataProvider, fixture_dataset
 from ainvest.data.models import (
+    CorporateAction,
+    CorporateActionObservation,
+    CorporateActionRequest,
+    CorporateActionType,
     DataRequest,
+    DividendObservation,
     ExternalHttpsUrl,
     FakeDataset,
     FilingReference,
@@ -29,11 +34,14 @@ from ainvest.data.models import (
     PriceLevel,
     QuoteRequest,
     ReportingPeriod,
+    SecFundamentalObservation,
+    SplitObservation,
     TimeCertainty,
 )
 from ainvest.data.ports import (
     ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY,
     ROBINHOOD_LIVE_QUOTE_CAPABILITY,
+    CorporateActionPort,
     DataAuthError,
     DataConflictError,
     DataErrorCode,
@@ -61,6 +69,11 @@ from ainvest.data.ports import (
 __all__ = [
     "ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY",
     "ROBINHOOD_LIVE_QUOTE_CAPABILITY",
+    "CorporateAction",
+    "CorporateActionObservation",
+    "CorporateActionPort",
+    "CorporateActionRequest",
+    "CorporateActionType",
     "DataAuthError",
     "DataConflictError",
     "DataErrorCode",
@@ -77,6 +90,7 @@ __all__ = [
     "DataUnsupportedError",
     "DataUpstreamError",
     "DeterministicFakeDataProvider",
+    "DividendObservation",
     "ExternalHttpsUrl",
     "FakeDataset",
     "FakeMarketCalendar",
@@ -107,7 +121,9 @@ __all__ = [
     "QuotePort",
     "QuoteRequest",
     "ReportingPeriod",
+    "SecFundamentalObservation",
     "SessionStatus",
+    "SplitObservation",
     "TimeCertainty",
     "fixture_dataset",
 ]

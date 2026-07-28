@@ -9,6 +9,9 @@ import pytest
 from pydantic import ValidationError
 
 from ainvest.data import (
+    CorporateActionPort,
+    CorporateActionRequest,
+    CorporateActionType,
     DataErrorCode,
     DataIncompleteError,
     DataInvalidRequestError,
@@ -20,6 +23,7 @@ from ainvest.data import (
     DataTimeoutError,
     DataUpstreamError,
     DeterministicFakeDataProvider,
+    DividendObservation,
     FundamentalRequest,
     FundamentalsPort,
     InstrumentMetadataPort,
@@ -35,6 +39,8 @@ from ainvest.data import (
     PriceBookRequest,
     QuotePort,
     QuoteRequest,
+    SecFundamentalObservation,
+    SplitObservation,
     TimeCertainty,
 )
 from ainvest.schemas.common import Provenance, QualityFlag
@@ -47,15 +53,17 @@ OhlcvFactory = Callable[[], OhlcvPort]
 FundamentalsFactory = Callable[[], FundamentalsPort]
 NewsEventFactory = Callable[[], NewsEventPort]
 MetadataFactory = Callable[[], InstrumentMetadataPort]
+CorporateActionFactory = Callable[[], CorporateActionPort]
 
 # Each capability owns its factory list. A partial adapter joins only the lists
-# for protocols it implements; no test requires one provider to expose all six.
+# for protocols it implements; no test requires one provider to expose all capabilities.
 QUOTE_FACTORIES: tuple[QuoteFactory, ...] = (DeterministicFakeDataProvider,)
 PRICE_BOOK_FACTORIES: tuple[PriceBookFactory, ...] = (DeterministicFakeDataProvider,)
 OHLCV_FACTORIES: tuple[OhlcvFactory, ...] = (DeterministicFakeDataProvider,)
 FUNDAMENTALS_FACTORIES: tuple[FundamentalsFactory, ...] = (DeterministicFakeDataProvider,)
 NEWS_EVENT_FACTORIES: tuple[NewsEventFactory, ...] = (DeterministicFakeDataProvider,)
 METADATA_FACTORIES: tuple[MetadataFactory, ...] = (DeterministicFakeDataProvider,)
+CORPORATE_ACTION_FACTORIES: tuple[CorporateActionFactory, ...] = (DeterministicFakeDataProvider,)
 
 
 @pytest.fixture(params=QUOTE_FACTORIES, ids=("deterministic-fake",))
@@ -86,6 +94,11 @@ def news_event_port(request: pytest.FixtureRequest) -> NewsEventPort:
 @pytest.fixture(params=METADATA_FACTORIES, ids=("deterministic-fake",))
 def metadata_port(request: pytest.FixtureRequest) -> InstrumentMetadataPort:
     return cast(MetadataFactory, request.param)()
+
+
+@pytest.fixture(params=CORPORATE_ACTION_FACTORIES, ids=("deterministic-fake",))
+def corporate_action_port(request: pytest.FixtureRequest) -> CorporateActionPort:
+    return cast(CorporateActionFactory, request.param)()
 
 
 # Quote capability
@@ -212,6 +225,7 @@ def test_fundamental_contract_retains_period_filing_currency_and_citations(
     result = fundamentals_port.get_fundamentals(_fundamental_request("AAPL"))
     observation = result.items[0]
 
+    assert isinstance(observation, SecFundamentalObservation)
     assert observation.instrument.symbol == observation.snapshot.symbol == "AAPL"
     assert observation.currency == "USD"
     assert observation.period.end_date == observation.filing.report_period_end
@@ -295,6 +309,115 @@ def test_metadata_contract_preserves_identity_precision_and_provenance(
     assert observation.tradable is True
     assert str(observation.price_increment) == "0.01"
     _assert_provenance(result, metadata_port.source_id)
+
+
+# Corporate-action capability
+
+
+def _corporate_action_request(
+    *instrument_ids: str,
+    **updates: object,
+) -> CorporateActionRequest:
+    payload: dict[str, object] = {
+        "instrument_ids": instrument_ids,
+        "effective_from": "2026-06-01",
+        "effective_to": "2026-08-01",
+    }
+    payload.update(updates)
+    return CorporateActionRequest.model_validate(payload)
+
+
+@pytest.mark.contract
+def test_corporate_action_contract_normalizes_splits_dividends_and_pagination(
+    corporate_action_port: CorporateActionPort,
+) -> None:
+    first = corporate_action_port.get_corporate_actions(
+        _corporate_action_request("rh_inst_aapl_xnas", page_size=1)
+    )
+
+    assert len(first.items) == 1
+    assert isinstance(first.items[0], SplitObservation)
+    assert first.items[0].action_type is CorporateActionType.SPLIT
+    assert str(first.items[0].split_ratio) == "4"
+    assert first.next_cursor is not None
+
+    second = corporate_action_port.get_corporate_actions(
+        _corporate_action_request(
+            "rh_inst_aapl_xnas",
+            page_size=1,
+            cursor=first.next_cursor,
+        )
+    )
+    assert len(second.items) == 1
+    assert isinstance(second.items[0], DividendObservation)
+    assert second.items[0].action_type is CorporateActionType.DIVIDEND
+    assert second.items[0].currency == "USD"
+    assert second.items[0].pay_date is not None
+    assert second.next_cursor is None
+    _assert_provenance(first, corporate_action_port.source_id)
+    _assert_provenance(second, corporate_action_port.source_id)
+
+
+@pytest.mark.contract
+def test_partial_corporate_action_missing_date_is_explicitly_flagged(
+    corporate_action_port: CorporateActionPort,
+) -> None:
+    result = corporate_action_port.get_corporate_actions(
+        _corporate_action_request("rh_inst_spy_arcx")
+    )
+
+    assert len(result.items) == 1
+    action = result.items[0]
+    assert isinstance(action, DividendObservation)
+    assert action.pay_date is None
+    assert {
+        QualityFlag.PARTIAL,
+        QualityFlag.MISSING_FIELDS,
+    }.issubset(action.provenance.quality_flags)
+    assert set(action.provenance.quality_flags).issubset(result.provenance.quality_flags)
+
+
+@pytest.mark.contract
+def test_known_corporate_action_instrument_may_have_empty_window(
+    corporate_action_port: CorporateActionPort,
+) -> None:
+    result = corporate_action_port.get_corporate_actions(
+        _corporate_action_request(
+            "rh_inst_aapl_xnas",
+            effective_from="2020-01-01",
+            effective_to="2020-02-01",
+        )
+    )
+
+    assert result.items == ()
+    assert QualityFlag.PARTIAL not in result.provenance.quality_flags
+    assert QualityFlag.MISSING_FIELDS not in result.provenance.quality_flags
+
+
+@pytest.mark.contract
+def test_unknown_corporate_action_instrument_uses_stable_error(
+    corporate_action_port: CorporateActionPort,
+) -> None:
+    with pytest.raises(DataNotFoundError) as caught:
+        corporate_action_port.get_corporate_actions(
+            _corporate_action_request("rh_inst_unknown_xnas")
+        )
+
+    assert caught.value.operation is DataOperation.CORPORATE_ACTIONS
+    assert caught.value.reason_code == "FAKE_INSTRUMENT_NOT_FOUND"
+
+
+@pytest.mark.contract
+def test_corporate_action_incomplete_failure_is_typed() -> None:
+    port: CorporateActionPort = DeterministicFakeDataProvider(
+        failures={DataOperation.CORPORATE_ACTIONS: DataErrorCode.INCOMPLETE_DATA}
+    )
+
+    with pytest.raises(DataIncompleteError) as caught:
+        port.get_corporate_actions(_corporate_action_request("rh_inst_aapl_xnas"))
+
+    assert caught.value.operation is DataOperation.CORPORATE_ACTIONS
+    assert caught.value.retryable is False
 
 
 # Cross-capability invariants

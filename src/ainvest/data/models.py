@@ -11,7 +11,7 @@ from collections.abc import Callable
 from datetime import date
 from enum import StrEnum
 from ipaddress import ip_address
-from typing import Annotated, Any, Self, cast
+from typing import Annotated, Any, Literal, Self, cast
 
 from pydantic import (
     AfterValidator,
@@ -120,6 +120,13 @@ class TimeCertainty(StrEnum):
     UNKNOWN = "UNKNOWN"
 
 
+class CorporateActionType(StrEnum):
+    """Provider-independent corporate-action categories."""
+
+    SPLIT = "SPLIT"
+    DIVIDEND = "DIVIDEND"
+
+
 class DataRequest(DomainModel):
     """Common bounded request settings for every data-provider call."""
 
@@ -224,6 +231,22 @@ class InstrumentMetadataRequest(PaginatedDataRequest):
         return self
 
 
+class CorporateActionRequest(PaginatedDataRequest):
+    """Request actions effective in a closed-open date window."""
+
+    instrument_ids: Annotated[tuple[InstrumentId, ...], Field(min_length=1, max_length=100)]
+    effective_from: date
+    effective_to: date
+
+    @model_validator(mode="after")
+    def _valid_filters(self) -> Self:
+        if self.effective_from >= self.effective_to:
+            raise ValueError("effective_from must be before effective_to")
+        if len(self.instrument_ids) != len(set(self.instrument_ids)):
+            raise ValueError("instrument_ids must be unique")
+        return self
+
+
 class PriceLevel(DomainModel):
     """One normalized order-book level."""
 
@@ -264,7 +287,7 @@ class PriceBook(DomainModel):
 
 
 class ReportingPeriod(DomainModel):
-    """Fiscal period attached to normalized filing-derived fundamentals."""
+    """Provider-independent fiscal period attached to normalized fundamentals."""
 
     start_date: date
     end_date: date
@@ -299,17 +322,17 @@ class FilingReference(DomainModel):
 
 
 class FundamentalObservation(DomainModel):
-    """Point-in-time fundamentals bound to period, filing, and citations."""
+    """Provider-independent point-in-time normalized fundamentals."""
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     instrument: InstrumentIdentity
     snapshot: FundamentalSnapshot
     period: ReportingPeriod
+    reporting_context: MachineCode = "CONSOLIDATED"
     currency: CurrencyCode
-    filing: FilingReference
     earnings_at: UtcDateTime | None
     earnings_time_certainty: TimeCertainty
-    citations: Annotated[tuple[EvidenceCitation, ...], Field(min_length=1, max_length=100)]
+    citations: Annotated[tuple[EvidenceCitation, ...], Field(max_length=100)] = ()
 
     @property
     def provenance(self) -> Provenance:
@@ -322,10 +345,6 @@ class FundamentalObservation(DomainModel):
             raise ValueError("instrument.symbol must match snapshot.symbol")
         if self.instrument.currency != self.currency:
             raise ValueError("currency must match instrument.currency")
-        if self.period.end_date != self.filing.report_period_end:
-            raise ValueError("period.end_date must match filing.report_period_end")
-        if self.filing.filed_at > self.snapshot.as_of:
-            raise ValueError("filing.filed_at must be <= snapshot.as_of")
         unitless_decimal_keys = tuple(
             fact.key
             for fact in self.snapshot.facts
@@ -341,13 +360,89 @@ class FundamentalObservation(DomainModel):
         citation_ids = [citation.evidence_id for citation in self.citations]
         if len(citation_ids) != len(set(citation_ids)):
             raise ValueError("fundamental citation evidence_ids must be unique")
+        if not hasattr(self, "filing") and any(
+            citation.kind is EvidenceKind.FILING for citation in self.citations
+        ):
+            raise ValueError("filing citations require SecFundamentalObservation")
+        return self
+
+
+class SecFundamentalObservation(FundamentalObservation):
+    """Fundamentals whose SEC evidence is bound to one filing accession."""
+
+    filing: FilingReference
+    citations: Annotated[tuple[EvidenceCitation, ...], Field(min_length=1, max_length=100)]
+
+    @model_validator(mode="after")
+    def _sec_evidence_is_consistent(self) -> Self:
+        if self.period.end_date > self.filing.report_period_end:
+            raise ValueError("fact period.end_date must be <= filing.report_period_end")
+        if self.filing.filed_at > self.snapshot.as_of:
+            raise ValueError("filing.filed_at must be <= snapshot.as_of")
         if not any(
             citation.kind is EvidenceKind.FILING
             and self.filing.accession_number in citation.locator
             for citation in self.citations
         ):
-            raise ValueError("fundamentals require a filing citation bound to accession_number")
+            raise ValueError("SEC fundamentals require an accession-bound filing citation")
         return self
+
+
+class CorporateActionObservation(DomainModel):
+    """Common immutable identity, timing, and provenance for one action."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    action_id: StableId
+    instrument: InstrumentIdentity
+    effective_date: date
+    declared_date: date | None = None
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def _declared_before_effective(self) -> Self:
+        if self.declared_date is not None and self.declared_date > self.effective_date:
+            raise ValueError("declared_date must be <= effective_date")
+        if (
+            self.declared_date is None
+            and QualityFlag.MISSING_FIELDS not in self.provenance.quality_flags
+        ):
+            raise ValueError("missing declared_date requires MISSING_FIELDS")
+        return self
+
+
+class SplitObservation(CorporateActionObservation):
+    """Stock split represented as new shares received per old share."""
+
+    action_type: Literal[CorporateActionType.SPLIT] = CorporateActionType.SPLIT
+    split_ratio: PositiveDecimal
+
+
+class DividendObservation(CorporateActionObservation):
+    """Cash dividend with currency and an optional quality-qualified pay date."""
+
+    action_type: Literal[CorporateActionType.DIVIDEND] = CorporateActionType.DIVIDEND
+    cash_amount: PositiveDecimal
+    currency: CurrencyCode
+    pay_date: date | None = None
+
+    @model_validator(mode="after")
+    def _dividend_is_consistent(self) -> Self:
+        if self.currency != self.instrument.currency:
+            raise ValueError("dividend currency must match instrument.currency")
+        if self.pay_date is not None and self.pay_date < self.effective_date:
+            raise ValueError("pay_date must be >= effective_date")
+        if (
+            self.pay_date is None
+            and QualityFlag.MISSING_FIELDS not in self.provenance.quality_flags
+        ):
+            raise ValueError("missing pay_date requires MISSING_FIELDS")
+        return self
+
+
+CorporateAction = Annotated[
+    SplitObservation | DividendObservation,
+    Field(discriminator="action_type"),
+]
 
 
 class NewsEventObservation(DomainModel):
@@ -450,7 +545,8 @@ class FakeDataset(DomainModel):
     quotes: tuple[MarketQuote, ...] = ()
     price_books: tuple[PriceBook, ...] = ()
     ohlcv: tuple[OhlcvBar, ...] = ()
-    fundamentals: tuple[FundamentalObservation, ...] = ()
+    fundamentals: tuple[SecFundamentalObservation | FundamentalObservation, ...] = ()
+    corporate_actions: tuple[CorporateAction, ...] = ()
     news_events: tuple[NewsEventObservation, ...] = ()
     instrument_metadata: tuple[InstrumentMetadataObservation, ...] = ()
 
@@ -461,10 +557,15 @@ class FakeDataset(DomainModel):
             self.price_books,
             self.ohlcv,
             self.fundamentals,
+            self.corporate_actions,
             self.news_events,
             self.instrument_metadata,
         ):
-            _validate_envelope_provenance(items, self.provenance)
+            _validate_envelope_provenance(
+                items,
+                self.provenance,
+                require_quality_flags=False,
+            )
         _require_unique_keys(
             self.quotes,
             lambda item: item.instrument.instrument_id,
@@ -482,8 +583,13 @@ class FakeDataset(DomainModel):
         )
         _require_unique_keys(
             self.fundamentals,
-            lambda item: (item.instrument.instrument_id, item.filing.accession_number),
-            "fundamental instrument/accession",
+            _fundamental_identity,
+            "fundamental instrument/source/period/context",
+        )
+        _require_unique_keys(
+            self.corporate_actions,
+            lambda item: item.action_id,
+            "corporate-action action_id",
         )
         _require_unique_keys(
             self.news_events,
@@ -503,6 +609,23 @@ class FakeDataset(DomainModel):
         return self
 
 
+def _fundamental_identity(
+    item: SecFundamentalObservation | FundamentalObservation,
+) -> tuple[object, ...]:
+    source_identity: object
+    if isinstance(item, SecFundamentalObservation):
+        source_identity = item.filing.accession_number
+    else:
+        source_identity = item.snapshot.as_of
+    return (
+        item.instrument.instrument_id,
+        source_identity,
+        item.period.start_date,
+        item.period.end_date,
+        item.reporting_context,
+    )
+
+
 def _require_unique_keys(
     items: tuple[Any, ...],
     key: Callable[[Any], object],
@@ -513,7 +636,12 @@ def _require_unique_keys(
         raise ValueError(f"fake dataset contains duplicate {label}")
 
 
-def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) -> None:
+def _validate_envelope_provenance(
+    items: tuple[Any, ...],
+    envelope: Provenance,
+    *,
+    require_quality_flags: bool = True,
+) -> None:
     raw_provenance = [getattr(item, "provenance", None) for item in items]
     if any(not isinstance(provenance, Provenance) for provenance in raw_provenance):
         raise ValueError("every observation must include provenance")
@@ -528,13 +656,19 @@ def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) 
         raise ValueError("envelope observed_at must not precede an item")
     if any(provenance.is_delayed for provenance in item_provenance) and not envelope.is_delayed:
         raise ValueError("a delayed item requires a delayed response envelope")
-    item_flags = {flag for provenance in item_provenance for flag in provenance.quality_flags}
-    if not item_flags.issubset(set(envelope.quality_flags)):
-        raise ValueError("response quality_flags must include every item quality flag")
+    if require_quality_flags:
+        item_flags = {flag for provenance in item_provenance for flag in provenance.quality_flags}
+        if not item_flags.issubset(set(envelope.quality_flags)):
+            raise ValueError("response quality_flags must include every item quality flag")
 
 
 __all__ = [
+    "CorporateAction",
+    "CorporateActionObservation",
+    "CorporateActionRequest",
+    "CorporateActionType",
     "DataRequest",
+    "DividendObservation",
     "ExternalHttpsUrl",
     "FakeDataset",
     "FilingReference",
@@ -557,5 +691,7 @@ __all__ = [
     "PriceLevel",
     "QuoteRequest",
     "ReportingPeriod",
+    "SecFundamentalObservation",
+    "SplitObservation",
     "TimeCertainty",
 ]

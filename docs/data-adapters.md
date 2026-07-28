@@ -13,6 +13,7 @@ P04-T0 defines one synchronous port per capability:
 - `PriceBookPort`
 - `OhlcvPort`
 - `FundamentalsPort`
+- `CorporateActionPort`
 - `NewsEventPort`
 - `InstrumentMetadataPort`
 
@@ -32,18 +33,39 @@ Empty pages retain envelope provenance so “no items” is still attributable t
 specific provider request. Envelopes preserve the provider's source timezone;
 they do not silently relabel it as UTC.
 
-`FundamentalObservation` composes the existing `FundamentalSnapshot`,
-`InstrumentIdentity`, `Provenance`, and `EvidenceCitation` contracts. It adds
-the reporting period, currency, SEC accession/form/document reference, filing
-provenance, earnings-time certainty, and filing-bound citations required by SEC
-and XBRL adapters. A filing citation must bind the exact accession number.
-Decimal facts must carry an explicit unit; a unitless numeric fact is rejected
-at this normalization boundary and therefore cannot be assumed comparable by a
-downstream SEC/XBRL adapter. SEC form names use a bounded, provider-independent
-grammar (one to 24 uppercase alphanumeric groups separated by a single space or
-hyphen, with an optional `/A` amendment suffix) rather than an enumerated
-taxonomy, so base forms, amendments such as `10-Q/A` and `10-K/A`, and names
-such as `DEF 14A` remain representable.
+`FundamentalObservation` is provider-independent and composes the existing
+`FundamentalSnapshot`, `InstrumentIdentity`, `Provenance`, and
+`EvidenceCitation` contracts. It retains reporting period, normalized reporting
+context, currency, earnings-time certainty, and optional non-filing citations,
+so normalized sources such as Robinhood MCP are not required to manufacture SEC
+evidence. Decimal facts must carry an explicit unit; a unitless numeric fact is
+rejected at this normalization boundary and cannot be assumed comparable.
+
+`SecFundamentalObservation` is the stricter filing-derived subtype used by an
+SEC/XBRL adapter. It requires a `FilingReference` plus a filing citation that
+binds the exact accession number. A generic observation may not carry a
+`FILING` citation, which prevents non-SEC providers from presenting generic data
+as primary SEC evidence. One filing may contain facts for multiple reporting
+periods or normalized contexts. Fake-dataset identity therefore includes the
+instrument, accession/source snapshot, period dates, and reporting context:
+distinct annual, quarterly, comparative, or segment contexts stay separate,
+while an exact duplicate period/context is rejected instead of merged.
+
+SEC form names use a bounded, provider-independent grammar (one to 24 uppercase
+alphanumeric groups separated by a single space or hyphen, with an optional
+`/A` amendment suffix) rather than an enumerated taxonomy, so base forms,
+amendments such as `10-Q/A` and `10-K/A`, and names such as `DEF 14A` remain
+representable.
+
+`CorporateActionPort` is a separate provider-independent capability for the
+offline adapter in P04-T1. A closed-open effective-date request returns
+discriminated `SplitObservation` and `DividendObservation` records. Splits use
+an explicit positive new-shares-per-old-share ratio. Cash dividends use an
+explicit positive amount and currency. Both retain canonical instrument
+identity, effective date, declaration date when available, and provenance;
+dividends also retain pay date when available. Missing applicable declaration
+or pay dates require `MISSING_FIELDS`, and item quality flags propagate to the
+page envelope.
 
 `NewsEventObservation` composes the existing `MarketEvent` and
 `EvidenceCitation` contracts. It retains HTTPS URL, publisher, publication
@@ -73,12 +95,13 @@ incompatibility, incomplete data, stale data, and conflicting data.
 Only read-only timeout and rate-limit failures are marked retryable. A retrying
 caller still owns its attempt bound and deadline.
 
-Missing requested quotes, books, metadata, or an unknown OHLCV
-instrument/series raise stable typed errors. A known OHLCV series may return a
-provenanced empty page for a valid window with no bars. Partially or completely
-missing requested fundamentals return `PARTIAL` plus `MISSING_FIELDS` on the
-response envelope; an unqualified empty fundamentals page is forbidden.
-One-sided or empty price books likewise require `PARTIAL` or `MISSING_FIELDS`.
+Missing requested quotes, books, metadata, or an unknown OHLCV/corporate-action
+instrument raises stable typed errors. A known OHLCV series or corporate-action
+instrument may return a provenanced empty page for a valid window with no
+observations. Partially or completely missing requested fundamentals return
+`PARTIAL` plus `MISSING_FIELDS` on the response envelope; an unqualified empty
+fundamentals page is forbidden. One-sided or empty price books likewise require
+`PARTIAL` or `MISSING_FIELDS`.
 
 ## Live market data
 
@@ -104,16 +127,18 @@ source/timezone inconsistencies are rejected at construction and normalized as
 Repeated identical requests return identical serialized models.
 
 Key-addressed fixture collections reject duplicate identities before the fake
-builds lookup maps: instrument ID for quotes/books, instrument/interval/start
-time for OHLCV bars, instrument/accession for fundamentals, event ID for news,
-and both instrument ID and symbol for metadata. Invalid raw fixture mappings
-surface the stable `FAKE_DATASET_INVALID` schema error; no lookup uses
-last-write-wins behavior.
+builds lookup maps: instrument ID for quotes/books,
+instrument/interval/start-time for OHLCV bars, normalized
+source/period/context for fundamentals, action ID for corporate actions, event
+ID for news, and both instrument ID and symbol for metadata. Invalid raw
+fixture mappings surface the stable `FAKE_DATASET_INVALID` schema error; no
+lookup uses last-write-wins behavior.
 
 The shared contract suite is `tests/contract/data/test_provider_ports.py`.
 Factories are registered independently for quote, book, OHLCV, fundamentals,
-events, and metadata. A provider implements and joins only the capability
-fixtures it supports; it is never required to implement all six. New adapters
-should add a recorded/no-network factory for each implemented capability, then
-add provider-specific response-normalization tests. Contract tests must never
-depend on public network availability or real credentials.
+corporate actions, events, and metadata. A provider implements and joins only
+the capability fixtures it supports; it is never required to implement every
+capability. New adapters should add a recorded/no-network factory for each
+implemented capability, then add provider-specific response-normalization
+tests. Contract tests must never depend on public network availability or real
+credentials.
