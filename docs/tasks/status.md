@@ -162,6 +162,11 @@ squash-merge rules above.
 | `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
 | `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
 
+Worktree evidence verified 2026-07-28: `.worktrees/p08-t0` is clean on
+`agent/p08-t0-runtime`, and `.worktrees/p08-t3` is clean on
+`agent/p08-t3-logging`; both resolve to the recorded immutable base
+`263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`.
+
 `P04-T0` may write `src/ainvest/data/{models,ports,fakes}.py`,
 `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
 `tests/contract/data/**`,
@@ -224,17 +229,29 @@ handoff, or broker behavior.
   base
 - **Allowed paths:** `src/ainvest/observability/__init__.py`,
   `src/ainvest/observability/logging.py`, and
-  `tests/unit/observability/test_logging.py`; no standalone documentation path
-  is assigned
-- **Shared configuration/dependencies:** `pyproject.toml` and `uv.lock` are
-  read-only; `structlog` is already present in the observability dependency
-  profile. `src/ainvest/config/**` is also read-only. Any dependency-profile or
-  configuration change requires a new coordinator assignment.
+  `tests/unit/observability/test_logging.py`;
+  `tests/integration/test_paper_flow.py` for full-workflow correlation;
+  `src/ainvest/orchestrator/paper_loop.py` only when required to propagate
+  logging context, without changing domain behavior; `pyproject.toml`,
+  `uv.lock`, and `docs/development.md` for the assigned dependency/setup
+  contract; and `scripts/dev` only if a wrapper change proves necessary for
+  the canonical clean setup and verification flow
+- **Shared configuration/dependencies:** `structlog` is currently available
+  only through the optional observability profile. This task must make a clean
+  `./scripts/dev setup` followed by `./scripts/dev verify` install and exercise
+  structured logging without weakening the existing dependency-profile
+  isolation. Any edits to `pyproject.toml`, `uv.lock`, `docs/development.md`,
+  or `scripts/dev` must be limited to that contract. `src/ainvest/config/**`
+  remains read-only; any other dependency or configuration change requires a
+  new coordinator assignment.
 - **Forbidden paths/scope:** every other production, test, documentation,
   configuration, dependency, schema, database, migration, CI, and tracker
   path; metrics/tracing/health (`P08-T4`); alerting (`P08-T5`); secret loading
-  (`P08-T7`); logging raw prompts, approval links, tokens, authorization
-  headers, account numbers, or full money-moving payloads
+  (`P08-T7`); the complete `src/ainvest/workflow/**` package; any change to
+  Paper-flow domain decisions, state transitions, risk, approval, execution,
+  reconciliation, or ledger behavior; logging raw prompts, approval links,
+  tokens, authorization headers, account numbers, or full money-moving
+  payloads
 - **Verification:** `./scripts/dev unit`; `./scripts/dev verify`; inspect the
   scoped diff and secret signatures; test the secret corpus,
   nested/exception/header redaction, stable correlation fields, JSON output,
@@ -307,7 +324,7 @@ task row is in the cross-cutting table below.
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
 | `P08-T0` | `in_progress` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
-| `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | `observability/{__init__,logging}.py`, `tests/unit/observability/test_logging.py` |
+| `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
