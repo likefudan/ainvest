@@ -33,6 +33,7 @@ from ainvest.execution import (
     transition_order,
 )
 from ainvest.execution.paper import as_write_port
+from ainvest.observability import get_logger, log_context
 from ainvest.orchestrator.approval_stub import (
     ApprovalStubStore,
     challenge_fingerprint,
@@ -108,6 +109,7 @@ from ainvest.workflow import (
 
 BPS_DENOM = Decimal("10000")
 _MONEY_QUANT = Decimal("0.000001")
+_PAPER_STRATEGY_RUN_ID = "srun_01HZYD4APAPER0001"
 
 
 @dataclass(slots=True)
@@ -267,6 +269,20 @@ def _record(
             payload={key: str(value) for key, value in dict(payload or {}).items()},
         )
     )
+    safe_summary = {
+        key: value
+        for key, value in dict(payload or {}).items()
+        if key in {"outcome", "reason_code", "status"}
+    }
+    proposal_id = subject_id if subject_id and subject_id.startswith("ordp_") else None
+    get_logger("paper_flow").info(
+        name,
+        lifecycle=state.lifecycle.value,
+        proposal_id=proposal_id,
+        digest_names=sorted(step_digests),
+        funds_safety=name in {"blind_retry_blocked", "reconcile_after_unknown"},
+        **safe_summary,
+    )
 
 
 def _candidate_to_proposal(
@@ -343,6 +359,15 @@ def _result(
 
 
 def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
+    """Run the fixed paper loop with workflow-scoped logging context."""
+    with log_context(
+        correlation_id=config.correlation_id,
+        strategy_run_id=_PAPER_STRATEGY_RUN_ID,
+    ):
+        return _run_paper_flow(config)
+
+
+def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
     """Run the fixed ResearchPacket → paper fill loop once."""
     as_of = ensure_utc(config.as_of)
     state = _FlowState(correlation_id=config.correlation_id)
@@ -361,7 +386,7 @@ def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         _ma_definition(),
         params=params,
         context=config.context,
-        run_id="srun_01HZYD4APAPER0001",
+        run_id=_PAPER_STRATEGY_RUN_ID,
     )
     if run.result is None or not run.result.signals:
         _record(

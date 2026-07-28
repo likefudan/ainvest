@@ -160,7 +160,7 @@ squash-merge rules above.
 | `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_review` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `e210d9601678f0abf750cf38590fd55ba10a873a` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
 | `P08-T0` | `in_review` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `62feb5d2c93ccde9eb651b79404296a39531818d` | `P01-T4`, `P03-T13` (merged) |
-| `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
+| `P08-T3` | `in_review` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `d9840a4ef80a380a26d7be4b0892d774fd8d43a8` | `P01-T2`, `P02-T8` (merged) |
 
 Initial worktree evidence verified 2026-07-28: `.worktrees/p08-t0` was clean on
 `agent/p08-t0-runtime`, and `.worktrees/p08-t3` was clean on
@@ -168,7 +168,10 @@ Initial worktree evidence verified 2026-07-28: `.worktrees/p08-t0` was clean on
 `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`. Before implementation, P08-T0
 was rebased to its assigned implementation base, then rebased again to the
 post-P05-T0 `main` commit recorded in its envelope before integration review;
-P08-T3 remains unchanged.
+P08-T3 was first rebased to
+`81344f5ac224c8879784db516062a8868758d230` before implementation, then
+rebased to post-P08-T0 `main`
+`d9840a4ef80a380a26d7be4b0892d774fd8d43a8` before integration review.
 
 `P04-T0` may write `src/ainvest/data/{models,ports,fakes}.py`,
 `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
@@ -388,10 +391,10 @@ Robinhood implementation, or Research Agent behavior.
 ##### Execution envelope: P08-T3
 
 - **Title:** Add Structured Logging, Correlation, and Redaction
-- **Status/owner:** `in_progress` — `batch_e_p08_t3`
+- **Status/owner:** `in_review` — `batch_e_p08_t3`
 - **Branch/worktree/base:** `agent/p08-t3-logging` /
   `.worktrees/p08-t3` at
-  `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
+  `81344f5ac224c8879784db516062a8868758d230`
 - **Design and task authority:** `design.md` sections 3.5, 3.6, 9, 11, and 13;
   `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T3`), 12 (Batch E), and 16;
   `DEC-005`, `DEC-006`, `DEC-009`, `DEC-010`, and `DEC-015`–`DEC-018`
@@ -406,14 +409,14 @@ Robinhood implementation, or Research Agent behavior.
   `uv.lock`, and `docs/development.md` for the assigned dependency/setup
   contract; and `scripts/dev` only if a wrapper change proves necessary for
   the canonical clean setup and verification flow
-- **Shared configuration/dependencies:** `structlog` is currently available
-  only through the optional observability profile. This task must make a clean
-  `./scripts/dev setup` followed by `./scripts/dev verify` install and exercise
-  structured logging without weakening the existing dependency-profile
-  isolation. Any edits to `pyproject.toml`, `uv.lock`, `docs/development.md`,
-  or `scripts/dev` must be limited to that contract. `src/ainvest/config/**`
-  remains read-only; any other dependency or configuration change requires a
-  new coordinator assignment.
+- **Shared configuration/dependencies:** At claim time, `structlog` was
+  available only through the optional observability profile. This branch
+  promotes structured logging to the core runtime while keeping
+  OpenTelemetry and Prometheus isolated in that optional profile; a clean
+  `./scripts/dev setup` followed by `./scripts/dev verify` installs and
+  exercises it. Edits to `pyproject.toml`, `uv.lock`, and
+  `docs/development.md` are limited to that contract. `scripts/dev` and
+  `src/ainvest/config/**` remain unchanged.
 - **Forbidden paths/scope:** every other production, test, documentation,
   configuration, dependency, schema, database, migration, CI, and tracker
   path; metrics/tracing/health (`P08-T4`); alerting (`P08-T5`); secret loading
@@ -427,8 +430,11 @@ Robinhood implementation, or Research Agent behavior.
   nested/exception/header redaction, stable correlation fields, JSON output,
   and preservation of funds-safety events in
   `tests/unit/observability/test_logging.py`
-- **Handoff:** pending implementation commit, scoped diff, verification
-  evidence, independent review, PR, and squash-merge commit
+- **Handoff:** implementation complete; clean `./scripts/dev setup` installed
+  `structlog` through the core profile; `./scripts/dev unit` passed 529 tests;
+  `./scripts/dev verify` passed 617 tests at 85.88% coverage; dependency audit
+  found no known vulnerabilities; scoped diff and secret-signature inspection
+  are clean. Independent review, PR, and squash-merge remain pending.
 
 #### Research track — `P04-T0` through `P04-T12`
 
@@ -494,7 +500,7 @@ task row is in the cross-cutting table below.
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
 | `P08-T0` | `in_review` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
-| `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
+| `P08-T3` | `in_review` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |

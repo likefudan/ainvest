@@ -2,12 +2,15 @@
 
 from __future__ import annotations
 
+import json
 from decimal import Decimal
+from io import StringIO
 
 import pytest
 
 from ainvest.execution import BrokerSubmitOutcome, BrokerSubmitRequest, BrokerSubmitResult
 from ainvest.execution.state_machine import OrderLifecycleState
+from ainvest.observability import clear_log_context, configure_logging
 from ainvest.orchestrator import PaperFlowTerminal, run_paper_flow
 from ainvest.orchestrator.fixtures import make_paper_flow_config, make_risk_config
 from ainvest.risk import AllowlistEntry
@@ -60,6 +63,32 @@ def test_paper_flow_success_replayable() -> None:
         "inject_market_event",
         "reconcile",
     }
+
+
+@pytest.mark.integration
+def test_paper_flow_logs_connect_every_step_without_money_payloads() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(
+        service="paper-orchestrator",
+        environment="test",
+        version="test-version",
+        stream=stream,
+    )
+
+    result = run_paper_flow(make_paper_flow_config(inject_approval=True))
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+
+    assert [event["event"] for event in events] == [step.name for step in result.steps]
+    assert {event["correlation_id"] for event in events} == {result.correlation_id}
+    assert {event["strategy_run_id"] for event in events} == {"srun_01HZYD4APAPER0001"}
+    assert all(event["service"] == "paper-orchestrator" for event in events)
+    assert all(event["environment"] == "test" for event in events)
+    assert all("causation_id" in event for event in events)
+    assert all("proposal_id" in event for event in events)
+    assert all("quantity" not in event for event in events)
+    assert all("limit_price" not in event for event in events)
+    assert any(event["proposal_id"] == result.proposal_id for event in events)
 
 
 @pytest.mark.integration

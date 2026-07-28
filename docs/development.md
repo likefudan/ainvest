@@ -86,12 +86,12 @@ Runtime capabilities are isolated as optional extras:
 
 | Profile | Install command | Intended consumer |
 |---|---|---|
-| Core | `uv sync --locked --no-default-groups` | Shared schemas, workflow, storage, scheduling |
+| Core | `uv sync --locked --no-default-groups` | Shared schemas, workflow, storage, scheduling, structured JSON logging |
 | Research | `uv sync --locked --no-default-groups --extra research` | Research/data workers |
 | Offline data | `uv sync --locked --no-default-groups --extra offline-data` | Development and offline research only |
 | Approval | `uv sync --locked --no-default-groups --extra approval` | Approval API and Telegram worker |
 | Broker | `uv sync --locked --no-default-groups --extra broker` | Official MCP broker gateways |
-| Observability | `uv sync --locked --no-default-groups --extra observability` | Runtime telemetry |
+| Observability | `uv sync --locked --no-default-groups --extra observability` | Metrics, tracing, and health telemetry |
 
 Multiple deployment profiles may be combined by repeating `--extra`. In particular, the research
 profile does not install the offline-data, approval, or broker packages. `yfinance` is isolated in

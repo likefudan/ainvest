@@ -16,6 +16,7 @@ dependencies = [
     "pydantic-settings>=2.8,<3",
     "pyyaml>=6,<7",
     "sqlalchemy>=2.0,<3",
+    "structlog>=25,<26",
     "transitions>=0.9,<1",
 ]
 
@@ -42,7 +43,6 @@ observability = [
     "opentelemetry-api>=1.32,<2",
     "opentelemetry-sdk>=1.32,<2",
     "prometheus-client>=0.22,<1",
-    "structlog>=25,<26",
 ]
 
 [dependency-groups]

@@ -25,6 +25,7 @@ dependencies = [
     { name = "pydantic-settings" },
     { name = "pyyaml" },
     { name = "sqlalchemy" },
+    { name = "structlog" },
     { name = "transitions" },
 ]
 
@@ -42,7 +43,6 @@ observability = [
     { name = "opentelemetry-api" },
     { name = "opentelemetry-sdk" },
     { name = "prometheus-client" },
-    { name = "structlog" },
 ]
 offline-data = [
     { name = "yfinance" },
@@ -91,7 +91,7 @@ requires-dist = [
     { name = "python-telegram-bot", marker = "extra == 'approval'", specifier = ">=22,<23" },
     { name = "pyyaml", specifier = ">=6,<7" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
-    { name = "structlog", marker = "extra == 'observability'", specifier = ">=25,<26" },
+    { name = "structlog", specifier = ">=25,<26" },
     { name = "transitions", specifier = ">=0.9,<1" },
     { name = "uvicorn", extras = ["standard"], marker = "extra == 'approval'", specifier = ">=0.34,<1" },
     { name = "webauthn", marker = "extra == 'approval'", specifier = ">=2.6,<3" },
