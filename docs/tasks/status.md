@@ -182,15 +182,16 @@ Robinhood implementation, or Research Agent behavior.
 - **Second review remediation:** `0b7cf3f965d192c54abd1c22cb518077e37aed6a`
 - **Third review remediation:** `83f3a02931b52ae89a2062e06cb69d5e9c11f217`
 - **Fourth review remediation:** `d4af0a027313460a956ce6eb6e5e3904e8415922`
+- **Fifth review remediation:** `7a4eb71e5f55d68677c3f6d8cd0838dbfa36d2cd`
 - **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
   `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
   `tests/contract/data/test_provider_ports.py`,
   `tests/unit/architecture/test_package_boundaries.py`,
   `docs/data-adapters.md`, and this P04-T0 tracker metadata.
-- **Verification:** focused data/architecture contracts passed (148 tests).
-  `./scripts/dev verify` passed after fourth review remediation: format, lint,
-  mypy, and schema snapshots passed; unit 586, contract 97, integration 15,
-  aggregate 698 tests; 86.22% branch coverage.
+- **Verification:** focused data/architecture contracts passed (150 tests).
+  `./scripts/dev verify` passed after fifth review remediation: format, lint,
+  mypy, and schema snapshots passed; unit 588, contract 97, integration 15,
+  aggregate 700 tests; 86.25% branch coverage.
 - **Handoff notes:** Defines synchronous provider-independent quote,
   price-book, OHLCV, fundamentals, corporate-action, news/event, and
   instrument-metadata ports; bounded timeout and query-bound opaque pagination;
@@ -200,7 +201,8 @@ Robinhood implementation, or Research Agent behavior.
   requiring SEC evidence; trading and reporting currency are independent, and
   the foreign-issuer fixture is USD-traded with EUR reports/facts. The SEC
   subtype parses an exact `filing:source/accession` path and rejects substring
-  or malformed bindings. Filing/citation knowledge time cannot exceed snapshot
+  or malformed bindings. A matching filing citation cannot be observed before
+  the filing's `filed_at`; filing/citation knowledge time cannot exceed snapshot
   `as_of`, and corporate declarations cannot postdate observation.
   Duplicate fundamental identity includes source/accession, period, and
   normalized context, allowing multiple filing periods without merging
