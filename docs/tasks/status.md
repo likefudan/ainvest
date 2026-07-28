@@ -100,7 +100,7 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
-| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` claimed) |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` in review) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` claimed) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` claimed) |
@@ -157,7 +157,7 @@ squash-merge rules above.
 
 | Task | Status | Owner | Branch / worktree | Immutable base | Dependencies |
 |---|---|---|---|---|---|
-| `P04-T0` | `in_progress` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T1`, `P03-T13` (merged) |
+| `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_progress` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
 | `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
 | `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
@@ -173,6 +173,60 @@ Worktree evidence verified 2026-07-28: `.worktrees/p08-t0` is clean on
 `tests/unit/architecture/test_package_boundaries.py`, and
 `docs/data-adapters.md`. It must not add a provider SDK, live fallback,
 Robinhood implementation, or Research Agent behavior.
+
+`P04-T0` handoff:
+
+- **Rebased main/base:** `81344f5ac224c8879784db516062a8868758d230`
+- **Initial implementation tip:** `513a440002041b096d821363834aedbef207b312`
+- **First review remediation:** `90e00c488733d54270df403aea3005b50b143c24`
+- **Second review remediation:** `0b7cf3f965d192c54abd1c22cb518077e37aed6a`
+- **Third review remediation:** `83f3a02931b52ae89a2062e06cb69d5e9c11f217`
+- **Fourth review remediation:** `d4af0a027313460a956ce6eb6e5e3904e8415922`
+- **Fifth review remediation:** `7a4eb71e5f55d68677c3f6d8cd0838dbfa36d2cd`
+- **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
+  `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
+  `tests/contract/data/test_provider_ports.py`,
+  `tests/unit/architecture/test_package_boundaries.py`,
+  `docs/data-adapters.md`, and this P04-T0 tracker metadata.
+- **Verification:** focused data/architecture contracts passed (150 tests).
+  `./scripts/dev verify` passed after fifth review remediation: format, lint,
+  mypy, and schema snapshots passed; unit 588, contract 97, integration 15,
+  aggregate 700 tests; 86.25% branch coverage.
+- **Handoff notes:** Defines synchronous provider-independent quote,
+  price-book, OHLCV, fundamentals, corporate-action, news/event, and
+  instrument-metadata ports; bounded timeout and query-bound opaque pagination;
+  stable typed failures; source/timezone/delay/quality-preserving result
+  envelopes; and explicit OHLCV adjustment/empty-window semantics. Generic
+  fundamentals retain period/context/unit/reporting-currency/certainty without
+  requiring SEC evidence; trading and reporting currency are independent, and
+  the foreign-issuer fixture is USD-traded with EUR reports/facts. The SEC
+  subtype parses an exact `filing:source/accession` path and rejects substring
+  or malformed bindings. A matching filing citation cannot be observed before
+  the filing's `filed_at`; filing/citation knowledge time cannot exceed snapshot
+  `as_of`, and corporate declarations cannot postdate observation.
+  Duplicate fundamental identity includes source/accession, period, and
+  normalized context, allowing multiple filing periods without merging
+  conflicts. The minimal corporate-action contract covers splits and cash
+  dividends with effective/applicable dates, provenance, partial/missing
+  semantics, stable errors, deterministic pagination, and no provider-specific
+  Yahoo types. Licensed, published, multi-symbol/multi-citation events remain
+  supported. Unitless decimal facts are rejected as non-comparable; SEC forms
+  use a bounded grammar that includes amendment forms. Filing and event URLs
+  share a Pydantic-parsed HTTPS-only type that requires a valid host and rejects
+  credentials and fragments. Partial fundamentals and one-sided books carry
+  explicit quality flags.
+  Capability-scoped provider contract factories allow partial adapters. Invalid
+  fake datasets, including duplicate identity keys or cross-collection
+  instrument-ID conflicts in symbol/exchange/trading-currency/asset-type, become
+  stable schema errors; source timezones are preserved. Failure contracts cover
+  timeout, rate-limit, stale, incomplete, and upstream errors with explicit
+  retryability.
+  Pinned live quote/book capabilities still expose no fallback under `DEC-003`.
+  The architecture test prevents provider SDK imports above the data/execution
+  boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
+  behavior changed.
+- **Blockers:** None.
+- **PR:** Pending.
 
 `P05-T0` may write `src/ainvest/approval/{service,tokens}.py`,
 `src/ainvest/approval/__init__.py` (re-exports only),
@@ -268,7 +322,7 @@ can never become a live quote fallback.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P04-T0` | `in_progress` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
+| `P04-T0` | `in_review` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `not_started` | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
