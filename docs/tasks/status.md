@@ -100,7 +100,7 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
-| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` claimed) |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` in review) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` claimed) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` claimed) |
@@ -157,7 +157,7 @@ squash-merge rules above.
 
 | Task | Status | Owner | Branch / worktree | Immutable base | Dependencies |
 |---|---|---|---|---|---|
-| `P04-T0` | `in_progress` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T1`, `P03-T13` (merged) |
+| `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_progress` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
 | `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
 | `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
@@ -173,6 +173,29 @@ Worktree evidence verified 2026-07-28: `.worktrees/p08-t0` is clean on
 `tests/unit/architecture/test_package_boundaries.py`, and
 `docs/data-adapters.md`. It must not add a provider SDK, live fallback,
 Robinhood implementation, or Research Agent behavior.
+
+`P04-T0` handoff:
+
+- **Rebased main/base:** `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
+- **Implementation tip:** `b57cd6124753fc7c13a2057de536dcba973704b2`
+- **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
+  `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
+  `tests/contract/data/test_provider_ports.py`,
+  `tests/unit/architecture/test_package_boundaries.py`,
+  `docs/data-adapters.md`, and this P04-T0 tracker metadata.
+- **Verification:** `./scripts/dev verify` passed after implementation:
+  630 aggregate tests, 86.12% branch coverage, current schema snapshots.
+- **Handoff notes:** Defines synchronous provider-independent quote,
+  price-book, OHLCV, fundamentals, news/event, and instrument-metadata ports;
+  bounded timeout and opaque pagination request models; stable typed failures;
+  source/timezone/delay/quality-preserving result envelopes; explicit OHLCV
+  adjustment semantics; pinned no-fallback live quote/book capabilities under
+  `DEC-003`; and a deterministic no-network fake with shared contract tests.
+  The architecture test prevents provider SDK imports above the data/execution
+  boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
+  behavior changed.
+- **Blockers:** None.
+- **PR:** Pending.
 
 `P05-T0` may write `src/ainvest/approval/{service,tokens}.py`,
 `src/ainvest/approval/__init__.py` (re-exports only),
@@ -268,7 +291,7 @@ can never become a live quote fallback.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P04-T0` | `in_progress` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
+| `P04-T0` | `in_review` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `not_started` | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
