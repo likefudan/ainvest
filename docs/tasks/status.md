@@ -180,24 +180,32 @@ Robinhood implementation, or Research Agent behavior.
 - **Initial implementation tip:** `513a440002041b096d821363834aedbef207b312`
 - **First review remediation:** `90e00c488733d54270df403aea3005b50b143c24`
 - **Second review remediation:** `0b7cf3f965d192c54abd1c22cb518077e37aed6a`
+- **Third review remediation:** `83f3a02931b52ae89a2062e06cb69d5e9c11f217`
 - **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
   `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
   `tests/contract/data/test_provider_ports.py`,
   `tests/unit/architecture/test_package_boundaries.py`,
   `docs/data-adapters.md`, and this P04-T0 tracker metadata.
-- **Verification:** focused data/architecture contracts passed (119 tests).
-  `./scripts/dev verify` passed after second review remediation: format, lint,
-  mypy, and schema snapshots passed; unit 563, contract 91, integration 15,
-  aggregate 669 tests; 86.04% branch coverage.
+- **Verification:** focused data/architecture contracts passed (131 tests).
+  `./scripts/dev verify` passed after third review remediation: format, lint,
+  mypy, and schema snapshots passed; unit 570, contract 96, integration 15,
+  aggregate 681 tests; 86.10% branch coverage.
 - **Handoff notes:** Defines synchronous provider-independent quote,
-  price-book, OHLCV, fundamentals, news/event, and instrument-metadata ports;
-  bounded timeout and query-bound opaque pagination; stable typed failures;
-  source/timezone/delay/quality-preserving result envelopes; explicit OHLCV
-  adjustment/empty-window semantics; filing/period/currency/certainty-bound
-  fundamentals; and licensed, published, multi-symbol/multi-citation events.
-  Unitless decimal facts are rejected as non-comparable; SEC forms use a
-  bounded grammar that includes amendment forms. Filing and event URLs share a
-  Pydantic-parsed HTTPS-only type that requires a valid host and rejects
+  price-book, OHLCV, fundamentals, corporate-action, news/event, and
+  instrument-metadata ports; bounded timeout and query-bound opaque pagination;
+  stable typed failures; source/timezone/delay/quality-preserving result
+  envelopes; and explicit OHLCV adjustment/empty-window semantics. Generic
+  fundamentals retain period/context/unit/currency/certainty without requiring
+  SEC evidence; the SEC subtype requires accession-bound filing evidence.
+  Duplicate fundamental identity includes source/accession, period, and
+  normalized context, allowing multiple filing periods without merging
+  conflicts. The minimal corporate-action contract covers splits and cash
+  dividends with effective/applicable dates, provenance, partial/missing
+  semantics, stable errors, deterministic pagination, and no provider-specific
+  Yahoo types. Licensed, published, multi-symbol/multi-citation events remain
+  supported. Unitless decimal facts are rejected as non-comparable; SEC forms
+  use a bounded grammar that includes amendment forms. Filing and event URLs
+  share a Pydantic-parsed HTTPS-only type that requires a valid host and rejects
   credentials and fragments. Partial fundamentals and one-sided books carry
   explicit quality flags.
   Capability-scoped provider contract factories allow partial adapters. Invalid
