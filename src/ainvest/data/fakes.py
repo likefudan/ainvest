@@ -460,7 +460,7 @@ class DeterministicFakeDataProvider:
 
 
 def fixture_dataset() -> FakeDataset:
-    """Return the canonical two-instrument P04-T0 fixture dataset."""
+    """Return the canonical three-instrument P04-T0 fixture dataset."""
     source = "ainvest.fake.v1"
     envelope = _provenance(source=source, observed_at="2026-07-24T18:30:00Z")
     aapl = _instrument(
@@ -474,6 +474,12 @@ def fixture_dataset() -> FakeDataset:
         symbol="SPY",
         exchange="ARCX",
         asset_type="ETF",
+        source=source,
+    )
+    sap = _instrument(
+        instrument_id="rh_inst_sap_xnys",
+        symbol="SAP",
+        exchange="XNYS",
         source=source,
     )
     return FakeDataset(
@@ -492,7 +498,10 @@ def fixture_dataset() -> FakeDataset:
             _bar(aapl, "2026-07-23T00:00:00Z", "213", "216", "212", "215.42", source),
             _bar(spy, "2026-07-23T00:00:00Z", "631", "638", "630", "636.12", source),
         ),
-        fundamentals=(_fundamental(aapl, envelope),),
+        fundamentals=(
+            _fundamental(aapl, envelope),
+            _generic_fundamental(sap, envelope),
+        ),
         corporate_actions=(
             _split(aapl, source),
             _dividend(aapl, source),
@@ -546,6 +555,7 @@ def fixture_dataset() -> FakeDataset:
         instrument_metadata=(
             _metadata(aapl, source),
             _metadata(spy, source),
+            _metadata(sap, source),
         ),
     )
 
@@ -775,7 +785,7 @@ def _fundamental(
                     "fiscal_period": "Q3",
                 }
             ),
-            "currency": "USD",
+            "reporting_currency": "USD",
             "filing": filing,
             "earnings_at": "2026-07-23T20:00:00Z",
             "earnings_time_certainty": "CONFIRMED",
@@ -790,6 +800,52 @@ def _fundamental(
                     evidence_id="evid_fundamental_aapl_mc",
                     kind=EvidenceKind.FUNDAMENTAL,
                     locator="fundamental:ainvest.fake.v1/AAPL#market_cap_usd",
+                    source=provenance.source,
+                ),
+            ),
+        }
+    )
+
+
+def _generic_fundamental(
+    instrument: InstrumentIdentity,
+    provenance: Provenance,
+) -> FundamentalObservation:
+    snapshot = FundamentalSnapshot.model_validate(
+        {
+            "symbol": instrument.symbol,
+            "as_of": "2026-07-24T18:30:00Z",
+            "facts": (
+                {
+                    "key": "revenue_eur",
+                    "kind": FactValueKind.DECIMAL,
+                    "decimal_value": "36000000000",
+                    "unit": "EUR",
+                },
+            ),
+            "provenance": provenance,
+        }
+    )
+    return FundamentalObservation.model_validate(
+        {
+            "instrument": instrument,
+            "snapshot": snapshot,
+            "period": ReportingPeriod.model_validate(
+                {
+                    "start_date": "2026-01-01",
+                    "end_date": "2026-06-30",
+                    "fiscal_year": 2026,
+                    "fiscal_period": "H1",
+                }
+            ),
+            "reporting_currency": "EUR",
+            "earnings_at": None,
+            "earnings_time_certainty": "UNKNOWN",
+            "citations": (
+                _citation(
+                    evidence_id="evid_fundamental_sap_revenue",
+                    kind=EvidenceKind.FUNDAMENTAL,
+                    locator="fundamental:ainvest.fake.v1/SAP#revenue_eur",
                     source=provenance.source,
                 ),
             ),

@@ -273,6 +273,31 @@ def test_conflicting_metadata_symbol_is_a_stable_schema_error() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    ("field", "conflicting_value"),
+    (
+        ("symbol", "MSFT"),
+        ("exchange", "XNYS"),
+        ("currency", "EUR"),
+        ("asset_type", "ETF"),
+    ),
+)
+def test_cross_collection_instrument_identity_conflict_is_stable_schema_error(
+    field: str,
+    conflicting_value: str,
+) -> None:
+    payload = fixture_dataset().model_dump(mode="json")
+    payload["corporate_actions"][0]["instrument"][field] = conflicting_value
+
+    with pytest.raises(DataSchemaError) as caught:
+        DeterministicFakeDataProvider(dataset=payload)
+
+    assert caught.value.code is DataErrorCode.SCHEMA_INCOMPATIBLE
+    assert caught.value.operation is DataOperation.DATASET
+    assert caught.value.reason_code == "FAKE_DATASET_INVALID"
+
+
+@pytest.mark.unit
 def test_fundamental_observation_requires_filing_bound_citation() -> None:
     observation = fixture_dataset().fundamentals[0]
     assert isinstance(observation, SecFundamentalObservation)
@@ -328,6 +353,63 @@ def test_sec_fundamental_requires_filing_and_accession_bound_citation() -> None:
     payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
     payload["citations"][0]["locator"] = "filing:sec.edgar/0000000000-00-000000#10-Q"
     with pytest.raises(ValidationError, match="accession-bound"):
+        SecFundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "locator",
+    (
+        "event:sec.edgar/0000320193-26-000001#10-Q",
+        "filing:sec.edgar/prefix0000320193-26-000001#10-Q",
+        "filing:sec.edgar/0000320193-26-000001suffix#10-Q",
+        "filing:sec.edgar/0000320193-26-000001/extra#10-Q",
+        "filing:sec.edgar//0000320193-26-000001#10-Q",
+        "filing:sec.edgar:0000320193-26-000001#10-Q",
+    ),
+)
+def test_sec_filing_citation_requires_exact_scheme_and_accession_path(locator: str) -> None:
+    payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
+    payload["citations"][0]["locator"] = locator
+
+    with pytest.raises(ValidationError, match="accession-bound"):
+        SecFundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_filing_cannot_be_observed_before_it_was_filed() -> None:
+    observation = fixture_dataset().fundamentals[0]
+    assert isinstance(observation, SecFundamentalObservation)
+    payload = observation.filing.model_dump(mode="json")
+    payload["filed_at"] = "2026-07-24T12:00:01Z"
+
+    with pytest.raises(ValidationError, match=r"filing provenance\.observed_at"):
+        FilingReference.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("moment", ("observed_at", "received_at"))
+def test_fundamental_citation_cannot_arrive_after_snapshot_as_of(moment: str) -> None:
+    payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
+    citation_provenance = payload["citations"][1]["provenance"]
+    citation_provenance[moment] = "2026-07-24T18:30:01Z"
+    if moment == "observed_at":
+        citation_provenance["received_at"] = "2026-07-24T18:30:01Z"
+
+    with pytest.raises(ValidationError, match=rf"citation\[1\].*{moment}"):
+        SecFundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("moment", ("observed_at", "received_at"))
+def test_filing_provenance_cannot_arrive_after_snapshot_as_of(moment: str) -> None:
+    payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
+    filing_provenance = payload["filing"]["provenance"]
+    filing_provenance[moment] = "2026-07-24T18:30:01Z"
+    if moment == "observed_at":
+        filing_provenance["received_at"] = "2026-07-24T18:30:01Z"
+
+    with pytest.raises(ValidationError, match=rf"filing\.provenance\.{moment}"):
         SecFundamentalObservation.model_validate(payload)
 
 
@@ -394,6 +476,18 @@ def test_missing_corporate_action_dates_require_quality_flags() -> None:
     dividend_payload["pay_date"] = None
     with pytest.raises(ValidationError, match="pay_date"):
         DividendObservation.model_validate(dividend_payload)
+
+
+@pytest.mark.unit
+def test_corporate_action_declaration_cannot_postdate_observation() -> None:
+    split = fixture_dataset().corporate_actions[0]
+    assert isinstance(split, SplitObservation)
+    payload = split.model_dump(mode="json")
+    payload["effective_date"] = "2026-06-20"
+    payload["declared_date"] = "2026-06-16"
+
+    with pytest.raises(ValidationError, match=r"provenance\.observed_at"):
+        SplitObservation.model_validate(payload)
 
 
 @pytest.mark.unit

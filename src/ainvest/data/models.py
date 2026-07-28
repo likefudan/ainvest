@@ -7,11 +7,13 @@ this boundary.
 
 from __future__ import annotations
 
-from collections.abc import Callable
-from datetime import date
+import re
+from collections.abc import Callable, Iterable
+from datetime import date, datetime
 from enum import StrEnum
 from ipaddress import ip_address
 from typing import Annotated, Any, Literal, Self, cast
+from urllib.parse import urlsplit
 
 from pydantic import (
     AfterValidator,
@@ -49,10 +51,12 @@ from ainvest.schemas.research import EvidenceCitation, EvidenceKind
 
 InstrumentId = Annotated[str, StringConstraints(min_length=3, max_length=128)]
 PageCursor = Annotated[str, StringConstraints(min_length=1, max_length=512)]
+_ACCESSION_NUMBER_PATTERN = r"^\d{10}-\d{2}-\d{6}$"
 AccessionNumber = Annotated[
     str,
-    StringConstraints(pattern=r"^\d{10}-\d{2}-\d{6}$", min_length=20, max_length=20),
+    StringConstraints(pattern=_ACCESSION_NUMBER_PATTERN, min_length=20, max_length=20),
 ]
+_ACCESSION_NUMBER_RE = re.compile(_ACCESSION_NUMBER_PATTERN)
 SecFormType = Annotated[
     str,
     StringConstraints(
@@ -318,6 +322,8 @@ class FilingReference(DomainModel):
     def _period_precedes_filing(self) -> Self:
         if self.report_period_end > self.filed_at.date():
             raise ValueError("report_period_end must be <= filed_at date")
+        if self.filed_at > self.provenance.observed_at:
+            raise ValueError("filed_at must be <= filing provenance.observed_at")
         return self
 
 
@@ -329,7 +335,7 @@ class FundamentalObservation(DomainModel):
     snapshot: FundamentalSnapshot
     period: ReportingPeriod
     reporting_context: MachineCode = "CONSOLIDATED"
-    currency: CurrencyCode
+    reporting_currency: CurrencyCode
     earnings_at: UtcDateTime | None
     earnings_time_certainty: TimeCertainty
     citations: Annotated[tuple[EvidenceCitation, ...], Field(max_length=100)] = ()
@@ -343,8 +349,6 @@ class FundamentalObservation(DomainModel):
     def _bindings_are_consistent(self) -> Self:
         if self.instrument.symbol != self.snapshot.symbol:
             raise ValueError("instrument.symbol must match snapshot.symbol")
-        if self.instrument.currency != self.currency:
-            raise ValueError("currency must match instrument.currency")
         unitless_decimal_keys = tuple(
             fact.key
             for fact in self.snapshot.facts
@@ -360,6 +364,12 @@ class FundamentalObservation(DomainModel):
         citation_ids = [citation.evidence_id for citation in self.citations]
         if len(citation_ids) != len(set(citation_ids)):
             raise ValueError("fundamental citation evidence_ids must be unique")
+        for index, citation in enumerate(self.citations):
+            _require_provenance_by_as_of(
+                f"fundamental citation[{index}]",
+                citation.provenance,
+                self.snapshot.as_of,
+            )
         if not hasattr(self, "filing") and any(
             citation.kind is EvidenceKind.FILING for citation in self.citations
         ):
@@ -379,9 +389,14 @@ class SecFundamentalObservation(FundamentalObservation):
             raise ValueError("fact period.end_date must be <= filing.report_period_end")
         if self.filing.filed_at > self.snapshot.as_of:
             raise ValueError("filing.filed_at must be <= snapshot.as_of")
+        _require_provenance_by_as_of(
+            "filing",
+            self.filing.provenance,
+            self.snapshot.as_of,
+        )
         if not any(
             citation.kind is EvidenceKind.FILING
-            and self.filing.accession_number in citation.locator
+            and _filing_citation_accession(citation.locator) == self.filing.accession_number
             for citation in self.citations
         ):
             raise ValueError("SEC fundamentals require an accession-bound filing citation")
@@ -402,6 +417,11 @@ class CorporateActionObservation(DomainModel):
     def _declared_before_effective(self) -> Self:
         if self.declared_date is not None and self.declared_date > self.effective_date:
             raise ValueError("declared_date must be <= effective_date")
+        if (
+            self.declared_date is not None
+            and self.declared_date > self.provenance.observed_at.date()
+        ):
+            raise ValueError("declared_date must be <= provenance.observed_at date")
         if (
             self.declared_date is None
             and QualityFlag.MISSING_FIELDS not in self.provenance.quality_flags
@@ -477,7 +497,8 @@ class NewsEventObservation(DomainModel):
             raise ValueError("news/event citation evidence_ids must be unique")
         for filing in self.related_filings:
             if not any(
-                citation.kind is EvidenceKind.FILING and filing.accession_number in citation.locator
+                citation.kind is EvidenceKind.FILING
+                and _filing_citation_accession(citation.locator) == filing.accession_number
                 for citation in self.citations
             ):
                 raise ValueError("related filings require accession-bound filing citations")
@@ -566,6 +587,18 @@ class FakeDataset(DomainModel):
                 self.provenance,
                 require_quality_flags=False,
             )
+        _validate_canonical_instrument_identities(
+            item.instrument
+            for items in (
+                self.quotes,
+                self.price_books,
+                self.ohlcv,
+                self.fundamentals,
+                self.corporate_actions,
+                self.instrument_metadata,
+            )
+            for item in items
+        )
         _require_unique_keys(
             self.quotes,
             lambda item: item.instrument.instrument_id,
@@ -607,6 +640,49 @@ class FakeDataset(DomainModel):
             "metadata symbol",
         )
         return self
+
+
+def _filing_citation_accession(locator: str) -> str | None:
+    """Parse the accession from the exact ``filing:source/accession`` path."""
+    if not locator.startswith("filing:") or "?" in locator:
+        return None
+    parsed = urlsplit(locator)
+    if parsed.scheme != "filing" or parsed.netloc:
+        return None
+    path_parts = parsed.path.split("/")
+    if len(path_parts) != 2 or not path_parts[0]:
+        return None
+    accession = path_parts[1]
+    if _ACCESSION_NUMBER_RE.fullmatch(accession) is None:
+        return None
+    return accession
+
+
+def _require_provenance_by_as_of(
+    label: str,
+    provenance: Provenance,
+    as_of: datetime,
+) -> None:
+    if provenance.observed_at > as_of:
+        raise ValueError(f"{label}.provenance.observed_at must be <= snapshot.as_of")
+    if provenance.received_at > as_of:
+        raise ValueError(f"{label}.provenance.received_at must be <= snapshot.as_of")
+
+
+def _validate_canonical_instrument_identities(
+    identities: Iterable[InstrumentIdentity],
+) -> None:
+    canonical: dict[str, tuple[object, ...]] = {}
+    for identity in identities:
+        comparable = (
+            identity.symbol,
+            identity.exchange,
+            identity.currency,
+            identity.asset_type,
+        )
+        existing = canonical.setdefault(identity.instrument_id, comparable)
+        if existing != comparable:
+            raise ValueError("fake dataset instrument_id maps to conflicting canonical identity")
 
 
 def _fundamental_identity(

@@ -24,6 +24,7 @@ from ainvest.data import (
     DataUpstreamError,
     DeterministicFakeDataProvider,
     DividendObservation,
+    FundamentalObservation,
     FundamentalRequest,
     FundamentalsPort,
     InstrumentMetadataPort,
@@ -227,7 +228,7 @@ def test_fundamental_contract_retains_period_filing_currency_and_citations(
 
     assert isinstance(observation, SecFundamentalObservation)
     assert observation.instrument.symbol == observation.snapshot.symbol == "AAPL"
-    assert observation.currency == "USD"
+    assert observation.reporting_currency == "USD"
     assert observation.period.end_date == observation.filing.report_period_end
     assert observation.filing.accession_number == "0000320193-26-000001"
     assert observation.earnings_time_certainty is TimeCertainty.CONFIRMED
@@ -236,6 +237,22 @@ def test_fundamental_contract_retains_period_filing_currency_and_citations(
         EvidenceKind.FILING,
         EvidenceKind.FUNDAMENTAL,
     }
+    _assert_provenance(result, fundamentals_port.source_id)
+
+
+@pytest.mark.contract
+def test_generic_fundamental_decouples_reporting_from_trading_currency(
+    fundamentals_port: FundamentalsPort,
+) -> None:
+    result = fundamentals_port.get_fundamentals(_fundamental_request("SAP"))
+    observation = result.items[0]
+
+    assert isinstance(observation, FundamentalObservation)
+    assert not isinstance(observation, SecFundamentalObservation)
+    assert observation.instrument.currency == "USD"
+    assert observation.reporting_currency == "EUR"
+    assert observation.snapshot.facts[0].unit == "EUR"
+    assert all(citation.kind is not EvidenceKind.FILING for citation in observation.citations)
     _assert_provenance(result, fundamentals_port.source_id)
 
 
@@ -336,6 +353,7 @@ def test_corporate_action_contract_normalizes_splits_dividends_and_pagination(
     )
 
     assert len(first.items) == 1
+    assert {action.instrument.instrument_id for action in first.items} == {"rh_inst_aapl_xnas"}
     assert isinstance(first.items[0], SplitObservation)
     assert first.items[0].action_type is CorporateActionType.SPLIT
     assert str(first.items[0].split_ratio) == "4"
@@ -349,6 +367,7 @@ def test_corporate_action_contract_normalizes_splits_dividends_and_pagination(
         )
     )
     assert len(second.items) == 1
+    assert {action.instrument.instrument_id for action in second.items} == {"rh_inst_aapl_xnas"}
     assert isinstance(second.items[0], DividendObservation)
     assert second.items[0].action_type is CorporateActionType.DIVIDEND
     assert second.items[0].currency == "USD"

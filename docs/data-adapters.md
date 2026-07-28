@@ -36,20 +36,31 @@ they do not silently relabel it as UTC.
 `FundamentalObservation` is provider-independent and composes the existing
 `FundamentalSnapshot`, `InstrumentIdentity`, `Provenance`, and
 `EvidenceCitation` contracts. It retains reporting period, normalized reporting
-context, currency, earnings-time certainty, and optional non-filing citations,
-so normalized sources such as Robinhood MCP are not required to manufacture SEC
-evidence. Decimal facts must carry an explicit unit; a unitless numeric fact is
-rejected at this normalization boundary and cannot be assumed comparable.
+context, reporting currency, earnings-time certainty, and optional non-filing
+citations, so normalized sources such as Robinhood MCP are not required to
+manufacture SEC evidence. `reporting_currency` describes the issuer's financial
+statements and is deliberately independent from the instrument's trading
+currency; every decimal fact still carries its own explicit unit. A unitless
+numeric fact is rejected at this normalization boundary and cannot be assumed
+comparable. The deterministic fixture includes a USD-traded foreign issuer with
+EUR reporting currency and EUR-denominated facts.
 
 `SecFundamentalObservation` is the stricter filing-derived subtype used by an
 SEC/XBRL adapter. It requires a `FilingReference` plus a filing citation that
-binds the exact accession number. A generic observation may not carry a
-`FILING` citation, which prevents non-SEC providers from presenting generic data
-as primary SEC evidence. One filing may contain facts for multiple reporting
-periods or normalized contexts. Fake-dataset identity therefore includes the
-instrument, accession/source snapshot, period dates, and reporting context:
-distinct annual, quarterly, comparative, or segment contexts stay separate,
-while an exact duplicate period/context is rejected instead of merged.
+binds the exact accession number. Binding parses the locator as exactly
+`filing:<source>/<accession>[#fragment]`; wrong schemes, malformed separators,
+extra path components, and accession prefixes/suffixes do not match. A generic
+observation may not carry a `FILING` citation, which prevents non-SEC providers
+from presenting generic data as primary SEC evidence. One filing may contain
+facts for multiple reporting periods or normalized contexts. Fake-dataset
+identity therefore includes the instrument, accession/source snapshot, period
+dates, and reporting context: distinct annual, quarterly, comparative, or
+segment contexts stay separate, while an exact duplicate period/context is
+rejected instead of merged.
+
+Knowledge time is fail-closed. A filing cannot be observed before `filed_at`;
+filing provenance and every fundamental citation must be observed and received
+no later than the fundamental snapshot's `as_of`.
 
 SEC form names use a bounded, provider-independent grammar (one to 24 uppercase
 alphanumeric groups separated by a single space or hyphen, with an optional
@@ -65,7 +76,8 @@ explicit positive amount and currency. Both retain canonical instrument
 identity, effective date, declaration date when available, and provenance;
 dividends also retain pay date when available. Missing applicable declaration
 or pay dates require `MISSING_FIELDS`, and item quality flags propagate to the
-page envelope.
+page envelope. A declaration date cannot be later than the action provenance's
+observed date.
 
 `NewsEventObservation` composes the existing `MarketEvent` and
 `EvidenceCitation` contracts. It retains HTTPS URL, publisher, publication
@@ -133,6 +145,11 @@ source/period/context for fundamentals, action ID for corporate actions, event
 ID for news, and both instrument ID and symbol for metadata. Invalid raw
 fixture mappings surface the stable `FAKE_DATASET_INVALID` schema error; no
 lookup uses last-write-wins behavior.
+
+The fake also builds one canonical identity map across quotes, books, bars,
+fundamentals, corporate actions, and metadata. Reusing an `instrument_id` with
+a conflicting symbol, exchange, trading currency, or asset type rejects the
+entire dataset as `FAKE_DATASET_INVALID`.
 
 The shared contract suite is `tests/contract/data/test_provider_ports.py`.
 Factories are registered independently for quote, book, OHLCV, fundamentals,
