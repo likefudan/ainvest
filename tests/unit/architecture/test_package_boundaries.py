@@ -18,12 +18,14 @@ from import_graph import (
     find_forbidden_external_imports,
     find_forbidden_internal_imports,
     find_import_cycles,
+    iter_python_files,
     package_root,
 )
 
 REPO_ROOT = Path(__file__).resolve().parents[3]
 AINVEST_ROOT = package_root(REPO_ROOT / "src")
 FIXTURES = Path(__file__).resolve().parent / "fixtures"
+PROVIDER_SDK_ROOTS = frozenset({"edgar", "mcp", "pandas_market_calendars", "yfinance"})
 
 
 @pytest.mark.unit
@@ -114,6 +116,28 @@ def test_production_packages_do_not_import_orm_models() -> None:
     violations = find_forbidden_internal_imports(AINVEST_ROOT)
     assert violations == [], "ORM model imports crossed a boundary: " + ", ".join(
         f"{item.package}:{item.module}@{item.source_path}:{item.lineno}" for item in violations
+    )
+
+
+@pytest.mark.unit
+def test_upper_layers_do_not_import_provider_sdks_directly() -> None:
+    """Provider SDK imports stay in data adapters or broker execution gateways."""
+    violations: list[str] = []
+    for path in iter_python_files(AINVEST_ROOT):
+        relative = path.relative_to(AINVEST_ROOT)
+        if relative.parts[0] in {"data", "execution"}:
+            continue
+        source = path.read_text(encoding="utf-8")
+        current_package = ".".join(("ainvest", *relative.parts[:-1]))
+        for module, lineno in extract_module_imports(
+            source,
+            source_path=path,
+            current_package=current_package,
+        ):
+            if module.split(".", maxsplit=1)[0] in PROVIDER_SDK_ROOTS:
+                violations.append(f"{relative}:{lineno} imports {module}")
+    assert violations == [], "provider SDK imports crossed the data boundary: " + ", ".join(
+        violations
     )
 
 
