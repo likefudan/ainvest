@@ -103,7 +103,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` claimed) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` claimed) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
-| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `not_started` |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` claimed) |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -146,8 +146,9 @@ scope, and integration order.
    Deterministic fakes and disabled adapters are the required fallback. No
    Batch E task enables live broker writes.
 
-Initial integration queue: this coordination change, then `P04-T0`, then
-`P05-T0`. Later ready branches enter the serial queue only after their recorded
+Tracker claim changes merge before their implementation PRs. The current
+default serial queue after this claim is `P04-T0`, `P05-T0`, `P08-T0`, then
+`P08-T3`. Later ready branches enter the queue only after their recorded
 dependencies are on `main`. The coordinator may reorder independent ready
 branches to reduce conflicts, but may not bypass the rebase, review, checks, or
 squash-merge rules above.
@@ -158,6 +159,8 @@ squash-merge rules above.
 |---|---|---|---|---|---|
 | `P04-T0` | `in_progress` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_progress` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
+| `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
+| `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
 
 `P04-T0` may write `src/ainvest/data/{models,ports,fakes}.py`,
 `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
@@ -177,6 +180,68 @@ it may not edit `src/ainvest/db/models.py`, create an Alembic revision, or edit
 another database, schema, export, or test file without a new coordinator
 assignment. It must not implement Telegram transport, WebAuthn, execution
 handoff, or broker behavior.
+
+##### Execution envelope: P08-T0
+
+- **Title:** Define Runtime Modes and Startup Capability Gates
+- **Status/owner:** `in_progress` — `batch_e_p08_t0`
+- **Branch/worktree/base:** `agent/p08-t0-runtime` /
+  `.worktrees/p08-t0` at
+  `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
+- **Design and task authority:** `design.md` sections 3.3, 3.5, 5.6, 7, 11,
+  12, and 16; `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T0`), 12
+  (Batch E), and 16; `DEC-001`, `DEC-002`, `DEC-005`, and `DEC-006`
+- **Dependencies:** `P01-T4` and `P03-T13`, both satisfied on the immutable
+  base
+- **Allowed paths:** `src/ainvest/runtime.py`,
+  `tests/unit/test_runtime.py`, and `docs/runtime-modes.md`
+- **Shared configuration/dependencies:** `src/ainvest/config/**`,
+  `pyproject.toml`, and `uv.lock` are read-only. Reuse existing settings and
+  broker ports. If the task cannot be completed without changing a shared
+  surface, stop and obtain a new coordinator assignment first.
+- **Forbidden paths/scope:** every other production, test, documentation,
+  configuration, dependency, schema, database, migration, CI, and tracker
+  path; scheduler implementation; Telegram/WebAuthn behavior; Robinhood
+  clients; broker submission behavior; any permissive production `LiveGuard`
+- **Verification:** `./scripts/dev unit`; `./scripts/dev verify`; inspect the
+  scoped diff and secret signatures; assert the mode/capability matrix,
+  redacted health summary, invalid combinations, and default-rejecting live
+  startup in `tests/unit/test_runtime.py`
+- **Handoff:** pending implementation commit, scoped diff, verification
+  evidence, independent review, PR, and squash-merge commit
+
+##### Execution envelope: P08-T3
+
+- **Title:** Add Structured Logging, Correlation, and Redaction
+- **Status/owner:** `in_progress` — `batch_e_p08_t3`
+- **Branch/worktree/base:** `agent/p08-t3-logging` /
+  `.worktrees/p08-t3` at
+  `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
+- **Design and task authority:** `design.md` sections 3.5, 3.6, 9, 11, and 13;
+  `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T3`), 12 (Batch E), and 16;
+  `DEC-005`, `DEC-006`, `DEC-009`, `DEC-010`, and `DEC-015`–`DEC-018`
+- **Dependencies:** `P01-T2` and `P02-T8`, both satisfied on the immutable
+  base
+- **Allowed paths:** `src/ainvest/observability/__init__.py`,
+  `src/ainvest/observability/logging.py`, and
+  `tests/unit/observability/test_logging.py`; no standalone documentation path
+  is assigned
+- **Shared configuration/dependencies:** `pyproject.toml` and `uv.lock` are
+  read-only; `structlog` is already present in the observability dependency
+  profile. `src/ainvest/config/**` is also read-only. Any dependency-profile or
+  configuration change requires a new coordinator assignment.
+- **Forbidden paths/scope:** every other production, test, documentation,
+  configuration, dependency, schema, database, migration, CI, and tracker
+  path; metrics/tracing/health (`P08-T4`); alerting (`P08-T5`); secret loading
+  (`P08-T7`); logging raw prompts, approval links, tokens, authorization
+  headers, account numbers, or full money-moving payloads
+- **Verification:** `./scripts/dev unit`; `./scripts/dev verify`; inspect the
+  scoped diff and secret signatures; test the secret corpus,
+  nested/exception/header redaction, stable correlation fields, JSON output,
+  and preservation of funds-safety events in
+  `tests/unit/observability/test_logging.py`
+- **Handoff:** pending implementation commit, scoped diff, verification
+  evidence, independent review, PR, and squash-merge commit
 
 #### Research track — `P04-T0` through `P04-T12`
 
@@ -241,8 +306,8 @@ task row is in the cross-cutting table below.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P08-T0` | `not_started` | `P01-T4`, `P03-T13` | `runtime.py`, `docs/runtime-modes.md`, capability/startup tests |
-| `P08-T3` | `not_started` | `P01-T2`, `P02-T8` | `observability/logging.py`; log/redaction/correlation tests |
+| `P08-T0` | `in_progress` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
+| `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | `observability/{__init__,logging}.py`, `tests/unit/observability/test_logging.py` |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
@@ -253,13 +318,14 @@ task row is in the cross-cutting table below.
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0`, `P08-T3`, `P08-T6`, `P08-T7`, `P08-T8`, and `P08-T9` are
-dependency-ready and may be implemented concurrently on disjoint worktrees
-after being claimed. `P08-T12` is scheduled incrementally after the production
-card whose test matrix it extends; every claim must enumerate its exact test
-files and matching `docs/testing.md` rows, and may not own an entire test
-directory. `P08-T4` follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14`
-follows `P08-T7`; `P08-T13` waits for the Paper approval implementation.
+`P08-T0` and `P08-T3` are active on disjoint worktrees. `P08-T6`, `P08-T7`,
+`P08-T8`, and `P08-T9` are dependency-ready but remain unclaimed; in
+particular, this claim does not assign `P08-T6` or `P08-T7`. `P08-T12` is
+scheduled incrementally after the production card whose test matrix it
+extends; every claim must enumerate its exact test files and matching
+`docs/testing.md` rows, and may not own an entire test directory. `P08-T4`
+follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
+`P08-T13` waits for the Paper approval implementation.
 
 ### Batch D — completed coordination note
 
