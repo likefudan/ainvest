@@ -16,16 +16,12 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Protocol, runtime_checkable
 
 from ainvest.config import Settings, TradingMode
-from ainvest.execution.broker import (
-    READ_METHOD_NAMES,
-    BrokerReadPort,
-    BrokerWritePort,
-    assert_no_replace_operation,
-    assert_read_port_has_no_write_methods,
-)
+
+if TYPE_CHECKING:
+    from ainvest.execution.broker import BrokerReadPort, BrokerWritePort
 
 
 class RuntimePackage(StrEnum):
@@ -201,7 +197,7 @@ class RuntimeStartupError(RuntimeError):
         super().__init__(message)
 
 
-LiveWriteFactory = Callable[[], BrokerWritePort]
+LiveWriteFactory = Callable[[], "BrokerWritePort"]
 
 
 @runtime_checkable
@@ -305,6 +301,14 @@ def _validate_settings(settings: Settings) -> None:
 def _validate_read_port(port: BrokerReadPort | None) -> None:
     if port is None:
         return
+
+    # Import broker contracts only after Research mode has returned, so a
+    # Research-only process does not import the execution package.
+    from ainvest.execution.broker import (
+        BrokerReadPort,
+        assert_read_port_has_no_write_methods,
+    )
+
     if not isinstance(port, BrokerReadPort):
         raise RuntimeStartupError(
             "broker_read must implement BrokerReadPort",
@@ -320,6 +324,12 @@ def _validate_read_port(port: BrokerReadPort | None) -> None:
 
 
 def _validate_write_port(port: object) -> BrokerWritePort:
+    from ainvest.execution.broker import (
+        READ_METHOD_NAMES,
+        BrokerWritePort,
+        assert_no_replace_operation,
+    )
+
     if not isinstance(port, BrokerWritePort):
         raise RuntimeStartupError(
             "broker write capability must implement BrokerWritePort",
@@ -391,8 +401,8 @@ def start_runtime(
                 code=RuntimeStartupErrorCode.PAPER_BROKER_REQUIRED,
             )
 
-        # Local import prevents Research-only processes from loading the Paper
-        # execution implementation merely by importing this composition module.
+        # Local import keeps the Paper execution implementation out of a
+        # Research-only process.
         from ainvest.execution.paper import PaperBroker, as_write_port
 
         if not isinstance(paper_broker, PaperBroker):

@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import subprocess
+import sys
 from datetime import UTC, datetime
 from decimal import Decimal
+from pathlib import Path
 
 import pytest
 from pydantic import SecretStr
@@ -33,6 +36,8 @@ from ainvest.runtime import (
 from ainvest.schemas.broker import BrokerFill, BrokerOrder, CancelCommand, CancelResult
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.portfolio import AccountScope, PortfolioSnapshot, PositionSnapshot
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
 
 
 def _paper_broker() -> PaperBroker:
@@ -173,6 +178,27 @@ def test_research_starts_without_execution_capabilities() -> None:
     assert runtime.broker_read is None
     assert runtime.broker_write is None
     assert runtime.active_broker_capabilities == frozenset()
+
+
+@pytest.mark.unit
+def test_importing_runtime_does_not_load_research_forbidden_packages() -> None:
+    script = (
+        "import sys; import ainvest.runtime; "
+        "forbidden = {'ainvest.execution', 'ainvest.approval', 'ainvest.strategies'}; "
+        "loaded = forbidden.intersection(sys.modules); "
+        "assert not loaded, loaded"
+    )
+
+    result = subprocess.run(
+        [sys.executable, "-c", script],
+        cwd=REPO_ROOT,
+        check=False,
+        capture_output=True,
+        text=True,
+        timeout=10,
+    )
+
+    assert result.returncode == 0, result.stderr
 
 
 @pytest.mark.unit
