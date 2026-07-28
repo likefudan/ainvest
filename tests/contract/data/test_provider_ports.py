@@ -10,10 +10,15 @@ from pydantic import ValidationError
 
 from ainvest.data import (
     DataErrorCode,
+    DataIncompleteError,
     DataInvalidRequestError,
     DataNotFoundError,
     DataOperation,
+    DataProviderError,
+    DataRateLimitError,
+    DataStaleError,
     DataTimeoutError,
+    DataUpstreamError,
     DeterministicFakeDataProvider,
     FundamentalRequest,
     FundamentalsPort,
@@ -266,7 +271,7 @@ def test_news_event_contract_retains_publication_license_symbols_and_citations(
 
     assert observation.event.event_type == "EARNINGS"
     assert observation.symbols == ("AAPL", "MSFT")
-    assert observation.url.startswith("https://")
+    assert observation.url.scheme == "https"
     assert observation.publisher
     assert observation.license_name
     assert observation.published_at <= observation.provenance.observed_at
@@ -296,16 +301,30 @@ def test_metadata_contract_preserves_identity_precision_and_provenance(
 
 
 @pytest.mark.contract
-def test_injected_failure_uses_code_not_message() -> None:
-    port: QuotePort = DeterministicFakeDataProvider(
-        failures={DataOperation.QUOTES: DataErrorCode.TIMEOUT}
-    )
+@pytest.mark.parametrize(
+    ("code", "error_type", "retryable"),
+    (
+        (DataErrorCode.TIMEOUT, DataTimeoutError, True),
+        (DataErrorCode.RATE_LIMIT, DataRateLimitError, True),
+        (DataErrorCode.STALE_DATA, DataStaleError, False),
+        (DataErrorCode.INCOMPLETE_DATA, DataIncompleteError, False),
+        (DataErrorCode.PROVIDER_FAILURE, DataUpstreamError, False),
+    ),
+)
+def test_injected_failure_uses_stable_code_and_retryability(
+    code: DataErrorCode,
+    error_type: type[DataProviderError],
+    retryable: bool,
+) -> None:
+    port: QuotePort = DeterministicFakeDataProvider(failures={DataOperation.QUOTES: code})
 
-    with pytest.raises(DataTimeoutError) as caught:
+    with pytest.raises(error_type) as caught:
         port.get_quotes(QuoteRequest(instrument_ids=("rh_inst_aapl_xnas",)))
 
-    assert caught.value.code is DataErrorCode.TIMEOUT
-    assert caught.value.retryable is True
+    assert caught.value.code is code
+    assert caught.value.operation is DataOperation.QUOTES
+    assert caught.value.reason_code == f"FAKE_{code.value}"
+    assert caught.value.retryable is retryable
 
 
 @pytest.mark.contract

@@ -9,6 +9,7 @@ from ainvest.data.calendar_port import FakeMarketCalendar, MarketCalendar, Sessi
 from ainvest.data.fakes import DeterministicFakeDataProvider, fixture_dataset
 from ainvest.data.models import (
     DataRequest,
+    ExternalHttpsUrl,
     FakeDataset,
     FilingReference,
     FundamentalObservation,
@@ -76,6 +77,7 @@ __all__ = [
     "DataUnsupportedError",
     "DataUpstreamError",
     "DeterministicFakeDataProvider",
+    "ExternalHttpsUrl",
     "FakeDataset",
     "FakeMarketCalendar",
     "FilingReference",

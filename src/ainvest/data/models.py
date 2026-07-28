@@ -7,11 +7,21 @@ this boundary.
 
 from __future__ import annotations
 
+from collections.abc import Callable
 from datetime import date
 from enum import StrEnum
+from ipaddress import ip_address
 from typing import Annotated, Any, Self, cast
 
-from pydantic import Field, StrictBool, StringConstraints, model_validator
+from pydantic import (
+    AfterValidator,
+    AnyUrl,
+    Field,
+    StrictBool,
+    StringConstraints,
+    UrlConstraints,
+    model_validator,
+)
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
@@ -29,6 +39,7 @@ from ainvest.schemas.common import (
     UtcDateTime,
 )
 from ainvest.schemas.market import (
+    FactValueKind,
     FundamentalSnapshot,
     MarketEvent,
     MarketQuote,
@@ -38,13 +49,58 @@ from ainvest.schemas.research import EvidenceCitation, EvidenceKind
 
 InstrumentId = Annotated[str, StringConstraints(min_length=3, max_length=128)]
 PageCursor = Annotated[str, StringConstraints(min_length=1, max_length=512)]
-HttpsUrl = Annotated[
-    str,
-    StringConstraints(pattern=r"^https://[^\s]+$", min_length=9, max_length=2048),
-]
 AccessionNumber = Annotated[
     str,
     StringConstraints(pattern=r"^\d{10}-\d{2}-\d{6}$", min_length=20, max_length=20),
+]
+SecFormType = Annotated[
+    str,
+    StringConstraints(
+        pattern=r"^[A-Z0-9]+(?:[ -][A-Z0-9]+)*(?:/A)?$",
+        min_length=1,
+        max_length=24,
+    ),
+]
+
+
+def _validate_external_https_url(value: AnyUrl) -> AnyUrl:
+    """Apply the data-boundary URL policy after Pydantic parses the URL."""
+    if value.username is not None or value.password is not None:
+        raise ValueError("external HTTPS URLs must not contain credentials")
+    if value.fragment is not None:
+        raise ValueError("external HTTPS URLs must not contain fragments")
+
+    host = value.host
+    if host is None:
+        raise ValueError("external HTTPS URLs require a host")
+    candidate = host.removeprefix("[").removesuffix("]")
+    try:
+        ip_address(candidate)
+    except ValueError:
+        is_ip_address = False
+    else:
+        is_ip_address = True
+    if not is_ip_address:
+        if len(host) > 253 or host.endswith("."):
+            raise ValueError("external HTTPS URL host is malformed")
+        labels = host.split(".")
+        if any(
+            not label
+            or len(label) > 63
+            or label.startswith("-")
+            or label.endswith("-")
+            or not label.isascii()
+            or not label.replace("-", "").isalnum()
+            for label in labels
+        ):
+            raise ValueError("external HTTPS URL host is malformed")
+    return value
+
+
+ExternalHttpsUrl = Annotated[
+    AnyUrl,
+    UrlConstraints(allowed_schemes=["https"], host_required=True, max_length=2048),
+    AfterValidator(_validate_external_https_url),
 ]
 
 
@@ -229,13 +285,10 @@ class FilingReference(DomainModel):
     """Canonical SEC/company filing reference with evidence provenance."""
 
     accession_number: AccessionNumber
-    form_type: Annotated[
-        str,
-        StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9-]{0,15}$", min_length=1, max_length=16),
-    ]
+    form_type: SecFormType
     filed_at: UtcDateTime
     report_period_end: date
-    primary_document_url: HttpsUrl
+    primary_document_url: ExternalHttpsUrl
     provenance: Provenance
 
     @model_validator(mode="after")
@@ -273,6 +326,13 @@ class FundamentalObservation(DomainModel):
             raise ValueError("period.end_date must match filing.report_period_end")
         if self.filing.filed_at > self.snapshot.as_of:
             raise ValueError("filing.filed_at must be <= snapshot.as_of")
+        unitless_decimal_keys = tuple(
+            fact.key
+            for fact in self.snapshot.facts
+            if fact.kind is FactValueKind.DECIMAL and fact.unit is None
+        )
+        if unitless_decimal_keys:
+            raise ValueError("decimal fundamental facts require an explicit unit")
         if self.earnings_time_certainty is TimeCertainty.UNKNOWN:
             if self.earnings_at is not None:
                 raise ValueError("UNKNOWN earnings certainty requires earnings_at=None")
@@ -296,7 +356,7 @@ class NewsEventObservation(DomainModel):
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
     event: MarketEvent
     symbols: Annotated[tuple[Symbol, ...], Field(max_length=100)] = ()
-    url: HttpsUrl
+    url: ExternalHttpsUrl
     publisher: Annotated[str, StringConstraints(min_length=1, max_length=256)]
     published_at: UtcDateTime
     license_name: Annotated[str, StringConstraints(min_length=1, max_length=256)]
@@ -405,7 +465,52 @@ class FakeDataset(DomainModel):
             self.instrument_metadata,
         ):
             _validate_envelope_provenance(items, self.provenance)
+        _require_unique_keys(
+            self.quotes,
+            lambda item: item.instrument.instrument_id,
+            "quote instrument_id",
+        )
+        _require_unique_keys(
+            self.price_books,
+            lambda item: item.instrument.instrument_id,
+            "price-book instrument_id",
+        )
+        _require_unique_keys(
+            self.ohlcv,
+            lambda item: (item.instrument.instrument_id, item.interval, item.bar_start),
+            "OHLCV instrument/interval/bar_start",
+        )
+        _require_unique_keys(
+            self.fundamentals,
+            lambda item: (item.instrument.instrument_id, item.filing.accession_number),
+            "fundamental instrument/accession",
+        )
+        _require_unique_keys(
+            self.news_events,
+            lambda item: item.event.event_id,
+            "news/event event_id",
+        )
+        _require_unique_keys(
+            self.instrument_metadata,
+            lambda item: item.instrument.instrument_id,
+            "metadata instrument_id",
+        )
+        _require_unique_keys(
+            self.instrument_metadata,
+            lambda item: item.instrument.symbol,
+            "metadata symbol",
+        )
         return self
+
+
+def _require_unique_keys(
+    items: tuple[Any, ...],
+    key: Callable[[Any], object],
+    label: str,
+) -> None:
+    keys = [key(item) for item in items]
+    if len(keys) != len(set(keys)):
+        raise ValueError(f"fake dataset contains duplicate {label}")
 
 
 def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) -> None:
@@ -430,6 +535,7 @@ def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) 
 
 __all__ = [
     "DataRequest",
+    "ExternalHttpsUrl",
     "FakeDataset",
     "FilingReference",
     "FundamentalObservation",

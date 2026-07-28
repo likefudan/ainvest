@@ -37,6 +37,13 @@ they do not silently relabel it as UTC.
 the reporting period, currency, SEC accession/form/document reference, filing
 provenance, earnings-time certainty, and filing-bound citations required by SEC
 and XBRL adapters. A filing citation must bind the exact accession number.
+Decimal facts must carry an explicit unit; a unitless numeric fact is rejected
+at this normalization boundary and therefore cannot be assumed comparable by a
+downstream SEC/XBRL adapter. SEC form names use a bounded, provider-independent
+grammar (one to 24 uppercase alphanumeric groups separated by a single space or
+hyphen, with an optional `/A` amendment suffix) rather than an enumerated
+taxonomy, so base forms, amendments such as `10-Q/A` and `10-K/A`, and names
+such as `DEF 14A` remain representable.
 
 `NewsEventObservation` composes the existing `MarketEvent` and
 `EvidenceCitation` contracts. It retains HTTPS URL, publisher, publication
@@ -44,6 +51,11 @@ time, license, zero or more affected symbols, event-time certainty, multiple
 citations, and any related filing references. The underlying single-symbol
 field remains consistent with the affected-symbol set while industry and macro
 events may legitimately have no symbol.
+
+Filing-document and news URLs share one Pydantic-parsed external-HTTPS type.
+The policy requires an `https` scheme and a syntactically valid host, forbids
+embedded username/password credentials, rejects fragments to keep the stored
+resource identity canonical, and caps the full input at 2,048 characters.
 
 Instrument metadata composes the existing canonical `InstrumentIdentity` rather
 than using a symbol as identity or duplicating the risk engine's evaluation
@@ -90,6 +102,13 @@ failure injection, and uses dataset/operation/query-scoped cursors. Dataset
 source/timezone inconsistencies are rejected at construction and normalized as
 `DataSchemaError`; provider calls never leak Pydantic validation failures.
 Repeated identical requests return identical serialized models.
+
+Key-addressed fixture collections reject duplicate identities before the fake
+builds lookup maps: instrument ID for quotes/books, instrument/interval/start
+time for OHLCV bars, instrument/accession for fundamentals, event ID for news,
+and both instrument ID and symbol for metadata. Invalid raw fixture mappings
+surface the stable `FAKE_DATASET_INVALID` schema error; no lookup uses
+last-write-wins behavior.
 
 The shared contract suite is `tests/contract/data/test_provider_ports.py`.
 Factories are registered independently for quote, book, OHLCV, fundamentals,

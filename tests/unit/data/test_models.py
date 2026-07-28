@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import pytest
-from pydantic import ValidationError
+from pydantic import TypeAdapter, ValidationError
 
 from ainvest.data import (
     DataErrorCode,
@@ -12,6 +12,8 @@ from ainvest.data import (
     DataSchemaError,
     DataUnsupportedError,
     DeterministicFakeDataProvider,
+    ExternalHttpsUrl,
+    FilingReference,
     FundamentalObservation,
     InstrumentMetadataRequest,
     ObservationBatch,
@@ -23,6 +25,8 @@ from ainvest.data import (
     fixture_dataset,
 )
 from ainvest.schemas.common import Provenance, QualityFlag
+
+_HTTPS_URL_ADAPTER = TypeAdapter(ExternalHttpsUrl)
 
 
 @pytest.mark.unit
@@ -206,6 +210,37 @@ def test_inconsistent_raw_fake_dataset_becomes_stable_schema_error() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "collection",
+    ("quotes", "price_books", "ohlcv", "fundamentals", "news_events", "instrument_metadata"),
+)
+def test_duplicate_fake_dataset_identity_is_a_stable_schema_error(collection: str) -> None:
+    payload = fixture_dataset().model_dump(mode="json")
+    payload[collection].append(payload[collection][0])
+
+    with pytest.raises(DataSchemaError) as caught:
+        DeterministicFakeDataProvider(dataset=payload)
+
+    assert caught.value.code is DataErrorCode.SCHEMA_INCOMPATIBLE
+    assert caught.value.operation is DataOperation.DATASET
+    assert caught.value.reason_code == "FAKE_DATASET_INVALID"
+
+
+@pytest.mark.unit
+def test_conflicting_metadata_symbol_is_a_stable_schema_error() -> None:
+    payload = fixture_dataset().model_dump(mode="json")
+    conflicting = dict(payload["instrument_metadata"][0])
+    conflicting["instrument"] = dict(conflicting["instrument"])
+    conflicting["instrument"]["instrument_id"] = "rh_inst_aapl_conflict"
+    payload["instrument_metadata"].append(conflicting)
+
+    with pytest.raises(DataSchemaError) as caught:
+        DeterministicFakeDataProvider(dataset=payload)
+
+    assert caught.value.reason_code == "FAKE_DATASET_INVALID"
+
+
+@pytest.mark.unit
 def test_fundamental_observation_requires_filing_bound_citation() -> None:
     observation = fixture_dataset().fundamentals[0]
     payload = observation.model_dump(mode="json")
@@ -215,6 +250,64 @@ def test_fundamental_observation_requires_filing_bound_citation() -> None:
 
     with pytest.raises(ValidationError, match="filing citation"):
         FundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_fundamental_observation_rejects_unitless_decimal_fact() -> None:
+    payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
+    payload["snapshot"]["facts"][0].pop("unit")
+
+    with pytest.raises(ValidationError, match="explicit unit"):
+        FundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("form_type", ("10-Q", "10-Q/A", "10-K/A", "DEF 14A", "FORM 4"))
+def test_filing_reference_accepts_bounded_sec_form_grammar(form_type: str) -> None:
+    payload = fixture_dataset().fundamentals[0].filing.model_dump(mode="json")
+    payload["form_type"] = form_type
+
+    assert FilingReference.model_validate(payload).form_type == form_type
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "form_type",
+    ("10-Q//A", "10- Q", "DEF  14A", "10-q", "/A", "A" * 25),
+)
+def test_filing_reference_rejects_malformed_or_unbounded_form(form_type: str) -> None:
+    payload = fixture_dataset().fundamentals[0].filing.model_dump(mode="json")
+    payload["form_type"] = form_type
+
+    with pytest.raises(ValidationError):
+        FilingReference.model_validate(payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "url",
+    (
+        "http://example.com/article",
+        "https://?query=missing-host",
+        "https://-invalid.example/article",
+        "https://user:secret@example.com/article",
+        "https://example.com/article#section",
+    ),
+)
+def test_external_https_url_rejects_unsafe_or_ambiguous_boundaries(url: str) -> None:
+    with pytest.raises(ValidationError):
+        _HTTPS_URL_ADAPTER.validate_python(url)
+
+
+@pytest.mark.unit
+def test_external_https_url_length_boundary_is_explicit() -> None:
+    prefix = "https://example.com/"
+    maximum = prefix + ("a" * (2048 - len(prefix)))
+    too_long = maximum + "a"
+
+    assert str(_HTTPS_URL_ADAPTER.validate_python(maximum)) == maximum
+    with pytest.raises(ValidationError):
+        _HTTPS_URL_ADAPTER.validate_python(too_long)
 
 
 @pytest.mark.unit
