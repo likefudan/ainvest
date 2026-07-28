@@ -181,22 +181,27 @@ Robinhood implementation, or Research Agent behavior.
 - **First review remediation:** `90e00c488733d54270df403aea3005b50b143c24`
 - **Second review remediation:** `0b7cf3f965d192c54abd1c22cb518077e37aed6a`
 - **Third review remediation:** `83f3a02931b52ae89a2062e06cb69d5e9c11f217`
+- **Fourth review remediation:** `d4af0a027313460a956ce6eb6e5e3904e8415922`
 - **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
   `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
   `tests/contract/data/test_provider_ports.py`,
   `tests/unit/architecture/test_package_boundaries.py`,
   `docs/data-adapters.md`, and this P04-T0 tracker metadata.
-- **Verification:** focused data/architecture contracts passed (131 tests).
-  `./scripts/dev verify` passed after third review remediation: format, lint,
-  mypy, and schema snapshots passed; unit 570, contract 96, integration 15,
-  aggregate 681 tests; 86.10% branch coverage.
+- **Verification:** focused data/architecture contracts passed (148 tests).
+  `./scripts/dev verify` passed after fourth review remediation: format, lint,
+  mypy, and schema snapshots passed; unit 586, contract 97, integration 15,
+  aggregate 698 tests; 86.22% branch coverage.
 - **Handoff notes:** Defines synchronous provider-independent quote,
   price-book, OHLCV, fundamentals, corporate-action, news/event, and
   instrument-metadata ports; bounded timeout and query-bound opaque pagination;
   stable typed failures; source/timezone/delay/quality-preserving result
   envelopes; and explicit OHLCV adjustment/empty-window semantics. Generic
-  fundamentals retain period/context/unit/currency/certainty without requiring
-  SEC evidence; the SEC subtype requires accession-bound filing evidence.
+  fundamentals retain period/context/unit/reporting-currency/certainty without
+  requiring SEC evidence; trading and reporting currency are independent, and
+  the foreign-issuer fixture is USD-traded with EUR reports/facts. The SEC
+  subtype parses an exact `filing:source/accession` path and rejects substring
+  or malformed bindings. Filing/citation knowledge time cannot exceed snapshot
+  `as_of`, and corporate declarations cannot postdate observation.
   Duplicate fundamental identity includes source/accession, period, and
   normalized context, allowing multiple filing periods without merging
   conflicts. The minimal corporate-action contract covers splits and cash
@@ -209,9 +214,11 @@ Robinhood implementation, or Research Agent behavior.
   credentials and fragments. Partial fundamentals and one-sided books carry
   explicit quality flags.
   Capability-scoped provider contract factories allow partial adapters. Invalid
-  fake datasets, including duplicate identity keys, become stable schema
-  errors; source timezones are preserved. Failure contracts cover timeout,
-  rate-limit, stale, incomplete, and upstream errors with explicit retryability.
+  fake datasets, including duplicate identity keys or cross-collection
+  instrument-ID conflicts in symbol/exchange/trading-currency/asset-type, become
+  stable schema errors; source timezones are preserved. Failure contracts cover
+  timeout, rate-limit, stale, incomplete, and upstream errors with explicit
+  retryability.
   Pinned live quote/book capabilities still expose no fallback under `DEC-003`.
   The architecture test prevents provider SDK imports above the data/execution
   boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
