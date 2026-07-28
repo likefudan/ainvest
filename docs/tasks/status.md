@@ -237,6 +237,8 @@ Robinhood implementation, or Research Agent behavior.
 - **Rebased main/base:** `e210d9601678f0abf750cf38590fd55ba10a873a`
 - **Implementation tip before tracker handoff:**
   `b9a4f35ef935f2b5f514abcee44ff2f22187e05f`
+- **Independent-review remediation:**
+  `6bf2d69b9ed5a733012a7594b6a46efad02b1bbe`
 - **Dependencies:** `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged)
 - **Design and task authority:** `design.md` sections 3.4–3.5, 5.5, 7, and
   15 Phase 3; `IMPLEMENTATION_TODO.md` sections 1 and 8 (`P05-T0`);
@@ -244,17 +246,24 @@ Robinhood implementation, or Research Agent behavior.
 - **Final files:** `src/ainvest/approval/service.py`,
   `src/ainvest/approval/tokens.py`, `src/ainvest/approval/__init__.py`,
   `src/ainvest/schemas/approval.py`, `src/ainvest/db/repositories.py`,
-  `src/ainvest/db/uow.py`,
+  `src/ainvest/db/uow.py`, `src/ainvest/risk/engine.py`,
   `tests/unit/approval/test_approval_service.py`,
-  `tests/unit/approval/test_tokens.py`,
+  `tests/unit/approval/test_tokens.py`, `tests/unit/risk/test_engine.py`,
   `schemas/json/v1/ApprovalChallenge.json`, and this P05-T0 tracker metadata.
   No model or Alembic migration changed because the existing proposal,
   challenge, event, hash, status, expiry, and optimistic-version columns cover
   the task.
-- **Verification:** focused approval/token/order-schema/repository/schema
-  snapshot/migration tests passed (81 tests). On the rebased branch,
+- **Authorized review scope expansion:** The coordinator authorized changes
+  only to `src/ainvest/risk/engine.py` and
+  `tests/unit/risk/test_engine.py` outside the original P05-T0 envelope. The
+  existing risk input digest now covers the complete canonical
+  `CandidateOrder`, so approval can bind exact economics, account scope,
+  strategy version, increments, and expiry. No risk rule, decision, config, or
+  other risk-layer behavior changed.
+- **Verification:** focused approval/token/risk-engine/schema-snapshot tests
+  passed (86 tests). On the rebased branch,
   `./scripts/dev verify` passed: format, lint, mypy, and schema snapshots;
-  unit 612, contract 97, integration 15, aggregate 724 tests; 86.41% branch
+  unit 636, contract 97, integration 15, aggregate 748 tests; 86.44% branch
   coverage.
 - **Handoff notes:** Generates canonical URL-safe nonces from exactly 256
   CSPRNG bits, redacts token string representations, and persists only a
@@ -266,9 +275,16 @@ Robinhood implementation, or Research Agent behavior.
   event in the same UnitOfWork. CONSUMED remains reserved for the P05-T6
   exactly-once handoff. Repeated/non-canonical tokens, explicit-decision type
   confusion, changed proposal/risk payloads, invalid scope pairs, and expiry
-  fail closed. Review found no raw-token database/log exposure, broker/live
-  enablement, duplicate persistence framework, or unresolved readability
-  issue.
+  fail closed. Independent review remediation binds the APPROVED output to the
+  full canonical candidate/context and atomically claims each risk decision for
+  exactly one proposal; validates every duplicated challenge field; blocks
+  raw-token dataclass/JSON/Pydantic/pickle/log-fallback serialization; restores
+  v1 `CANCELLED` and general positive-lifetime compatibility while retaining
+  the 60–120 second creation policy; and wraps event insertion plus challenge
+  transition in a savepoint so validation/uniqueness failures leave PENDING
+  state intact even when caught inside the active UnitOfWork. No raw-token
+  database/log exposure, broker/live enablement, or duplicate persistence
+  framework remains.
 - **Blockers:** None.
 - **PR:** Pending.
 
