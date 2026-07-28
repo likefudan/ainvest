@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-07-27
+Last updated: 2026-07-28
 
 ## Status vocabulary
 
@@ -119,12 +119,13 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 - **Batch:** Batch D — Part 1a (D1a) — Strategy worker isolation (`P03-T4`)
 - **Plan batch:** Batch D (D1)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d1
-- **Integration branch:** `task/batch-d1a-strategy-worker`
+- **Integration branch:** `task/batch-d1a-strategy-worker` (deleted after merge)
 - **Base commit:** `b189f71a8feffe5255f7a653d398086f90934378` (includes claim #62)
+- **Merge commit:** `861f5bf2db97b8eff6488af12e724e0c1b63cfb6`
 - **Dependencies:** `P03-T0`–`T2`, `P02-T8` (satisfied on main)
-- **Merge target:** `main` (squash); **first** in Batch D merge queue
+- **Merge target:** merged into `main` via squash
 - **Allowed paths:** `src/ainvest/strategies/worker/**`,
   `src/ainvest/strategies/__init__.py` (re-exports only),
   `tests/unit/strategies/**`, `tests/integration/strategies/**`,
@@ -134,7 +135,7 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 - **Forbidden:** `strategy_conformance/` (D1b), portfolio aggregation (D2),
   pretrade/kill_switch (D2c), workflow (D3), live broker, rewriting registry
   load semantics beyond worker invocation hooks
-- **Handoff notes:** Isolated strategy workers with versioned JSON I/O,
+- **Handoff notes:** Merged via #63. Isolated strategy workers with versioned JSON I/O,
   wall/CPU/memory limits, scrubbed env, socket block + documented container
   network expectations; fail-closed classification; one worker failure does not
   stop the batch. `./scripts/dev verify` passed (463 tests).
@@ -142,19 +143,20 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `complete` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T0`–`T2`, `P02-T8` | https://github.com/likefudan/ainvest/pull/63 |
+| `P03-T4` | Isolate Strategy Workers and Enforce Resource Boundaries | `merged` | cursor-subagent-d1 | `task/batch-d1a-strategy-worker` | `b189f71a8feffe5255f7a653d398086f90934378` | `P03-T0`–`T2`, `P02-T8` | https://github.com/likefudan/ainvest/pull/63 |
 
 ### Batch D — Part 1b (D1b)
 
 - **Batch:** Batch D — Part 1b (D1b) — Strategy conformance suite (`P03-T5`)
 - **Plan batch:** Batch D (D1)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d1
-- **Integration branch:** `task/batch-d1b-strategy-conformance`
+- **Integration branch:** `task/batch-d1b-strategy-conformance` (deleted after merge)
 - **Base commit:** `861f5bf` (D1a merged)
+- **Merge commit:** `2dd98a4ac9325ba526788f8f6aafcf57e8654a30`
 - **Dependencies:** `P03-T0`–`T4`, `P03-T13` (satisfied on main)
-- **Merge target:** `main` (squash); **second** in Batch D merge queue (after D1a)
+- **Merge target:** merged into `main` via squash
 - **Allowed paths:** `src/ainvest/strategy_conformance/**`,
   CLI entry point / `pyproject.toml` scripts,
   `tests/unit/strategy_conformance/**`, `tests/integration/strategy_conformance/**`,
@@ -162,7 +164,7 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
   `docs/tasks/status.md` (D1b section + summary row + Active batch notes only)
 - **Forbidden:** rewriting worker internals beyond calling public APIs; D2/D3 scope;
   merging the PR
-- **Handoff notes:** Published `ainvest.strategy_conformance` +
+- **Handoff notes:** Merged via #64. Published `ainvest.strategy_conformance` +
   `ainvest-strategy-conformance` CLI; JSON + human reports; isolation via
   `evaluate_in_worker`. Reference MA passes; invalid plugins fail with stable
   codes. `./scripts/dev verify` passed (489 tests, 85.01% coverage).
@@ -170,26 +172,27 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T5` | Publish the Strategy Conformance Test Suite | `in_review` | cursor-subagent-d1 | `task/batch-d1b-strategy-conformance` | `861f5bf` | `P03-T0`–`T4`, `P03-T13` | https://github.com/likefudan/ainvest/pull/64 |
+| `P03-T5` | Publish the Strategy Conformance Test Suite | `merged` | cursor-subagent-d1 | `task/batch-d1b-strategy-conformance` | `861f5bf` | `P03-T0`–`T4`, `P03-T13` | https://github.com/likefudan/ainvest/pull/64 |
 
 ### Batch D — Part 2b (D2b)
 
 - **Batch:** Batch D — Part 2b (D2b) — Multi-strategy signal aggregation (`P03-T7`)
 - **Plan batch:** Batch D (D2)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d2
-- **Integration branch:** `task/batch-d2b-signal-aggregation`
+- **Integration branch:** `task/batch-d2b-signal-aggregation` (deleted after merge)
 - **Base commit:** `2dd98a4` (rebased onto post-D1 `main`)
+- **Merge commit:** `3e12ecc182213dd84925da8073053b9cc54b6f0e`
 - **Dependencies:** `P03-T6` (satisfied); D1a+D1b merged
-- **Merge target:** `main` (squash); **next** in Batch D merge queue after D1
+- **Merge target:** merged into `main` via squash
 - **Allowed paths:** `src/ainvest/portfolio/signal_aggregation.py`,
   `src/ainvest/portfolio/__init__.py`, `docs/decisions/**` (aggregation ADR),
   `tests/unit/portfolio/**`,
   `docs/tasks/status.md` (D2b section + summary row + Active batch notes only)
 - **Forbidden:** pretrade/kill_switch (D2c), strategy worker (D1), workflow (D3),
   rewriting sizer behavior beyond calling it if needed
-- **Handoff notes:** ADR-020 / `DEC-020` accepted: conflict → `NEEDS_REVIEW` /
+- **Handoff notes:** Merged via #65. ADR-020 / `DEC-020` accepted: conflict → `NEEDS_REVIEW` /
   no trade; group by symbol + `generated_at` + expiry + strategy version;
   never emit opposing orders for one symbol; strength never weighted as
   probability. API: `aggregate_signals` / `SignalAggregationResult`.
@@ -198,19 +201,20 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T7` | Define Multi-Strategy Signal Aggregation | `in_review` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | https://github.com/likefudan/ainvest/pull/65 |
+| `P03-T7` | Define Multi-Strategy Signal Aggregation | `merged` | cursor-subagent-d2 | `task/batch-d2b-signal-aggregation` | `2dd98a4` | `P03-T6` | https://github.com/likefudan/ainvest/pull/65 |
 
 ### Batch D — Part 2c (D2c)
 
 - **Batch:** Batch D — Part 2c (D2c) — Pre-trade risk re-evaluation (`P03-T12`)
 - **Plan batch:** Batch D (D2)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d2
-- **Integration branch:** `task/batch-d2c-pretrade-risk`
+- **Integration branch:** `task/batch-d2c-pretrade-risk` (deleted after merge)
 - **Base commit:** `3e12ecc` (rebased onto post-D2b `main`)
+- **Merge commit:** `27631f272101f75a46c487e8b3be7f0ec7b992bc`
 - **Dependencies:** `P03-T8`–`T11`, `P02-T7`, `P02-T9` (satisfied); D2b merged
-- **Merge target:** `main` (squash); **next** in Batch D merge queue after D2b
+- **Merge target:** merged into `main` via squash
 - **Allowed paths:** `src/ainvest/risk/rules/orders.py`, `src/ainvest/risk/kill_switch.py`,
   `src/ainvest/risk/pretrade.py`, `src/ainvest/risk/__init__.py`,
   `src/ainvest/risk/rules/__init__.py`, `src/ainvest/risk/engine.py`,
@@ -218,7 +222,7 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
   `docs/tasks/status.md` (D2c section + summary row only)
 - **Forbidden:** strategy worker (D1), signal aggregation (D2b), workflow (D3), live broker,
   auto-cancel of open orders (DEC-008)
-- **Handoff notes:** `KillSwitch` (configured+operational, alert, no auto-cancel);
+- **Handoff notes:** Merged via #67. `KillSwitch` (configured+operational, alert, no auto-cancel);
   order rules for proposal-hash / client-order-id / symbol-side window / open-order
   conflicts; `evaluate_pretrade` re-fetches quote+portfolio and runs
   `PRETRADE_RULE_CODES` with a new decision id (never reuses prior APPROVED).
@@ -227,21 +231,21 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P03-T12` | Prevent Duplicate Orders and Re-run Risk Before Execution | `in_review` | cursor-subagent-d2 | `task/batch-d2c-pretrade-risk` | `3e12ecc` | `P03-T8`–`T11`, `P02-T7`, `P02-T9` | https://github.com/likefudan/ainvest/pull/67 |
+| `P03-T12` | Prevent Duplicate Orders and Re-run Risk Before Execution | `merged` | cursor-subagent-d2 | `task/batch-d2c-pretrade-risk` | `3e12ecc` | `P03-T8`–`T11`, `P02-T7`, `P02-T9` | https://github.com/likefudan/ainvest/pull/67 |
 
 ### Batch D — Part 3b (D3b)
 
 - **Batch:** Batch D — Part 3b (D3b) — Domain commands/events (`P02-T10`)
 - **Plan batch:** Batch D (D3)
 - **Coordinator:** cursor-agent / local
-- **Status:** `in_review`
+- **Status:** `merged`
 - **Owner/agent:** cursor-subagent-d3
-- **Integration branch:** `task/batch-d3b-workflow-commands`
+- **Integration branch:** `task/batch-d3b-workflow-commands` (deleted after merge)
 - **Handoff PR:** [#68](https://github.com/likefudan/ainvest/pull/68)
 - **Base commit:** `27631f272101f75a46c487e8b3be7f0ec7b992bc` (rebased onto post-D2 `main`)
-- **Tip commit:** see PR #68 head (feature `1f38f71` + status)
+- **Merge commit:** `efec55b5e5f6c5b53dbf87475afa5353981f917a`
 - **Dependencies:** `P02-T9`, `P02-T8`, Batch D2 (`P03-T7`/`T12`) satisfied on main
-- **Merge target:** `main` (squash)
+- **Merge target:** merged into `main` via squash
 - **Allowed paths:** `src/ainvest/workflow/**`,
   `tests/unit/workflow/**`, `tests/contract/workflow/**` (if needed),
   `docs/tasks/status.md` (D3b section + summary row + Active batch notes only),
@@ -249,14 +253,14 @@ Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
   `docs/architecture/dependency-direction.md` + architecture tests (register `workflow`)
 - **Forbidden:** reconciliation/ledger (D3c), rewriting D1/D2, live broker,
   Temporal/durable queue implementation (interface only)
-- **Handoff notes:** Rebased onto `27631f2`; `./scripts/dev verify` green (570 passed).
+- **Handoff notes:** Merged via #68. `./scripts/dev verify` green (570 passed).
   `ainvest.workflow` commands/events with correlation/causation/idempotency;
   in-process dispatcher + IdempotencyStore; PURE / READ_ONLY_EXTERNAL / BROKER_WRITE.
-  Architecture matrix registers `workflow`. T15 draft remains held (no D3c PR).
+  Architecture matrix registers `workflow`.
 
 | Task | Title | Status | Owner | Branch | Base | Dependencies | PR |
 |---|---|---|---|---|---|---|---|
-| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `in_review` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `27631f272101f75a46c487e8b3be7f0ec7b992bc` | `P02-T9`, `P02-T8` | [#68](https://github.com/likefudan/ainvest/pull/68) |
+| `P02-T10` | Define Domain Commands, Events, and Correlation IDs | `merged` | cursor-subagent-d3 | `task/batch-d3b-workflow-commands` | `27631f272101f75a46c487e8b3be7f0ec7b992bc` | `P02-T9`, `P02-T8` | [#68](https://github.com/likefudan/ainvest/pull/68) |
 
 ### Batch D — Part 3c (D3c)
 
