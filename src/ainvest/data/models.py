@@ -394,12 +394,11 @@ class SecFundamentalObservation(FundamentalObservation):
             self.filing.provenance,
             self.snapshot.as_of,
         )
-        if not any(
-            citation.kind is EvidenceKind.FILING
-            and _filing_citation_accession(citation.locator) == self.filing.accession_number
-            for citation in self.citations
-        ):
-            raise ValueError("SEC fundamentals require an accession-bound filing citation")
+        _require_filing_citation_binding(
+            "SEC fundamentals",
+            self.filing,
+            self.citations,
+        )
         return self
 
 
@@ -496,12 +495,11 @@ class NewsEventObservation(DomainModel):
         if len(citation_ids) != len(set(citation_ids)):
             raise ValueError("news/event citation evidence_ids must be unique")
         for filing in self.related_filings:
-            if not any(
-                citation.kind is EvidenceKind.FILING
-                and _filing_citation_accession(citation.locator) == filing.accession_number
-                for citation in self.citations
-            ):
-                raise ValueError("related filings require accession-bound filing citations")
+            _require_filing_citation_binding(
+                "related filings",
+                filing,
+                self.citations,
+            )
         return self
 
 
@@ -656,6 +654,24 @@ def _filing_citation_accession(locator: str) -> str | None:
     if _ACCESSION_NUMBER_RE.fullmatch(accession) is None:
         return None
     return accession
+
+
+def _require_filing_citation_binding(
+    label: str,
+    filing: FilingReference,
+    citations: Iterable[EvidenceCitation],
+) -> None:
+    """Require exact accession evidence that was observed no earlier than filing."""
+    matching = tuple(
+        citation
+        for citation in citations
+        if citation.kind is EvidenceKind.FILING
+        and _filing_citation_accession(citation.locator) == filing.accession_number
+    )
+    if not matching:
+        raise ValueError(f"{label} require an accession-bound filing citation")
+    if any(citation.provenance.observed_at < filing.filed_at for citation in matching):
+        raise ValueError(f"{label} citation provenance.observed_at must be >= filing.filed_at")
 
 
 def _require_provenance_by_as_of(

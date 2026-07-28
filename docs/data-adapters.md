@@ -49,10 +49,12 @@ EUR reporting currency and EUR-denominated facts.
 SEC/XBRL adapter. It requires a `FilingReference` plus a filing citation that
 binds the exact accession number. Binding parses the locator as exactly
 `filing:<source>/<accession>[#fragment]`; wrong schemes, malformed separators,
-extra path components, and accession prefixes/suffixes do not match. A generic
-observation may not carry a `FILING` citation, which prevents non-SEC providers
-from presenting generic data as primary SEC evidence. One filing may contain
-facts for multiple reporting periods or normalized contexts. Fake-dataset
+extra path components, and accession prefixes/suffixes do not match. Every
+matching citation must have been observed at or after the filing's `filed_at`
+time, so neither fundamentals nor related news can cite a filing before it
+exists. A generic observation may not carry a `FILING` citation, which prevents
+non-SEC providers from presenting generic data as primary SEC evidence. One
+filing may contain facts for multiple reporting periods or normalized contexts. Fake-dataset
 identity therefore includes the instrument, accession/source snapshot, period
 dates, and reporting context: distinct annual, quarterly, comparative, or
 segment contexts stay separate, while an exact duplicate period/context is

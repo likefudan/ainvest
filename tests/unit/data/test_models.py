@@ -21,6 +21,7 @@ from ainvest.data import (
     FundamentalObservation,
     FundamentalRequest,
     InstrumentMetadataRequest,
+    NewsEventObservation,
     ObservationBatch,
     OhlcvRequest,
     PriceBook,
@@ -385,6 +386,24 @@ def test_filing_cannot_be_observed_before_it_was_filed() -> None:
 
     with pytest.raises(ValidationError, match=r"filing provenance\.observed_at"):
         FilingReference.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_sec_filing_citation_cannot_predate_matching_filing() -> None:
+    payload = fixture_dataset().fundamentals[0].model_dump(mode="json")
+    payload["citations"][0]["provenance"]["observed_at"] = "2026-07-24T11:59:59Z"
+
+    with pytest.raises(ValidationError, match=r"citation provenance\.observed_at"):
+        SecFundamentalObservation.model_validate(payload)
+
+
+@pytest.mark.unit
+def test_news_filing_citation_cannot_predate_matching_filing() -> None:
+    payload = fixture_dataset().news_events[0].model_dump(mode="json")
+    payload["citations"][1]["provenance"]["observed_at"] = "2026-07-24T11:59:59Z"
+
+    with pytest.raises(ValidationError, match=r"citation provenance\.observed_at"):
+        NewsEventObservation.model_validate(payload)
 
 
 @pytest.mark.unit
