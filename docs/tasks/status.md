@@ -177,23 +177,27 @@ Robinhood implementation, or Research Agent behavior.
 `P04-T0` handoff:
 
 - **Rebased main/base:** `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
-- **Implementation tip:** `b57cd6124753fc7c13a2057de536dcba973704b2`
+- **Implementation tip:** `0e6116440384ff34cf4ef18409466ad8ffc627b2`
 - **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
   `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
   `tests/contract/data/test_provider_ports.py`,
   `tests/unit/architecture/test_package_boundaries.py`,
   `docs/data-adapters.md`, and this P04-T0 tracker metadata.
-- **Verification:** `./scripts/dev verify` passed after implementation:
-  630 aggregate tests, 86.12% branch coverage, current schema snapshots.
+- **Verification:** `./scripts/dev verify` passed after review remediation:
+  640 aggregate tests, 86.03% branch coverage, current schema snapshots.
 - **Handoff notes:** Defines synchronous provider-independent quote,
   price-book, OHLCV, fundamentals, news/event, and instrument-metadata ports;
-  bounded timeout and opaque pagination request models; stable typed failures;
+  bounded timeout and query-bound opaque pagination; stable typed failures;
   source/timezone/delay/quality-preserving result envelopes; explicit OHLCV
-  adjustment semantics; pinned no-fallback live quote/book capabilities under
-  `DEC-003`; and a deterministic no-network fake with shared contract tests.
-  The architecture test prevents provider SDK imports above the data/execution
-  boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
-  behavior changed.
+  adjustment/empty-window semantics; filing/period/currency/certainty-bound
+  fundamentals; and licensed, published, multi-symbol/multi-citation events.
+  Partial fundamentals and one-sided books carry explicit quality flags.
+  Capability-scoped provider contract factories allow partial adapters. Invalid
+  fake datasets become stable schema errors, and source timezones are
+  preserved. Pinned live quote/book capabilities still expose no fallback under
+  `DEC-003`. The architecture test prevents provider SDK imports above the
+  data/execution boundaries. No dependency, config, shared-schema, risk, broker,
+  or live-mode behavior changed.
 - **Blockers:** None.
 - **PR:** Pending.
 
