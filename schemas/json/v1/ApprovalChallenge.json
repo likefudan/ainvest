@@ -7,7 +7,8 @@
         "APPROVED",
         "REJECTED",
         "EXPIRED",
-        "CONSUMED"
+        "CONSUMED",
+        "CANCELLED"
       ],
       "title": "ApprovalChallengeStatus",
       "type": "string"

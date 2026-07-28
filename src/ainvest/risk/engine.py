@@ -69,12 +69,10 @@ def compute_input_digest(context: RiskContext) -> str:
         {
             "phase": context.phase.value,
             "as_of": context.as_of.isoformat(),
-            "candidate_id": candidate.candidate_id,
-            "instrument_id": candidate.instrument_id,
-            "symbol": candidate.symbol,
-            "side": candidate.side.value,
-            "quantity": str(candidate.quantity),
-            "limit_price": str(candidate.limit_price),
+            # Bind every candidate field, including account scope, order
+            # economics, increments, strategy version, and expiry. Approval
+            # verifies this digest before freezing a proposal.
+            "candidate": candidate.model_dump(mode="json"),
             "quote_last": str(quote.last_price),
             "quote_bid": str(quote.bid) if quote.bid is not None else None,
             "quote_ask": str(quote.ask) if quote.ask is not None else None,

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import json
+import pickle
+from dataclasses import asdict, dataclass
 
 import pytest
+from pydantic_core import to_jsonable_python
 
 from ainvest.approval.tokens import (
     APPROVAL_TOKEN_BYTES,
@@ -45,6 +49,41 @@ def test_token_hash_is_domain_separated_and_deterministic() -> None:
     assert hash_approval_token(token) == expected
     assert hash_approval_token(token.reveal()) == expected
     assert token.reveal() not in expected
+
+
+@pytest.mark.unit
+def test_token_is_redacted_or_rejected_by_structural_serializers() -> None:
+    token = OpaqueApprovalToken(FIXED_TOKEN)
+
+    @dataclass
+    class Envelope:
+        approval_token: OpaqueApprovalToken
+
+    structural = asdict(Envelope(token))
+    assert FIXED_TOKEN not in repr(structural)
+    with pytest.raises(TypeError):
+        vars(token)
+    with pytest.raises(TypeError):
+        json.dumps(token)
+    with pytest.raises(TypeError, match="cannot be structurally serialized"):
+        pickle.dumps(token)
+
+    json_fallback = json.dumps(
+        {"approval_token": token},
+        default=str,
+    )
+    pydantic_fallback = to_jsonable_python(
+        {"approval_token": token},
+        fallback=str,
+    )
+    structlog_style = json.dumps(
+        {"event": "approval-issued", "approval_token": token},
+        default=repr,
+    )
+    assert FIXED_TOKEN not in json_fallback
+    assert FIXED_TOKEN not in json.dumps(pydantic_fallback)
+    assert FIXED_TOKEN not in structlog_style
+    assert "<redacted>" in json_fallback
 
 
 @pytest.mark.unit

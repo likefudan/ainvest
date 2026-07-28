@@ -6,7 +6,6 @@ Telegram never authorizes live trading.
 
 from __future__ import annotations
 
-from datetime import timedelta
 from enum import StrEnum
 from typing import Annotated
 
@@ -44,6 +43,7 @@ class ApprovalChallengeStatus(StrEnum):
     REJECTED = "REJECTED"
     EXPIRED = "EXPIRED"
     CONSUMED = "CONSUMED"
+    CANCELLED = "CANCELLED"
 
 
 class ApprovalEventOutcome(StrEnum):
@@ -80,9 +80,8 @@ class ApprovalChallenge(DomainModel):
     @model_validator(mode="after")
     def _method_scope_and_window(self) -> ApprovalChallenge:
         _require_allowed_method_scope(self.method, self.scope)
-        lifetime = self.expires_at - self.created_at
-        if not timedelta(seconds=60) <= lifetime <= timedelta(seconds=120):
-            raise ValueError("approval challenge lifetime must be between 60 and 120 seconds")
+        if self.expires_at <= self.created_at:
+            raise ValueError("expires_at must be > created_at")
         return self
 
 

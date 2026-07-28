@@ -10,8 +10,7 @@ import base64
 import hashlib
 import re
 import secrets
-from dataclasses import dataclass
-from typing import Final
+from typing import Any, Final, NoReturn, SupportsIndex
 
 APPROVAL_TOKEN_BYTES: Final[int] = 32
 """256 bits of CSPRNG entropy, the minimum required by P05-T0."""
@@ -20,24 +19,40 @@ APPROVAL_TOKEN_HASH_DOMAIN: Final[bytes] = b"ainvest.approval.nonce.v1\x00"
 _TOKEN_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[A-Za-z0-9_-]{43}$")
 
 
-@dataclass(frozen=True, slots=True, repr=False)
 class OpaqueApprovalToken:
-    """Sensitive callback token whose string representations stay redacted."""
+    """Non-structural secret holder for a raw callback token.
 
-    _value: str
+    The value is deliberately unavailable to dataclass, ``vars()``, JSON, and
+    Pydantic structural encoders. Transport code must opt in through
+    :meth:`reveal`; ordinary string/repr fallbacks remain redacted.
+    """
 
-    def __post_init__(self) -> None:
-        _decode_token(self._value)
+    __slots__ = ("__value",)
+
+    def __init__(self, value: str) -> None:
+        _decode_token(value)
+        self.__value = value
 
     def reveal(self) -> str:
         """Return the raw token for transport to the intended approval channel."""
-        return self._value
+        return self.__value
 
     def __repr__(self) -> str:
         return "OpaqueApprovalToken(<redacted>)"
 
     def __str__(self) -> str:
         return "<redacted>"
+
+    def __copy__(self) -> OpaqueApprovalToken:
+        return self
+
+    def __deepcopy__(self, memo: dict[int, Any]) -> OpaqueApprovalToken:
+        del memo
+        return self
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> NoReturn:
+        del protocol
+        raise TypeError("approval tokens cannot be structurally serialized")
 
 
 def generate_approval_token() -> OpaqueApprovalToken:

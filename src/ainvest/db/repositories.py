@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ainvest.db.errors import (
     ConcurrentModificationError,
+    ConflictError,
     NotFoundError,
     PersistenceError,
 )
@@ -72,6 +73,21 @@ class RiskDecisionRepository:
         row = RiskDecisionRow(**fields)
         self._session.add(row)
         return row
+
+    def create_bound_fields(
+        self,
+        fields: dict[str, Any],
+        *,
+        risk_decision_id: str,
+    ) -> tuple[RiskDecisionRow, bool]:
+        """Atomically claim one risk decision for one proposal."""
+        row = RiskDecisionRow(**fields)
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=lambda: self.get(risk_decision_id),
+            conflict_message="risk decision conflict without existing row",
+        )
 
 
 class ProposalRepository:
@@ -247,6 +263,38 @@ class ApprovalRepository:
         self._session.add(row)
         self._session.flush()
         return row
+
+    def transition_with_event(
+        self,
+        challenge_id: str,
+        *,
+        expected_version: int,
+        expected_status: str,
+        new_status: str,
+        challenge_payload: dict[str, Any],
+        event_fields: dict[str, Any],
+    ) -> tuple[ApprovalChallengeRow, ApprovalEventRow]:
+        """Savepoint-backed challenge transition and event insert.
+
+        A validation/unique conflict rolls the transition back even when a
+        service caller catches the resulting error inside the outer UnitOfWork.
+        """
+        try:
+            with self._session.begin_nested():
+                challenge = self.consume_challenge_once(
+                    challenge_id,
+                    expected_version=expected_version,
+                    expected_status=expected_status,
+                    new_status=new_status,
+                    extra_values={"payload_json": challenge_payload},
+                )
+                event = self.add_event_fields(event_fields)
+            return challenge, event
+        except IntegrityError as exc:
+            raise ConflictError(
+                "approval event conflicts with an existing event",
+                code="APPROVAL_EVENT_CONFLICT",
+            ) from exc
 
     def get_event(self, event_id: str) -> ApprovalEventRow | None:
         return self._session.scalar(

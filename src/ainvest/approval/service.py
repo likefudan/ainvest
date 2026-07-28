@@ -11,9 +11,10 @@ from __future__ import annotations
 import hmac
 import secrets
 from collections.abc import Callable
-from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from typing import Any, Final
+
+from pydantic import ValidationError
 
 from ainvest.approval.order_hash import (
     attach_order_hash,
@@ -25,13 +26,19 @@ from ainvest.approval.tokens import (
     generate_approval_token,
     hash_approval_token,
 )
-from ainvest.db.errors import ConcurrentModificationError
+from ainvest.db.errors import ConcurrentModificationError, ConflictError
 from ainvest.db.repositories import (
     ApprovalRepository,
     ProposalRepository,
     RiskDecisionRepository,
 )
 from ainvest.db.uow import UnitOfWork
+from ainvest.risk.engine import (
+    RiskEngineOutput,
+    compute_config_digest,
+    compute_input_digest,
+)
+from ainvest.risk.models import EvaluationPhase, RiskContext
 from ainvest.schemas.approval import (
     ApprovalChallenge,
     ApprovalChallengeStatus,
@@ -43,7 +50,7 @@ from ainvest.schemas.approval import (
 from ainvest.schemas.common import ensure_utc
 from ainvest.schemas.orders import CandidateOrder, OrderProposal
 from ainvest.schemas.portfolio import AccountScope
-from ainvest.schemas.risk import RiskDecision, RiskOutcome
+from ainvest.schemas.risk import RiskOutcome
 
 MIN_APPROVAL_TTL: Final[timedelta] = timedelta(seconds=60)
 MAX_APPROVAL_TTL: Final[timedelta] = timedelta(seconds=120)
@@ -62,13 +69,46 @@ class ApprovalServiceError(RuntimeError):
         super().__init__(message)
 
 
-@dataclass(frozen=True, slots=True)
 class IssuedApprovalChallenge:
-    """Frozen proposal/challenge plus the one-time raw token returned to transport."""
+    """Non-structural result that keeps its raw token out of serializers."""
 
-    proposal: OrderProposal
-    challenge: ApprovalChallenge
-    token: OpaqueApprovalToken
+    __slots__ = ("__challenge", "__proposal", "__token")
+
+    def __init__(
+        self,
+        *,
+        proposal: OrderProposal,
+        challenge: ApprovalChallenge,
+        token: OpaqueApprovalToken,
+    ) -> None:
+        self.__proposal = proposal
+        self.__challenge = challenge
+        self.__token = token
+
+    @property
+    def proposal(self) -> OrderProposal:
+        """Return the immutable proposal bound to this challenge."""
+        return self.__proposal
+
+    @property
+    def challenge(self) -> ApprovalChallenge:
+        """Return the immutable persisted challenge contract."""
+        return self.__challenge
+
+    @property
+    def token(self) -> OpaqueApprovalToken:
+        """Return the opaque holder; explicit ``reveal`` is still required."""
+        return self.__token
+
+    def __repr__(self) -> str:
+        return (
+            "IssuedApprovalChallenge("
+            f"proposal_id={self.proposal.proposal_id!r}, "
+            f"challenge_id={self.challenge.challenge_id!r}, token=<redacted>)"
+        )
+
+    def __str__(self) -> str:
+        return self.__repr__()
 
 
 def _utc_now() -> datetime:
@@ -121,8 +161,9 @@ class ApprovalService:
     def create_proposal_and_challenge(
         self,
         candidate: CandidateOrder,
-        risk_decision: RiskDecision,
+        risk_output: RiskEngineOutput,
         *,
+        risk_context: RiskContext,
         method: ApprovalMethod,
         scope: ApprovalScope,
         ttl: timedelta = DEFAULT_APPROVAL_TTL,
@@ -148,9 +189,10 @@ class ApprovalService:
                 "approval must be telegram+paper or webauthn+live",
             )
         _require_ttl(ttl)
-        _require_risk_approval(candidate, risk_decision)
+        _require_risk_approval(candidate, risk_output, risk_context)
         _require_scope_matches_account(scope, candidate.account_scope)
 
+        risk_decision = risk_output.decision
         resolved_proposal_id = proposal_id or self._id_factory("ordp")
         if (
             risk_decision.proposal_id is not None
@@ -187,7 +229,10 @@ class ApprovalService:
             status=ApprovalChallengeStatus.PENDING,
         )
 
-        self._freeze_risk_decision(risk_decision)
+        self._freeze_risk_decision(
+            risk_output,
+            proposal_id=proposal.proposal_id,
+        )
         self._proposals.add_fields(_proposal_fields(proposal))
         self._approvals.add_challenge_fields(_challenge_fields(challenge))
         return IssuedApprovalChallenge(proposal=proposal, challenge=challenge, token=token)
@@ -238,54 +283,61 @@ class ApprovalService:
             new_status = ApprovalChallengeStatus.REJECTED
             outcome = ApprovalEventOutcome.DENIED
 
+        try:
+            event = ApprovalEvent(
+                event_id=event_id or self._id_factory("apev"),
+                challenge_id=challenge.challenge_id,
+                proposal_id=proposal.proposal_id,
+                order_hash=proposal.order_hash,
+                method=challenge.method,
+                scope=challenge.scope,
+                outcome=outcome,
+                approved_at=now,
+                approver_identity=approver_identity,
+            )
+        except (ValidationError, ValueError) as exc:
+            raise ApprovalServiceError(
+                "INVALID_APPROVAL_EVENT",
+                "approval event failed validation",
+            ) from exc
+
         transitioned = challenge.model_copy(update={"status": new_status})
         try:
-            self._approvals.consume_challenge_once(
+            self._approvals.transition_with_event(
                 challenge.challenge_id,
                 expected_version=stored.version,
                 expected_status=ApprovalChallengeStatus.PENDING.value,
                 new_status=new_status.value,
-                extra_values={"payload_json": transitioned.model_dump(mode="json")},
+                challenge_payload=transitioned.model_dump(mode="json"),
+                event_fields=_event_fields(event),
             )
         except ConcurrentModificationError as exc:
             raise ApprovalServiceError(
                 "CHALLENGE_ALREADY_USED",
                 "approval challenge lost a concurrent decision race",
             ) from exc
-
-        event = ApprovalEvent(
-            event_id=event_id or self._id_factory("apev"),
-            challenge_id=challenge.challenge_id,
-            proposal_id=proposal.proposal_id,
-            order_hash=proposal.order_hash,
-            method=challenge.method,
-            scope=challenge.scope,
-            outcome=outcome,
-            approved_at=now,
-            approver_identity=approver_identity,
-        )
-        self._approvals.add_event_fields(_event_fields(event))
+        except ConflictError as exc:
+            raise ApprovalServiceError(
+                "APPROVAL_EVENT_CONFLICT",
+                "approval event conflicts with an existing event",
+            ) from exc
         return event
 
-    def _freeze_risk_decision(self, decision: RiskDecision) -> None:
-        payload = decision.model_dump(mode="json")
-        existing = self._risk_decisions.get(decision.risk_decision_id)
-        if existing is not None:
-            if (
-                existing.payload_json != payload
-                or existing.candidate_id != decision.candidate_id
-                or existing.proposal_id != decision.proposal_id
-                or existing.outcome != decision.outcome.value
-                or existing.decided_at != decision.decided_at
-                or existing.rule_set_version != decision.rule_set_version
-                or existing.reason_code != decision.reason_code
-            ):
-                raise ApprovalServiceError(
-                    "RISK_DECISION_CHANGED",
-                    "stored risk decision does not match the proposal input",
-                )
-            return
-        self._risk_decisions.add_fields(_risk_decision_fields(decision))
+    def _freeze_risk_decision(
+        self,
+        output: RiskEngineOutput,
+        *,
+        proposal_id: str,
+    ) -> None:
+        stored, created = self._risk_decisions.create_bound_fields(
+            _risk_decision_fields(output, proposal_id=proposal_id),
+            risk_decision_id=output.decision.risk_decision_id,
+        )
+        if not created:
+            raise ApprovalServiceError(
+                "RISK_DECISION_ALREADY_USED",
+                f"risk decision is already bound to proposal {stored.proposal_id}",
+            )
 
     def _load_bound_proposal(self, challenge: ApprovalChallenge) -> OrderProposal:
         stored = self._proposals.get_by_proposal_id(challenge.proposal_id)
@@ -333,7 +385,12 @@ def _require_ttl(ttl: timedelta) -> None:
         )
 
 
-def _require_risk_approval(candidate: CandidateOrder, decision: RiskDecision) -> None:
+def _require_risk_approval(
+    candidate: CandidateOrder,
+    output: RiskEngineOutput,
+    context: RiskContext,
+) -> None:
+    decision = output.decision
     if decision.outcome is not RiskOutcome.APPROVED:
         raise ApprovalServiceError(
             "RISK_NOT_APPROVED",
@@ -343,6 +400,36 @@ def _require_risk_approval(candidate: CandidateOrder, decision: RiskDecision) ->
         raise ApprovalServiceError(
             "RISK_CANDIDATE_MISMATCH",
             "risk decision is bound to a different candidate",
+        )
+    if context.phase is not EvaluationPhase.PROPOSAL:
+        raise ApprovalServiceError(
+            "RISK_PHASE_MISMATCH",
+            "proposal creation requires a PROPOSAL risk evaluation",
+        )
+    if context.risk_decision_id != decision.risk_decision_id:
+        raise ApprovalServiceError(
+            "RISK_CONTEXT_MISMATCH",
+            "risk output and context use different decision IDs",
+        )
+    if context.candidate != candidate:
+        raise ApprovalServiceError(
+            "RISK_CANDIDATE_MISMATCH",
+            "risk context does not contain the exact candidate",
+        )
+    if output.input_digest != compute_input_digest(context):
+        raise ApprovalServiceError(
+            "RISK_INPUT_DIGEST_MISMATCH",
+            "risk input digest does not match the supplied context",
+        )
+    if output.config_digest != compute_config_digest(context.config):
+        raise ApprovalServiceError(
+            "RISK_CONFIG_DIGEST_MISMATCH",
+            "risk config digest does not match the supplied context",
+        )
+    if decision.rule_set_version != context.config.rule_set_version:
+        raise ApprovalServiceError(
+            "RISK_CONFIG_MISMATCH",
+            "risk decision rule-set version does not match the context",
         )
 
 
@@ -373,17 +460,22 @@ def _build_proposal(
     return parse_order_proposal(attach_order_hash(payload))
 
 
-def _risk_decision_fields(decision: RiskDecision) -> dict[str, Any]:
+def _risk_decision_fields(
+    output: RiskEngineOutput,
+    *,
+    proposal_id: str,
+) -> dict[str, Any]:
+    decision = output.decision
     return {
         "risk_decision_id": decision.risk_decision_id,
         "candidate_id": decision.candidate_id,
-        "proposal_id": decision.proposal_id,
+        "proposal_id": proposal_id,
         "outcome": decision.outcome.value,
         "decided_at": decision.decided_at,
         "rule_set_version": decision.rule_set_version,
         "reason_code": decision.reason_code,
         "schema_version": decision.schema_version,
-        "payload_json": decision.model_dump(mode="json"),
+        "payload_json": output.model_dump(mode="json"),
     }
 
 
@@ -459,6 +551,9 @@ def _load_challenge(stored: Any) -> ApprovalChallenge:
         or challenge.method.value != stored.method
         or challenge.scope.value != stored.scope
         or challenge.status.value != stored.status
+        or challenge.created_at != stored.challenge_created_at
+        or challenge.expires_at != stored.expires_at
+        or challenge.schema_version != stored.schema_version
     ):
         raise ApprovalServiceError(
             "CHALLENGE_INTEGRITY_FAILED",

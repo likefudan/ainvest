@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -230,3 +231,25 @@ def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
     assert compute_input_digest(
         with_port.model_copy(update={"exposure_inputs": swapped_sectors})
     ) == compute_input_digest(with_port.model_copy(update={"exposure_inputs": ordered_sectors}))
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("quantity", "1"),
+        ("limit_price", "214.49"),
+        ("maximum_notional", "1000.00"),
+        ("account_scope", "agentic"),
+        ("expires_at", "2026-07-24T18:33:12Z"),
+        ("strategy_version", "1.2.1"),
+    ],
+)
+def test_input_digest_binds_complete_candidate(field: str, value: str) -> None:
+    context = _context()
+    baseline = compute_input_digest(context)
+    payload = deepcopy(context.candidate.model_dump(mode="json"))
+    payload[field] = value
+    changed = CandidateOrder.model_validate(payload)
+
+    assert compute_input_digest(context.model_copy(update={"candidate": changed})) != baseline
