@@ -100,19 +100,156 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | in progress (`P04-T0` claimed) |
+| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | in progress (`P05-T0` claimed) |
+| Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | not started; owner decisions remain deferred |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | not started |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
 ## Active batch
 
-**Batch D complete — Gate 1 accepted** on `main` at
-`36f51ebb795e04f64f91a4983bc65cdb953d86d0` (D4a) with acceptance record
-[`docs/releases/phase-1-acceptance.md`](../releases/phase-1-acceptance.md)
-(D4b / `P03-T17`). **Batch C is complete.** Next coordination follows Batch E
-tracks in `IMPLEMENTATION_TODO.md` (research / paper approval / cross-cutting).
+**Batch E is active.** Its immutable starting point is
+`3781fc165096aff1d4827b7e9c232e5c330b1e9e`, after Batch D / Gate 1 and its
+tracker cleanup were merged. Gate 1 remains accepted; see
+[`docs/releases/phase-1-acceptance.md`](../releases/phase-1-acceptance.md).
 
-Coordination note (closed): D4a → D4b ran serially (two PRs). D4 was
-**integration only** — did not rewrite D1–D3 modules.
+### Batch E canonical coordination index
+
+This section is the canonical dispatch index for Batch E. The complete
+requirements and acceptance criteria remain the task cards in
+`IMPLEMENTATION_TODO.md`; this index records ownership, safe parallelism, write
+scope, and integration order.
+
+#### Integration policy
+
+1. Every task is implemented by its own sub-agent in a Git worktree under the
+   main repository's `.worktrees/` directory. One active task has one branch and
+   one owner.
+2. Implementations may run concurrently when their dependencies and allowed
+   paths do not overlap. PRs are integrated one at a time.
+3. Immediately before a PR enters review, its branch must rebase onto the
+   latest `main`, resolve conflicts without weakening safety contracts, rerun
+   `./scripts/dev verify`, and update the PR branch.
+4. A sub-agent independent of the implementation must review functionality,
+   fail-closed behavior, tests, readability, duplication, and dependency use.
+   Review findings must be fixed and re-reviewed until no actionable finding
+   remains.
+5. Required GitHub checks must pass after the final rebase. Merge by squash
+   only; record the PR and resulting `main` commit here before reviewing the
+   next PR.
+6. `docs/tasks/status.md` is coordinator-owned while task agents are active.
+   `pyproject.toml`, `uv.lock`, `src/ainvest/config.py`, shared schema exports,
+   the Alembic head, package `__init__.py` files, and CI workflows are shared
+   surfaces: an agent must obtain coordinator assignment before changing them.
+7. Owner-controlled values from `DEC-009`–`DEC-019` are never invented.
+   Deterministic fakes and disabled adapters are the required fallback. No
+   Batch E task enables live broker writes.
+
+Initial integration queue: this coordination change, then `P04-T0`, then
+`P05-T0`. Later ready branches enter the serial queue only after their recorded
+dependencies are on `main`. The coordinator may reorder independent ready
+branches to reduce conflicts, but may not bypass the rebase, review, checks, or
+squash-merge rules above.
+
+#### Initial claims
+
+| Task | Status | Owner | Branch / worktree | Immutable base | Dependencies |
+|---|---|---|---|---|---|
+| `P04-T0` | `in_progress` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T1`, `P03-T13` (merged) |
+| `P05-T0` | `in_progress` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
+
+`P04-T0` may write `src/ainvest/data/{ports,models,fakes}.py`, narrowly scoped
+data re-exports, deterministic data fixtures, and data unit/contract tests.
+It must not add a provider SDK, live fallback, Robinhood implementation, or
+Research Agent behavior.
+
+`P05-T0` may write `src/ainvest/approval/{service,tokens}.py`, approval
+unit/concurrency tests, and the minimum approval persistence/repository changes
+needed by the card. Any Alembic revision or shared database/schema edit must be
+coordinated before it is made. It must not implement Telegram transport,
+WebAuthn, execution handoff, or broker behavior.
+
+#### Research track — `P04-T0` through `P04-T12`
+
+All provider tests use recorded fixtures or deterministic fakes; canonical
+tests must not require public network access. Under `DEC-003`, development data
+can never become a live quote fallback.
+
+| Task | Status | Dependencies / unlock | Allowed implementation scope |
+|---|---|---|---|
+| `P04-T0` | `in_progress` | `P02-T1`, `P03-T13` | `data/{ports,models,fakes}.py`; deterministic fixtures; data unit/contract tests |
+| `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
+| `P04-T2` | `not_started` | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
+| `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
+| `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
+| `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
+| `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
+| `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
+| `P04-T8` | `not_started` | `P04-T6`, `P04-T7` | `tests/evals/research/**`, `scripts/run_research_evals.py`, versioned evaluation fixtures/reports |
+| `P04-T9` | `not_started` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` | `backtest/runner.py`; replay fixtures and tests |
+| `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
+| `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
+| `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
+
+After `P04-T4` merges, the Research Agent chain
+`P04-T5` → `P04-T6` → `P04-T7` → `P04-T8` and the backtest chain
+`P04-T9` → `P04-T10` → `P04-T11` may be implemented in parallel. They rejoin
+at `P04-T12`.
+
+#### Paper approval track — Gate 3
+
+Telegram remains Paper-only under `DEC-005`; synthetic IDs and fake transports
+are used until `DEC-010` is accepted and secrets are provisioned outside Git.
+
+| Task | Status | Dependencies / unlock | Allowed implementation scope |
+|---|---|---|---|
+| `P05-T0` | `in_progress` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`; minimum approval persistence; nonce/state/concurrency tests |
+| `P05-T1` | `not_started` | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` | `approval/telegram_approval.py`; callback validation, audit/outbox integration, tests |
+| `P05-T4` | `not_started` | `P05-T0`, `DEC-005`; environment integration requires `DEC-010` | `approval/telegram.py`; notification/config adapter, snapshots, fake-transport tests |
+| `P05-T5` | `not_started` | `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests |
+| `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
+| `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
+
+After `P05-T0` merges, `P05-T1` and `P05-T4` may be implemented in parallel.
+`P05-T5` follows `P05-T4`; `P05-T6` follows `P05-T1`. The completed Paper
+approval path unlocks `P08-T13`, then `P05-T8`.
+
+#### Deferred live approval track
+
+This track does not block Gate 2 or Gate 3. Production acceptance is
+fail-closed until the cited owner decisions are accepted. `P08-T14` is listed
+here because it is on the live-approval dependency chain; its only canonical
+task row is in the cross-cutting table below.
+
+| Task | Status | Dependencies / owner gate | Allowed implementation scope |
+|---|---|---|---|
+| `P05-T7` | `not_started` | `P08-T6`, `DEC-015` | deployment manifest/IaC and `docs/runbooks/approval-deploy.md`; no guessed domain/provider |
+| `P08-T14` | `not_started` | `P08-T7`; production endpoint also requires `DEC-018` | see cross-cutting row; local interfaces may be tested with fake identities |
+| `P05-T2` | `not_started` | `P05-T0`, `P08-T14`, `DEC-015`, `DEC-016`, `DEC-018` | `approval/webauthn.py`, registration routes, one coordinated migration, security tests |
+| `P05-T3` | `not_started` | `P05-T0`, `P05-T2`, `P05-T7` | `api/app.py`, approval routes/assets, `approval/assertion.py`, WebAuthn tests |
+
+#### Cross-cutting foundation
+
+| Task | Status | Dependencies / unlock | Allowed implementation scope |
+|---|---|---|---|
+| `P08-T0` | `not_started` | `P01-T4`, `P03-T13` | `runtime.py`, `docs/runtime-modes.md`, capability/startup tests |
+| `P08-T3` | `not_started` | `P01-T2`, `P02-T8` | `observability/logging.py`; log/redaction/correlation tests |
+| `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
+| `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
+| `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
+| `P08-T7` | `not_started` | `P01-T4`, `P01-T1` | `secrets.py`, `docs/security/secrets.md`, bounded identity/IAM artifacts and tests |
+| `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
+| `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
+| `P08-T12` | `not_started` | incremental; prerequisite modules are merged | `docs/testing.md`; `tests/{unit,property,contract}/**`; no production rewrites |
+| `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
+| `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
+
+`P08-T0`, `P08-T3`, `P08-T6`, `P08-T7`, `P08-T8`, `P08-T9`, and
+`P08-T12` are dependency-ready and may be implemented concurrently on disjoint
+worktrees after being claimed. `P08-T4` follows `P08-T3`; `P08-T5` follows
+`P08-T4`; `P08-T14` follows `P08-T7`; `P08-T13` waits for the Paper approval
+implementation.
 
 ### Batch D — Part 1a (D1a)
 
