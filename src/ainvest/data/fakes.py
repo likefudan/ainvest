@@ -2,14 +2,21 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 from collections.abc import Mapping, Sequence
-from typing import NoReturn, TypeVar
+from typing import Any, NoReturn, TypeVar
+
+from pydantic import BaseModel, ValidationError
 
 from ainvest.data.models import (
     FakeDataset,
+    FilingReference,
+    FundamentalObservation,
     FundamentalRequest,
     InstrumentMetadataObservation,
     InstrumentMetadataRequest,
+    NewsEventObservation,
     NewsEventRequest,
     ObservationBatch,
     ObservationPage,
@@ -19,6 +26,7 @@ from ainvest.data.models import (
     PriceBook,
     PriceBookRequest,
     QuoteRequest,
+    ReportingPeriod,
 )
 from ainvest.data.ports import (
     DataAuthError,
@@ -49,16 +57,18 @@ from ainvest.schemas.market import (
     MarketQuote,
     OhlcvBar,
 )
+from ainvest.schemas.research import EvidenceCitation, EvidenceKind
 
 ItemT = TypeVar(
     "ItemT",
     MarketQuote,
     PriceBook,
     OhlcvBar,
-    FundamentalSnapshot,
-    MarketEvent,
+    FundamentalObservation,
+    NewsEventObservation,
     InstrumentMetadataObservation,
 )
+ModelT = TypeVar("ModelT", bound=BaseModel)
 
 _ERROR_TYPES: Mapping[DataErrorCode, type[DataProviderError]] = {
     DataErrorCode.AUTH: DataAuthError,
@@ -85,11 +95,25 @@ class DeterministicFakeDataProvider:
 
     def __init__(
         self,
-        dataset: FakeDataset | None = None,
+        dataset: FakeDataset | Mapping[str, Any] | None = None,
         *,
         failures: Mapping[DataOperation, DataErrorCode] | None = None,
     ) -> None:
-        self._dataset = dataset or fixture_dataset()
+        try:
+            if dataset is None:
+                normalized_dataset = fixture_dataset()
+            elif isinstance(dataset, FakeDataset):
+                normalized_dataset = dataset
+            else:
+                normalized_dataset = FakeDataset.model_validate(dataset)
+        except ValidationError as exc:
+            raise DataSchemaError(
+                "fake provider dataset is inconsistent",
+                operation=DataOperation.DATASET,
+                reason_code="FAKE_DATASET_INVALID",
+                details={"error_count": str(exc.error_count())},
+            ) from exc
+        self._dataset = normalized_dataset
         self._failures = dict(failures or {})
 
     @property
@@ -102,14 +126,21 @@ class DeterministicFakeDataProvider:
         by_id = {item.instrument.instrument_id: item for item in self._dataset.quotes}
         self._require_all(request.instrument_ids, by_id, DataOperation.QUOTES)
         items = tuple(by_id[instrument_id] for instrument_id in request.instrument_ids)
-        return ObservationBatch(items=items, provenance=self._envelope(items))
+        return self._build(
+            ObservationBatch[MarketQuote],
+            DataOperation.QUOTES,
+            items=items,
+            provenance=self._envelope(items, DataOperation.QUOTES),
+        )
 
     def get_price_books(self, request: PriceBookRequest) -> ObservationBatch[PriceBook]:
         self._raise_injected(DataOperation.PRICE_BOOKS)
         by_id = {item.instrument.instrument_id: item for item in self._dataset.price_books}
         self._require_all(request.instrument_ids, by_id, DataOperation.PRICE_BOOKS)
         items = tuple(
-            PriceBook(
+            self._build(
+                PriceBook,
+                DataOperation.PRICE_BOOKS,
                 instrument=by_id[instrument_id].instrument,
                 bids=by_id[instrument_id].bids[: request.depth],
                 asks=by_id[instrument_id].asks[: request.depth],
@@ -117,7 +148,12 @@ class DeterministicFakeDataProvider:
             )
             for instrument_id in request.instrument_ids
         )
-        return ObservationBatch(items=items, provenance=self._envelope(items))
+        return self._build(
+            ObservationBatch[PriceBook],
+            DataOperation.PRICE_BOOKS,
+            items=items,
+            provenance=self._envelope(items, DataOperation.PRICE_BOOKS),
+        )
 
     def get_ohlcv(self, request: OhlcvRequest) -> OhlcvPage:
         self._raise_injected(DataOperation.OHLCV)
@@ -128,6 +164,26 @@ class DeterministicFakeDataProvider:
                 reason_code="FAKE_ADJUSTMENT_UNSUPPORTED",
                 source=self.source_id,
             )
+        known_instruments = {
+            item.instrument.instrument_id for item in self._dataset.instrument_metadata
+        }
+        if request.instrument_id not in known_instruments:
+            raise DataNotFoundError(
+                "requested OHLCV instrument is unknown",
+                operation=DataOperation.OHLCV,
+                reason_code="FAKE_INSTRUMENT_NOT_FOUND",
+                source=self.source_id,
+            )
+        available_series = {
+            (bar.instrument.instrument_id, bar.interval) for bar in self._dataset.ohlcv
+        }
+        if (request.instrument_id, request.interval) not in available_series:
+            raise DataNotFoundError(
+                "requested OHLCV series is unavailable",
+                operation=DataOperation.OHLCV,
+                reason_code="FAKE_SERIES_NOT_FOUND",
+                source=self.source_id,
+            )
         filtered = tuple(
             bar
             for bar in self._dataset.ohlcv
@@ -136,10 +192,12 @@ class DeterministicFakeDataProvider:
             and request.start_at <= bar.bar_start < request.end_at
         )
         selected, next_cursor = self._select_page(filtered, request, DataOperation.OHLCV)
-        return OhlcvPage(
+        return self._build(
+            OhlcvPage,
+            DataOperation.OHLCV,
             items=selected,
             next_cursor=next_cursor,
-            provenance=self._envelope(selected),
+            provenance=self._envelope(selected, DataOperation.OHLCV),
             instrument_id=request.instrument_id,
             interval=request.interval,
             adjustment=request.adjustment,
@@ -148,25 +206,34 @@ class DeterministicFakeDataProvider:
     def get_fundamentals(
         self,
         request: FundamentalRequest,
-    ) -> ObservationPage[FundamentalSnapshot]:
+    ) -> ObservationPage[FundamentalObservation]:
         self._raise_injected(DataOperation.FUNDAMENTALS)
         filtered = tuple(
-            snapshot
-            for snapshot in self._dataset.fundamentals
-            if snapshot.symbol in request.symbols and snapshot.as_of <= request.as_of
+            observation
+            for observation in self._dataset.fundamentals
+            if observation.snapshot.symbol in request.symbols
+            and observation.snapshot.as_of <= request.as_of
         )
-        return self._page(filtered, request, DataOperation.FUNDAMENTALS)
+        found_symbols = {observation.snapshot.symbol for observation in filtered}
+        missing_symbols = set(request.symbols) - found_symbols
+        missing_flags = (QualityFlag.PARTIAL, QualityFlag.MISSING_FIELDS) if missing_symbols else ()
+        return self._page(
+            filtered,
+            request,
+            DataOperation.FUNDAMENTALS,
+            extra_flags=missing_flags,
+        )
 
-    def get_news_events(self, request: NewsEventRequest) -> ObservationPage[MarketEvent]:
+    def get_news_events(self, request: NewsEventRequest) -> ObservationPage[NewsEventObservation]:
         self._raise_injected(DataOperation.NEWS_EVENTS)
         event_types = set(request.event_types)
         symbols = set(request.symbols)
         filtered = tuple(
-            event
-            for event in self._dataset.news_events
-            if request.start_at <= event.occurred_at < request.end_at
-            and (not symbols or event.symbol in symbols)
-            and (not event_types or event.event_type in event_types)
+            observation
+            for observation in self._dataset.news_events
+            if request.start_at <= observation.event.occurred_at < request.end_at
+            and (not symbols or not symbols.isdisjoint(observation.symbols))
+            and (not event_types or observation.event.event_type in event_types)
         )
         return self._page(filtered, request, DataOperation.NEWS_EVENTS)
 
@@ -201,12 +268,16 @@ class DeterministicFakeDataProvider:
         items: tuple[ItemT, ...],
         request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
         operation: DataOperation,
+        *,
+        extra_flags: tuple[QualityFlag, ...] = (),
     ) -> ObservationPage[ItemT]:
         selected, next_cursor = self._select_page(items, request, operation)
-        return ObservationPage(
+        return self._build(
+            ObservationPage[ItemT],
+            operation,
             items=selected,
             next_cursor=next_cursor,
-            provenance=self._envelope(selected),
+            provenance=self._envelope(selected, operation, extra_flags=extra_flags),
         )
 
     def _select_page(
@@ -215,32 +286,45 @@ class DeterministicFakeDataProvider:
         request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
         operation: DataOperation,
     ) -> tuple[tuple[ItemT, ...], str | None]:
-        offset = self._decode_cursor(request.cursor, operation)
+        offset = self._decode_cursor(request.cursor, operation, request)
         selected = items[offset : offset + request.page_size]
         next_offset = offset + len(selected)
         next_cursor = (
-            self._encode_cursor(next_offset, operation) if next_offset < len(items) else None
+            self._encode_cursor(next_offset, operation, request)
+            if next_offset < len(items)
+            else None
         )
         return selected, next_cursor
 
-    def _envelope(self, items: Sequence[ItemT]) -> Provenance:
-        if not items:
-            return self._dataset.provenance
-        provenances = tuple(item.provenance for item in items)
+    def _envelope(
+        self,
+        items: Sequence[ItemT],
+        operation: DataOperation,
+        *,
+        extra_flags: tuple[QualityFlag, ...] = (),
+    ) -> Provenance:
+        provenances: tuple[Provenance, ...] = (
+            tuple(item.provenance for item in items) if items else (self._dataset.provenance,)
+        )
         flags: tuple[QualityFlag, ...] = tuple(
             sorted(
-                {flag for provenance in provenances for flag in provenance.quality_flags},
-                key=str,
+                {
+                    *extra_flags,
+                    *(flag for provenance in provenances for flag in provenance.quality_flags),
+                },
+                key=lambda flag: flag.value,
             )
         )
         delayed = any(provenance.is_delayed for provenance in provenances)
         if delayed and QualityFlag.DELAYED not in flags:
             flags = (*flags, QualityFlag.DELAYED)
-        return Provenance(
+        return self._build(
+            Provenance,
+            operation,
             source=self.source_id,
             observed_at=max(provenance.observed_at for provenance in provenances),
             received_at=max(provenance.received_at for provenance in provenances),
-            timezone="UTC",
+            timezone=provenances[0].timezone,
             is_delayed=delayed,
             quality_flags=flags,
         )
@@ -275,19 +359,58 @@ class DeterministicFakeDataProvider:
             source=self.source_id,
         )
 
-    def _encode_cursor(self, offset: int, operation: DataOperation) -> str:
-        return f"{self._dataset.dataset_id}:{operation.value}:{offset}"
+    def _encode_cursor(
+        self,
+        offset: int,
+        operation: DataOperation,
+        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+    ) -> str:
+        digest = self._request_digest(request)
+        return f"{self._dataset.dataset_id}:{operation.value}:{digest}:{offset}"
 
-    def _decode_cursor(self, cursor: str | None, operation: DataOperation) -> int:
+    def _decode_cursor(
+        self,
+        cursor: str | None,
+        operation: DataOperation,
+        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+    ) -> int:
         if cursor is None:
             return 0
-        prefix = f"{self._dataset.dataset_id}:{operation.value}:"
+        prefix = f"{self._dataset.dataset_id}:{operation.value}:{self._request_digest(request)}:"
         if not cursor.startswith(prefix):
             self._invalid_cursor(operation)
         raw_offset = cursor.removeprefix(prefix)
         if not raw_offset.isdigit():
             self._invalid_cursor(operation)
         return int(raw_offset)
+
+    @staticmethod
+    def _request_digest(
+        request: OhlcvRequest | FundamentalRequest | NewsEventRequest | InstrumentMetadataRequest,
+    ) -> str:
+        filters = request.model_dump(
+            mode="json",
+            exclude={"cursor", "page_size", "schema_version", "timeout_seconds"},
+        )
+        canonical = json.dumps(filters, sort_keys=True, separators=(",", ":"), ensure_ascii=True)
+        return hashlib.sha256(canonical.encode("utf-8")).hexdigest()
+
+    def _build(
+        self,
+        model: type[ModelT],
+        operation: DataOperation,
+        **values: Any,
+    ) -> ModelT:
+        try:
+            return model.model_validate(values)
+        except ValidationError as exc:
+            raise DataSchemaError(
+                "fake provider could not normalize its configured dataset",
+                operation=operation,
+                reason_code="FAKE_NORMALIZATION_FAILED",
+                source=self.source_id,
+                details={"error_count": str(exc.error_count())},
+            ) from exc
 
     def _invalid_cursor(self, operation: DataOperation) -> NoReturn:
         raise DataInvalidRequestError(
@@ -331,48 +454,50 @@ def fixture_dataset() -> FakeDataset:
             _bar(aapl, "2026-07-23T00:00:00Z", "213", "216", "212", "215.42", source),
             _bar(spy, "2026-07-23T00:00:00Z", "631", "638", "630", "636.12", source),
         ),
-        fundamentals=(
-            FundamentalSnapshot.model_validate(
-                {
-                    "symbol": "AAPL",
-                    "as_of": "2026-07-24T18:30:00Z",
-                    "facts": (
-                        {
-                            "key": "market_cap_usd",
-                            "kind": FactValueKind.DECIMAL,
-                            "decimal_value": "3200000000000",
-                            "unit": "USD",
-                        },
-                    ),
-                    "provenance": envelope,
-                }
-            ),
-        ),
+        fundamentals=(_fundamental(aapl, envelope),),
         news_events=(
-            MarketEvent.model_validate(
-                {
-                    "event_id": "event_aapl_earnings_2026q3",
-                    "symbol": "AAPL",
-                    "event_type": "EARNINGS",
-                    "headline": "Synthetic earnings fixture",
-                    "occurred_at": "2026-07-23T20:00:00Z",
-                    "provenance": _provenance(
+            _news_event(
+                source=source,
+                event_id="event_aapl_earnings_2026q3",
+                event_type="EARNINGS",
+                headline="Synthetic earnings fixture",
+                occurred_at="2026-07-23T20:00:00Z",
+                observed_at="2026-07-23T20:01:00Z",
+                published_at="2026-07-23T19:59:00Z",
+                symbols=("AAPL", "MSFT"),
+                citations=(
+                    _citation(
+                        evidence_id="evid_news_aapl_earnings",
+                        kind=EvidenceKind.EVENT,
+                        locator="event:example.publisher/aapl-earnings-2026q3",
                         source=source,
-                        observed_at="2026-07-23T20:01:00Z",
                     ),
-                }
+                    _citation(
+                        evidence_id="evid_filing_aapl_2026q3",
+                        kind=EvidenceKind.FILING,
+                        locator="filing:sec.edgar/0000320193-26-000001#10-Q",
+                        source=source,
+                    ),
+                ),
+                related_filings=(_filing(source),),
             ),
-            MarketEvent.model_validate(
-                {
-                    "event_id": "event_macro_rates_20260724",
-                    "event_type": "MACRO_RATE",
-                    "headline": "Synthetic macro fixture",
-                    "occurred_at": "2026-07-24T14:00:00Z",
-                    "provenance": _provenance(
+            _news_event(
+                source=source,
+                event_id="event_macro_rates_20260724",
+                event_type="MACRO_RATE",
+                headline="Synthetic macro fixture",
+                occurred_at="2026-07-24T14:00:00Z",
+                observed_at="2026-07-24T14:01:00Z",
+                published_at="2026-07-24T13:55:00Z",
+                symbols=(),
+                citations=(
+                    _citation(
+                        evidence_id="evid_macro_rates_20260724",
+                        kind=EvidenceKind.EVENT,
+                        locator="event:example.publisher/macro-rates-20260724",
                         source=source,
-                        observed_at="2026-07-24T14:01:00Z",
                     ),
-                }
+                ),
             ),
         ),
         instrument_metadata=(
@@ -485,6 +610,138 @@ def _metadata(
             "price_increment": "0.01",
             "quantity_increment": "1",
             "provenance": _provenance(source=source, observed_at="2026-07-24T18:30:00Z"),
+        }
+    )
+
+
+def _filing(source: str) -> FilingReference:
+    return FilingReference.model_validate(
+        {
+            "accession_number": "0000320193-26-000001",
+            "form_type": "10-Q",
+            "filed_at": "2026-07-24T12:00:00Z",
+            "report_period_end": "2026-06-30",
+            "primary_document_url": (
+                "https://www.sec.gov/Archives/edgar/data/320193/"
+                "000032019326000001/aapl-20260630.htm"
+            ),
+            "provenance": _provenance(
+                source=source,
+                observed_at="2026-07-24T12:00:00Z",
+            ),
+        }
+    )
+
+
+def _citation(
+    *,
+    evidence_id: str,
+    kind: EvidenceKind,
+    locator: str,
+    source: str,
+) -> EvidenceCitation:
+    return EvidenceCitation.model_validate(
+        {
+            "evidence_id": evidence_id,
+            "kind": kind,
+            "summary": "Synthetic provider-contract citation",
+            "provenance": _provenance(
+                source=source,
+                observed_at="2026-07-24T18:00:00Z",
+            ),
+            "locator": locator,
+        }
+    )
+
+
+def _fundamental(
+    instrument: InstrumentIdentity,
+    provenance: Provenance,
+) -> FundamentalObservation:
+    filing = _filing(provenance.source)
+    snapshot = FundamentalSnapshot.model_validate(
+        {
+            "symbol": instrument.symbol,
+            "as_of": "2026-07-24T18:30:00Z",
+            "facts": (
+                {
+                    "key": "market_cap_usd",
+                    "kind": FactValueKind.DECIMAL,
+                    "decimal_value": "3200000000000",
+                    "unit": "USD",
+                },
+            ),
+            "provenance": provenance,
+        }
+    )
+    return FundamentalObservation.model_validate(
+        {
+            "instrument": instrument,
+            "snapshot": snapshot,
+            "period": ReportingPeriod.model_validate(
+                {
+                    "start_date": "2026-04-01",
+                    "end_date": "2026-06-30",
+                    "fiscal_year": 2026,
+                    "fiscal_period": "Q3",
+                }
+            ),
+            "currency": "USD",
+            "filing": filing,
+            "earnings_at": "2026-07-23T20:00:00Z",
+            "earnings_time_certainty": "CONFIRMED",
+            "citations": (
+                _citation(
+                    evidence_id="evid_filing_aapl_fund",
+                    kind=EvidenceKind.FILING,
+                    locator=f"filing:sec.edgar/{filing.accession_number}#10-Q",
+                    source=provenance.source,
+                ),
+                _citation(
+                    evidence_id="evid_fundamental_aapl_mc",
+                    kind=EvidenceKind.FUNDAMENTAL,
+                    locator="fundamental:ainvest.fake.v1/AAPL#market_cap_usd",
+                    source=provenance.source,
+                ),
+            ),
+        }
+    )
+
+
+def _news_event(
+    *,
+    source: str,
+    event_id: str,
+    event_type: str,
+    headline: str,
+    occurred_at: str,
+    observed_at: str,
+    published_at: str,
+    symbols: tuple[str, ...],
+    citations: tuple[EvidenceCitation, ...],
+    related_filings: tuple[FilingReference, ...] = (),
+) -> NewsEventObservation:
+    event = MarketEvent.model_validate(
+        {
+            "event_id": event_id,
+            "symbol": symbols[0] if symbols else None,
+            "event_type": event_type,
+            "headline": headline,
+            "occurred_at": occurred_at,
+            "provenance": _provenance(source=source, observed_at=observed_at),
+        }
+    )
+    return NewsEventObservation.model_validate(
+        {
+            "event": event,
+            "symbols": symbols,
+            "url": f"https://example.com/events/{event_id}",
+            "publisher": "Synthetic Fixture Publisher",
+            "published_at": published_at,
+            "license_name": "synthetic-test-only",
+            "event_time_certainty": "CONFIRMED",
+            "citations": citations,
+            "related_filings": related_filings,
         }
     )
 

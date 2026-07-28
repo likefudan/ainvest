@@ -15,9 +15,11 @@ from enum import StrEnum
 from typing import ClassVar, Literal, Protocol, runtime_checkable
 
 from ainvest.data.models import (
+    FundamentalObservation,
     FundamentalRequest,
     InstrumentMetadataObservation,
     InstrumentMetadataRequest,
+    NewsEventObservation,
     NewsEventRequest,
     ObservationBatch,
     ObservationPage,
@@ -28,7 +30,7 @@ from ainvest.data.models import (
     QuoteRequest,
 )
 from ainvest.schemas.common import MachineCode, SourceId
-from ainvest.schemas.market import FundamentalSnapshot, MarketEvent, MarketQuote
+from ainvest.schemas.market import MarketQuote
 
 ROBINHOOD_LIVE_QUOTE_CAPABILITY = "robinhood.mcp.get_equity_quotes"
 ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY = "robinhood.mcp.get_equity_price_book"
@@ -37,6 +39,7 @@ ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY = "robinhood.mcp.get_equity_price_book"
 class DataOperation(StrEnum):
     """Stable operation identifiers for errors, metrics, and tests."""
 
+    DATASET = "DATASET"
     QUOTES = "QUOTES"
     PRICE_BOOKS = "PRICE_BOOKS"
     OHLCV = "OHLCV"
@@ -207,7 +210,7 @@ class FundamentalsPort(Protocol):
     def get_fundamentals(
         self,
         request: FundamentalRequest,
-    ) -> ObservationPage[FundamentalSnapshot]:
+    ) -> ObservationPage[FundamentalObservation]:
         """Return one page of standardized fundamental snapshots."""
         ...
 
@@ -221,7 +224,7 @@ class NewsEventPort(Protocol):
         """Stable provider/capability identifier."""
         ...
 
-    def get_news_events(self, request: NewsEventRequest) -> ObservationPage[MarketEvent]:
+    def get_news_events(self, request: NewsEventRequest) -> ObservationPage[NewsEventObservation]:
         """Return one page of normalized events."""
         ...
 

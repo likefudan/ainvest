@@ -7,6 +7,7 @@ this boundary.
 
 from __future__ import annotations
 
+from datetime import date
 from enum import StrEnum
 from typing import Annotated, Any, Self, cast
 
@@ -14,6 +15,7 @@ from pydantic import Field, StrictBool, StringConstraints, model_validator
 
 from ainvest.schemas.common import (
     SCHEMA_VERSION_V1,
+    CurrencyCode,
     DomainModel,
     InstrumentIdentity,
     MachineCode,
@@ -32,9 +34,18 @@ from ainvest.schemas.market import (
     MarketQuote,
     OhlcvBar,
 )
+from ainvest.schemas.research import EvidenceCitation, EvidenceKind
 
 InstrumentId = Annotated[str, StringConstraints(min_length=3, max_length=128)]
 PageCursor = Annotated[str, StringConstraints(min_length=1, max_length=512)]
+HttpsUrl = Annotated[
+    str,
+    StringConstraints(pattern=r"^https://[^\s]+$", min_length=9, max_length=2048),
+]
+AccessionNumber = Annotated[
+    str,
+    StringConstraints(pattern=r"^\d{10}-\d{2}-\d{6}$", min_length=20, max_length=20),
+]
 
 
 class PriceAdjustment(StrEnum):
@@ -43,6 +54,14 @@ class PriceAdjustment(StrEnum):
     RAW = "RAW"
     SPLIT = "SPLIT"
     SPLIT_AND_DIVIDEND = "SPLIT_AND_DIVIDEND"
+
+
+class TimeCertainty(StrEnum):
+    """Whether an earnings/event time is authoritative or estimated."""
+
+    CONFIRMED = "CONFIRMED"
+    ESTIMATED = "ESTIMATED"
+    UNKNOWN = "UNKNOWN"
 
 
 class DataRequest(DomainModel):
@@ -180,12 +199,133 @@ class PriceBook(DomainModel):
         if bid_prices and ask_prices and bid_prices[0] > ask_prices[0]:
             raise ValueError("best bid must be <= best ask")
         if (
-            not self.bids
-            and not self.asks
+            (not self.bids or not self.asks)
             and QualityFlag.MISSING_FIELDS not in self.provenance.quality_flags
             and QualityFlag.PARTIAL not in self.provenance.quality_flags
         ):
-            raise ValueError("an empty price book requires MISSING_FIELDS or PARTIAL")
+            raise ValueError("a one-sided or empty price book requires MISSING_FIELDS or PARTIAL")
+        return self
+
+
+class ReportingPeriod(DomainModel):
+    """Fiscal period attached to normalized filing-derived fundamentals."""
+
+    start_date: date
+    end_date: date
+    fiscal_year: Annotated[int, Field(ge=1900, le=9999)]
+    fiscal_period: Annotated[
+        str,
+        StringConstraints(pattern=r"^(FY|Q[1-4]|H[12]|TTM)$", min_length=2, max_length=3),
+    ]
+
+    @model_validator(mode="after")
+    def _ordered(self) -> Self:
+        if self.start_date > self.end_date:
+            raise ValueError("reporting period start_date must be <= end_date")
+        return self
+
+
+class FilingReference(DomainModel):
+    """Canonical SEC/company filing reference with evidence provenance."""
+
+    accession_number: AccessionNumber
+    form_type: Annotated[
+        str,
+        StringConstraints(pattern=r"^[A-Z0-9][A-Z0-9-]{0,15}$", min_length=1, max_length=16),
+    ]
+    filed_at: UtcDateTime
+    report_period_end: date
+    primary_document_url: HttpsUrl
+    provenance: Provenance
+
+    @model_validator(mode="after")
+    def _period_precedes_filing(self) -> Self:
+        if self.report_period_end > self.filed_at.date():
+            raise ValueError("report_period_end must be <= filed_at date")
+        return self
+
+
+class FundamentalObservation(DomainModel):
+    """Point-in-time fundamentals bound to period, filing, and citations."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    instrument: InstrumentIdentity
+    snapshot: FundamentalSnapshot
+    period: ReportingPeriod
+    currency: CurrencyCode
+    filing: FilingReference
+    earnings_at: UtcDateTime | None
+    earnings_time_certainty: TimeCertainty
+    citations: Annotated[tuple[EvidenceCitation, ...], Field(min_length=1, max_length=100)]
+
+    @property
+    def provenance(self) -> Provenance:
+        """Observation provenance reused from the normalized snapshot."""
+        return self.snapshot.provenance
+
+    @model_validator(mode="after")
+    def _bindings_are_consistent(self) -> Self:
+        if self.instrument.symbol != self.snapshot.symbol:
+            raise ValueError("instrument.symbol must match snapshot.symbol")
+        if self.instrument.currency != self.currency:
+            raise ValueError("currency must match instrument.currency")
+        if self.period.end_date != self.filing.report_period_end:
+            raise ValueError("period.end_date must match filing.report_period_end")
+        if self.filing.filed_at > self.snapshot.as_of:
+            raise ValueError("filing.filed_at must be <= snapshot.as_of")
+        if self.earnings_time_certainty is TimeCertainty.UNKNOWN:
+            if self.earnings_at is not None:
+                raise ValueError("UNKNOWN earnings certainty requires earnings_at=None")
+        elif self.earnings_at is None:
+            raise ValueError("confirmed/estimated earnings certainty requires earnings_at")
+        citation_ids = [citation.evidence_id for citation in self.citations]
+        if len(citation_ids) != len(set(citation_ids)):
+            raise ValueError("fundamental citation evidence_ids must be unique")
+        if not any(
+            citation.kind is EvidenceKind.FILING
+            and self.filing.accession_number in citation.locator
+            for citation in self.citations
+        ):
+            raise ValueError("fundamentals require a filing citation bound to accession_number")
+        return self
+
+
+class NewsEventObservation(DomainModel):
+    """News/event record with publisher, license, symbols, and citations."""
+
+    schema_version: SchemaVersion = SCHEMA_VERSION_V1
+    event: MarketEvent
+    symbols: Annotated[tuple[Symbol, ...], Field(max_length=100)] = ()
+    url: HttpsUrl
+    publisher: Annotated[str, StringConstraints(min_length=1, max_length=256)]
+    published_at: UtcDateTime
+    license_name: Annotated[str, StringConstraints(min_length=1, max_length=256)]
+    event_time_certainty: TimeCertainty
+    citations: Annotated[tuple[EvidenceCitation, ...], Field(min_length=1, max_length=100)]
+    related_filings: Annotated[tuple[FilingReference, ...], Field(max_length=20)] = ()
+
+    @property
+    def provenance(self) -> Provenance:
+        """Observation provenance reused from the normalized event."""
+        return self.event.provenance
+
+    @model_validator(mode="after")
+    def _bindings_are_consistent(self) -> Self:
+        if len(self.symbols) != len(set(self.symbols)):
+            raise ValueError("news/event symbols must be unique")
+        if self.event.symbol is not None and self.event.symbol not in self.symbols:
+            raise ValueError("event.symbol must be included in symbols")
+        if self.published_at > self.provenance.observed_at:
+            raise ValueError("published_at must be <= provenance.observed_at")
+        citation_ids = [citation.evidence_id for citation in self.citations]
+        if len(citation_ids) != len(set(citation_ids)):
+            raise ValueError("news/event citation evidence_ids must be unique")
+        for filing in self.related_filings:
+            if not any(
+                citation.kind is EvidenceKind.FILING and filing.accession_number in citation.locator
+                for citation in self.citations
+            ):
+                raise ValueError("related filings require accession-bound filing citations")
         return self
 
 
@@ -250,9 +390,22 @@ class FakeDataset(DomainModel):
     quotes: tuple[MarketQuote, ...] = ()
     price_books: tuple[PriceBook, ...] = ()
     ohlcv: tuple[OhlcvBar, ...] = ()
-    fundamentals: tuple[FundamentalSnapshot, ...] = ()
-    news_events: tuple[MarketEvent, ...] = ()
+    fundamentals: tuple[FundamentalObservation, ...] = ()
+    news_events: tuple[NewsEventObservation, ...] = ()
     instrument_metadata: tuple[InstrumentMetadataObservation, ...] = ()
+
+    @model_validator(mode="after")
+    def _all_observations_match_dataset_envelope(self) -> Self:
+        for items in (
+            self.quotes,
+            self.price_books,
+            self.ohlcv,
+            self.fundamentals,
+            self.news_events,
+            self.instrument_metadata,
+        ):
+            _validate_envelope_provenance(items, self.provenance)
+        return self
 
 
 def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) -> None:
@@ -278,10 +431,13 @@ def _validate_envelope_provenance(items: tuple[Any, ...], envelope: Provenance) 
 __all__ = [
     "DataRequest",
     "FakeDataset",
+    "FilingReference",
+    "FundamentalObservation",
     "FundamentalRequest",
     "InstrumentId",
     "InstrumentMetadataObservation",
     "InstrumentMetadataRequest",
+    "NewsEventObservation",
     "NewsEventRequest",
     "ObservationBatch",
     "ObservationPage",
@@ -294,4 +450,6 @@ __all__ = [
     "PriceBookRequest",
     "PriceLevel",
     "QuoteRequest",
+    "ReportingPeriod",
+    "TimeCertainty",
 ]

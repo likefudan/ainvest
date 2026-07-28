@@ -10,9 +10,12 @@ from ainvest.data.fakes import DeterministicFakeDataProvider, fixture_dataset
 from ainvest.data.models import (
     DataRequest,
     FakeDataset,
+    FilingReference,
+    FundamentalObservation,
     FundamentalRequest,
     InstrumentMetadataObservation,
     InstrumentMetadataRequest,
+    NewsEventObservation,
     NewsEventRequest,
     ObservationBatch,
     ObservationPage,
@@ -24,6 +27,8 @@ from ainvest.data.models import (
     PriceBookRequest,
     PriceLevel,
     QuoteRequest,
+    ReportingPeriod,
+    TimeCertainty,
 )
 from ainvest.data.ports import (
     ROBINHOOD_LIVE_PRICE_BOOK_CAPABILITY,
@@ -73,6 +78,8 @@ __all__ = [
     "DeterministicFakeDataProvider",
     "FakeDataset",
     "FakeMarketCalendar",
+    "FilingReference",
+    "FundamentalObservation",
     "FundamentalRequest",
     "FundamentalsPort",
     "InstrumentMetadataObservation",
@@ -81,6 +88,7 @@ __all__ = [
     "LivePriceBookPort",
     "LiveQuotePort",
     "MarketCalendar",
+    "NewsEventObservation",
     "NewsEventPort",
     "NewsEventRequest",
     "ObservationBatch",
@@ -96,6 +104,8 @@ __all__ = [
     "PriceLevel",
     "QuotePort",
     "QuoteRequest",
+    "ReportingPeriod",
     "SessionStatus",
+    "TimeCertainty",
     "fixture_dataset",
 ]
