@@ -13,6 +13,7 @@ from ainvest.db.repositories import (
     AuditRepository,
     BrokerOrderRepository,
     ProposalRepository,
+    RiskDecisionRepository,
 )
 
 
@@ -27,6 +28,7 @@ class UnitOfWork:
         self._session_factory = session_factory
         self.session: Session | None = None
         self.proposals: ProposalRepository | None = None
+        self.risk_decisions: RiskDecisionRepository | None = None
         self.approvals: ApprovalRepository | None = None
         self.broker_orders: BrokerOrderRepository | None = None
         self.audit: AuditRepository | None = None
@@ -34,6 +36,7 @@ class UnitOfWork:
     def __enter__(self) -> Self:
         self.session = self._session_factory()
         self.proposals = ProposalRepository(self.session)
+        self.risk_decisions = RiskDecisionRepository(self.session)
         self.approvals = ApprovalRepository(self.session)
         self.broker_orders = BrokerOrderRepository(self.session)
         self.audit = AuditRepository(self.session)
@@ -56,6 +59,7 @@ class UnitOfWork:
             self.session.close()
             self.session = None
             self.proposals = None
+            self.risk_decisions = None
             self.approvals = None
             self.broker_orders = None
             self.audit = None
@@ -83,6 +87,12 @@ class UnitOfWork:
         if self.approvals is None:
             raise RuntimeError("UnitOfWork is not active")
         return self.approvals
+
+    @property
+    def risk_decisions_repo(self) -> RiskDecisionRepository:
+        if self.risk_decisions is None:
+            raise RuntimeError("UnitOfWork is not active")
+        return self.risk_decisions
 
     @property
     def broker_orders_repo(self) -> BrokerOrderRepository:

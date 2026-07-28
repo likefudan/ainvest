@@ -4,9 +4,10 @@
       "description": "Lifecycle for a one-time approval challenge.",
       "enum": [
         "PENDING",
-        "CONSUMED",
+        "APPROVED",
+        "REJECTED",
         "EXPIRED",
-        "CANCELLED"
+        "CONSUMED"
       ],
       "title": "ApprovalChallengeStatus",
       "type": "string"
