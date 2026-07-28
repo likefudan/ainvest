@@ -157,7 +157,7 @@ squash-merge rules above.
 
 | Task | Status | Owner | Branch / worktree | Immutable base | Dependencies |
 |---|---|---|---|---|---|
-| `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P02-T1`, `P03-T13` (merged) |
+| `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_progress` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `3781fc165096aff1d4827b7e9c232e5c330b1e9e` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
 | `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
 | `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
@@ -176,28 +176,38 @@ Robinhood implementation, or Research Agent behavior.
 
 `P04-T0` handoff:
 
-- **Rebased main/base:** `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
-- **Implementation tip:** `0e6116440384ff34cf4ef18409466ad8ffc627b2`
+- **Rebased main/base:** `81344f5ac224c8879784db516062a8868758d230`
+- **Initial implementation tip:** `513a440002041b096d821363834aedbef207b312`
+- **First review remediation:** `90e00c488733d54270df403aea3005b50b143c24`
+- **Second review remediation:** `0b7cf3f965d192c54abd1c22cb518077e37aed6a`
 - **Final files:** `src/ainvest/data/{models,ports,fakes}.py`,
   `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
   `tests/contract/data/test_provider_ports.py`,
   `tests/unit/architecture/test_package_boundaries.py`,
   `docs/data-adapters.md`, and this P04-T0 tracker metadata.
-- **Verification:** `./scripts/dev verify` passed after review remediation:
-  640 aggregate tests, 86.03% branch coverage, current schema snapshots.
+- **Verification:** focused data/architecture contracts passed (119 tests).
+  `./scripts/dev verify` passed after second review remediation: format, lint,
+  mypy, and schema snapshots passed; unit 563, contract 91, integration 15,
+  aggregate 669 tests; 86.04% branch coverage.
 - **Handoff notes:** Defines synchronous provider-independent quote,
   price-book, OHLCV, fundamentals, news/event, and instrument-metadata ports;
   bounded timeout and query-bound opaque pagination; stable typed failures;
   source/timezone/delay/quality-preserving result envelopes; explicit OHLCV
   adjustment/empty-window semantics; filing/period/currency/certainty-bound
   fundamentals; and licensed, published, multi-symbol/multi-citation events.
-  Partial fundamentals and one-sided books carry explicit quality flags.
+  Unitless decimal facts are rejected as non-comparable; SEC forms use a
+  bounded grammar that includes amendment forms. Filing and event URLs share a
+  Pydantic-parsed HTTPS-only type that requires a valid host and rejects
+  credentials and fragments. Partial fundamentals and one-sided books carry
+  explicit quality flags.
   Capability-scoped provider contract factories allow partial adapters. Invalid
-  fake datasets become stable schema errors, and source timezones are
-  preserved. Pinned live quote/book capabilities still expose no fallback under
-  `DEC-003`. The architecture test prevents provider SDK imports above the
-  data/execution boundaries. No dependency, config, shared-schema, risk, broker,
-  or live-mode behavior changed.
+  fake datasets, including duplicate identity keys, become stable schema
+  errors; source timezones are preserved. Failure contracts cover timeout,
+  rate-limit, stale, incomplete, and upstream errors with explicit retryability.
+  Pinned live quote/book capabilities still expose no fallback under `DEC-003`.
+  The architecture test prevents provider SDK imports above the data/execution
+  boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
+  behavior changed.
 - **Blockers:** None.
 - **PR:** Pending.
 
