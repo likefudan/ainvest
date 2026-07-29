@@ -159,13 +159,16 @@ squash-merge rules above.
 |---|---|---|---|---|---|
 | `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
 | `P05-T0` | `in_review` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `e210d9601678f0abf750cf38590fd55ba10a873a` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
-| `P08-T0` | `in_progress` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T4`, `P03-T13` (merged) |
+| `P08-T0` | `in_review` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `62feb5d2c93ccde9eb651b79404296a39531818d` | `P01-T4`, `P03-T13` (merged) |
 | `P08-T3` | `in_progress` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd` | `P01-T2`, `P02-T8` (merged) |
 
-Worktree evidence verified 2026-07-28: `.worktrees/p08-t0` is clean on
-`agent/p08-t0-runtime`, and `.worktrees/p08-t3` is clean on
-`agent/p08-t3-logging`; both resolve to the recorded immutable base
-`263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`.
+Initial worktree evidence verified 2026-07-28: `.worktrees/p08-t0` was clean on
+`agent/p08-t0-runtime`, and `.worktrees/p08-t3` was clean on
+`agent/p08-t3-logging`; both initially resolved to
+`263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`. Before implementation, P08-T0
+was rebased to its assigned implementation base, then rebased again to the
+post-P05-T0 `main` commit recorded in its envelope before integration review;
+P08-T3 remains unchanged.
 
 `P04-T0` may write `src/ainvest/data/{models,ports,fakes}.py`,
 `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
@@ -314,10 +317,10 @@ Robinhood implementation, or Research Agent behavior.
 ##### Execution envelope: P08-T0
 
 - **Title:** Define Runtime Modes and Startup Capability Gates
-- **Status/owner:** `in_progress` — `batch_e_p08_t0`
+- **Status/owner:** `in_review` — `batch_e_p08_t0`
 - **Branch/worktree/base:** `agent/p08-t0-runtime` /
   `.worktrees/p08-t0` at
-  `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`
+  `62feb5d2c93ccde9eb651b79404296a39531818d`
 - **Design and task authority:** `design.md` sections 3.3, 3.5, 5.6, 7, 11,
   12, and 16; `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T0`), 12
   (Batch E), and 16; `DEC-001`, `DEC-002`, `DEC-005`, and `DEC-006`
@@ -337,8 +340,50 @@ Robinhood implementation, or Research Agent behavior.
   scoped diff and secret signatures; assert the mode/capability matrix,
   redacted health summary, invalid combinations, and default-rejecting live
   startup in `tests/unit/test_runtime.py`
-- **Handoff:** pending implementation commit, scoped diff, verification
-  evidence, independent review, PR, and squash-merge commit
+- **Handoff:** rebased implementation commits
+  `2b99fe3ca86aa0676c3df6fb9f82bb7752efe43c` and
+  `a0c07394be4ed4ea835937009b66c03ac23e40c4`; tracker handoff tip
+  `321847ef0969cdd5e931a50b3454dd69b9e6bf6f`. Independent-review round-1
+  remediation: `ac31cfe0598952277da478f91a42cc8ad5a52428`, with adversarial
+  production-ordering follow-up
+  `b16b28ccd1ee87866197c157cf8a32ca4526827c`. Provides one immutable
+  capability matrix, concrete PaperBroker-only writes, optional isolated read
+  port, unconditionally disabled production Live, a per-write reauthorizing
+  LiveGuard proxy, factory-controlled Runtime construction, stable startup
+  error codes, redacted health output, and explicit signal/approval-expiry plus
+  order-monitoring scheduler capabilities. Focused adversarial runtime tests
+  passed (17 tests). Independent-review round-2 remediation
+  `9ac2305206e93f2825ac0bb159565e072fbd3bf1` replaces the payload-blind
+  check/delegate split with request-aware guard-owned atomic delegation,
+  retains only a non-secret immutable Live gate context, rejects Runtime/proxy
+  copy and serialization, sanitizes write-factory failures, preserves broker
+  delegate errors, and documents the trusted-process boundary. Focused
+  adversarial runtime tests passed (22 tests). `./scripts/dev verify` passed
+  after remediation: Ruff/format/mypy/schema snapshots, 702 unit, 102 contract,
+  15 integration, and 819 total tests with 86.69% coverage.
+  Independent-review round-3 remediation
+  `b581906be9eea8881c944ff5d4e107b7a2006fef` replaces the replayable raw
+  delegate with a thread-safe, call-scoped exactly-once capability; fails
+  closed on late, omitted, repeated, concurrent, and result-substituting use;
+  preserves established broker-domain errors while mapping any inconsistent
+  post-delegate path to the existing reconciliation-required unknown-outcome
+  taxonomy; sanitizes non-domain guard exceptions without retained
+  cause/context; and makes submit/cancel authorization explicitly independent.
+  Focused adversarial runtime tests passed (31 tests). Final
+  `./scripts/dev verify` passed: Ruff/format/mypy/schema snapshots, 711 unit,
+  102 contract, 15 integration, and 828 total tests with 86.79% coverage.
+  Independent-review round-4 remediation
+  `2ea9ff53928795d2f57a028b389b9209b488a818` binds every call-scoped
+  delegate to its guard-call thread and rejects spawned-worker use before
+  adapter preprocessing or broker access. The synchronous same-thread
+  lock/lease contract is explicit in the API and runtime-mode documentation.
+  The deterministic worker-thread regression returns stable guard rejection
+  with zero raw touches after the public call, while the same-thread path
+  remains green. Focused tests remained 31; canonical verification remained
+  711 unit, 102 contract, 15 integration, 828 total, and 86.79% coverage.
+  Scoped readability/duplication and secret-signature inspection found no
+  copied broker/config logic or credential values.
+  Independent re-review, PR, and squash-merge commit remain pending.
 
 ##### Execution envelope: P08-T3
 
@@ -448,7 +493,7 @@ task row is in the cross-cutting table below.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P08-T0` | `in_progress` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
+| `P08-T0` | `in_review` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
