@@ -343,17 +343,19 @@ Robinhood implementation, or Research Agent behavior.
 - **Handoff:** rebased implementation commits
   `2b99fe3ca86aa0676c3df6fb9f82bb7752efe43c` and
   `a0c07394be4ed4ea835937009b66c03ac23e40c4`; tracker handoff tip
-  `321847ef0969cdd5e931a50b3454dd69b9e6bf6f`. Provides one immutable
-  capability matrix,
-  concrete PaperBroker-only writes, optional isolated read port, guarded Live
-  write construction, production/default rejection, stable startup error
-  codes, and redacted health output. Focused runtime tests passed (15 tests).
-  `./scripts/dev verify` passed after
-  rebasing onto the P05-T0 merge: Ruff/format/mypy/schema snapshots, 695 unit,
-  102 contract, 15 integration, and 812 total tests with 86.64% coverage.
+  `321847ef0969cdd5e931a50b3454dd69b9e6bf6f`. Independent-review round-1
+  remediation: `ac31cfe0598952277da478f91a42cc8ad5a52428`. Provides one immutable
+  capability matrix, concrete PaperBroker-only writes, optional isolated read
+  port, unconditionally disabled production Live, a per-write reauthorizing
+  LiveGuard proxy, factory-controlled Runtime construction, stable startup
+  error codes, redacted health output, and explicit signal/approval-expiry plus
+  order-monitoring scheduler capabilities. Focused adversarial runtime tests
+  passed (17 tests). `./scripts/dev verify` passed after remediation:
+  Ruff/format/mypy/schema snapshots, 697 unit, 102 contract, 15 integration,
+  and 814 total tests with 86.68% coverage.
   Scoped readability/duplication and secret-signature inspection found no
   copied broker/config logic or credential values.
-  Independent review, PR, and squash-merge commit remain pending.
+  Independent re-review, PR, and squash-merge commit remain pending.
 
 ##### Execution envelope: P08-T3
 
