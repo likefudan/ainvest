@@ -344,7 +344,9 @@ Robinhood implementation, or Research Agent behavior.
   `2b99fe3ca86aa0676c3df6fb9f82bb7752efe43c` and
   `a0c07394be4ed4ea835937009b66c03ac23e40c4`; tracker handoff tip
   `321847ef0969cdd5e931a50b3454dd69b9e6bf6f`. Independent-review round-1
-  remediation: `ac31cfe0598952277da478f91a42cc8ad5a52428`. Provides one immutable
+  remediation: `ac31cfe0598952277da478f91a42cc8ad5a52428`, with adversarial
+  production-ordering follow-up
+  `b16b28ccd1ee87866197c157cf8a32ca4526827c`. Provides one immutable
   capability matrix, concrete PaperBroker-only writes, optional isolated read
   port, unconditionally disabled production Live, a per-write reauthorizing
   LiveGuard proxy, factory-controlled Runtime construction, stable startup
