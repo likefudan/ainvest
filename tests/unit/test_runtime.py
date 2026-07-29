@@ -7,6 +7,7 @@ import sys
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
+from typing import cast
 
 import pytest
 from pydantic import SecretStr
@@ -24,8 +25,9 @@ from ainvest.execution.broker import BrokerSubmitRequest, BrokerSubmitResult
 from ainvest.runtime import (
     MODE_CAPABILITY_MATRIX,
     BrokerCapability,
-    LiveWriteFactory,
+    LiveGuardOperation,
     RejectingLiveGuard,
+    Runtime,
     RuntimePackage,
     RuntimeSecret,
     RuntimeStartupError,
@@ -76,6 +78,24 @@ class _WritePort:
         raise NotImplementedError(command)
 
 
+class _CountingWritePort:
+    def __init__(self) -> None:
+        self.submit_calls = 0
+        self.cancel_calls = 0
+        self.submit_result = cast(BrokerSubmitResult, object())
+        self.cancel_result = cast(CancelResult, object())
+
+    def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
+        del request
+        self.submit_calls += 1
+        return self.submit_result
+
+    def cancel(self, command: CancelCommand) -> CancelResult:
+        del command
+        self.cancel_calls += 1
+        return self.cancel_result
+
+
 class _ReadPort:
     def get_account(self, account_scope: AccountScope) -> PortfolioSnapshot:
         raise NotImplementedError(account_scope)
@@ -109,37 +129,54 @@ class _LeakyReadPort(_ReadPort, _WritePort):
 
 
 class _FailingGuard:
-    @property
-    def production_ready(self) -> bool:
-        return False
-
-    def construct_write_capability(
+    def authorize(
         self,
         *,
         settings: Settings,
-        factory: LiveWriteFactory,
-    ) -> BrokerWritePort:
-        del settings, factory
+        operation: LiveGuardOperation,
+    ) -> None:
+        del settings, operation
         raise ValueError("unsafe guard failure")
 
 
 class _AllowingTestGuard:
     def __init__(self) -> None:
-        self.factory_called = False
+        self.calls: list[LiveGuardOperation] = []
 
-    @property
-    def production_ready(self) -> bool:
-        return False
-
-    def construct_write_capability(
+    def authorize(
         self,
         *,
         settings: Settings,
-        factory: LiveWriteFactory,
-    ) -> BrokerWritePort:
+        operation: LiveGuardOperation,
+    ) -> None:
         assert settings.trading_mode is TradingMode.LIVE
-        self.factory_called = True
-        return factory()
+        self.calls.append(operation)
+
+
+class _MutableTestGuard(_AllowingTestGuard):
+    def __init__(self) -> None:
+        super().__init__()
+        self.allowed = True
+
+    def authorize(
+        self,
+        *,
+        settings: Settings,
+        operation: LiveGuardOperation,
+    ) -> None:
+        super().authorize(settings=settings, operation=operation)
+        if not self.allowed:
+            raise RuntimeStartupError(
+                "test kill switch is active",
+                code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+            )
+
+
+class _SpoofedProductionGuard(_AllowingTestGuard):
+    @property
+    def production_ready(self) -> bool:
+        """Adversarial legacy readiness flag that P08-T0 must ignore."""
+        return True
 
 
 @pytest.mark.unit
@@ -159,15 +196,35 @@ def test_capability_matrix_has_mode_specific_boundaries() -> None:
     assert RuntimePackage.TELEGRAM_PAPER_APPROVAL in paper.packages
     assert RuntimePackage.WEBAUTHN_LIVE_APPROVAL not in paper.packages
     assert RuntimeSecret.WEBAUTHN_SERVER not in paper.secrets
-    assert SchedulerJob.PAPER_EXECUTION in paper.scheduler_jobs
-    assert SchedulerJob.LIVE_EXECUTION not in paper.scheduler_jobs
+    assert research.scheduler_jobs == frozenset({SchedulerJob.RESEARCH})
+    assert paper.scheduler_jobs == frozenset(
+        {
+            SchedulerJob.RESEARCH,
+            SchedulerJob.STRATEGY_EVALUATION,
+            SchedulerJob.SIGNAL_EXPIRY,
+            SchedulerJob.APPROVAL_EXPIRY,
+            SchedulerJob.PAPER_EXECUTION,
+            SchedulerJob.ORDER_MONITORING,
+            SchedulerJob.RECONCILIATION,
+        }
+    )
 
     assert BrokerCapability.ROBINHOOD_WRITE in live.broker
     assert BrokerCapability.PAPER_WRITE not in live.broker
     assert RuntimePackage.WEBAUTHN_LIVE_APPROVAL in live.packages
     assert RuntimePackage.TELEGRAM_PAPER_APPROVAL not in live.packages
     assert RuntimeSecret.ROBINHOOD_WRITE in live.secrets
-    assert SchedulerJob.LIVE_EXECUTION in live.scheduler_jobs
+    assert live.scheduler_jobs == frozenset(
+        {
+            SchedulerJob.RESEARCH,
+            SchedulerJob.STRATEGY_EVALUATION,
+            SchedulerJob.SIGNAL_EXPIRY,
+            SchedulerJob.APPROVAL_EXPIRY,
+            SchedulerJob.LIVE_EXECUTION,
+            SchedulerJob.ORDER_MONITORING,
+            SchedulerJob.RECONCILIATION,
+        }
+    )
 
 
 @pytest.mark.unit
@@ -310,19 +367,26 @@ def test_default_live_guard_rejects_without_calling_factory() -> None:
 
 
 @pytest.mark.unit
-def test_production_live_rejects_non_production_guard_before_factory() -> None:
-    guard = _AllowingTestGuard()
+def test_production_live_unconditionally_rejects_spoofed_ready_guard() -> None:
+    guard = _SpoofedProductionGuard()
     live = _live_settings().model_copy(update={"ainvest_env": AinvestEnv.PRODUCTION})
+    factory_called = False
+
+    def factory() -> BrokerWritePort:
+        nonlocal factory_called
+        factory_called = True
+        return _WritePort()
 
     with pytest.raises(RuntimeStartupError) as exc_info:
         start_runtime(
             live,
             live_guard=guard,
-            live_write_factory=_WritePort,
+            live_write_factory=factory,
         )
 
-    assert exc_info.value.code is RuntimeStartupErrorCode.LIVE_GUARD_NOT_PRODUCTION_READY
-    assert guard.factory_called is False
+    assert exc_info.value.code is RuntimeStartupErrorCode.PRODUCTION_LIVE_DISABLED
+    assert guard.calls == []
+    assert factory_called is False
 
 
 @pytest.mark.unit
@@ -335,10 +399,50 @@ def test_live_write_is_constructed_only_through_explicit_guard() -> None:
         live_write_factory=_WritePort,
     )
 
-    assert guard.factory_called is True
+    assert guard.calls == [LiveGuardOperation.STARTUP]
     assert isinstance(runtime.broker_write, BrokerWritePort)
     assert BrokerCapability.ROBINHOOD_WRITE in runtime.capabilities.broker
     assert runtime.active_broker_capabilities == frozenset({BrokerCapability.ROBINHOOD_WRITE})
+
+
+@pytest.mark.unit
+def test_live_guard_rechecks_before_every_write_and_blocks_after_flip() -> None:
+    guard = _MutableTestGuard()
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=guard,
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+    submit_request = cast(BrokerSubmitRequest, object())
+    cancel_command = cast(CancelCommand, object())
+
+    assert write.submit(submit_request) is delegate.submit_result
+    assert write.cancel(cancel_command) is delegate.cancel_result
+    assert guard.calls == [
+        LiveGuardOperation.STARTUP,
+        LiveGuardOperation.SUBMIT,
+        LiveGuardOperation.CANCEL,
+    ]
+    assert delegate.submit_calls == 1
+    assert delegate.cancel_calls == 1
+
+    guard.allowed = False
+    with pytest.raises(RuntimeStartupError) as submit_rejected:
+        write.submit(submit_request)
+    with pytest.raises(RuntimeStartupError) as cancel_rejected:
+        write.cancel(cancel_command)
+
+    assert submit_rejected.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert cancel_rejected.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert delegate.submit_calls == 1
+    assert delegate.cancel_calls == 1
+    assert guard.calls[-2:] == [
+        LiveGuardOperation.SUBMIT,
+        LiveGuardOperation.CANCEL,
+    ]
 
 
 @pytest.mark.unit
@@ -392,3 +496,24 @@ def test_health_summary_redacts_secret_values_and_is_deterministic() -> None:
     assert secret not in rendered
     assert "[REDACTED]" in rendered
     assert summary == runtime.health_summary()
+
+
+@pytest.mark.unit
+def test_runtime_direct_construction_and_object_bypass_cannot_report_ready() -> None:
+    with pytest.raises(RuntimeStartupError) as direct:
+        Runtime(
+            mode=TradingMode.LIVE,
+            capabilities=MODE_CAPABILITY_MATRIX[TradingMode.LIVE],
+            active_broker_capabilities=frozenset({BrokerCapability.ROBINHOOD_WRITE}),
+            broker_write=_WritePort(),
+        )
+    assert direct.value.code is RuntimeStartupErrorCode.UNVALIDATED_RUNTIME
+
+    forged = object.__new__(Runtime)
+    with pytest.raises(RuntimeStartupError) as health:
+        forged.health_summary()
+    with pytest.raises(RuntimeStartupError) as write:
+        _ = forged.broker_write
+
+    assert health.value.code is RuntimeStartupErrorCode.UNVALIDATED_RUNTIME
+    assert write.value.code is RuntimeStartupErrorCode.UNVALIDATED_RUNTIME

@@ -21,7 +21,13 @@ from typing import TYPE_CHECKING, Protocol, runtime_checkable
 from ainvest.config import Settings, TradingMode
 
 if TYPE_CHECKING:
-    from ainvest.execution.broker import BrokerReadPort, BrokerWritePort
+    from ainvest.execution.broker import (
+        BrokerReadPort,
+        BrokerSubmitRequest,
+        BrokerSubmitResult,
+        BrokerWritePort,
+    )
+    from ainvest.schemas.broker import CancelCommand, CancelResult
 
 
 class RuntimePackage(StrEnum):
@@ -61,8 +67,11 @@ class SchedulerJob(StrEnum):
 
     RESEARCH = "research"
     STRATEGY_EVALUATION = "strategy_evaluation"
+    SIGNAL_EXPIRY = "signal_expiry"
+    APPROVAL_EXPIRY = "approval_expiry"
     PAPER_EXECUTION = "paper_execution"
     LIVE_EXECUTION = "live_execution"
+    ORDER_MONITORING = "order_monitoring"
     RECONCILIATION = "reconciliation"
 
 
@@ -123,7 +132,10 @@ _PAPER_CAPABILITIES = ModeCapabilities(
         {
             SchedulerJob.RESEARCH,
             SchedulerJob.STRATEGY_EVALUATION,
+            SchedulerJob.SIGNAL_EXPIRY,
+            SchedulerJob.APPROVAL_EXPIRY,
             SchedulerJob.PAPER_EXECUTION,
+            SchedulerJob.ORDER_MONITORING,
             SchedulerJob.RECONCILIATION,
         }
     ),
@@ -160,7 +172,10 @@ _LIVE_CAPABILITIES = ModeCapabilities(
         {
             SchedulerJob.RESEARCH,
             SchedulerJob.STRATEGY_EVALUATION,
+            SchedulerJob.SIGNAL_EXPIRY,
+            SchedulerJob.APPROVAL_EXPIRY,
             SchedulerJob.LIVE_EXECUTION,
+            SchedulerJob.ORDER_MONITORING,
             SchedulerJob.RECONCILIATION,
         }
     ),
@@ -184,9 +199,10 @@ class RuntimeStartupErrorCode(StrEnum):
     PAPER_BROKER_REQUIRED = "RUNTIME_PAPER_BROKER_REQUIRED"
     INVALID_BROKER_PORT = "RUNTIME_INVALID_BROKER_PORT"
     LIVE_GUARD_REQUIRED = "RUNTIME_LIVE_GUARD_REQUIRED"
-    LIVE_GUARD_NOT_PRODUCTION_READY = "RUNTIME_LIVE_GUARD_NOT_PRODUCTION_READY"
+    PRODUCTION_LIVE_DISABLED = "RUNTIME_PRODUCTION_LIVE_DISABLED"
     LIVE_GUARD_REJECTED = "RUNTIME_LIVE_GUARD_REJECTED"
     LIVE_WRITE_FACTORY_REQUIRED = "RUNTIME_LIVE_WRITE_FACTORY_REQUIRED"
+    UNVALIDATED_RUNTIME = "RUNTIME_UNVALIDATED"
 
 
 class RuntimeStartupError(RuntimeError):
@@ -200,78 +216,157 @@ class RuntimeStartupError(RuntimeError):
 LiveWriteFactory = Callable[[], "BrokerWritePort"]
 
 
+class LiveGuardOperation(StrEnum):
+    """Authorization points that a LiveGuard must evaluate independently."""
+
+    STARTUP = "startup"
+    SUBMIT = "submit"
+    CANCEL = "cancel"
+
+
 @runtime_checkable
 class LiveGuard(Protocol):
-    """Construct the isolated live write capability after all live gates pass.
+    """Re-evaluate all independent live gates at startup and before each write.
 
-    A guard controls whether ``factory`` is invoked.  Implementations must
-    validate the independent live prerequisites from P07-T4 and must raise
-    :class:`RuntimeStartupError` when any prerequisite is absent or uncertain.
+    Implementations must raise :class:`RuntimeStartupError` whenever any P07-T4
+    prerequisite is absent, disabled, stale, or uncertain. P08-T0 supplies no
+    production implementation.
     """
 
-    @property
-    def production_ready(self) -> bool:
-        """Whether this implementation completed the P07-T4 production gate."""
-        ...
-
-    def construct_write_capability(
+    def authorize(
         self,
         *,
         settings: Settings,
-        factory: LiveWriteFactory,
-    ) -> BrokerWritePort:
-        """Return a write-only broker port, or reject startup."""
+        operation: LiveGuardOperation,
+    ) -> None:
+        """Authorize exactly one startup or broker-write operation."""
         ...
 
 
 class RejectingLiveGuard:
-    """Default LiveGuard: never invoke the factory and always reject."""
+    """Default LiveGuard: reject startup and every broker-write operation."""
 
-    @property
-    def production_ready(self) -> bool:
-        """The built-in guard is intentionally never production-ready."""
-        return False
-
-    def construct_write_capability(
+    def authorize(
         self,
         *,
         settings: Settings,
-        factory: LiveWriteFactory,
-    ) -> BrokerWritePort:
-        del settings, factory
+        operation: LiveGuardOperation,
+    ) -> None:
+        del settings, operation
         raise RuntimeStartupError(
             "Live writes remain disabled until the production LiveGuard is installed",
             code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
         )
 
 
-@dataclass(frozen=True, slots=True)
 class Runtime:
-    """Validated runtime capabilities returned by :func:`start_runtime`."""
+    """Factory-controlled validated runtime returned by :func:`start_runtime`.
 
-    mode: TradingMode
-    capabilities: ModeCapabilities
-    active_broker_capabilities: frozenset[BrokerCapability]
-    broker_read: BrokerReadPort | None
-    broker_write: BrokerWritePort | None
+    Direct construction is rejected. This prevents ordinary callers from
+    manufacturing a ``ready`` Live runtime around an unguarded write port.
+    """
+
+    __slots__ = (
+        "__active_broker_capabilities",
+        "__broker_read",
+        "__broker_write",
+        "__capabilities",
+        "__factory_token",
+        "__mode",
+    )
+
+    def __init__(
+        self,
+        *,
+        _factory_token: object | None = None,
+        mode: TradingMode | None = None,
+        capabilities: ModeCapabilities | None = None,
+        active_broker_capabilities: frozenset[BrokerCapability] | None = None,
+        broker_read: BrokerReadPort | None = None,
+        broker_write: BrokerWritePort | None = None,
+    ) -> None:
+        if _factory_token is not _RUNTIME_FACTORY_TOKEN:
+            raise RuntimeStartupError(
+                "Runtime instances must be created by start_runtime",
+                code=RuntimeStartupErrorCode.UNVALIDATED_RUNTIME,
+            )
+        if mode is None or capabilities is None or active_broker_capabilities is None:
+            raise RuntimeStartupError(
+                "Validated runtime state is incomplete",
+                code=RuntimeStartupErrorCode.UNVALIDATED_RUNTIME,
+            )
+        self.__factory_token = _factory_token
+        self.__mode = mode
+        self.__capabilities = capabilities
+        self.__active_broker_capabilities = active_broker_capabilities
+        self.__broker_read = broker_read
+        self.__broker_write = broker_write
+
+    def _assert_validated(self) -> None:
+        try:
+            factory_token = self.__factory_token
+        except AttributeError as exc:
+            raise RuntimeStartupError(
+                "Runtime was not created by start_runtime",
+                code=RuntimeStartupErrorCode.UNVALIDATED_RUNTIME,
+            ) from exc
+        if factory_token is not _RUNTIME_FACTORY_TOKEN:
+            raise RuntimeStartupError(
+                "Runtime validation token is invalid",
+                code=RuntimeStartupErrorCode.UNVALIDATED_RUNTIME,
+            )
+
+    @property
+    def mode(self) -> TradingMode:
+        """Validated configured runtime mode."""
+        self._assert_validated()
+        return self.__mode
+
+    @property
+    def capabilities(self) -> ModeCapabilities:
+        """Allowed capabilities from the authoritative mode matrix."""
+        self._assert_validated()
+        return self.__capabilities
+
+    @property
+    def active_broker_capabilities(self) -> frozenset[BrokerCapability]:
+        """Broker capabilities actually installed in this runtime."""
+        self._assert_validated()
+        return self.__active_broker_capabilities
+
+    @property
+    def broker_read(self) -> BrokerReadPort | None:
+        """Validated read-only broker port, when configured."""
+        self._assert_validated()
+        return self.__broker_read
+
+    @property
+    def broker_write(self) -> BrokerWritePort | None:
+        """Validated write-only broker port, guarded for Live per operation."""
+        self._assert_validated()
+        return self.__broker_write
 
     def health_summary(self) -> dict[str, object]:
         """Return a deterministic health payload with all secrets redacted."""
+        self._assert_validated()
         return {
             "status": "ready",
-            "mode": self.mode.value,
+            "mode": self.__mode.value,
             "capabilities": {
-                "packages_allowed": sorted(item.value for item in self.capabilities.packages),
-                "broker_active": sorted(item.value for item in self.active_broker_capabilities),
+                "packages_allowed": sorted(item.value for item in self.__capabilities.packages),
+                "broker_active": sorted(item.value for item in self.__active_broker_capabilities),
                 "scheduler_jobs_allowed": sorted(
-                    item.value for item in self.capabilities.scheduler_jobs
+                    item.value for item in self.__capabilities.scheduler_jobs
                 ),
                 "secret_classes_allowed": {
                     item.value: "[REDACTED]"
-                    for item in sorted(self.capabilities.secrets, key=lambda item: item.value)
+                    for item in sorted(self.__capabilities.secrets, key=lambda item: item.value)
                 },
             },
         }
+
+
+_RUNTIME_FACTORY_TOKEN = object()
 
 
 def _validate_settings(settings: Settings) -> None:
@@ -351,6 +446,74 @@ def _validate_write_port(port: object) -> BrokerWritePort:
     return port
 
 
+def _authorize_live_guard(
+    guard: LiveGuard,
+    *,
+    settings: Settings,
+    operation: LiveGuardOperation,
+) -> None:
+    try:
+        guard.authorize(settings=settings, operation=operation)
+    except RuntimeStartupError:
+        raise
+    except Exception as exc:
+        raise RuntimeStartupError(
+            f"LiveGuard failed closed while authorizing {operation.value}",
+            code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+        ) from exc
+
+
+class _GuardedLiveWritePort:
+    """Write-only proxy that re-authorizes immediately before every write."""
+
+    __slots__ = ("__delegate", "__guard", "__settings")
+
+    def __init__(
+        self,
+        *,
+        guard: LiveGuard,
+        settings: Settings,
+        delegate: BrokerWritePort,
+    ) -> None:
+        self.__guard = guard
+        self.__settings = settings
+        self.__delegate = delegate
+
+    def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
+        _authorize_live_guard(
+            self.__guard,
+            settings=self.__settings,
+            operation=LiveGuardOperation.SUBMIT,
+        )
+        return self.__delegate.submit(request)
+
+    def cancel(self, command: CancelCommand) -> CancelResult:
+        _authorize_live_guard(
+            self.__guard,
+            settings=self.__settings,
+            operation=LiveGuardOperation.CANCEL,
+        )
+        return self.__delegate.cancel(command)
+
+
+def _new_runtime(
+    *,
+    mode: TradingMode,
+    capabilities: ModeCapabilities,
+    active_broker_capabilities: frozenset[BrokerCapability],
+    broker_read: BrokerReadPort | None,
+    broker_write: BrokerWritePort | None,
+) -> Runtime:
+    return Runtime(
+        _factory_token=_RUNTIME_FACTORY_TOKEN,
+        mode=mode,
+        capabilities=capabilities,
+        active_broker_capabilities=active_broker_capabilities,
+        broker_read=broker_read,
+        broker_write=broker_write,
+    )
+
+
 def start_runtime(
     settings: Settings,
     *,
@@ -379,7 +542,7 @@ def start_runtime(
                 "Research mode cannot receive broker read/write or LiveGuard capabilities",
                 code=RuntimeStartupErrorCode.CAPABILITY_NOT_ALLOWED,
             )
-        return Runtime(
+        return _new_runtime(
             mode=mode,
             capabilities=capabilities,
             active_broker_capabilities=frozenset(),
@@ -414,7 +577,7 @@ def start_runtime(
         active_broker = {BrokerCapability.PAPER_WRITE}
         if broker_read is not None:
             active_broker.add(BrokerCapability.READ_ONLY)
-        return Runtime(
+        return _new_runtime(
             mode=mode,
             capabilities=capabilities,
             active_broker_capabilities=frozenset(active_broker),
@@ -426,6 +589,11 @@ def start_runtime(
         raise RuntimeStartupError(
             "Live mode cannot load PaperBroker",
             code=RuntimeStartupErrorCode.CAPABILITY_NOT_ALLOWED,
+        )
+    if settings.is_production:
+        raise RuntimeStartupError(
+            "Production Live mode is disabled until P07-T4 installs its trusted integration",
+            code=RuntimeStartupErrorCode.PRODUCTION_LIVE_DISABLED,
         )
     if live_guard is None:
         raise RuntimeStartupError(
@@ -442,29 +610,23 @@ def start_runtime(
             "live_guard must implement LiveGuard",
             code=RuntimeStartupErrorCode.LIVE_GUARD_REQUIRED,
         )
-    if settings.is_production and not live_guard.production_ready:
-        raise RuntimeStartupError(
-            "Production Live mode requires a P07-T4 production-ready LiveGuard",
-            code=RuntimeStartupErrorCode.LIVE_GUARD_NOT_PRODUCTION_READY,
+    _authorize_live_guard(
+        live_guard,
+        settings=settings,
+        operation=LiveGuardOperation.STARTUP,
+    )
+    raw_write = _validate_write_port(live_write_factory())
+    broker_write = _validate_write_port(
+        _GuardedLiveWritePort(
+            guard=live_guard,
+            settings=settings,
+            delegate=raw_write,
         )
-
-    try:
-        guarded_write = live_guard.construct_write_capability(
-            settings=settings, factory=live_write_factory
-        )
-    except RuntimeStartupError:
-        raise
-    except Exception as exc:
-        raise RuntimeStartupError(
-            "LiveGuard failed closed while authorizing write capability",
-            code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
-        ) from exc
-
-    broker_write = _validate_write_port(guarded_write)
+    )
     active_broker = {BrokerCapability.ROBINHOOD_WRITE}
     if broker_read is not None:
         active_broker.add(BrokerCapability.READ_ONLY)
-    return Runtime(
+    return _new_runtime(
         mode=mode,
         capabilities=capabilities,
         active_broker_capabilities=frozenset(active_broker),
@@ -477,6 +639,7 @@ __all__ = [
     "MODE_CAPABILITY_MATRIX",
     "BrokerCapability",
     "LiveGuard",
+    "LiveGuardOperation",
     "LiveWriteFactory",
     "ModeCapabilities",
     "RejectingLiveGuard",

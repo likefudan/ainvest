@@ -20,7 +20,11 @@ or uncertain inputs always produce no trade.
 | WebAuthn Live approval | Not loaded | Not loaded | Allowed |
 | Robinhood account read port | Not loaded | Optional, read-only | Optional, read-only |
 | Broker write port | None | `PaperBroker` write-only view | Robinhood write-only port through `LiveGuard` |
-| Scheduler jobs | Research only | Research, strategy, Paper execution, reconciliation | Research, strategy, Live execution, reconciliation |
+| Research scheduling | Allowed | Allowed | Allowed |
+| Strategy evaluation and signal expiry | Not loaded | Allowed | Allowed |
+| Approval expiry | Not loaded | Allowed | Allowed |
+| Execution | Not loaded | Paper only | Live only |
+| Order monitoring and reconciliation | Not loaded | Allowed | Allowed |
 
 The same matrix also limits secret classes:
 
@@ -45,17 +49,21 @@ Use `start_runtime(settings, ...)` as the composition root:
 - Paper rejects WebAuthn/LiveGuard construction. Telegram remains
   `approval_method=telegram`, `approval_scope=paper` under `DEC-005`.
 - Live rejects `PaperBroker`. It requires complete validated settings, an
-  explicit `LiveGuard`, and a write factory. The factory is passed to the guard,
-  so the runtime cannot construct a Robinhood write port before the guard
-  authorizes it.
-- The built-in `RejectingLiveGuard` never invokes the factory and always fails
-  startup. P07-T4 must supply the production guard; until then, production Live
-  startup is impossible.
-- A LiveGuard used under `AINVEST_ENV=production` must explicitly implement the
-  P07-T4 production-ready contract. Test/development guards are rejected before
-  their write factory can run.
+  explicit `LiveGuard`, and a write factory. The guard authorizes startup before
+  the factory may run. The raw port is retained only inside a private write-only
+  proxy, which asks the same guard to re-evaluate all gates immediately before
+  every submit and cancel.
+- The built-in `RejectingLiveGuard` always fails authorization. A guard decision
+  is not cached: activating a kill switch or losing a prerequisite after
+  startup blocks the next write before the underlying broker is called.
+- `AINVEST_ENV=production` plus Live is unconditionally rejected in P08-T0.
+  A structural object, flag, or claimed readiness value cannot override this.
+  P07-T4 must add the reviewed trusted integration before production Live can
+  start.
 - Read ports that expose `submit` or `cancel`, write ports that expose read
   methods, and ports with in-place replacement methods are rejected.
+- `Runtime` construction is factory-controlled. Direct or uninitialized
+  instances cannot expose broker ports or report health as `ready`.
 
 The first-release configuration locks
 `REGULAR_TRADING_HOURS_ONLY=true`,
@@ -91,16 +99,16 @@ Paper:
 runtime = start_runtime(settings, paper_broker=paper_broker)
 ```
 
-Live intentionally has no working default:
+Non-production integration tests may inject a test guard:
 
 ```python
 runtime = start_runtime(
     live_settings,
-    live_guard=production_live_guard,
+    live_guard=test_live_guard,
     live_write_factory=isolated_robinhood_write_factory,
 )
 ```
 
-The last example can succeed only after P07-T4 provides and validates the
-production guard. Telegram approval can never authorize that path (`DEC-005`,
-`DEC-006`).
+Production Live cannot succeed in P08-T0, regardless of the injected guard.
+P07-T4 must provide and integrate the trusted production gate. Telegram
+approval can never authorize that path (`DEC-005`, `DEC-006`).
