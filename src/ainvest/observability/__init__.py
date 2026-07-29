@@ -6,6 +6,8 @@ from ainvest.observability.logging import (
     clear_log_context,
     configure_logging,
     get_logger,
+    is_funds_safety_event,
+    isolated_log_context,
     log_context,
 )
 
@@ -15,5 +17,7 @@ __all__ = [
     "clear_log_context",
     "configure_logging",
     "get_logger",
+    "is_funds_safety_event",
+    "isolated_log_context",
     "log_context",
 ]

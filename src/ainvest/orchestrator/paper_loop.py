@@ -33,7 +33,7 @@ from ainvest.execution import (
     transition_order,
 )
 from ainvest.execution.paper import as_write_port
-from ainvest.observability import get_logger, log_context
+from ainvest.observability import get_logger, isolated_log_context, log_context
 from ainvest.orchestrator.approval_stub import (
     ApprovalStubStore,
     challenge_fingerprint,
@@ -239,6 +239,10 @@ def _record(
     payload: Mapping[str, Any] | None = None,
     event_type: AuditEventType | str = AuditEventType.GENERIC,
     subject_id: str | None = None,
+    causation_id: str | None = None,
+    proposal_id: str | None = None,
+    client_order_id: str | None = None,
+    broker_order_id: str | None = None,
 ) -> None:
     step_digests = dict(digests or {})
     state.digests.update(step_digests)
@@ -274,15 +278,18 @@ def _record(
         for key, value in dict(payload or {}).items()
         if key in {"outcome", "reason_code", "status"}
     }
-    proposal_id = subject_id if subject_id and subject_id.startswith("ordp_") else None
-    get_logger("paper_flow").info(
-        name,
-        lifecycle=state.lifecycle.value,
+    with log_context(
+        causation_id=causation_id,
         proposal_id=proposal_id,
-        digest_names=sorted(step_digests),
-        funds_safety=name in {"blind_retry_blocked", "reconcile_after_unknown"},
-        **safe_summary,
-    )
+        client_order_id=client_order_id,
+        broker_order_id=broker_order_id,
+    ):
+        get_logger("paper_flow").info(
+            name,
+            lifecycle=state.lifecycle.value,
+            digest_names=sorted(step_digests),
+            **safe_summary,
+        )
 
 
 def _candidate_to_proposal(
@@ -360,7 +367,7 @@ def _result(
 
 def run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
     """Run the fixed paper loop with workflow-scoped logging context."""
-    with log_context(
+    with isolated_log_context(
         correlation_id=config.correlation_id,
         strategy_run_id=_PAPER_STRATEGY_RUN_ID,
     ):
@@ -526,6 +533,7 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         as_of=as_of,
         digests={"order_hash": proposal.order_hash},
         payload={"proposal_id": proposal.proposal_id},
+        proposal_id=proposal.proposal_id,
     )
 
     challenge = create_challenge(
@@ -548,6 +556,7 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         as_of=as_of,
         digests={"challenge": challenge_fingerprint(challenge)},
         payload={"challenge_id": challenge.challenge_id},
+        proposal_id=proposal.proposal_id,
     )
 
     if not config.inject_approval:
@@ -583,6 +592,8 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             name="consume_challenge",
             as_of=consume_at,
             payload={"outcome": approval.outcome.value},
+            causation_id=approval.event_id,
+            proposal_id=proposal.proposal_id,
         )
         return _result(
             state,
@@ -614,6 +625,8 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         name="consume_challenge",
         as_of=consume_at,
         payload={"outcome": approval.outcome.value, "event_id": approval.event_id},
+        causation_id=approval.event_id,
+        proposal_id=proposal.proposal_id,
     )
 
     # 8. Pre-trade re-evaluation (fresh decision id).
@@ -645,6 +658,8 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             "pretrade_config": pretrade.config_digest,
         },
         payload={"outcome": pretrade.decision.outcome.value},
+        proposal_id=proposal.proposal_id,
+        client_order_id=config.client_order_id,
     )
     if pretrade.decision.outcome is not RiskOutcome.APPROVED:
         _transition(
@@ -654,7 +669,13 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             correlation_id=config.correlation_id,
             as_of=as_of,
         )
-        _record(state, name="pretrade_rejected", as_of=as_of)
+        _record(
+            state,
+            name="pretrade_rejected",
+            as_of=as_of,
+            proposal_id=proposal.proposal_id,
+            client_order_id=config.client_order_id,
+        )
         return _result(
             state,
             terminal=PaperFlowTerminal.PRE_TRADE_REJECTED,
@@ -865,6 +886,10 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             payload={"outcome": "SUBMIT_UNKNOWN"},
             event_type=AuditEventType.BROKER_ORDER_STATUS_CHANGED,
             subject_id=proposal.proposal_id,
+            causation_id=exec_event.causation_id,
+            proposal_id=proposal.proposal_id,
+            client_order_id=config.client_order_id,
+            broker_order_id=exec_event.broker_order_id,
         )
         # Must reconcile before any new ExecuteOrder.
         _transition(
@@ -912,6 +937,10 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             },
             event_type=AuditEventType.OPERATOR_ACTION,
             subject_id=proposal.proposal_id,
+            causation_id=recon_event.causation_id,
+            proposal_id=proposal.proposal_id,
+            client_order_id=config.client_order_id,
+            broker_order_id=recon_event.broker_order_id,
         )
 
         # Blind retry with a *new* write attempt must fail closed.
@@ -929,6 +958,10 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             name="blind_retry_blocked",
             as_of=as_of,
             payload={"error": blind_error},
+            causation_id=execute_cmd.command_id,
+            proposal_id=proposal.proposal_id,
+            client_order_id=config.client_order_id,
+            broker_order_id=exec_event.broker_order_id,
         )
         return _result(
             state,
@@ -968,6 +1001,9 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             },
             event_type=AuditEventType.BROKER_ORDER_STATUS_CHANGED,
             subject_id=proposal.proposal_id,
+            causation_id=exec_event.causation_id,
+            proposal_id=proposal.proposal_id,
+            client_order_id=config.client_order_id,
         )
         return _result(
             state,
@@ -1023,6 +1059,10 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
         payload={"broker_order_id": broker_order_id, "outcome": "SUBMITTED"},
         event_type=AuditEventType.BROKER_ORDER_CREATED,
         subject_id=proposal.proposal_id,
+        causation_id=exec_event.causation_id,
+        proposal_id=proposal.proposal_id,
+        client_order_id=config.client_order_id,
+        broker_order_id=broker_order_id,
     )
 
     # 10. Inject market event → fill(s).
@@ -1070,6 +1110,9 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             "filled_quantity": str(filled_qty),
             "broker_status": broker_order.status.value,
         },
+        proposal_id=proposal.proposal_id,
+        client_order_id=config.client_order_id,
+        broker_order_id=broker_order_id,
     )
 
     # 11. Reconcile + ledger conservation.
@@ -1111,6 +1154,9 @@ def _run_paper_flow(config: PaperFlowConfig) -> PaperFlowResult:
             "outcome": report.outcome.value,
             "conservation_ok": conservation_ok,
         },
+        proposal_id=proposal.proposal_id,
+        client_order_id=config.client_order_id,
+        broker_order_id=broker_order_id,
     )
     if terminal is PaperFlowTerminal.FAILED:
         return _result(

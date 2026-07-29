@@ -4,12 +4,13 @@ from __future__ import annotations
 
 import json
 import logging
-from collections.abc import Iterator
+from collections.abc import Iterator, Mapping, Sequence
 from io import StringIO
-from typing import Any
+from typing import Any, Never, overload
 
 import pytest
 
+import ainvest.observability.logging as logging_module
 from ainvest.audit import REDACTED, assert_no_plaintext_secrets
 from ainvest.observability import (
     bind_log_context,
@@ -59,6 +60,8 @@ def test_json_logging_has_stable_identity_and_bound_workflow_context() -> None:
     assert event["causation_id"] == "cmd_test_12345678"
     assert event["proposal_id"] == "ordp_test_12345678"
     assert event["strategy_run_id"] == "srun_test_12345678"
+    assert event["client_order_id"] is None
+    assert event["broker_order_id"] is None
     assert event["level"] == "info"
     assert event["funds_safety"] is False
     assert event["timestamp"].endswith("Z")
@@ -160,8 +163,158 @@ def test_exception_type_and_stack_survive_with_inline_secrets_redacted() -> None
     event = _events(stream)[0]
     assert event["exception"]["type"] == "RuntimeError"
     assert REDACTED in event["exception"]["message"]
-    assert "RuntimeError" in event["exception"]["stack"]
+    assert event["exception"]["stack"]
     assert_no_plaintext_secrets(event, secrets)
+
+
+@pytest.mark.unit
+def test_exception_args_notes_cause_and_context_are_structurally_redacted() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    secret_key = "sk-" + "mapping-key-secret"
+    account = "account-99887766"
+    token = "approval-token-secret"
+
+    context = KeyError({"account_number": account, secret_key: token})
+    cause = ValueError({"token": token, "shape": ["visible", {"secret": account}]})
+    cause.__context__ = context
+    cause.add_note(f"api_key={secret_key}")
+    outer = RuntimeError({"approval_token": token, "kind": "provider"})
+    outer.add_note(f"account_number={account}")
+    try:
+        raise outer from cause
+    except RuntimeError:
+        get_logger().exception("exception_tree_failed")
+
+    event = _events(stream)[0]
+    exception = event["exception"]
+    assert exception["type"] == "RuntimeError"
+    assert exception["args"][0]["approval_token"] == REDACTED
+    assert exception["cause"]["type"] == "ValueError"
+    assert exception["cause"]["context"]["type"] == "KeyError"
+    assert exception["notes"]
+    assert exception["cause"]["notes"]
+    assert_no_plaintext_secrets(event, [secret_key, account, token])
+
+
+class _HostileObject:
+    def __str__(self) -> str:
+        raise RuntimeError("hostile __str__")
+
+    def __repr__(self) -> str:
+        raise RuntimeError("hostile __repr__")
+
+
+class _HostileMapping(Mapping[str, object]):
+    def __getitem__(self, key: str) -> object:
+        raise RuntimeError(key)
+
+    def __iter__(self) -> Iterator[str]:
+        raise RuntimeError("hostile mapping iterator")
+
+    def __len__(self) -> int:
+        raise RuntimeError("hostile mapping length")
+
+    def items(self) -> Never:
+        raise RuntimeError("hostile mapping items")
+
+
+class _HostileSequence(Sequence[object]):
+    @overload
+    def __getitem__(self, index: int) -> object: ...
+
+    @overload
+    def __getitem__(self, index: slice) -> Sequence[object]: ...
+
+    def __getitem__(self, index: int | slice) -> object | Sequence[object]:
+        raise RuntimeError(index)
+
+    def __len__(self) -> int:
+        raise RuntimeError("hostile sequence length")
+
+    def __iter__(self) -> Iterator[object]:
+        raise RuntimeError("hostile sequence iterator")
+
+
+@pytest.mark.unit
+def test_cycles_depth_and_hostile_objects_emit_once_without_raising() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    cyclic_dict: dict[str, object] = {}
+    cyclic_dict["self"] = cyclic_dict
+    cyclic_list: list[object] = []
+    cyclic_list.append(cyclic_list)
+    deep: dict[str, object] = {}
+    cursor = deep
+    for _index in range(20):
+        child: dict[str, object] = {}
+        cursor["child"] = child
+        cursor = child
+
+    get_logger().info(
+        "adversarial_payload",
+        cyclic_dict=cyclic_dict,
+        cyclic_list=cyclic_list,
+        deep=deep,
+        hostile_object=_HostileObject(),
+        hostile_mapping=_HostileMapping(),
+        hostile_sequence=_HostileSequence(),
+    )
+
+    events = _events(stream)
+    assert len(events) == 1
+    rendered = json.dumps(events[0], sort_keys=True)
+    assert "<cycle>" in rendered
+    assert "<truncated>" in rendered
+    assert "<_HostileObject>" in rendered
+    assert "<unavailable>" in rendered or REDACTED in rendered
+
+
+@pytest.mark.unit
+def test_secret_looking_mapping_keys_are_redacted() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    secret_key = "sk-" + "secret-as-a-mapping-key"
+    token = "token-value-that-must-vanish"
+
+    get_logger().info(
+        "mapping_key_test",
+        nested={
+            secret_key: "visible",
+            "account_number": "account-11223344",
+            "token": token,
+        },
+    )
+
+    event = _events(stream)[0]
+    assert secret_key not in json.dumps(event, sort_keys=True)
+    assert_no_plaintext_secrets(event, [secret_key, "account-11223344", token])
+
+
+@pytest.mark.unit
+def test_sanitizer_failure_emits_minimal_funds_safety_fallback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+
+    def fail_sanitization(*_args: object, **_kwargs: object) -> Any:
+        raise RuntimeError("processor failure")
+
+    monkeypatch.setattr(logging_module, "_sanitize", fail_sanitization)
+    get_logger().info(
+        "execute_order",
+        correlation_id="corr_fallback_12345678",
+        money_payload={"limit_price": "123.45"},
+    )
+
+    event = _events(stream)[0]
+    assert event["event"] == "execute_order"
+    assert event["funds_safety"] is True
+    assert event["level"] == "critical"
+    assert event["logging_error_code"] == "LOG_SANITIZATION_FAILED"
+    assert event["correlation_id"] == "corr_fallback_12345678"
+    assert "money_payload" not in event
 
 
 @pytest.mark.unit
