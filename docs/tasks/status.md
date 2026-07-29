@@ -433,23 +433,29 @@ Robinhood implementation, or Research Agent behavior.
 - **Handoff:** rebased implementation tip
   `83a8eb5a90fc7581bbea64bdab43ad1ddbff5f88` plus independent-review
   remediations `4f064f701c2bb9ffe55958f6933738a13962ec00` and
-  `0d0e4b65ecd2c6e92d25b8493c2029f5caac6d7b` on post-P08-T0 `main`.
+  `0d0e4b65ecd2c6e92d25b8493c2029f5caac6d7b`, followed by
+  `8c4dee748ffbbea247330b5e91816eaeb5c9f515` on post-P08-T0 `main`.
   The remediations make recursive redaction bounded and cycle-aware, protect
   mapping keys and exception chains, enforce a centralized recursive contract
   for credentials and flattened financial/order/account fields, bound numeric
   extremes, and use a strict no-raise JSON renderer with a static last-resort
   fallback. Sampling-exempt money lifecycle retention is independent from
-  natural severity; only named safety incidents are elevated to critical.
+  natural severity. Overlength keys now become bounded hashed placeholders and
+  fail closed. An explicit reachable `(event, outcome)` policy elevates
+  `SUBMIT_UNKNOWN`, manual-review-after-unknown, and reconciliation mismatches
+  to critical while classifying a successfully blocked blind retry as warning.
   Paper-flow entry resets stale IDs and progressively binds real identifiers.
-  Focused logging/runtime/approval-token/Paper-flow verification passed 65
+  Focused logging/runtime/approval-token/Paper-flow verification passed 66
   tests. An isolated locked core-profile environment imported
   `ainvest.observability` and `structlog` while confirming OpenTelemetry and
   Prometheus remained absent. `./scripts/dev verify` passed format, lint,
-  mypy, and schema snapshots; 726 unit, 102 contract, 19 integration, and 847
-  aggregate tests at 86.11% coverage. Adversarial objects, secret-looking and
-  flattened fields, exception trees, sink/renderer failures, huge and
-  non-finite numbers, strict JSON parsing, `sample_rate=0`, stale caller
-  context, and concurrent full Paper flows are covered.
+  mypy, and schema snapshots; 727 unit, 102 contract, 19 integration, and 848
+  aggregate tests at 86.12% coverage. Adversarial objects, boundary/overlength
+  keys, hidden credential/financial suffixes, secret-looking and flattened
+  fields, exception trees, sink/renderer failures, huge and non-finite
+  numbers, strict JSON parsing, `sample_rate=0`, stale caller context,
+  concurrent full Paper flows, and the real unknown-submit/manual-review path
+  are covered.
   Readability/duplication inspection found focused helpers and no second
   logging, renderer, telemetry, or Runtime-health abstraction. The prior
   dependency audit found no known vulnerabilities. Final independent
