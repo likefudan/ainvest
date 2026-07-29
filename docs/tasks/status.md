@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-07-28
+Last updated: 2026-07-29
 
 ## Status vocabulary
 
@@ -100,10 +100,11 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
-| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` in review) |
-| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` in review) |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` merged) |
+| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
-| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` claimed) |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` merged) |
+| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `not_started`; next serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -146,21 +147,22 @@ scope, and integration order.
    Deterministic fakes and disabled adapters are the required fallback. No
    Batch E task enables live broker writes.
 
-Tracker claim changes merge before their implementation PRs. The current
-default serial queue after this claim is `P04-T0`, `P05-T0`, `P08-T0`, then
-`P08-T3`. Later ready branches enter the queue only after their recorded
-dependencies are on `main`. The coordinator may reorder independent ready
-branches to reduce conflicts, but may not bypass the rebase, review, checks, or
-squash-merge rules above.
+Tracker claim changes merge before their implementation PRs. The initial queue
+(`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) is merged. The next priority
+queue is the earliest safe **Robinhood Read-only Preview**:
+`P08-T7` → `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge
+queue only after their recorded dependencies are on `main`. The coordinator
+may reorder independent ready branches to reduce conflicts, but may not bypass
+the rebase, review, checks, or squash-merge rules above.
 
 #### Initial claims
 
 | Task | Status | Owner | Branch / worktree | Immutable base | Dependencies |
 |---|---|---|---|---|---|
-| `P04-T0` | `in_review` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
-| `P05-T0` | `in_review` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `e210d9601678f0abf750cf38590fd55ba10a873a` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
-| `P08-T0` | `in_review` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `62feb5d2c93ccde9eb651b79404296a39531818d` | `P01-T4`, `P03-T13` (merged) |
-| `P08-T3` | `in_review` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `d9840a4ef80a380a26d7be4b0892d774fd8d43a8` | `P01-T2`, `P02-T8` (merged) |
+| `P04-T0` | `merged` | `batch_e_p04_t0` | `agent/p04-t0-data-ports` / `.worktrees/p04-t0` | `81344f5ac224c8879784db516062a8868758d230` | `P02-T1`, `P03-T13` (merged) |
+| `P05-T0` | `merged` | `batch_e_p05_t0` | `agent/p05-t0-approval-challenges` / `.worktrees/p05-t0` | `e210d9601678f0abf750cf38590fd55ba10a873a` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged) |
+| `P08-T0` | `merged` | `batch_e_p08_t0` | `agent/p08-t0-runtime` / `.worktrees/p08-t0` | `62feb5d2c93ccde9eb651b79404296a39531818d` | `P01-T4`, `P03-T13` (merged) |
+| `P08-T3` | `merged` | `batch_e_p08_t3` | `agent/p08-t3-logging` / `.worktrees/p08-t3` | `d9840a4ef80a380a26d7be4b0892d774fd8d43a8` | `P01-T2`, `P02-T8` (merged) |
 
 Initial worktree evidence verified 2026-07-28: `.worktrees/p08-t0` was clean on
 `agent/p08-t0-runtime`, and `.worktrees/p08-t3` was clean on
@@ -232,12 +234,14 @@ Robinhood implementation, or Research Agent behavior.
   boundaries. No dependency, config, shared-schema, risk, broker, or live-mode
   behavior changed.
 - **Blockers:** None.
-- **PR:** Pending.
+- **PR:** [#76](https://github.com/likefudan/ainvest/pull/76)
+- **Squash-merge commit:**
+  `e210d9601678f0abf750cf38590fd55ba10a873a`
 
 ##### Execution envelope: P05-T0
 
 - **Title:** Implement OrderProposal and One-Time Approval Challenges
-- **Status/owner:** `in_review` — `batch_e_p05_t0`
+- **Status/owner:** `merged` — `batch_e_p05_t0`
 - **Branch/worktree:** `agent/p05-t0-approval-challenges` /
   `.worktrees/p05-t0`
 - **Rebased main/base:** `e210d9601678f0abf750cf38590fd55ba10a873a`
@@ -315,12 +319,14 @@ Robinhood implementation, or Research Agent behavior.
   database/log exposure, broker/live enablement, or duplicate persistence
   framework remains.
 - **Blockers:** None.
-- **PR:** Pending.
+- **PR:** [#77](https://github.com/likefudan/ainvest/pull/77)
+- **Squash-merge commit:**
+  `62feb5d2c93ccde9eb651b79404296a39531818d`
 
 ##### Execution envelope: P08-T0
 
 - **Title:** Define Runtime Modes and Startup Capability Gates
-- **Status/owner:** `in_review` — `batch_e_p08_t0`
+- **Status/owner:** `merged` — `batch_e_p08_t0`
 - **Branch/worktree/base:** `agent/p08-t0-runtime` /
   `.worktrees/p08-t0` at
   `62feb5d2c93ccde9eb651b79404296a39531818d`
@@ -386,12 +392,15 @@ Robinhood implementation, or Research Agent behavior.
   711 unit, 102 contract, 15 integration, 828 total, and 86.79% coverage.
   Scoped readability/duplication and secret-signature inspection found no
   copied broker/config logic or credential values.
-  Independent re-review, PR, and squash-merge commit remain pending.
+  Independent review completed with no remaining actionable finding.
+- **PR:** [#78](https://github.com/likefudan/ainvest/pull/78)
+- **Squash-merge commit:**
+  `d9840a4ef80a380a26d7be4b0892d774fd8d43a8`
 
 ##### Execution envelope: P08-T3
 
 - **Title:** Add Structured Logging, Correlation, and Redaction
-- **Status/owner:** `in_review` — `batch_e_p08_t3`
+- **Status/owner:** `merged` — `batch_e_p08_t3`
 - **Branch/worktree/base:** `agent/p08-t3-logging` /
   `.worktrees/p08-t3` at
   `d9840a4ef80a380a26d7be4b0892d774fd8d43a8`
@@ -458,8 +467,50 @@ Robinhood implementation, or Research Agent behavior.
   are covered.
   Readability/duplication inspection found focused helpers and no second
   logging, renderer, telemetry, or Runtime-health abstraction. The prior
-  dependency audit found no known vulnerabilities. Final independent
-  re-review, PR, and squash-merge remain pending.
+  dependency audit found no known vulnerabilities. Final independent review
+  completed with no remaining actionable finding.
+- **PR:** [#79](https://github.com/likefudan/ainvest/pull/79)
+- **Squash-merge commit:**
+  `14467cdb9da999ff1f73697be9bc83c27371e7a1`
+
+#### Priority lane — Robinhood Read-only Preview
+
+This lane provides an early, useful Robinhood result without claiming Gate 4
+or enabling broker writes. Its serial merge order is:
+
+1. `P08-T7` establishes role-separated secret access and the read-broker
+   identity boundary required by `P06-T0`.
+2. `P06-T0` connects the official MCP Read Gateway, discovers and pins tool
+   schemas, permits only an explicit read allowlist, and default-denies every
+   write or unknown tool.
+3. `P06-T1` normalizes portfolio, positions, buying power, order history/open
+   orders, quotes, price books, and the other accepted read data into versioned
+   ainvest schemas.
+4. `P06-T2` exposes those reads through an ainvest CLI/read-only entry point
+   and uses real data only with PaperBroker; it cannot construct a broker write
+   client.
+
+| Task | Status | Dependencies / unlock | Integration note |
+|---|---|---|---|
+| `P08-T7` | `not_started` | `P01-T4`, `P01-T1` (satisfied) | Next merge candidate |
+| `P06-T0` | `not_started` | `P03-T13`, `P01-T4` (satisfied), then `P08-T7`; real connection also needs owner-supplied Robinhood authorization | Rebase after `P08-T7`; fake-MCP implementation remains possible before real authorization |
+| `P06-T1` | `not_started` | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Rebase after `P06-T0` |
+| `P06-T2` | `not_started` | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Rebase after `P06-T1`; Paper execution only |
+
+`P06-T0` through `P06-T2` form the **Read-only Preview**, not Gate 4. Gate 4
+remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
+`P08-T4`, and every other dependency on its task card. No broker-write work may
+start before Gates 1–4 and the later live prerequisites pass. Robinhood MCP
+remains the only live quote source; failure never falls back to Alpaca,
+yfinance, or another provider.
+
+`P04-T2` and `P05-T4` may be implemented on disjoint background worktrees while
+the priority lane runs. They do not jump ahead of the lane in the merge queue;
+each candidate must rebase onto the then-current `main` before its independent
+review and serial integration. After `P06-T2`, create a separate narrow
+scheduling/task-card PR for Telegram read-only queries built on the Read
+Gateway and the `P05-T4`/`P05-T5` transport; do not mix that read surface with
+Telegram approval or any broker-write capability.
 
 #### Research track — `P04-T0` through `P04-T12`
 
@@ -469,7 +520,7 @@ can never become a live quote fallback.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P04-T0` | `in_review` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
+| `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `not_started` | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
@@ -495,7 +546,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P05-T0` | `in_review` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
+| `P05-T0` | `merged` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
 | `P05-T1` | `not_started` | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` | `approval/telegram_approval.py`; callback validation, audit/outbox integration, tests |
 | `P05-T4` | `not_started` | `P05-T0`, `DEC-005`; environment integration requires `DEC-010` | `approval/telegram.py`; notification/config adapter, snapshots, fake-transport tests |
 | `P05-T5` | `not_started` | `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests |
@@ -524,8 +575,8 @@ task row is in the cross-cutting table below.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P08-T0` | `in_review` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
-| `P08-T3` | `in_review` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
+| `P08-T0` | `merged` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
+| `P08-T3` | `merged` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
@@ -536,9 +587,9 @@ task row is in the cross-cutting table below.
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0` and `P08-T3` are active on disjoint worktrees. `P08-T6`, `P08-T7`,
-`P08-T8`, and `P08-T9` are dependency-ready but remain unclaimed; in
-particular, this claim does not assign `P08-T6` or `P08-T7`. `P08-T12` is
+`P08-T0` and `P08-T3` are merged. `P08-T6`, `P08-T7`, `P08-T8`, and
+`P08-T9` are dependency-ready but remain unclaimed; `P08-T7` is the next
+priority-lane task. `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
 `docs/testing.md` rows, and may not own an entire test directory. `P08-T4`
