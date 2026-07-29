@@ -619,9 +619,10 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
 
-After `P05-T0` merges, `P05-T1` and `P05-T4` may be implemented in parallel.
-`P05-T5` follows `P05-T4`; `P05-T6` follows `P05-T1`. The completed Paper
-approval path unlocks `P08-T13`, then `P05-T8`.
+`P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is
+owner-paused/unclaimed and may not start until the owner/coordinator explicitly
+resumes it; only after that task merges may `P05-T5` start. `P05-T6` follows
+`P05-T1`. The completed Paper approval path unlocks `P08-T13`, then `P05-T8`.
 
 #### Deferred live approval track
 
