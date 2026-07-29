@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` merged) |
-| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `not_started`; next serial merge queue |
+| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` claimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -492,10 +492,76 @@ or enabling broker writes. Its serial merge order is:
 
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
-| `P08-T7` | `not_started` | `P01-T4`, `P01-T1` (satisfied) | Next merge candidate |
-| `P06-T0` | `not_started` | `P03-T13`, `P01-T4` (satisfied), then `P08-T7`; real connection also needs owner-supplied Robinhood authorization | Rebase after `P08-T7`; fake-MCP implementation remains possible before real authorization |
-| `P06-T1` | `not_started` | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Rebase after `P06-T0` |
-| `P06-T2` | `not_started` | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Rebase after `P06-T1`; Paper execution only |
+| `P08-T7` | `in_progress` | `P01-T4`, `P01-T1` (satisfied) | Claimed below; only active priority-lane implementation |
+| `P06-T0` | `not_started` (queued/unclaimed) | `P03-T13`, `P01-T4` (satisfied), then `P08-T7`; real connection also needs owner-supplied Robinhood authorization | Claim only after `P08-T7` merges; create from/rebase onto that latest `main` |
+| `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
+| `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
+
+##### Execution envelope: P08-T7
+
+- **Title:** Isolate Secrets, Identities, and Least-Privilege Access
+- **Status/owner:** `in_progress` — `p08_t7_secrets_iam`
+- **Branch/worktree:** `agent/p08-t7-secrets-iam` / `.worktrees/p08-t7`
+- **Immutable base:** `61636dd04037911b203726811f91ccabeaa9ecc1`
+  (includes the Robinhood priority-lane scheduling change in #80)
+- **Dependencies:** `P01-T1` and `P01-T4`, both merged and satisfied on the
+  immutable base
+- **Design and task authority:** `design.md` sections 3.5–3.6, 5.7, 9, 11,
+  and 12; `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T7`), 12 (Batch E),
+  and 16; `docs/security/{threat-model,data-flow}.md`; `DEC-003`,
+  `DEC-009`, `DEC-010`, `DEC-015`, `DEC-017`, and `DEC-018`
+- **Expected dependency artifacts:** the fail-closed configuration loader and
+  file-secret precedence from `P01-T4`; the accepted trust boundaries and
+  strategy secret-isolation requirements from `P01-T1`; the runtime capability
+  separation from `P08-T0`; and redacted structured logging from `P08-T3`
+- **Allowed paths:** `src/ainvest/secrets.py`,
+  `tests/unit/test_secrets.py`, and `docs/security/secrets.md`;
+  `.env.example` only for empty/non-secret development placeholders;
+  `tests/unit/strategies/test_worker.py` only for a narrow assertion that the
+  strategy worker cannot observe role credentials. Provider-neutral identity
+  policy fixtures may be added under `tests/fixtures/identity/`. Any production
+  configuration, runtime integration, package export, dependency, or deployment
+  path requires coordinator-approved scope expansion recorded here first.
+- **Required behavior:** define role-scoped secret references and a provider
+  boundary for Research, Approval, Read Broker, and Write Broker; default-deny
+  cross-role reads; keep development `.env` access explicit and uncommitted;
+  fail closed when production secret-manager/workload-identity configuration is
+  absent; check only secret presence and permission at startup; support
+  reference-based rotation without logging, tracing, auditing, serializing, or
+  returning secret values. Research alone may obtain the OpenAI reference, and
+  Read Broker must never obtain a write-broker credential.
+- **Forbidden scope:** no real credential, token, account identifier, secret
+  value, cloud account, IAM principal, or secret-manager choice; no provider-
+  specific production deployment while `DEC-015` is deferred; no Robinhood MCP
+  session/tool implementation (`P06-T0`); no broker-write client or capability;
+  no remote operator endpoint; no Telegram/WebAuthn behavior; no edits to
+  `src/ainvest/config/**`, `src/ainvest/runtime.py`, execution/data adapters,
+  schemas, database/migrations, CI, dependencies, or other task-owned paths
+  without prior coordinator authorization
+- **Owner values/credentials:** none are required for implementation or offline
+  tests. Use deterministic fake references and fake providers only. Real
+  Robinhood authorization, production identity/IAM, and secret-manager values
+  remain external owner actions under `DEC-015`, `DEC-017`, and `DEC-018`;
+  their absence must leave the corresponding capability disabled.
+- **Verification contract:** add positive, boundary, cross-role-denial,
+  missing/permission-denied, rotation, serialization/repr, log/audit redaction,
+  and strategy-isolation tests; run the focused unit tests, then
+  `./scripts/dev verify`; run `git diff --check`; inspect the complete scoped
+  diff and repository-visible outputs for secret-like values and duplicated
+  config/runtime abstractions
+- **Review/integration contract:** the implementation agent commits but does
+  not merge, and its worktree uses the immutable base above. After this claim
+  PR is on `main` and before integration review, the implementation branch
+  rebases onto the then-latest `main`, reruns the full verification contract,
+  and updates its PR. A
+  separate sub-agent reviews functionality, fail-closed security, tests,
+  readability, and duplication directly on the PR; every actionable finding
+  is fixed and re-reviewed before required checks pass and the PR is squash-
+  merged. Only then may `P06-T0` be claimed.
+- **Handoff/blockers:** no current implementation blocker. Production
+  deployment artifacts and real credential validation remain intentionally
+  blocked on owner decisions; they do not block the provider-neutral,
+  fail-closed implementation.
 
 `P06-T0` through `P06-T2` form the **Read-only Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
@@ -504,10 +570,10 @@ start before Gates 1–4 and the later live prerequisites pass. Robinhood MCP
 remains the only live quote source; failure never falls back to Alpaca,
 yfinance, or another provider.
 
-`P04-T2` and `P05-T4` may be implemented on disjoint background worktrees while
-the priority lane runs. They do not jump ahead of the lane in the merge queue;
-each candidate must rebase onto the then-current `main` before its independent
-review and serial integration. After `P06-T2`, create a separate narrow
+Per owner instruction on 2026-07-29, `P04-T2` and `P05-T4` are
+`not_started`, unclaimed, and paused while the priority lane runs; no background
+worktree or implementation agent should be started for either task. After
+`P06-T2`, create a separate narrow
 scheduling/task-card PR for Telegram read-only queries built on the Read
 Gateway and the `P05-T4`/`P05-T5` transport; do not mix that read surface with
 Telegram approval or any broker-write capability.
@@ -522,7 +588,7 @@ can never become a live quote fallback.
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
-| `P04-T2` | `not_started` | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
+| `P04-T2` | `not_started` (owner-paused/unclaimed) | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
@@ -548,7 +614,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 |---|---|---|---|
 | `P05-T0` | `merged` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
 | `P05-T1` | `not_started` | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` | `approval/telegram_approval.py`; callback validation, audit/outbox integration, tests |
-| `P05-T4` | `not_started` | `P05-T0`, `DEC-005`; environment integration requires `DEC-010` | `approval/telegram.py`; notification/config adapter, snapshots, fake-transport tests |
+| `P05-T4` | `not_started` (owner-paused/unclaimed) | `P05-T0`, `DEC-005`; environment integration requires `DEC-010` | `approval/telegram.py`; notification/config adapter, snapshots, fake-transport tests |
 | `P05-T5` | `not_started` | `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
@@ -580,16 +646,16 @@ task row is in the cross-cutting table below.
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
-| `P08-T7` | `not_started` | `P01-T4`, `P01-T1` | `secrets.py`, `docs/security/secrets.md`, bounded identity/IAM artifacts and tests |
+| `P08-T7` | `in_progress` (`p08_t7_secrets_iam`) | `P01-T4`, `P01-T1` | claimed in the priority-lane execution envelope above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0` and `P08-T3` are merged. `P08-T6`, `P08-T7`, `P08-T8`, and
-`P08-T9` are dependency-ready but remain unclaimed; `P08-T7` is the next
-priority-lane task. `P08-T12` is
+`P08-T0` and `P08-T3` are merged. `P08-T7` is the only claimed implementation;
+`P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but remain unclaimed.
+`P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
 `docs/testing.md` rows, and may not own an entire test directory. `P08-T4`
