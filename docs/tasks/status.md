@@ -239,6 +239,8 @@ Robinhood implementation, or Research Agent behavior.
   `b9a4f35ef935f2b5f514abcee44ff2f22187e05f`
 - **Independent-review remediation:**
   `6bf2d69b9ed5a733012a7594b6a46efad02b1bbe`
+- **Round-2 independent-review remediation:**
+  `0df9309842522ea975bd26d18a2b72b7abaac1d2`
 - **Dependencies:** `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged)
 - **Design and task authority:** `design.md` sections 3.4–3.5, 5.5, 7, and
   15 Phase 3; `IMPLEMENTATION_TODO.md` sections 1 and 8 (`P05-T0`);
@@ -249,7 +251,12 @@ Robinhood implementation, or Research Agent behavior.
   `src/ainvest/db/uow.py`, `src/ainvest/risk/engine.py`,
   `tests/unit/approval/test_approval_service.py`,
   `tests/unit/approval/test_tokens.py`, `tests/unit/risk/test_engine.py`,
-  `schemas/json/v1/ApprovalChallenge.json`, and this P05-T0 tracker metadata.
+  `src/ainvest/schemas/{examples,export}.py`,
+  `schemas/json/v1/ApprovalChallenge{,V1_1}.json`,
+  `schemas/json/v1/MANIFEST.json`,
+  `tests/contract/test_schema_{fixtures,snapshots}.py`,
+  `tests/contract/fixtures/ApprovalChallengeV1_1/`,
+  `docs/schema-versioning.md`, and this P05-T0 tracker metadata.
   No model or Alembic migration changed because the existing proposal,
   challenge, event, hash, status, expiry, and optimistic-version columns cover
   the task.
@@ -260,10 +267,16 @@ Robinhood implementation, or Research Agent behavior.
   `CandidateOrder`, so approval can bind exact economics, account scope,
   strategy version, increments, and expiry. No risk rule, decision, config, or
   other risk-layer behavior changed.
+- **Authorized round-2 scope expansion:** The coordinator authorized the
+  schema export/example generators, schema contract tests, generated v1.1
+  artifact/fixtures/manifest, and the narrow schema-versioning documentation
+  update solely to preserve `ApprovalChallenge` 1.0 exactly while introducing
+  an explicit cumulative 1.0/1.1 dispatcher. No unrelated schema or versioning
+  policy changed.
 - **Verification:** focused approval/token/risk-engine/schema-snapshot tests
-  passed (86 tests). On the rebased branch,
+  passed (177 tests). On the rebased branch,
   `./scripts/dev verify` passed: format, lint, mypy, and schema snapshots;
-  unit 636, contract 97, integration 15, aggregate 748 tests; 86.44% branch
+  unit 679, contract 102, integration 15, aggregate 796 tests; 86.57% branch
   coverage.
 - **Handoff notes:** Generates canonical URL-safe nonces from exactly 256
   CSPRNG bits, redacts token string representations, and persists only a
@@ -271,16 +284,21 @@ Robinhood implementation, or Research Agent behavior.
   order/hash and approved risk decision, requires account/method/scope binding,
   and constrains injected-clock TTL to 60–120 seconds. Conditional
   status+version updates make PENDING decisions single-winner under concurrent
-  access and persist APPROVED, REJECTED, or EXPIRED with a method/scope-bound
-  event in the same UnitOfWork. CONSUMED remains reserved for the P05-T6
-  exactly-once handoff. Repeated/non-canonical tokens, explicit-decision type
-  confusion, changed proposal/risk payloads, invalid scope pairs, and expiry
-  fail closed. Independent review remediation binds the APPROVED output to the
-  full canonical candidate/context and atomically claims each risk decision for
-  exactly one proposal; validates every duplicated challenge field; blocks
+  access and persist method/scope-bound events in the same UnitOfWork. New
+  service challenges use schema 1.1 with explicit APPROVED, REJECTED, or
+  EXPIRED states; the exact original 1.0 contract/artifact remains unchanged
+  and its PENDING decisions transition through the original CONSUMED state.
+  Repeated/non-canonical tokens, explicit-decision type confusion, changed
+  proposal/risk payloads, invalid scope pairs, and expiry fail closed.
+  Independent review remediation binds the APPROVED output to the complete,
+  normalized `RiskContext`, requires the full default rule set and
+  decision/result/violation/reason aggregate consistency, and atomically claims
+  each risk decision for exactly one proposal; validates every duplicated
+  challenge field; blocks
   raw-token dataclass/JSON/Pydantic/pickle/log-fallback serialization; restores
-  v1 `CANCELLED` and general positive-lifetime compatibility while retaining
-  the 60–120 second creation policy; and wraps event insertion plus challenge
+  v1.0 `CANCELLED` and general positive-lifetime compatibility while retaining
+  the 60–120 second creation policy; dispatches exact 1.0 and 1.1 challenge
+  contracts without widening 1.0; and wraps event insertion plus challenge
   transition in a savepoint so validation/uniqueness failures leave PENDING
   state intact even when caught inside the active UnitOfWork. No raw-token
   database/log exposure, broker/live enablement, or duplicate persistence
