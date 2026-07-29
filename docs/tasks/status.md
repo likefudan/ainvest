@@ -394,7 +394,7 @@ Robinhood implementation, or Research Agent behavior.
 - **Status/owner:** `in_review` — `batch_e_p08_t3`
 - **Branch/worktree/base:** `agent/p08-t3-logging` /
   `.worktrees/p08-t3` at
-  `81344f5ac224c8879784db516062a8868758d230`
+  `d9840a4ef80a380a26d7be4b0892d774fd8d43a8`
 - **Design and task authority:** `design.md` sections 3.5, 3.6, 9, 11, and 13;
   `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T3`), 12 (Batch E), and 16;
   `DEC-005`, `DEC-006`, `DEC-009`, `DEC-010`, and `DEC-015`–`DEC-018`
@@ -430,11 +430,18 @@ Robinhood implementation, or Research Agent behavior.
   nested/exception/header redaction, stable correlation fields, JSON output,
   and preservation of funds-safety events in
   `tests/unit/observability/test_logging.py`
-- **Handoff:** implementation complete; clean `./scripts/dev setup` installed
-  `structlog` through the core profile; `./scripts/dev unit` passed 529 tests;
-  `./scripts/dev verify` passed 617 tests at 85.88% coverage; dependency audit
-  found no known vulnerabilities; scoped diff and secret-signature inspection
-  are clean. Independent review, PR, and squash-merge remain pending.
+- **Handoff:** rebased implementation tip
+  `83a8eb5a90fc7581bbea64bdab43ad1ddbff5f88` on post-P08-T0 `main`.
+  Focused logging/runtime/approval-token/Paper-flow verification passed 54
+  tests. An isolated locked core-profile environment imported
+  `ainvest.observability` and `structlog` while confirming OpenTelemetry and
+  Prometheus remained absent. `./scripts/dev verify` passed format, lint,
+  mypy, and schema snapshots; 718 unit, 102 contract, 16 integration, and 836
+  aggregate tests at 86.79% coverage. Correlation, recursive redaction, and
+  funds-safety event retention remain green against the new Runtime;
+  readability/duplication inspection found no second logging, telemetry, or
+  Runtime-health abstraction. The prior dependency audit found no known
+  vulnerabilities. Independent review, PR, and squash-merge remain pending.
 
 #### Research track — `P04-T0` through `P04-T12`
 
