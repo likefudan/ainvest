@@ -83,6 +83,8 @@ def test_scrub_environ_removes_secrets() -> None:
             "PATH": "/usr/bin",
             "OPENAI_API_KEY": "sk-not-a-real-secret-value",
             "TELEGRAM_BOT_TOKEN": "123:ABC",
+            "AINVEST_READ_BROKER_CREDENTIAL": "synthetic-role-value",
+            "AINVEST_WRITE_BROKER_CREDENTIAL": "synthetic-role-value",
             "DATABASE_URL": "postgresql://user:pass@localhost/db",
             "AINVEST_WORKER_BLOCK_NETWORK": "1",
             "SAFE_FLAG": "ok",
@@ -92,6 +94,8 @@ def test_scrub_environ_removes_secrets() -> None:
     assert "AINVEST_WORKER_BLOCK_NETWORK" in cleaned
     assert "OPENAI_API_KEY" not in cleaned
     assert "TELEGRAM_BOT_TOKEN" not in cleaned
+    assert "AINVEST_READ_BROKER_CREDENTIAL" not in cleaned
+    assert "AINVEST_WRITE_BROKER_CREDENTIAL" not in cleaned
     assert "DATABASE_URL" not in cleaned
     assert is_sensitive_env_key("ROBINHOOD_TOKEN")
     assert not is_sensitive_env_key("PATH")
