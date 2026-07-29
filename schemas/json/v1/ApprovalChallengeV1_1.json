@@ -1,14 +1,16 @@
 {
   "$defs": {
-    "ApprovalChallengeStatus": {
-      "description": "Lifecycle for a one-time approval challenge.",
+    "ApprovalChallengeStatusV1_1": {
+      "description": "v1.1 lifecycle with explicit human-decision states.",
       "enum": [
         "PENDING",
-        "CONSUMED",
+        "APPROVED",
+        "REJECTED",
         "EXPIRED",
+        "CONSUMED",
         "CANCELLED"
       ],
-      "title": "ApprovalChallengeStatus",
+      "title": "ApprovalChallengeStatusV1_1",
       "type": "string"
     },
     "ApprovalMethod": {
@@ -31,7 +33,7 @@
     }
   },
   "additionalProperties": false,
-  "description": "One-time challenge bound to a proposal and order hash.",
+  "description": "Backward-compatible v1.1 challenge with explicit decision states.",
   "properties": {
     "challenge_id": {
       "maxLength": 160,
@@ -79,8 +81,8 @@
       "type": "string"
     },
     "schema_version": {
-      "const": "1.0",
-      "default": "1.0",
+      "const": "1.1",
+      "default": "1.1",
       "title": "Schema Version",
       "type": "string"
     },
@@ -88,7 +90,7 @@
       "$ref": "#/$defs/ApprovalScope"
     },
     "status": {
-      "$ref": "#/$defs/ApprovalChallengeStatus",
+      "$ref": "#/$defs/ApprovalChallengeStatusV1_1",
       "default": "PENDING"
     }
   },
@@ -102,6 +104,6 @@
     "created_at",
     "expires_at"
   ],
-  "title": "ApprovalChallenge",
+  "title": "ApprovalChallengeV1_1",
   "type": "object"
 }

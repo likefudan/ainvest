@@ -59,98 +59,46 @@ def _sha256_digest(payload: object) -> str:
     return "sha256:" + hashlib.sha256(raw.encode("utf-8")).hexdigest()
 
 
-def compute_input_digest(context: RiskContext) -> str:
-    candidate = context.candidate
-    quote = context.quote
-    instrument = context.instrument
-    portfolio = context.portfolio
-    exposure = context.exposure_inputs
-    return _sha256_digest(
-        {
-            "phase": context.phase.value,
-            "as_of": context.as_of.isoformat(),
-            # Bind every candidate field, including account scope, order
-            # economics, increments, strategy version, and expiry. Approval
-            # verifies this digest before freezing a proposal.
-            "candidate": candidate.model_dump(mode="json"),
-            "quote_last": str(quote.last_price),
-            "quote_bid": str(quote.bid) if quote.bid is not None else None,
-            "quote_ask": str(quote.ask) if quote.ask is not None else None,
-            "quote_observed_at": quote.provenance.observed_at.isoformat(),
-            "instrument_tradable": instrument.tradable,
-            "vol_bps": (
-                str(context.short_term_volatility_bps)
-                if context.short_term_volatility_bps is not None
-                else None
-            ),
-            "portfolio": (
-                None
-                if portfolio is None
-                else {
-                    "snapshot_id": portfolio.snapshot_id,
-                    "cash": str(portfolio.cash),
-                    "buying_power": str(portfolio.buying_power),
-                    "equity": str(portfolio.equity),
-                    "positions": [
-                        {
-                            "instrument_id": p.instrument.instrument_id,
-                            "quantity": str(p.quantity),
-                            "market_value": str(p.market_value),
-                        }
-                        for p in sorted(
-                            portfolio.positions,
-                            key=lambda p: p.instrument.instrument_id,
-                        )
-                    ],
-                    "open_orders": [
-                        {
-                            "order_id": o.order_id,
-                            "instrument_id": o.instrument.instrument_id,
-                            "side": o.side.value,
-                            "quantity": str(o.quantity),
-                            "limit_price": (
-                                str(o.limit_price) if o.limit_price is not None else None
-                            ),
-                        }
-                        for o in sorted(
-                            portfolio.open_orders,
-                            key=lambda o: (o.order_id, o.instrument.instrument_id),
-                        )
-                    ],
-                }
-            ),
-            "exposure_inputs": (
-                None
-                if exposure is None
-                else {
-                    **exposure.model_dump(mode="json"),
-                    "sectors": [
-                        s.model_dump(mode="json")
-                        for s in sorted(
-                            exposure.sectors,
-                            key=lambda s: (s.instrument_id, s.sector),
-                        )
-                    ],
-                }
-            ),
-            "kill_switch": (
-                None if context.kill_switch is None else context.kill_switch.model_dump(mode="json")
-            ),
-            "client_order_id": context.client_order_id,
-            "proposal_order_hash": context.proposal_order_hash,
-            "recent_submissions": (
-                None
-                if context.recent_submissions is None
-                else [
-                    s.model_dump(mode="json")
-                    for s in sorted(
-                        context.recent_submissions,
-                        key=lambda s: (s.client_order_id, s.submitted_at.isoformat()),
-                    )
-                ]
-            ),
-        }
+def _sort_documents(documents: list[dict[str, object]]) -> list[dict[str, object]]:
+    """Canonicalize a collection whose domain semantics are order-independent."""
+    return sorted(
+        documents,
+        key=lambda item: json.dumps(item, sort_keys=True, separators=(",", ":")),
     )
+
+
+def compute_input_digest(context: RiskContext) -> str:
+    """Hash the complete normalized risk-evaluation input.
+
+    No field is selected manually: new ``RiskContext`` fields enter the digest
+    automatically through ``model_dump``. Only collections consumed as sets by
+    risk rules are sorted: provenance quality flags, eligibility allowlist,
+    portfolio positions/open orders, exposure sector assignments, and recent
+    submissions. Their members remain complete and duplicates are retained.
+    """
+    payload = context.model_dump(mode="json")
+
+    quote_provenance = payload["quote"]["provenance"]
+    quote_provenance["quality_flags"] = sorted(quote_provenance["quality_flags"])
+
+    allowlist = payload["config"]["eligibility"]["allowlist"]
+    payload["config"]["eligibility"]["allowlist"] = _sort_documents(allowlist)
+
+    portfolio = payload["portfolio"]
+    if portfolio is not None:
+        portfolio["positions"] = _sort_documents(portfolio["positions"])
+        portfolio["open_orders"] = _sort_documents(portfolio["open_orders"])
+        portfolio["provenance"]["quality_flags"] = sorted(portfolio["provenance"]["quality_flags"])
+
+    exposure = payload["exposure_inputs"]
+    if exposure is not None:
+        exposure["sectors"] = _sort_documents(exposure["sectors"])
+
+    recent = payload["recent_submissions"]
+    if recent is not None:
+        payload["recent_submissions"] = _sort_documents(recent)
+
+    return _sha256_digest(payload)
 
 
 def compute_config_digest(config: RiskRuleConfig) -> str:
@@ -184,6 +132,24 @@ def aggregate_rule_results(
     # Stable ordering for explainability (does not affect outcome).
     ordered = tuple(sorted(violations, key=lambda v: (v.severity.value, v.rule_code, v.reason)))
     return outcome, ordered
+
+
+def validate_default_risk_output(output: RiskEngineOutput) -> None:
+    """Reject incomplete or contradictory default-rule evaluation evidence."""
+    if output.rule_codes != DEFAULT_RULE_CODES:
+        raise ValueError("risk output must contain the complete default rule set")
+    result_codes = tuple(result.rule_code for result in output.rule_results)
+    if result_codes != output.rule_codes:
+        raise ValueError("risk result codes must match the declared rule codes")
+
+    outcome, violations = aggregate_rule_results(output.rule_results)
+    if output.decision.outcome is not outcome:
+        raise ValueError("risk decision outcome contradicts its rule results")
+    if output.decision.violations != violations:
+        raise ValueError("risk decision violations contradict its rule results")
+    reason_code, reason = _decision_reason(outcome, violations)
+    if output.decision.reason_code != reason_code or output.decision.reason != reason:
+        raise ValueError("risk decision reason contradicts its rule results")
 
 
 def _decision_reason(
@@ -306,4 +272,5 @@ __all__ = [
     "compute_input_digest",
     "evaluate_risk",
     "evaluate_rules",
+    "validate_default_risk_output",
 ]

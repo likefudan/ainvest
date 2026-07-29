@@ -17,25 +17,24 @@ from sqlalchemy.orm import Session, sessionmaker
 
 from ainvest.approval.service import ApprovalService, ApprovalServiceError
 from ainvest.approval.tokens import OpaqueApprovalToken, hash_approval_token
+from ainvest.data.calendar_port import FakeMarketCalendar
 from ainvest.db.session import create_all_tables, create_db_engine, create_session_factory
 from ainvest.db.uow import UnitOfWork
-from ainvest.risk.engine import (
-    RiskEngineOutput,
-    compute_config_digest,
-    compute_input_digest,
-)
-from ainvest.risk.models import RiskContext
+from ainvest.risk.engine import RiskEngineOutput, evaluate_risk
+from ainvest.risk.models import ExposureInputs, RiskContext, RuleResult, SectorAssignment
 from ainvest.schemas.approval import (
     ApprovalChallenge,
     ApprovalChallengeStatus,
+    ApprovalChallengeStatusV1_1,
     ApprovalEvent,
     ApprovalEventOutcome,
     ApprovalMethod,
     ApprovalScope,
 )
-from ainvest.schemas.examples import candidate_order_example, risk_decision_example
+from ainvest.schemas.examples import candidate_order_example, portfolio_snapshot_example
 from ainvest.schemas.orders import CandidateOrder
-from ainvest.schemas.risk import RiskDecision
+from ainvest.schemas.portfolio import PortfolioSnapshot
+from ainvest.schemas.risk import RiskOutcome, RiskSeverity
 
 NOW = datetime(2026, 7, 24, 18, 30, 12, tzinfo=UTC)
 FIXED_TOKEN_VALUE = "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg"
@@ -69,33 +68,30 @@ def _risk(
         risk_decision_id=risk_decision_id,
         as_of=NOW,
         candidate=candidate,
-    )
-    payload = risk_decision_example()
-    payload["risk_decision_id"] = risk_decision_id
-    payload["candidate_id"] = candidate.candidate_id
-    payload["outcome"] = outcome
-    payload["rule_set_version"] = context.config.rule_set_version
-    if outcome == "REJECTED":
-        payload["violations"] = [
-            {
-                "rule_code": "LIMIT_EXCEEDED",
-                "severity": "HARD",
-                "reason": "test rejection",
-            }
-        ]
-        payload["reason_code"] = "LIMIT_EXCEEDED"
-        payload["reason"] = "test rejection"
-    decision = RiskDecision.model_validate(payload)
-    return (
-        RiskEngineOutput(
-            decision=decision,
-            input_digest=compute_input_digest(context),
-            config_digest=compute_config_digest(context.config),
-            rule_codes=(),
-            rule_results=(),
+        portfolio=PortfolioSnapshot.model_validate(portfolio_snapshot_example()),
+        exposure_inputs=ExposureInputs(
+            sectors=(
+                SectorAssignment(
+                    instrument_id=candidate.instrument_id,
+                    sector="TECH",
+                ),
+            ),
+            daily_turnover_to_date=Decimal("100"),
+            daily_realized_pnl=Decimal("0"),
+            daily_unrealized_pnl=Decimal("0"),
         ),
-        context,
     )
+    limits = context.config.exposure.model_copy(update={"max_symbol_weight": Decimal("0.60")})
+    if outcome == "REJECTED":
+        limits = limits.model_copy(update={"max_order_notional": Decimal("1")})
+    context = context.model_copy(
+        update={
+            "config": context.config.model_copy(update={"exposure": limits}),
+        }
+    )
+    output = evaluate_risk(context, calendar=FakeMarketCalendar())
+    assert output.decision.outcome.value == outcome
+    return output, context
 
 
 def _ids(prefix: str) -> str:
@@ -154,6 +150,7 @@ def test_creation_freezes_proposal_risk_and_only_token_hash(tmp_path: Path) -> N
             method=ApprovalMethod.TELEGRAM,
             scope=ApprovalScope.PAPER,
         )
+        assert issued.challenge.schema_version == "1.1"
         assert issued.challenge.expires_at - issued.challenge.created_at == timedelta(seconds=120)
         assert issued.proposal.risk_decision_id == output.decision.risk_decision_id
         assert issued.challenge.order_hash == issued.proposal.order_hash
@@ -330,6 +327,46 @@ def test_non_approved_or_mismatched_risk_cannot_create_proposal(tmp_path: Path) 
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize("corruption", ["missing_rule", "contradictory_hard_result"])
+def test_incomplete_or_contradictory_risk_output_is_rejected(
+    tmp_path: Path,
+    corruption: str,
+) -> None:
+    factory = _session_factory(tmp_path / f"risk-output-{corruption}.db")
+    candidate = _candidate()
+    output, context = _risk(candidate)
+    if corruption == "missing_rule":
+        corrupted = output.model_copy(
+            update={
+                "rule_codes": output.rule_codes[:-1],
+                "rule_results": output.rule_results[:-1],
+            }
+        )
+    else:
+        hard = RuleResult(
+            rule_code=output.rule_codes[0],
+            severity=RiskSeverity.HARD,
+            decision=RiskOutcome.REJECTED,
+            reason="contradictory review fixture",
+        )
+        corrupted = output.model_copy(update={"rule_results": (hard, *output.rule_results[1:])})
+
+    with UnitOfWork(factory) as uow, pytest.raises(ApprovalServiceError) as caught:
+        _service(uow).create_proposal_and_challenge(
+            candidate,
+            corrupted,
+            risk_context=context,
+            method=ApprovalMethod.TELEGRAM,
+            scope=ApprovalScope.PAPER,
+        )
+    assert caught.value.code == "RISK_OUTPUT_INVALID"
+
+    with UnitOfWork(factory) as uow:
+        assert uow.proposals_repo.get_by_proposal_id(_ids("ordp")) is None
+        assert uow.approvals_repo.get_challenge(_ids("apch")) is None
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("field", "value"),
     [
@@ -348,11 +385,11 @@ def test_risk_digest_rejects_changed_candidate_economics_or_scope(
 ) -> None:
     factory = _session_factory(tmp_path / f"risk-digest-{field}.db")
     original = _candidate()
-    output, _ = _risk(original)
+    output, context = _risk(original)
     changed_payload = original.model_dump(mode="json")
     changed_payload[field] = value
     changed = CandidateOrder.model_validate(changed_payload)
-    _, changed_context = _risk(changed)
+    changed_context = context.model_copy(update={"candidate": changed})
 
     with UnitOfWork(factory) as uow, pytest.raises(ApprovalServiceError) as caught:
         _service(uow).create_proposal_and_challenge(
@@ -404,14 +441,22 @@ def test_one_risk_decision_cannot_create_multiple_proposals(tmp_path: Path) -> N
 @pytest.mark.parametrize(
     ("approved", "expected_status", "expected_outcome"),
     [
-        (True, ApprovalChallengeStatus.APPROVED, ApprovalEventOutcome.APPROVED),
-        (False, ApprovalChallengeStatus.REJECTED, ApprovalEventOutcome.DENIED),
+        (
+            True,
+            ApprovalChallengeStatusV1_1.APPROVED,
+            ApprovalEventOutcome.APPROVED,
+        ),
+        (
+            False,
+            ApprovalChallengeStatusV1_1.REJECTED,
+            ApprovalEventOutcome.DENIED,
+        ),
     ],
 )
 def test_decision_is_bound_and_single_use(
     tmp_path: Path,
     approved: bool,
-    expected_status: ApprovalChallengeStatus,
+    expected_status: ApprovalChallengeStatusV1_1,
     expected_outcome: ApprovalEventOutcome,
 ) -> None:
     factory = _session_factory(tmp_path / f"decision-{approved}.db")
@@ -675,7 +720,7 @@ def test_concurrent_decision_has_exactly_one_winner(tmp_path: Path) -> None:
         assert len(events) == 1
         challenge = uow.approvals_repo.get_challenge(_ids("apch"))
         assert challenge is not None
-        assert challenge.status == ApprovalChallengeStatus.APPROVED.value
+        assert challenge.status == ApprovalChallengeStatusV1_1.APPROVED.value
 
 
 @pytest.mark.unit

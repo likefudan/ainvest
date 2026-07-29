@@ -14,6 +14,7 @@ from ainvest.risk.engine import (
     compute_input_digest,
     evaluate_risk,
     evaluate_rules,
+    validate_default_risk_output,
 )
 from ainvest.risk.models import (
     EvaluationPhase,
@@ -144,6 +145,13 @@ def test_happy_path_approved_with_digests() -> None:
 
 
 @pytest.mark.unit
+def test_default_output_invariant_accepts_real_complete_engine_evidence() -> None:
+    output = evaluate_risk(_context(), calendar=FakeMarketCalendar())
+
+    validate_default_risk_output(output)
+
+
+@pytest.mark.unit
 def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
     base = _context(as_of=datetime(2026, 7, 23, 15, 0, tzinfo=UTC))
     portfolio = PortfolioSnapshot.model_validate(portfolio_snapshot_example())
@@ -237,12 +245,24 @@ def test_input_digest_includes_portfolio_and_exposure_inputs() -> None:
 @pytest.mark.parametrize(
     ("field", "value"),
     [
+        ("signal_id", "sig_01HZYOTHER00001"),
+        ("instrument_id", "rh_inst_msft_xnas"),
+        ("symbol", "MSFT"),
+        ("exchange", "XNYS"),
+        ("currency", "EUR"),
+        ("asset_type", "ETF"),
+        ("side", "SELL"),
         ("quantity", "1"),
         ("limit_price", "214.49"),
         ("maximum_notional", "1000.00"),
+        ("quantity_increment", "2"),
+        ("price_increment", "0.50"),
         ("account_scope", "agentic"),
+        ("created_at", "2026-07-24T18:30:11Z"),
         ("expires_at", "2026-07-24T18:33:12Z"),
+        ("strategy", "other_strategy"),
         ("strategy_version", "1.2.1"),
+        ("reason_codes", ["OTHER_REASON"]),
     ],
 )
 def test_input_digest_binds_complete_candidate(field: str, value: str) -> None:
@@ -253,3 +273,121 @@ def test_input_digest_binds_complete_candidate(field: str, value: str) -> None:
     changed = CandidateOrder.model_validate(payload)
 
     assert compute_input_digest(context.model_copy(update={"candidate": changed})) != baseline
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("instrument_id", "rh_inst_msft_xnas"),
+        ("symbol", "MSFT"),
+        ("exchange", "XNYS"),
+        ("currency", "EUR"),
+        ("asset_type", "ETF"),
+        ("tradable", False),
+        ("price_increment", "0.50"),
+        ("quantity_increment", "2"),
+        ("is_leveraged_or_inverse", True),
+        ("allows_short", True),
+        ("allows_margin", True),
+        ("is_option", True),
+        ("is_crypto", True),
+    ],
+)
+def test_input_digest_binds_every_instrument_metadata_field(
+    field: str,
+    value: object,
+) -> None:
+    context = _context()
+    payload = context.instrument.model_dump(mode="json")
+    payload[field] = value
+    changed = InstrumentMetadata.model_validate(payload)
+
+    assert compute_input_digest(context.model_copy(update={"instrument": changed})) != (
+        compute_input_digest(context)
+    )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("path", "value"),
+    [
+        (("last_price",), "215.00"),
+        (("bid",), "214.47"),
+        (("ask",), "999.00"),
+        (("instrument", "instrument_id"), "rh_inst_msft_xnas"),
+        (("instrument", "symbol"), "MSFT"),
+        (("instrument", "exchange"), "XNYS"),
+        (("instrument", "asset_type"), "ETF"),
+        (("instrument", "provider"), "other.provider"),
+        (("provenance", "source"), "other.quotes"),
+        (("provenance", "observed_at"), "2026-07-24T18:29:57Z"),
+        (("provenance", "received_at"), "2026-07-24T18:30:01Z"),
+        (("provenance", "timezone"), "America/New_York"),
+        (("provenance", "quality_flags"), ["STALE"]),
+        (("provenance", "is_delayed"), True),
+    ],
+)
+def test_input_digest_binds_complete_quote_and_provenance(
+    path: tuple[str, ...],
+    value: object,
+) -> None:
+    context = _context()
+    payload = deepcopy(context.quote.model_dump(mode="json"))
+    target = payload
+    for part in path[:-1]:
+        target = target[part]
+    target[path[-1]] = value
+    if path == ("provenance", "is_delayed"):
+        target["quality_flags"] = ["DELAYED"]
+    changed = MarketQuote.model_validate(payload)
+
+    assert compute_input_digest(context.model_copy(update={"quote": changed})) != (
+        compute_input_digest(context)
+    )
+
+
+@pytest.mark.unit
+def test_input_digest_binds_all_rule_consumed_portfolio_values() -> None:
+    context = _context()
+    portfolio = PortfolioSnapshot.model_validate(portfolio_snapshot_example())
+    context = context.model_copy(update={"portfolio": portfolio})
+    baseline = compute_input_digest(context)
+    position = portfolio.positions[0]
+
+    mutations = (
+        portfolio.model_copy(update={"cash": Decimal("2999")}),
+        portfolio.model_copy(update={"buying_power": Decimal("2999")}),
+        portfolio.model_copy(update={"equity": Decimal("5155.20")}),
+        portfolio.model_copy(
+            update={"positions": (position.model_copy(update={"quantity": Decimal("11")}),)}
+        ),
+        portfolio.model_copy(
+            update={
+                "positions": (position.model_copy(update={"market_value": Decimal("2155.20")}),)
+            }
+        ),
+        portfolio.model_copy(
+            update={
+                "positions": (
+                    position.model_copy(
+                        update={
+                            "instrument": position.instrument.model_copy(
+                                update={"instrument_id": "rh_inst_other_xnas"}
+                            )
+                        }
+                    ),
+                )
+            }
+        ),
+        portfolio.model_copy(
+            update={
+                "provenance": portfolio.provenance.model_copy(update={"source": "other.portfolio"})
+            }
+        ),
+    )
+
+    assert all(
+        compute_input_digest(context.model_copy(update={"portfolio": changed})) != baseline
+        for changed in mutations
+    )

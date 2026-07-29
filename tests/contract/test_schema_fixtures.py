@@ -11,6 +11,11 @@ from jsonschema import Draft202012Validator, FormatChecker
 from pydantic import ValidationError
 
 from ainvest.approval.order_hash import compute_order_hash, parse_order_proposal
+from ainvest.schemas.approval import (
+    ApprovalChallenge,
+    ApprovalChallengeV1_1,
+    parse_approval_challenge,
+)
 from ainvest.schemas.examples import example_payload
 from ainvest.schemas.export import EXPORTED_MODELS, render_model_json_schema
 
@@ -85,6 +90,27 @@ def test_domain_models_forbid_unknown_fields() -> None:
     """Unknown-field policy is fail-closed for every exported contract."""
     for model in EXPORTED_MODELS.values():
         assert model.model_config.get("extra") == "forbid"
+
+
+@pytest.mark.contract
+def test_approval_challenge_minor_dispatch_is_cumulative_and_exact() -> None:
+    old_payload = json.loads(
+        (FIXTURE_ROOT / "ApprovalChallenge" / "valid.json").read_text(encoding="utf-8")
+    )
+    new_payload = json.loads(
+        (FIXTURE_ROOT / "ApprovalChallengeV1_1" / "valid.json").read_text(encoding="utf-8")
+    )
+    new_payload["status"] = "APPROVED"
+
+    assert isinstance(parse_approval_challenge(old_payload), ApprovalChallenge)
+    assert isinstance(parse_approval_challenge(new_payload), ApprovalChallengeV1_1)
+
+    invalid_old = dict(old_payload)
+    invalid_old["status"] = "APPROVED"
+    with pytest.raises(ValidationError, match="status"):
+        ApprovalChallenge.model_validate(invalid_old)
+    with pytest.raises(ValueError, match="schema_version"):
+        parse_approval_challenge({**new_payload, "schema_version": "1.2"})
 
 
 @pytest.mark.contract

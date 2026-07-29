@@ -37,15 +37,19 @@ from ainvest.risk.engine import (
     RiskEngineOutput,
     compute_config_digest,
     compute_input_digest,
+    validate_default_risk_output,
 )
 from ainvest.risk.models import EvaluationPhase, RiskContext
 from ainvest.schemas.approval import (
-    ApprovalChallenge,
+    ApprovalChallengeDocument,
     ApprovalChallengeStatus,
+    ApprovalChallengeStatusV1_1,
+    ApprovalChallengeV1_1,
     ApprovalEvent,
     ApprovalEventOutcome,
     ApprovalMethod,
     ApprovalScope,
+    parse_approval_challenge,
 )
 from ainvest.schemas.common import ensure_utc
 from ainvest.schemas.orders import CandidateOrder, OrderProposal
@@ -78,7 +82,7 @@ class IssuedApprovalChallenge:
         self,
         *,
         proposal: OrderProposal,
-        challenge: ApprovalChallenge,
+        challenge: ApprovalChallengeV1_1,
         token: OpaqueApprovalToken,
     ) -> None:
         self.__proposal = proposal
@@ -91,7 +95,7 @@ class IssuedApprovalChallenge:
         return self.__proposal
 
     @property
-    def challenge(self) -> ApprovalChallenge:
+    def challenge(self) -> ApprovalChallengeV1_1:
         """Return the immutable persisted challenge contract."""
         return self.__challenge
 
@@ -217,7 +221,7 @@ class ApprovalService:
         )
         token = self._token_factory()
         nonce_hash = hash_approval_token(token)
-        challenge = ApprovalChallenge(
+        challenge = ApprovalChallengeV1_1(
             challenge_id=challenge_id or self._id_factory("apch"),
             proposal_id=proposal.proposal_id,
             order_hash=proposal.order_hash,
@@ -226,7 +230,7 @@ class ApprovalService:
             nonce_hash=nonce_hash,
             created_at=now,
             expires_at=challenge_expiry,
-            status=ApprovalChallengeStatus.PENDING,
+            status=ApprovalChallengeStatusV1_1.PENDING,
         )
 
         self._freeze_risk_decision(
@@ -274,13 +278,25 @@ class ApprovalService:
         proposal = self._load_bound_proposal(challenge)
 
         if now >= challenge.expires_at or now >= proposal.expires_at:
-            new_status = ApprovalChallengeStatus.EXPIRED
+            new_status = (
+                ApprovalChallengeStatusV1_1.EXPIRED
+                if isinstance(challenge, ApprovalChallengeV1_1)
+                else ApprovalChallengeStatus.EXPIRED
+            )
             outcome = ApprovalEventOutcome.EXPIRED
         elif approved:
-            new_status = ApprovalChallengeStatus.APPROVED
+            new_status = (
+                ApprovalChallengeStatusV1_1.APPROVED
+                if isinstance(challenge, ApprovalChallengeV1_1)
+                else ApprovalChallengeStatus.CONSUMED
+            )
             outcome = ApprovalEventOutcome.APPROVED
         else:
-            new_status = ApprovalChallengeStatus.REJECTED
+            new_status = (
+                ApprovalChallengeStatusV1_1.REJECTED
+                if isinstance(challenge, ApprovalChallengeV1_1)
+                else ApprovalChallengeStatus.CONSUMED
+            )
             outcome = ApprovalEventOutcome.DENIED
 
         try:
@@ -339,7 +355,7 @@ class ApprovalService:
                 f"risk decision is already bound to proposal {stored.proposal_id}",
             )
 
-    def _load_bound_proposal(self, challenge: ApprovalChallenge) -> OrderProposal:
+    def _load_bound_proposal(self, challenge: ApprovalChallengeDocument) -> OrderProposal:
         stored = self._proposals.get_by_proposal_id(challenge.proposal_id)
         if stored is None:
             raise ApprovalServiceError("PROPOSAL_NOT_FOUND", "proposal not found")
@@ -391,6 +407,13 @@ def _require_risk_approval(
     context: RiskContext,
 ) -> None:
     decision = output.decision
+    try:
+        validate_default_risk_output(output)
+    except ValueError as exc:
+        raise ApprovalServiceError(
+            "RISK_OUTPUT_INVALID",
+            "risk output is incomplete or contradicts its rule results",
+        ) from exc
     if decision.outcome is not RiskOutcome.APPROVED:
         raise ApprovalServiceError(
             "RISK_NOT_APPROVED",
@@ -503,7 +526,7 @@ def _proposal_fields(proposal: OrderProposal) -> dict[str, Any]:
     }
 
 
-def _challenge_fields(challenge: ApprovalChallenge) -> dict[str, Any]:
+def _challenge_fields(challenge: ApprovalChallengeDocument) -> dict[str, Any]:
     return {
         "challenge_id": challenge.challenge_id,
         "proposal_id": challenge.proposal_id,
@@ -535,9 +558,9 @@ def _event_fields(event: ApprovalEvent) -> dict[str, Any]:
     }
 
 
-def _load_challenge(stored: Any) -> ApprovalChallenge:
+def _load_challenge(stored: Any) -> ApprovalChallengeDocument:
     try:
-        challenge = ApprovalChallenge.model_validate(dict(stored.payload_json))
+        challenge = parse_approval_challenge(dict(stored.payload_json))
     except (TypeError, ValueError) as exc:
         raise ApprovalServiceError(
             "CHALLENGE_INTEGRITY_FAILED",

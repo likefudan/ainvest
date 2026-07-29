@@ -9,7 +9,11 @@ from typing import Any, Final
 
 from pydantic import BaseModel
 
-from ainvest.schemas.approval import ApprovalChallenge, ApprovalEvent
+from ainvest.schemas.approval import (
+    ApprovalChallenge,
+    ApprovalChallengeV1_1,
+    ApprovalEvent,
+)
 from ainvest.schemas.broker import (
     BrokerFill,
     BrokerOrder,
@@ -44,6 +48,7 @@ EXPORTED_MODELS: Final[Mapping[str, type[BaseModel]]] = {
     "OrderProposal": OrderProposal,
     "RiskDecision": RiskDecision,
     "ApprovalChallenge": ApprovalChallenge,
+    "ApprovalChallengeV1_1": ApprovalChallengeV1_1,
     "ApprovalEvent": ApprovalEvent,
     "BrokerOrder": BrokerOrder,
     "BrokerFill": BrokerFill,
