@@ -16,11 +16,7 @@ from typing import Any, Final
 
 from pydantic import ValidationError
 
-from ainvest.approval.order_hash import (
-    attach_order_hash,
-    parse_order_proposal,
-    verify_order_hash,
-)
+from ainvest.approval.order_hash import attach_order_hash, parse_order_proposal
 from ainvest.approval.tokens import (
     OpaqueApprovalToken,
     generate_approval_token,
@@ -389,7 +385,6 @@ class ApprovalService:
                 "PROPOSAL_INTEGRITY_FAILED",
                 "challenge and stored proposal binding do not match",
             )
-        verify_order_hash(proposal)
         return proposal
 
 
@@ -433,6 +428,11 @@ def _require_risk_approval(
         raise ApprovalServiceError(
             "RISK_CONTEXT_MISMATCH",
             "risk output and context use different decision IDs",
+        )
+    if decision.decided_at != context.as_of:
+        raise ApprovalServiceError(
+            "RISK_DECISION_TIME_MISMATCH",
+            "risk decision time does not match the evaluated context",
         )
     if context.candidate != candidate:
         raise ApprovalServiceError(

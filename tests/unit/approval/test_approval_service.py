@@ -367,6 +367,34 @@ def test_incomplete_or_contradictory_risk_output_is_rejected(
 
 
 @pytest.mark.unit
+def test_risk_decision_time_must_match_context_without_persistence(
+    tmp_path: Path,
+) -> None:
+    factory = _session_factory(tmp_path / "risk-decision-time.db")
+    candidate = _candidate()
+    output, context = _risk(candidate)
+    shifted_decision = output.decision.model_copy(
+        update={"decided_at": context.as_of + timedelta(days=7)}
+    )
+    shifted_output = output.model_copy(update={"decision": shifted_decision})
+
+    with UnitOfWork(factory) as uow, pytest.raises(ApprovalServiceError) as caught:
+        _service(uow).create_proposal_and_challenge(
+            candidate,
+            shifted_output,
+            risk_context=context,
+            method=ApprovalMethod.TELEGRAM,
+            scope=ApprovalScope.PAPER,
+        )
+    assert caught.value.code == "RISK_DECISION_TIME_MISMATCH"
+
+    with UnitOfWork(factory) as uow:
+        assert uow.risk_decisions_repo.get(output.decision.risk_decision_id) is None
+        assert uow.proposals_repo.get_by_proposal_id(_ids("ordp")) is None
+        assert uow.approvals_repo.get_challenge(_ids("apch")) is None
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     ("field", "value"),
     [
