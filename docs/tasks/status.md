@@ -352,9 +352,15 @@ Robinhood implementation, or Research Agent behavior.
   LiveGuard proxy, factory-controlled Runtime construction, stable startup
   error codes, redacted health output, and explicit signal/approval-expiry plus
   order-monitoring scheduler capabilities. Focused adversarial runtime tests
-  passed (17 tests). `./scripts/dev verify` passed after remediation:
-  Ruff/format/mypy/schema snapshots, 697 unit, 102 contract, 15 integration,
-  and 814 total tests with 86.68% coverage.
+  passed (17 tests). Independent-review round-2 remediation
+  `9ac2305206e93f2825ac0bb159565e072fbd3bf1` replaces the payload-blind
+  check/delegate split with request-aware guard-owned atomic delegation,
+  retains only a non-secret immutable Live gate context, rejects Runtime/proxy
+  copy and serialization, sanitizes write-factory failures, preserves broker
+  delegate errors, and documents the trusted-process boundary. Focused
+  adversarial runtime tests passed (22 tests). `./scripts/dev verify` passed
+  after remediation: Ruff/format/mypy/schema snapshots, 702 unit, 102 contract,
+  15 integration, and 819 total tests with 86.69% coverage.
   Scoped readability/duplication and secret-signature inspection found no
   copied broker/config logic or credential values.
   Independent re-review, PR, and squash-merge commit remain pending.
