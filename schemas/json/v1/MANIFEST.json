@@ -2,6 +2,7 @@
   "major": 1,
   "models": [
     "ApprovalChallenge",
+    "ApprovalChallengeV1_1",
     "ApprovalEvent",
     "BrokerFill",
     "BrokerOrder",

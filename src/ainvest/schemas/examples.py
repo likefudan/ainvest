@@ -143,6 +143,12 @@ def approval_challenge_example() -> dict[str, Any]:
     }
 
 
+def approval_challenge_v1_1_example() -> dict[str, Any]:
+    payload = approval_challenge_example()
+    payload["schema_version"] = "1.1"
+    return payload
+
+
 def approval_event_example() -> dict[str, Any]:
     return {
         "schema_version": "1.0",
@@ -312,6 +318,7 @@ EXAMPLE_BUILDERS: dict[str, Any] = {
     "OrderProposal": order_proposal_valid,
     "RiskDecision": risk_decision_example,
     "ApprovalChallenge": approval_challenge_example,
+    "ApprovalChallengeV1_1": approval_challenge_v1_1_example,
     "ApprovalEvent": approval_event_example,
     "BrokerOrder": broker_order_example,
     "BrokerFill": broker_fill_example,

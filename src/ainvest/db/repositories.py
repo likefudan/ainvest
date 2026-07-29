@@ -19,6 +19,7 @@ from sqlalchemy.orm import Session
 
 from ainvest.db.errors import (
     ConcurrentModificationError,
+    ConflictError,
     NotFoundError,
     PersistenceError,
 )
@@ -29,6 +30,7 @@ from ainvest.db.models import (
     BrokerFillRow,
     BrokerOrderRow,
     OrderProposalRow,
+    RiskDecisionRow,
 )
 
 
@@ -56,6 +58,38 @@ def _insert_idempotent[T](
         return existing, False
 
 
+class RiskDecisionRepository:
+    """Persistence helpers for immutable risk decisions."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self, risk_decision_id: str) -> RiskDecisionRow | None:
+        return self._session.scalar(
+            select(RiskDecisionRow).where(RiskDecisionRow.risk_decision_id == risk_decision_id)
+        )
+
+    def add_fields(self, fields: dict[str, Any]) -> RiskDecisionRow:
+        row = RiskDecisionRow(**fields)
+        self._session.add(row)
+        return row
+
+    def create_bound_fields(
+        self,
+        fields: dict[str, Any],
+        *,
+        risk_decision_id: str,
+    ) -> tuple[RiskDecisionRow, bool]:
+        """Atomically claim one risk decision for one proposal."""
+        row = RiskDecisionRow(**fields)
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=lambda: self.get(risk_decision_id),
+            conflict_message="risk decision conflict without existing row",
+        )
+
+
 class ProposalRepository:
     """Persistence helpers for order proposals."""
 
@@ -75,6 +109,10 @@ class ProposalRepository:
     def add(self, row: OrderProposalRow) -> OrderProposalRow:
         self._session.add(row)
         return row
+
+    def add_fields(self, fields: dict[str, Any]) -> OrderProposalRow:
+        """Construct and persist a proposal without leaking ORM models."""
+        return self.add(OrderProposalRow(**fields))
 
     def create_idempotent(
         self,
@@ -159,6 +197,10 @@ class ApprovalRepository:
         self._session.add(row)
         return row
 
+    def add_challenge_fields(self, fields: dict[str, Any]) -> ApprovalChallengeRow:
+        """Construct and persist a challenge without leaking ORM models."""
+        return self.add_challenge(ApprovalChallengeRow(**fields))
+
     def create_challenge_idempotent(
         self,
         row: ApprovalChallengeRow,
@@ -179,12 +221,19 @@ class ApprovalRepository:
         expected_version: int,
         expected_status: str = "PENDING",
         new_status: str = "CONSUMED",
+        extra_values: dict[str, Any] | None = None,
     ) -> ApprovalChallengeRow:
-        """Atomically consume a challenge when status+version match.
+        """Atomically transition a challenge when status+version match.
 
         Concurrent callers: only one succeeds. Losers raise
         :class:`~ainvest.db.errors.ConcurrentModificationError`.
         """
+        values: dict[str, Any] = {
+            "status": new_status,
+            "version": expected_version + 1,
+        }
+        if extra_values:
+            values.update(extra_values)
         result = cast(
             CursorResult[Any],
             self._session.execute(
@@ -194,7 +243,7 @@ class ApprovalRepository:
                     ApprovalChallengeRow.version == expected_version,
                     ApprovalChallengeRow.status == expected_status,
                 )
-                .values(status=new_status, version=expected_version + 1)
+                .values(**values)
             ),
         )
 
@@ -207,6 +256,45 @@ class ApprovalRepository:
         if row is None:
             raise NotFoundError(f"challenge {challenge_id} missing after consume")
         return row
+
+    def add_event_fields(self, fields: dict[str, Any]) -> ApprovalEventRow:
+        """Construct and persist an approval event without leaking ORM models."""
+        row = ApprovalEventRow(**fields)
+        self._session.add(row)
+        self._session.flush()
+        return row
+
+    def transition_with_event(
+        self,
+        challenge_id: str,
+        *,
+        expected_version: int,
+        expected_status: str,
+        new_status: str,
+        challenge_payload: dict[str, Any],
+        event_fields: dict[str, Any],
+    ) -> tuple[ApprovalChallengeRow, ApprovalEventRow]:
+        """Savepoint-backed challenge transition and event insert.
+
+        A validation/unique conflict rolls the transition back even when a
+        service caller catches the resulting error inside the outer UnitOfWork.
+        """
+        try:
+            with self._session.begin_nested():
+                challenge = self.consume_challenge_once(
+                    challenge_id,
+                    expected_version=expected_version,
+                    expected_status=expected_status,
+                    new_status=new_status,
+                    extra_values={"payload_json": challenge_payload},
+                )
+                event = self.add_event_fields(event_fields)
+            return challenge, event
+        except IntegrityError as exc:
+            raise ConflictError(
+                "approval event conflicts with an existing event",
+                code="APPROVAL_EVENT_CONFLICT",
+            ) from exc
 
     def get_event(self, event_id: str) -> ApprovalEventRow | None:
         return self._session.scalar(
@@ -400,4 +488,5 @@ __all__ = [
     "AuditRepository",
     "BrokerOrderRepository",
     "ProposalRepository",
+    "RiskDecisionRepository",
 ]

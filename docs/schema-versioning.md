@@ -25,9 +25,14 @@ support Strategy API `1.x` while exchanging only payload `schema_version`
 Format: `MAJOR.MINOR` (two non-negative integers, no patch segment).
 
 Each generated model line accepts only the payload versions it explicitly
-implements. The current `v1` artifacts implement only
+implements. Most current `v1` artifacts implement only
 `schema_version="1.0"` and reject documents claiming another minor or major;
 matching the `MAJOR.MINOR` text shape alone never makes a payload compatible.
+`ApprovalChallenge` additionally implements `1.1`: the original
+`ApprovalChallenge` model/artifact remains the exact `1.0` contract, the
+`ApprovalChallengeV1_1` model/artifact owns `1.1`, and
+`parse_approval_challenge` is the cumulative dispatcher that accepts both
+implemented minors without widening `1.0` documents in place.
 
 Support within a major is cumulative. When a backward-compatible `1.1` model is
 implemented, its accepted version type becomes `Literal["1.0", "1.1"]` (or an

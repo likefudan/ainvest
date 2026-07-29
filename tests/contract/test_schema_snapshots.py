@@ -39,3 +39,26 @@ def test_manifest_lists_every_exported_model() -> None:
     manifest = json.loads((SCHEMA_JSON_V1 / "MANIFEST.json").read_text(encoding="utf-8"))
     assert manifest["major"] == 1
     assert manifest["models"] == sorted(EXPORTED_MODELS)
+
+
+@pytest.mark.contract
+def test_approval_challenge_minor_artifacts_preserve_v1_0_exactly() -> None:
+    old = json.loads((SCHEMA_JSON_V1 / "ApprovalChallenge.json").read_text(encoding="utf-8"))
+    latest = json.loads((SCHEMA_JSON_V1 / "ApprovalChallengeV1_1.json").read_text(encoding="utf-8"))
+
+    assert old["properties"]["schema_version"]["const"] == "1.0"
+    assert old["$defs"]["ApprovalChallengeStatus"]["enum"] == [
+        "PENDING",
+        "CONSUMED",
+        "EXPIRED",
+        "CANCELLED",
+    ]
+    assert latest["properties"]["schema_version"]["const"] == "1.1"
+    assert set(latest["$defs"]["ApprovalChallengeStatusV1_1"]["enum"]) == {
+        "PENDING",
+        "APPROVED",
+        "REJECTED",
+        "CONSUMED",
+        "EXPIRED",
+        "CANCELLED",
+    }
