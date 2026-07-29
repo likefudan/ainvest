@@ -128,7 +128,8 @@ def test_filled_flow_preserves_money_lifecycle_when_sampling_is_zero() -> None:
         "reconcile",
     }
     assert all(event["funds_safety"] is True for event in events)
-    assert all(event["level"] == "critical" for event in events)
+    assert all(event["sampling_exempt"] is True for event in events)
+    assert all(event["level"] == "info" for event in events)
 
 
 @pytest.mark.integration

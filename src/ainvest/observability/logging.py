@@ -11,6 +11,7 @@ import hashlib
 import importlib.metadata
 import json
 import logging
+import math
 import re
 import sys
 import traceback
@@ -53,8 +54,8 @@ _LEVELS: Final[Mapping[str, int]] = {
     "critical": logging.CRITICAL,
 }
 
-# These events must bypass both ordinary level filtering and sampling because
-# losing one could hide a funds-safety incident.
+# These events are retained without sampling because together they describe the
+# money-moving decision trail. Retention does not imply critical severity.
 FUNDS_SAFETY_EVENTS: Final[frozenset[str]] = frozenset(
     {
         "account_state_mismatch",
@@ -78,13 +79,28 @@ FUNDS_SAFETY_EVENTS: Final[frozenset[str]] = frozenset(
         "unexpected_live_component",
     }
 )
+CRITICAL_SAFETY_EVENTS: Final[frozenset[str]] = frozenset(
+    {
+        "account_state_mismatch",
+        "approved_order_mismatch",
+        "broker_submit_unknown",
+        "duplicate_order_detected",
+        "kill_switch_activated",
+        "unexpected_live_component",
+    }
+)
 
 _MAX_SANITIZE_DEPTH: Final[int] = 10
 _MAX_COLLECTION_ITEMS: Final[int] = 64
 _MAX_STRING_CHARS: Final[int] = 2_048
+_MAX_KEY_CHARS: Final[int] = 256
+_MAX_SAFE_INTEGER_BITS: Final[int] = 63
+_MAX_DECIMAL_ADJUSTED: Final[int] = 308
 _CYCLE: Final[str] = "<cycle>"
 _TRUNCATED: Final[str] = "<truncated>"
 _UNAVAILABLE: Final[str] = "<unavailable>"
+_NUMBER_OUT_OF_RANGE: Final[str] = "<number-out-of-range>"
+_NON_FINITE_NUMBER: Final[str] = "<non-finite-number>"
 
 _FORBIDDEN_CONTENT_KEYS: Final[frozenset[str]] = frozenset(
     {
@@ -133,6 +149,110 @@ _ALLOWED_HTTP_HEADERS: Final[frozenset[str]] = frozenset(
         "x-request-id",
     }
 )
+_SAFE_IDENTIFIER_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        *_STABLE_ID_FIELDS,
+        "approval_event_id",
+        "candidate_id",
+        "challenge_id",
+        "command_id",
+        "event_id",
+        "fill_id",
+        "fill_ids",
+        "idempotency_id",
+        "reconciliation_id",
+        "request_id",
+        "risk_decision_id",
+        "signal_id",
+        "signal_ids",
+        "trace_id",
+    }
+)
+_SECRET_KEY_TERMS: Final[frozenset[str]] = frozenset(
+    {
+        "auth",
+        "authentication",
+        "authorization",
+        "cookie",
+        "credential",
+        "credentials",
+        "passwd",
+        "password",
+        "secret",
+        "token",
+    }
+)
+_FLATTENED_FINANCIAL_KEYS: Final[frozenset[str]] = frozenset(
+    {
+        "account",
+        "account_id",
+        "account_number",
+        "account_scope",
+        "ask",
+        "ask_price",
+        "average_price",
+        "avg_price",
+        "bid",
+        "bid_price",
+        "buying_power",
+        "cash",
+        "currency",
+        "exchange",
+        "filled_quantity",
+        "instrument",
+        "instrument_id",
+        "last_price",
+        "limit_price",
+        "market_value",
+        "notional",
+        "order_type",
+        "position",
+        "positions",
+        "price",
+        "quantity",
+        "remaining_quantity",
+        "side",
+        "stop_price",
+        "symbol",
+        "time_in_force",
+    }
+)
+_FLATTENED_FINANCIAL_SUFFIXES: Final[tuple[str, ...]] = (
+    "_account",
+    "_account_id",
+    "_account_number",
+    "_amount",
+    "_balance",
+    "_buying_power",
+    "_cash",
+    "_instrument",
+    "_instrument_id",
+    "_notional",
+    "_position",
+    "_positions",
+    "_price",
+    "_quantity",
+    "_symbol",
+)
+_FLATTENED_FINANCIAL_TERMS: Final[frozenset[str]] = frozenset(
+    {
+        "account",
+        "amount",
+        "balance",
+        "buying",
+        "cash",
+        "currency",
+        "exchange",
+        "instrument",
+        "notional",
+        "position",
+        "positions",
+        "price",
+        "quantity",
+        "side",
+        "symbol",
+    }
+)
 
 # Audit redaction handles structured sensitive keys and common bearer/cookie/bot
 # token formats. Logs additionally need to sanitize secrets embedded inside
@@ -140,7 +260,8 @@ _ALLOWED_HTTP_HEADERS: Final[frozenset[str]] = frozenset(
 _INLINE_SECRET_RE: Final[re.Pattern[str]] = re.compile(
     r"(?i)\b("
     r"api[_ -]?key|access[_ -]?token|refresh[_ -]?token|authorization|"
-    r"password|secret|cookie|account[_ -]?(?:number|no)|session[_ -]?id"
+    r"auth(?:entication)?|broker[_ -]?credential|credentials?|password|"
+    r"secret|cookie|account[_ -]?(?:number|no)|session[_ -]?id"
     r")\s*[:=]\s*(?:bearer\s+)?[^\s,;]+"
 )
 _OPENAI_KEY_RE: Final[re.Pattern[str]] = re.compile(r"\bsk-[A-Za-z0-9_-]{8,}\b")
@@ -196,14 +317,55 @@ def _package_version() -> str:
 def _normalized_key(key: object) -> str:
     if type(key) is not str:
         return ""
-    return key.strip().lower().replace("-", "_")
+    bounded = key[:_MAX_KEY_CHARS]
+    snake_case = re.sub(r"(?<=[a-z0-9])(?=[A-Z])", "_", bounded)
+    return re.sub(r"[^a-zA-Z0-9]+", "_", snake_case).strip("_").lower()
 
 
 def is_funds_safety_event(event: object, *, explicit: object = False) -> bool:
-    """Return whether an event must bypass ordinary level and sampling policy."""
+    """Return whether an event belongs to the unsampled money-moving trail."""
     if explicit is True:
         return True
     return type(event) is str and event in FUNDS_SAFETY_EVENTS
+
+
+def _is_critical_safety_event(event: object) -> bool:
+    return type(event) is str and event in CRITICAL_SAFETY_EVENTS
+
+
+def _field_policy(key: str) -> str:
+    """Classify one bounded normalized key for the recursive log contract."""
+    normalized = _normalized_key(key)
+    if normalized in _SAFE_IDENTIFIER_KEYS:
+        return "allow"
+    terms = frozenset(part for part in normalized.split("_") if part)
+    if terms & _SECRET_KEY_TERMS:
+        return "redact"
+    if normalized in _FORBIDDEN_CONTENT_KEYS:
+        return "redact"
+    if normalized in _HEADER_CONTAINER_KEYS:
+        return "headers"
+    if normalized in _DIGEST_ONLY_KEYS:
+        return "digest"
+    if normalized in _FLATTENED_FINANCIAL_KEYS:
+        return "redact"
+    if terms & _FLATTENED_FINANCIAL_TERMS:
+        return "redact"
+    if normalized.endswith(_FLATTENED_FINANCIAL_SUFFIXES):
+        return "redact"
+    if _audit_redacts_key(key):
+        return "redact"
+    return "allow"
+
+
+def _strict_json_dumps(value: object) -> str:
+    return json.dumps(
+        value,
+        allow_nan=False,
+        ensure_ascii=False,
+        separators=(",", ":"),
+        sort_keys=True,
+    )
 
 
 def _audit_redacts_key(key: str) -> bool:
@@ -358,12 +520,7 @@ def _sanitize_exception(
             raw_args = (_UNAVAILABLE,)
         safe_args = _sanitize(raw_args, state=state, depth=depth + 1)
         try:
-            message = json.dumps(
-                safe_args,
-                ensure_ascii=False,
-                separators=(",", ":"),
-                sort_keys=True,
-            )[:_MAX_STRING_CHARS]
+            message = _strict_json_dumps(safe_args)[:_MAX_STRING_CHARS]
         except Exception:
             message = _UNAVAILABLE
         result: dict[str, Any] = {
@@ -419,14 +576,12 @@ def _sanitize(
     try:
         if depth >= _MAX_SANITIZE_DEPTH:
             return _TRUNCATED
-        normalized = _normalized_key(key) if key is not None else None
-        if key is not None and _audit_redacts_key(key):
+        policy = _field_policy(key) if key is not None else "allow"
+        if policy == "redact":
             return REDACTED
-        if normalized in _FORBIDDEN_CONTENT_KEYS:
-            return REDACTED
-        if normalized in _HEADER_CONTAINER_KEYS:
+        if policy == "headers":
             return _sanitize_headers(value)
-        if normalized in _DIGEST_ONLY_KEYS:
+        if policy == "digest":
             safe_value = _sanitize(
                 value,
                 state=current_state,
@@ -444,8 +599,20 @@ def _sanitize(
                 state=current_state,
                 depth=depth,
             )
-        if value is None or type(value) in {bool, int, float}:
+        if value is None or type(value) is bool:
             return value
+        if type(value) is int:
+            try:
+                return (
+                    value if value.bit_length() <= _MAX_SAFE_INTEGER_BITS else _NUMBER_OUT_OF_RANGE
+                )
+            except Exception:
+                return _NUMBER_OUT_OF_RANGE
+        if type(value) is float:
+            try:
+                return value if math.isfinite(value) else _NON_FINITE_NUMBER
+            except Exception:
+                return _NON_FINITE_NUMBER
         if type(value) is str:
             return _sanitize_string(value)
         if isinstance(value, str):
@@ -457,7 +624,22 @@ def _sanitize(
                 return "<bytes>"
         if isinstance(value, Decimal):
             try:
-                return format(value, "f")
+                if not value.is_finite():
+                    return _NON_FINITE_NUMBER
+                decimal_tuple = value.as_tuple()
+                exponent = decimal_tuple.exponent
+                if type(exponent) is not int:
+                    return _NUMBER_OUT_OF_RANGE
+                if abs(exponent) > _MAX_DECIMAL_ADJUSTED:
+                    return _NUMBER_OUT_OF_RANGE
+                if len(decimal_tuple.digits) > _MAX_STRING_CHARS:
+                    return _NUMBER_OUT_OF_RANGE
+                if abs(value.adjusted()) > _MAX_DECIMAL_ADJUSTED:
+                    return _NUMBER_OUT_OF_RANGE
+                rendered = format(value, "f")
+                if len(rendered) > _MAX_STRING_CHARS:
+                    return _NUMBER_OUT_OF_RANGE
+                return rendered
             except Exception:
                 return _UNAVAILABLE
         if isinstance(value, datetime):
@@ -590,13 +772,14 @@ def _level_processor(min_level: int) -> Processor:
             explicit=event_dict.get("funds_safety"),
         )
         event_dict["funds_safety"] = funds_safety
-        if funds_safety:
+        event_dict["sampling_exempt"] = funds_safety or event_dict.get("sampling_exempt") is True
+        if _is_critical_safety_event(event_name):
             event_dict["level"] = "critical"
             return event_dict
         level = _LEVELS.get(method_name, logging.INFO)
-        if level < min_level:
-            raise structlog.DropEvent
         event_dict["level"] = "error" if method_name == "exception" else method_name
+        if level < min_level and event_dict["sampling_exempt"] is not True:
+            raise structlog.DropEvent
         return event_dict
 
     return filter_level
@@ -606,8 +789,16 @@ def _sampling_processor(sample_rate: float) -> Processor:
     def sample_part(value: object) -> str:
         if type(value) is str:
             return value[:256]
-        if type(value) in {bool, int, float} or value is None:
-            return repr(value)
+        if value is None:
+            return "null"
+        if type(value) is bool:
+            return "true" if value else "false"
+        if type(value) is int:
+            return (
+                str(value) if value.bit_length() <= _MAX_SAFE_INTEGER_BITS else _NUMBER_OUT_OF_RANGE
+            )
+        if type(value) is float:
+            return format(value, ".17g") if math.isfinite(value) else _NON_FINITE_NUMBER
         return _UNAVAILABLE
 
     def sample(
@@ -615,7 +806,7 @@ def _sampling_processor(sample_rate: float) -> Processor:
         _method_name: str,
         event_dict: EventDict,
     ) -> EventDict:
-        if event_dict.get("funds_safety") is True or event_dict.get("level") in {
+        if event_dict.get("sampling_exempt") is True or event_dict.get("level") in {
             "warning",
             "error",
             "critical",
@@ -656,8 +847,9 @@ def _fallback_event(event_dict: EventDict) -> EventDict:
     event_name = _safe_fallback_field(original_event) or "logging_sanitization_failed"
     fallback: EventDict = {
         "event": event_name,
-        "level": "critical" if funds_safety else "error",
+        "level": "critical" if _is_critical_safety_event(original_event) else "error",
         "funds_safety": funds_safety,
+        "sampling_exempt": True,
         "logging_error_code": "LOG_SANITIZATION_FAILED",
     }
     for field_name in ("service", "environment", "version", "timestamp"):
@@ -685,6 +877,31 @@ def _redaction_processor(
         return _fallback_event(event_dict)
 
 
+_STATIC_RENDER_FALLBACK: Final[str] = (
+    '{"event":"logging_render_failed","funds_safety":false,"level":"error",'
+    '"logging_error_code":"LOG_RENDER_FAILED","sampling_exempt":true}'
+)
+
+
+def _strict_json_renderer(
+    _logger: WrappedLogger,
+    _method_name: str,
+    event_dict: EventDict,
+) -> str:
+    """Render standards-compliant JSON without exposing failures to callers."""
+    try:
+        return _strict_json_dumps(event_dict)
+    except Exception:
+        fallback = _fallback_event(event_dict)
+        fallback["event"] = "logging_render_failed"
+        fallback["level"] = "error"
+        fallback["logging_error_code"] = "LOG_RENDER_FAILED"
+        try:
+            return _strict_json_dumps(fallback)
+        except Exception:
+            return _STATIC_RENDER_FALLBACK
+
+
 def configure_logging(
     *,
     service: str = "ainvest",
@@ -697,8 +914,9 @@ def configure_logging(
     """Configure process-wide structlog JSON output.
 
     ``sample_rate`` is deterministic per service/correlation/event and applies
-    only below warning. Funds-safety events bypass both sampling and the
-    configured minimum level.
+    only below warning. Money-moving lifecycle events bypass sampling while
+    retaining their natural severity; only named safety incidents are forced
+    to critical.
     """
     global _logging_configured
 
@@ -721,7 +939,7 @@ def configure_logging(
             _sampling_processor(sample_rate),
             structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
             _redaction_processor,
-            structlog.processors.JSONRenderer(sort_keys=True),
+            _strict_json_renderer,
         ],
         context_class=dict,
         logger_factory=_NoRaisePrintLoggerFactory(file=stream),

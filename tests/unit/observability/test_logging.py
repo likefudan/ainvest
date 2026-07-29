@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import logging
 from collections.abc import Iterator, Mapping, Sequence
+from decimal import Decimal
 from io import StringIO
 from typing import Any, Never, overload
 
@@ -21,8 +22,15 @@ from ainvest.observability import (
 )
 
 
+def _reject_json_constant(value: str) -> Never:
+    raise ValueError(f"non-standard JSON constant: {value}")
+
+
 def _events(stream: StringIO) -> list[dict[str, Any]]:
-    return [json.loads(line) for line in stream.getvalue().splitlines()]
+    return [
+        json.loads(line, parse_constant=_reject_json_constant)
+        for line in stream.getvalue().splitlines()
+    ]
 
 
 @pytest.fixture(autouse=True)
@@ -64,6 +72,7 @@ def test_json_logging_has_stable_identity_and_bound_workflow_context() -> None:
     assert event["broker_order_id"] is None
     assert event["level"] == "info"
     assert event["funds_safety"] is False
+    assert event["sampling_exempt"] is False
     assert event["timestamp"].endswith("Z")
 
 
@@ -119,7 +128,16 @@ def test_recursive_policy_redacts_headers_prompts_links_and_money_payloads() -> 
                 "X-Provider-Private": "private-header",
             },
             "account_number": corpus[4],
+            "broker_credential": "nested-broker-credential",
+            "order_type": "LIMIT",
+            "quantity": "2",
+            "symbol": "AAPL",
         },
+        brokerCredential="top-level-broker-credential",
+        credential="generic-credential",
+        instrument_id="rh-instrument-private",
+        limit_price=corpus[5],
+        positions=[{"symbol": "AAPL", "quantity": "5"}],
         order_proposal={
             "quantity": "2",
             "limit_price": corpus[5],
@@ -137,6 +155,15 @@ def test_recursive_policy_redacts_headers_prompts_links_and_money_payloads() -> 
     assert nested["headers"]["X-Request-ID"] == "request-safe"
     assert nested["headers"]["X-Provider-Private"] == REDACTED
     assert nested["account_number"] == REDACTED
+    assert nested["broker_credential"] == REDACTED
+    assert nested["order_type"] == REDACTED
+    assert nested["quantity"] == REDACTED
+    assert nested["symbol"] == REDACTED
+    assert event["brokerCredential"] == REDACTED
+    assert event["credential"] == REDACTED
+    assert event["instrument_id"] == REDACTED
+    assert event["limit_price"] == REDACTED
+    assert event["positions"] == REDACTED
     assert event["order_proposal"]["content"] == REDACTED
     assert event["order_proposal"]["digest"].startswith("sha256:")
     assert_no_plaintext_secrets(event, corpus)
@@ -292,6 +319,88 @@ def test_secret_looking_mapping_keys_are_redacted() -> None:
 
 
 @pytest.mark.unit
+def test_recursive_field_contract_preserves_only_safe_workflow_identifiers() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    with log_context(
+        correlation_id="corr_safe_12345678",
+        proposal_id="ordp_safe_12345678",
+        client_order_id="client_safe_12345678",
+        broker_order_id="broker_safe_12345678",
+    ):
+        get_logger().info(
+            "field_contract",
+            nested={
+                "client_order_id": "client_nested_12345678",
+                "account_id": "account-private",
+                "filled_quantity": "3",
+                "instrument_identity": {"symbol": "AAPL", "exchange": "XNAS"},
+                "stopPrice": "98.50",
+            },
+        )
+
+    event = _events(stream)[0]
+    assert event["correlation_id"] == "corr_safe_12345678"
+    assert event["proposal_id"] == "ordp_safe_12345678"
+    assert event["client_order_id"] == "client_safe_12345678"
+    assert event["broker_order_id"] == "broker_safe_12345678"
+    assert event["nested"]["client_order_id"] == "client_nested_12345678"
+    assert event["nested"]["account_id"] == REDACTED
+    assert event["nested"]["filled_quantity"] == REDACTED
+    assert event["nested"]["instrument_identity"] == REDACTED
+    assert event["nested"]["stopPrice"] == REDACTED
+
+
+@pytest.mark.unit
+def test_numeric_extremes_render_as_strict_bounded_json() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+
+    get_logger().info(
+        "numeric_extremes",
+        huge_integer=1 << 100_000,
+        huge_decimal=Decimal("1e1000000"),
+        tiny_decimal=Decimal("1e-1000000"),
+        decimal_nan=Decimal("NaN"),
+        positive_infinity=float("inf"),
+        negative_infinity=float("-inf"),
+        nan=float("nan"),
+    )
+
+    event = _events(stream)[0]
+    assert event["huge_integer"] == "<number-out-of-range>"
+    assert event["huge_decimal"] == "<number-out-of-range>"
+    assert event["tiny_decimal"] == "<number-out-of-range>"
+    assert event["decimal_nan"] == "<non-finite-number>"
+    assert event["positive_infinity"] == "<non-finite-number>"
+    assert event["negative_infinity"] == "<non-finite-number>"
+    assert event["nan"] == "<non-finite-number>"
+
+
+@pytest.mark.unit
+def test_renderer_failure_emits_static_strict_json_without_raising(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+
+    def fail_rendering(_value: object) -> Never:
+        raise RuntimeError("renderer failure")
+
+    monkeypatch.setattr(logging_module, "_strict_json_dumps", fail_rendering)
+    get_logger().info("renderer_failure", credential="must-not-escape")
+
+    event = _events(stream)[0]
+    assert event == {
+        "event": "logging_render_failed",
+        "funds_safety": False,
+        "level": "error",
+        "logging_error_code": "LOG_RENDER_FAILED",
+        "sampling_exempt": True,
+    }
+
+
+@pytest.mark.unit
 def test_sanitizer_failure_emits_minimal_funds_safety_fallback(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
@@ -311,14 +420,15 @@ def test_sanitizer_failure_emits_minimal_funds_safety_fallback(
     event = _events(stream)[0]
     assert event["event"] == "execute_order"
     assert event["funds_safety"] is True
-    assert event["level"] == "critical"
+    assert event["sampling_exempt"] is True
+    assert event["level"] == "error"
     assert event["logging_error_code"] == "LOG_SANITIZATION_FAILED"
     assert event["correlation_id"] == "corr_fallback_12345678"
     assert "money_payload" not in event
 
 
 @pytest.mark.unit
-def test_funds_safety_events_bypass_level_filter_and_sampling() -> None:
+def test_money_lifecycle_bypasses_sampling_without_forcing_severity() -> None:
     stream = StringIO()
     configure_logging(
         stream=stream,
@@ -328,22 +438,48 @@ def test_funds_safety_events_bypass_level_filter_and_sampling() -> None:
     )
     logger = get_logger()
     logger.info("ordinary_progress")
+    logger.info("execute_order", proposal_id="ordp_test_12345678")
+    logger.info("custom_safety_event", funds_safety=True)
     logger.info("broker_submit_unknown", proposal_id="ordp_test_12345678")
-    logger.debug("custom_safety_event", funds_safety=True)
     logger.error("ordinary_error")
 
     events = _events(stream)
     assert [event["event"] for event in events] == [
-        "broker_submit_unknown",
+        "execute_order",
         "custom_safety_event",
+        "broker_submit_unknown",
         "ordinary_error",
     ]
     assert events[0]["funds_safety"] is True
-    assert events[0]["level"] == "critical"
+    assert events[0]["sampling_exempt"] is True
+    assert events[0]["level"] == "info"
     assert events[1]["funds_safety"] is True
-    assert events[1]["level"] == "critical"
-    assert events[2]["funds_safety"] is False
-    assert events[2]["level"] == "error"
+    assert events[1]["sampling_exempt"] is True
+    assert events[1]["level"] == "info"
+    assert events[2]["funds_safety"] is True
+    assert events[2]["sampling_exempt"] is True
+    assert events[2]["level"] == "critical"
+    assert events[3]["funds_safety"] is False
+    assert events[3]["sampling_exempt"] is False
+    assert events[3]["level"] == "error"
+
+
+@pytest.mark.unit
+def test_actual_safety_incident_bypasses_minimum_level_as_critical() -> None:
+    stream = StringIO()
+    configure_logging(
+        stream=stream,
+        environment="test",
+        level=logging.ERROR,
+        sample_rate=0,
+    )
+
+    get_logger().debug("kill_switch_activated")
+
+    event = _events(stream)[0]
+    assert event["funds_safety"] is True
+    assert event["sampling_exempt"] is True
+    assert event["level"] == "critical"
 
 
 @pytest.mark.unit
