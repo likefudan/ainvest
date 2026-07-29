@@ -550,6 +550,12 @@ def start_runtime(
             broker_write=None,
         )
 
+    if mode is TradingMode.LIVE and settings.is_production:
+        raise RuntimeStartupError(
+            "Production Live mode is disabled until P07-T4 installs its trusted integration",
+            code=RuntimeStartupErrorCode.PRODUCTION_LIVE_DISABLED,
+        )
+
     _validate_read_port(broker_read)
 
     if mode is TradingMode.PAPER:
@@ -589,11 +595,6 @@ def start_runtime(
         raise RuntimeStartupError(
             "Live mode cannot load PaperBroker",
             code=RuntimeStartupErrorCode.CAPABILITY_NOT_ALLOWED,
-        )
-    if settings.is_production:
-        raise RuntimeStartupError(
-            "Production Live mode is disabled until P07-T4 installs its trusted integration",
-            code=RuntimeStartupErrorCode.PRODUCTION_LIVE_DISABLED,
         )
     if live_guard is None:
         raise RuntimeStartupError(

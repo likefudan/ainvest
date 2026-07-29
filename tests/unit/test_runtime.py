@@ -380,6 +380,8 @@ def test_production_live_unconditionally_rejects_spoofed_ready_guard() -> None:
     with pytest.raises(RuntimeStartupError) as exc_info:
         start_runtime(
             live,
+            broker_read=_LeakyReadPort(),
+            paper_broker=_paper_broker(),
             live_guard=guard,
             live_write_factory=factory,
         )
