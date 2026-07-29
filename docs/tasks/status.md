@@ -431,17 +431,24 @@ Robinhood implementation, or Research Agent behavior.
   and preservation of funds-safety events in
   `tests/unit/observability/test_logging.py`
 - **Handoff:** rebased implementation tip
-  `83a8eb5a90fc7581bbea64bdab43ad1ddbff5f88` on post-P08-T0 `main`.
-  Focused logging/runtime/approval-token/Paper-flow verification passed 54
-  tests. An isolated locked core-profile environment imported
+  `83a8eb5a90fc7581bbea64bdab43ad1ddbff5f88` plus independent-review
+  remediation `4f064f701c2bb9ffe55958f6933738a13962ec00` on post-P08-T0 `main`.
+  The remediation makes recursive redaction bounded and cycle-aware, protects
+  mapping keys and exception chains, prevents logging failures from escaping
+  into business control flow, centralizes money-lifecycle event retention,
+  and resets then progressively binds Paper-flow identifiers. Focused
+  logging/runtime/approval-token/Paper-flow verification passed 61 tests.
+  An isolated locked core-profile environment imported
   `ainvest.observability` and `structlog` while confirming OpenTelemetry and
   Prometheus remained absent. `./scripts/dev verify` passed format, lint,
-  mypy, and schema snapshots; 718 unit, 102 contract, 16 integration, and 836
-  aggregate tests at 86.79% coverage. Correlation, recursive redaction, and
-  funds-safety event retention remain green against the new Runtime;
-  readability/duplication inspection found no second logging, telemetry, or
-  Runtime-health abstraction. The prior dependency audit found no known
-  vulnerabilities. Independent review, PR, and squash-merge remain pending.
+  mypy, and schema snapshots; 722 unit, 102 contract, 19 integration, and 843
+  aggregate tests at 86.26% coverage. Adversarial objects, secret-looking
+  mapping keys, exception args/notes/causes/contexts, sink failures,
+  `sample_rate=0`, stale caller context, and concurrent full Paper flows are
+  covered. Readability/duplication inspection found focused helpers and no
+  second logging, telemetry, or Runtime-health abstraction. The prior
+  dependency audit found no known vulnerabilities. Final independent
+  re-review, PR, and squash-merge remain pending.
 
 #### Research track — `P04-T0` through `P04-T12`
 
