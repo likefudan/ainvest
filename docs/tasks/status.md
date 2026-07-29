@@ -241,6 +241,8 @@ Robinhood implementation, or Research Agent behavior.
   `6bf2d69b9ed5a733012a7594b6a46efad02b1bbe`
 - **Round-2 independent-review remediation:**
   `0df9309842522ea975bd26d18a2b72b7abaac1d2`
+- **Round-3 independent-review remediation:**
+  `bd46d1100bb74286c67e940ff0fd8d574746f57d`
 - **Dependencies:** `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` (merged)
 - **Design and task authority:** `design.md` sections 3.4–3.5, 5.5, 7, and
   15 Phase 3; `IMPLEMENTATION_TODO.md` sections 1 and 8 (`P05-T0`);
@@ -273,10 +275,11 @@ Robinhood implementation, or Research Agent behavior.
   update solely to preserve `ApprovalChallenge` 1.0 exactly while introducing
   an explicit cumulative 1.0/1.1 dispatcher. No unrelated schema or versioning
   policy changed.
-- **Verification:** focused approval/token/risk-engine/schema-snapshot tests
-  passed (177 tests). On the rebased branch,
+- **Verification:** round-2 focused approval/token/risk-engine/schema-snapshot
+  tests passed (177 tests); round-3 approval/hash/schema-snapshot tests passed
+  (80 tests). On the rebased branch,
   `./scripts/dev verify` passed: format, lint, mypy, and schema snapshots;
-  unit 679, contract 102, integration 15, aggregate 796 tests; 86.57% branch
+  unit 680, contract 102, integration 15, aggregate 797 tests; 86.58% branch
   coverage.
 - **Handoff notes:** Generates canonical URL-safe nonces from exactly 256
   CSPRNG bits, redacts token string representations, and persists only a
@@ -292,9 +295,11 @@ Robinhood implementation, or Research Agent behavior.
   proposal/risk payloads, invalid scope pairs, and expiry fail closed.
   Independent review remediation binds the APPROVED output to the complete,
   normalized `RiskContext`, requires the full default rule set and
-  decision/result/violation/reason aggregate consistency, and atomically claims
-  each risk decision for exactly one proposal; validates every duplicated
-  challenge field; blocks
+  decision/result/violation/reason aggregate consistency, requires
+  `decision.decided_at` to equal the evaluated context's `as_of`, and atomically
+  claims each risk decision for exactly one proposal; validates every
+  duplicated challenge field; relies on the canonical proposal parser as the
+  single order-hash verification path; blocks
   raw-token dataclass/JSON/Pydantic/pickle/log-fallback serialization; restores
   v1.0 `CANCELLED` and general positive-lifetime compatibility while retaining
   the 60–120 second creation policy; dispatches exact 1.0 and 1.1 challenge
