@@ -352,6 +352,42 @@ def test_recursive_field_contract_preserves_only_safe_workflow_identifiers() -> 
 
 
 @pytest.mark.unit
+def test_overlong_keys_are_replaced_and_values_fail_closed_recursively() -> None:
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    at_limit = "k" * 256
+    over_limit = "x" * 257
+    hidden_credential = ("c" * 256) + "_broker_credential"
+    hidden_financial = ("f" * 256) + "_limit_price"
+
+    get_logger().info(
+        "overlong_keys",
+        **{
+            at_limit: "safe-boundary-value",
+            over_limit: "over-limit-value",
+            hidden_credential: "credential-value",
+            "nested": {hidden_financial: "123.45"},
+        },
+    )
+
+    rendered = stream.getvalue()
+    event = _events(stream)[0]
+    assert event[at_limit] == "safe-boundary-value"
+    assert over_limit not in rendered
+    assert hidden_credential not in rendered
+    assert hidden_financial not in rendered
+    assert "over-limit-value" not in rendered
+    assert "credential-value" not in rendered
+    assert "123.45" not in rendered
+    top_level_placeholders = [key for key in event if key.startswith("<redacted-key:")]
+    nested_placeholders = [key for key in event["nested"] if key.startswith("<redacted-key:")]
+    assert len(top_level_placeholders) == 2
+    assert len(nested_placeholders) == 1
+    assert all(event[key] == REDACTED for key in top_level_placeholders)
+    assert event["nested"][nested_placeholders[0]] == REDACTED
+
+
+@pytest.mark.unit
 def test_numeric_extremes_render_as_strict_bounded_json() -> None:
     stream = StringIO()
     configure_logging(stream=stream, environment="test")
@@ -438,16 +474,24 @@ def test_money_lifecycle_bypasses_sampling_without_forcing_severity() -> None:
     )
     logger = get_logger()
     logger.info("ordinary_progress")
-    logger.info("execute_order", proposal_id="ordp_test_12345678")
+    logger.info(
+        "execute_order",
+        proposal_id="ordp_test_12345678",
+        outcome="SUBMITTED",
+    )
     logger.info("custom_safety_event", funds_safety=True)
-    logger.info("broker_submit_unknown", proposal_id="ordp_test_12345678")
+    logger.info(
+        "execute_order",
+        proposal_id="ordp_test_12345678",
+        outcome="SUBMIT_UNKNOWN",
+    )
     logger.error("ordinary_error")
 
     events = _events(stream)
     assert [event["event"] for event in events] == [
         "execute_order",
         "custom_safety_event",
-        "broker_submit_unknown",
+        "execute_order",
         "ordinary_error",
     ]
     assert events[0]["funds_safety"] is True
@@ -465,7 +509,15 @@ def test_money_lifecycle_bypasses_sampling_without_forcing_severity() -> None:
 
 
 @pytest.mark.unit
-def test_actual_safety_incident_bypasses_minimum_level_as_critical() -> None:
+def test_incident_rules_match_reachable_stable_event_schema() -> None:
+    assert logging_module._INCIDENT_SEVERITY_RULES == {
+        ("execute_order", "SUBMIT_UNKNOWN"): "critical",
+        ("reconcile_after_unknown", "MANUAL_REVIEW"): "critical",
+        ("reconcile", "DIVERGED"): "critical",
+        ("reconcile", "UNKNOWN"): "critical",
+        ("reconcile", "MANUAL_REVIEW"): "critical",
+        ("blind_retry_blocked", None): "warning",
+    }
     stream = StringIO()
     configure_logging(
         stream=stream,
@@ -474,12 +526,25 @@ def test_actual_safety_incident_bypasses_minimum_level_as_critical() -> None:
         sample_rate=0,
     )
 
-    get_logger().debug("kill_switch_activated")
+    logger = get_logger()
+    logger.info("execute_order", outcome="SUBMIT_UNKNOWN")
+    logger.info("reconcile_after_unknown", outcome="MANUAL_REVIEW")
+    logger.info("reconcile", outcome="DIVERGED")
+    logger.info("reconcile", outcome="UNKNOWN")
+    logger.info("reconcile", outcome="MANUAL_REVIEW")
+    logger.info("blind_retry_blocked")
 
-    event = _events(stream)[0]
-    assert event["funds_safety"] is True
-    assert event["sampling_exempt"] is True
-    assert event["level"] == "critical"
+    events = _events(stream)
+    assert [event["level"] for event in events] == [
+        "critical",
+        "critical",
+        "critical",
+        "critical",
+        "critical",
+        "warning",
+    ]
+    assert all(event["funds_safety"] is True for event in events)
+    assert all(event["sampling_exempt"] is True for event in events)
 
 
 @pytest.mark.unit

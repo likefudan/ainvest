@@ -241,8 +241,18 @@ def test_paper_flow_expired_approval() -> None:
 
 @pytest.mark.integration
 def test_paper_flow_unknown_broker_then_reconcile() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(
+        stream=stream,
+        environment="test",
+        sample_rate=0,
+    )
     port = _UnknownWritePort()
     result = run_paper_flow(make_paper_flow_config(inject_approval=True, write_port=port))
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    by_name = {event["event"]: event for event in events}
+
     assert result.terminal is PaperFlowTerminal.SUBMIT_UNKNOWN
     assert result.lifecycle is OrderLifecycleState.MANUAL_REVIEW
     assert port.submit_calls == 1
@@ -252,6 +262,13 @@ def test_paper_flow_unknown_broker_then_reconcile() -> None:
     assert "blind" in result.error.lower() or "SUBMIT_UNKNOWN" in result.error
     assert len(result.audit_events) >= 3
     assert all(event.correlation_id == result.correlation_id for event in result.audit_events)
+    assert by_name["create_proposal"]["level"] == "info"
+    assert by_name["create_proposal"]["sampling_exempt"] is True
+    assert by_name["execute_order"]["outcome"] == "SUBMIT_UNKNOWN"
+    assert by_name["execute_order"]["level"] == "critical"
+    assert by_name["reconcile_after_unknown"]["outcome"] == "MANUAL_REVIEW"
+    assert by_name["reconcile_after_unknown"]["level"] == "critical"
+    assert by_name["blind_retry_blocked"]["level"] == "warning"
 
 
 @pytest.mark.integration

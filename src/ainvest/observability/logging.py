@@ -79,16 +79,14 @@ FUNDS_SAFETY_EVENTS: Final[frozenset[str]] = frozenset(
         "unexpected_live_component",
     }
 )
-CRITICAL_SAFETY_EVENTS: Final[frozenset[str]] = frozenset(
-    {
-        "account_state_mismatch",
-        "approved_order_mismatch",
-        "broker_submit_unknown",
-        "duplicate_order_detected",
-        "kill_switch_activated",
-        "unexpected_live_component",
-    }
-)
+_INCIDENT_SEVERITY_RULES: Final[Mapping[tuple[str, str | None], str]] = {
+    ("execute_order", "SUBMIT_UNKNOWN"): "critical",
+    ("reconcile_after_unknown", "MANUAL_REVIEW"): "critical",
+    ("reconcile", "DIVERGED"): "critical",
+    ("reconcile", "UNKNOWN"): "critical",
+    ("reconcile", "MANUAL_REVIEW"): "critical",
+    ("blind_retry_blocked", None): "warning",
+}
 
 _MAX_SANITIZE_DEPTH: Final[int] = 10
 _MAX_COLLECTION_ITEMS: Final[int] = 64
@@ -329,12 +327,20 @@ def is_funds_safety_event(event: object, *, explicit: object = False) -> bool:
     return type(event) is str and event in FUNDS_SAFETY_EVENTS
 
 
-def _is_critical_safety_event(event: object) -> bool:
-    return type(event) is str and event in CRITICAL_SAFETY_EVENTS
+def _incident_severity(event_dict: Mapping[str, object]) -> str | None:
+    """Classify reachable incidents using the stable event/outcome schema."""
+    event = event_dict.get("event")
+    outcome = event_dict.get("outcome")
+    if type(event) is not str:
+        return None
+    stable_outcome = outcome if type(outcome) is str else None
+    return _INCIDENT_SEVERITY_RULES.get((event, stable_outcome))
 
 
 def _field_policy(key: str) -> str:
     """Classify one bounded normalized key for the recursive log contract."""
+    if len(key) > _MAX_KEY_CHARS:
+        return "redact"
     normalized = _normalized_key(key)
     if normalized in _SAFE_IDENTIFIER_KEYS:
         return "allow"
@@ -410,6 +416,10 @@ def _type_placeholder(value: object) -> str:
 def _sanitize_key(key: object, *, index: int) -> tuple[str, str | None]:
     if type(key) is not str:
         return f"<key:{_type_placeholder(key)}:{index}>", None
+    if len(key) > _MAX_KEY_CHARS:
+        fingerprint_input = f"{len(key)}:{key[:128]}:{key[-128:]}"
+        fingerprint = hashlib.sha256(fingerprint_input.encode("utf-8")).hexdigest()[:16]
+        return f"<redacted-key:{fingerprint}>", key
     sanitized = _sanitize_string(key)
     if sanitized != key:
         return f"{REDACTED}_KEY_{index}", key
@@ -773,8 +783,9 @@ def _level_processor(min_level: int) -> Processor:
         )
         event_dict["funds_safety"] = funds_safety
         event_dict["sampling_exempt"] = funds_safety or event_dict.get("sampling_exempt") is True
-        if _is_critical_safety_event(event_name):
-            event_dict["level"] = "critical"
+        incident_severity = _incident_severity(event_dict)
+        if incident_severity is not None:
+            event_dict["level"] = incident_severity
             return event_dict
         level = _LEVELS.get(method_name, logging.INFO)
         event_dict["level"] = "error" if method_name == "exception" else method_name
@@ -847,7 +858,7 @@ def _fallback_event(event_dict: EventDict) -> EventDict:
     event_name = _safe_fallback_field(original_event) or "logging_sanitization_failed"
     fallback: EventDict = {
         "event": event_name,
-        "level": "critical" if _is_critical_safety_event(original_event) else "error",
+        "level": _incident_severity(event_dict) or "error",
         "funds_safety": funds_safety,
         "sampling_exempt": True,
         "logging_error_code": "LOG_SANITIZATION_FAILED",
