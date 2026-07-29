@@ -16,9 +16,9 @@ from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Protocol, runtime_checkable
+from typing import TYPE_CHECKING, Never, Protocol, SupportsIndex, runtime_checkable
 
-from ainvest.config import Settings, TradingMode
+from ainvest.config import AinvestEnv, Settings, TradingMode
 
 if TYPE_CHECKING:
     from ainvest.execution.broker import (
@@ -202,6 +202,7 @@ class RuntimeStartupErrorCode(StrEnum):
     PRODUCTION_LIVE_DISABLED = "RUNTIME_PRODUCTION_LIVE_DISABLED"
     LIVE_GUARD_REJECTED = "RUNTIME_LIVE_GUARD_REJECTED"
     LIVE_WRITE_FACTORY_REQUIRED = "RUNTIME_LIVE_WRITE_FACTORY_REQUIRED"
+    LIVE_WRITE_FACTORY_FAILED = "RUNTIME_LIVE_WRITE_FACTORY_FAILED"
     UNVALIDATED_RUNTIME = "RUNTIME_UNVALIDATED"
 
 
@@ -214,45 +215,84 @@ class RuntimeStartupError(RuntimeError):
 
 
 LiveWriteFactory = Callable[[], "BrokerWritePort"]
+LiveSubmitDelegate = Callable[["BrokerSubmitRequest"], "BrokerSubmitResult"]
+LiveCancelDelegate = Callable[["CancelCommand"], "CancelResult"]
 
 
-class LiveGuardOperation(StrEnum):
-    """Authorization points that a LiveGuard must evaluate independently."""
+@dataclass(frozen=True, slots=True)
+class LiveGateContext:
+    """Minimal non-secret runtime identity supplied to a LiveGuard."""
 
-    STARTUP = "startup"
-    SUBMIT = "submit"
-    CANCEL = "cancel"
+    environment: AinvestEnv
+    mode: TradingMode
 
 
 @runtime_checkable
 class LiveGuard(Protocol):
-    """Re-evaluate all independent live gates at startup and before each write.
+    """Own startup authorization and each request-aware broker delegation.
 
     Implementations must raise :class:`RuntimeStartupError` whenever any P07-T4
-    prerequisite is absent, disabled, stale, or uncertain. P08-T0 supplies no
-    production implementation.
+    prerequisite is absent, disabled, stale, or uncertain. Submit/cancel
+    implementations receive the concrete payload and the only delegate that
+    can reach the raw write port, allowing an implementation to hold a lock or
+    lease across final validation and delegation. P08-T0 supplies no production
+    implementation.
     """
 
-    def authorize(
+    def authorize_startup(self, *, context: LiveGateContext) -> None:
+        """Authorize non-production Live composition before factory invocation."""
+        ...
+
+    def submit(
         self,
         *,
-        settings: Settings,
-        operation: LiveGuardOperation,
-    ) -> None:
-        """Authorize exactly one startup or broker-write operation."""
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        """Validate ``request`` and atomically decide whether to delegate it."""
+        ...
+
+    def cancel(
+        self,
+        *,
+        context: LiveGateContext,
+        command: CancelCommand,
+        delegate: LiveCancelDelegate,
+    ) -> CancelResult:
+        """Validate ``command`` and atomically decide whether to delegate it."""
         ...
 
 
 class RejectingLiveGuard:
     """Default LiveGuard: reject startup and every broker-write operation."""
 
-    def authorize(
+    def authorize_startup(self, *, context: LiveGateContext) -> None:
+        del context
+        self._reject()
+
+    def submit(
         self,
         *,
-        settings: Settings,
-        operation: LiveGuardOperation,
-    ) -> None:
-        del settings, operation
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context, request, delegate
+        self._reject()
+
+    def cancel(
+        self,
+        *,
+        context: LiveGateContext,
+        command: CancelCommand,
+        delegate: LiveCancelDelegate,
+    ) -> CancelResult:
+        del context, command, delegate
+        self._reject()
+
+    @staticmethod
+    def _reject() -> Never:
         raise RuntimeStartupError(
             "Live writes remain disabled until the production LiveGuard is installed",
             code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
@@ -315,6 +355,17 @@ class Runtime:
                 "Runtime validation token is invalid",
                 code=RuntimeStartupErrorCode.UNVALIDATED_RUNTIME,
             )
+
+    def __copy__(self) -> Runtime:
+        raise TypeError("Runtime capability containers cannot be copied")
+
+    def __deepcopy__(self, memo: dict[int, object]) -> Runtime:
+        del memo
+        raise TypeError("Runtime capability containers cannot be deep-copied")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> tuple[object, ...]:
+        del protocol
+        raise TypeError("Runtime capability containers cannot be serialized")
 
     @property
     def mode(self) -> TradingMode:
@@ -446,54 +497,58 @@ def _validate_write_port(port: object) -> BrokerWritePort:
     return port
 
 
-def _authorize_live_guard(
-    guard: LiveGuard,
-    *,
-    settings: Settings,
-    operation: LiveGuardOperation,
-) -> None:
+def _authorize_live_startup(guard: LiveGuard, *, context: LiveGateContext) -> None:
     try:
-        guard.authorize(settings=settings, operation=operation)
+        guard.authorize_startup(context=context)
     except RuntimeStartupError:
         raise
-    except Exception as exc:
+    except Exception:
         raise RuntimeStartupError(
-            f"LiveGuard failed closed while authorizing {operation.value}",
+            "LiveGuard failed closed while authorizing startup",
             code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
-        ) from exc
+        ) from None
 
 
 class _GuardedLiveWritePort:
-    """Write-only proxy that re-authorizes immediately before every write."""
+    """Write-only proxy whose guard owns final validation and delegation."""
 
-    __slots__ = ("__delegate", "__guard", "__settings")
+    __slots__ = ("__context", "__delegate", "__guard")
 
     def __init__(
         self,
         *,
         guard: LiveGuard,
-        settings: Settings,
+        context: LiveGateContext,
         delegate: BrokerWritePort,
     ) -> None:
         self.__guard = guard
-        self.__settings = settings
+        self.__context = context
         self.__delegate = delegate
 
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
-        _authorize_live_guard(
-            self.__guard,
-            settings=self.__settings,
-            operation=LiveGuardOperation.SUBMIT,
+        return self.__guard.submit(
+            context=self.__context,
+            request=request,
+            delegate=self.__delegate.submit,
         )
-        return self.__delegate.submit(request)
 
     def cancel(self, command: CancelCommand) -> CancelResult:
-        _authorize_live_guard(
-            self.__guard,
-            settings=self.__settings,
-            operation=LiveGuardOperation.CANCEL,
+        return self.__guard.cancel(
+            context=self.__context,
+            command=command,
+            delegate=self.__delegate.cancel,
         )
-        return self.__delegate.cancel(command)
+
+    def __copy__(self) -> _GuardedLiveWritePort:
+        raise TypeError("Live broker-write capabilities cannot be copied")
+
+    def __deepcopy__(self, memo: dict[int, object]) -> _GuardedLiveWritePort:
+        del memo
+        raise TypeError("Live broker-write capabilities cannot be deep-copied")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> tuple[object, ...]:
+        del protocol
+        raise TypeError("Live broker-write capabilities cannot be serialized")
 
 
 def _new_runtime(
@@ -611,16 +666,31 @@ def start_runtime(
             "live_guard must implement LiveGuard",
             code=RuntimeStartupErrorCode.LIVE_GUARD_REQUIRED,
         )
-    _authorize_live_guard(
-        live_guard,
-        settings=settings,
-        operation=LiveGuardOperation.STARTUP,
+    live_context = LiveGateContext(
+        environment=settings.ainvest_env,
+        mode=settings.trading_mode,
     )
-    raw_write = _validate_write_port(live_write_factory())
+    _authorize_live_startup(live_guard, context=live_context)
+
+    factory_failed = False
+    raw_write_candidate: object | None = None
+    try:
+        raw_write_candidate = live_write_factory()
+    except Exception:
+        factory_failed = True
+    if factory_failed:
+        # Raise outside the adapter exception handler so its message and
+        # traceback cannot become an implicit cause/context carrying secrets.
+        raise RuntimeStartupError(
+            "Live write factory failed closed",
+            code=RuntimeStartupErrorCode.LIVE_WRITE_FACTORY_FAILED,
+        )
+
+    raw_write = _validate_write_port(raw_write_candidate)
     broker_write = _validate_write_port(
         _GuardedLiveWritePort(
             guard=live_guard,
-            settings=settings,
+            context=live_context,
             delegate=raw_write,
         )
     )
@@ -639,8 +709,10 @@ def start_runtime(
 __all__ = [
     "MODE_CAPABILITY_MATRIX",
     "BrokerCapability",
+    "LiveCancelDelegate",
+    "LiveGateContext",
     "LiveGuard",
-    "LiveGuardOperation",
+    "LiveSubmitDelegate",
     "LiveWriteFactory",
     "ModeCapabilities",
     "RejectingLiveGuard",

@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import copy
+import io
+import pickle
 import subprocess
 import sys
+import threading
 from datetime import UTC, datetime
 from decimal import Decimal
 from pathlib import Path
@@ -12,6 +16,7 @@ from typing import cast
 import pytest
 from pydantic import SecretStr
 
+from ainvest.approval.order_hash import attach_order_hash
 from ainvest.config import (
     AinvestEnv,
     ApprovalMethod,
@@ -25,7 +30,9 @@ from ainvest.execution.broker import BrokerSubmitRequest, BrokerSubmitResult
 from ainvest.runtime import (
     MODE_CAPABILITY_MATRIX,
     BrokerCapability,
-    LiveGuardOperation,
+    LiveCancelDelegate,
+    LiveGateContext,
+    LiveSubmitDelegate,
     RejectingLiveGuard,
     Runtime,
     RuntimePackage,
@@ -35,8 +42,15 @@ from ainvest.runtime import (
     SchedulerJob,
     start_runtime,
 )
+from ainvest.schemas.approval import ApprovalEvent
 from ainvest.schemas.broker import BrokerFill, BrokerOrder, CancelCommand, CancelResult
+from ainvest.schemas.examples import (
+    approval_event_example,
+    cancel_command_example,
+    order_proposal_valid,
+)
 from ainvest.schemas.market import MarketQuote
+from ainvest.schemas.orders import OrderProposal
 from ainvest.schemas.portfolio import AccountScope, PortfolioSnapshot, PositionSnapshot
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
@@ -70,6 +84,42 @@ def _live_settings() -> Settings:
     )
 
 
+def _live_submit_request() -> BrokerSubmitRequest:
+    proposal = OrderProposal.model_validate(
+        attach_order_hash(
+            {
+                **order_proposal_valid(),
+                "account_scope": "agentic",
+            }
+        )
+    )
+    approval = ApprovalEvent.model_validate(
+        {
+            **approval_event_example(),
+            "proposal_id": proposal.proposal_id,
+            "order_hash": proposal.order_hash,
+            "method": "webauthn",
+            "scope": "live",
+        }
+    )
+    return BrokerSubmitRequest(
+        proposal=proposal,
+        approval=approval,
+        client_order_id="live_client_order_1",
+    )
+
+
+def _live_cancel_command(request: BrokerSubmitRequest) -> CancelCommand:
+    return CancelCommand.model_validate(
+        {
+            **cancel_command_example(),
+            "proposal_id": request.proposal.proposal_id,
+            "order_hash": request.proposal.order_hash,
+            "account_scope": "agentic",
+        }
+    )
+
+
 class _WritePort:
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
         raise NotImplementedError(request)
@@ -82,18 +132,33 @@ class _CountingWritePort:
     def __init__(self) -> None:
         self.submit_calls = 0
         self.cancel_calls = 0
+        self.last_submit_request: BrokerSubmitRequest | None = None
+        self.last_cancel_command: CancelCommand | None = None
         self.submit_result = cast(BrokerSubmitResult, object())
         self.cancel_result = cast(CancelResult, object())
 
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
-        del request
         self.submit_calls += 1
+        self.last_submit_request = request
         return self.submit_result
 
     def cancel(self, command: CancelCommand) -> CancelResult:
-        del command
         self.cancel_calls += 1
+        self.last_cancel_command = command
         return self.cancel_result
+
+
+class _FailingWritePort:
+    def __init__(self, failure: RuntimeError) -> None:
+        self.failure = failure
+
+    def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
+        del request
+        raise self.failure
+
+    def cancel(self, command: CancelCommand) -> CancelResult:
+        del command
+        raise self.failure
 
 
 class _ReadPort:
@@ -129,47 +194,126 @@ class _LeakyReadPort(_ReadPort, _WritePort):
 
 
 class _FailingGuard:
-    def authorize(
+    def authorize_startup(self, *, context: LiveGateContext) -> None:
+        del context
+        raise ValueError("unsafe guard failure")
+
+    def submit(
         self,
         *,
-        settings: Settings,
-        operation: LiveGuardOperation,
-    ) -> None:
-        del settings, operation
-        raise ValueError("unsafe guard failure")
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context, request, delegate
+        raise AssertionError("startup must fail first")
+
+    def cancel(
+        self,
+        *,
+        context: LiveGateContext,
+        command: CancelCommand,
+        delegate: LiveCancelDelegate,
+    ) -> CancelResult:
+        del context, command, delegate
+        raise AssertionError("startup must fail first")
 
 
 class _AllowingTestGuard:
     def __init__(self) -> None:
-        self.calls: list[LiveGuardOperation] = []
+        self.startup_contexts: list[LiveGateContext] = []
+        self.submit_calls: list[tuple[LiveGateContext, BrokerSubmitRequest]] = []
+        self.cancel_calls: list[tuple[LiveGateContext, CancelCommand]] = []
 
-    def authorize(
+    def authorize_startup(
         self,
         *,
-        settings: Settings,
-        operation: LiveGuardOperation,
+        context: LiveGateContext,
     ) -> None:
-        assert settings.trading_mode is TradingMode.LIVE
-        self.calls.append(operation)
+        assert context.mode is TradingMode.LIVE
+        self.startup_contexts.append(context)
+
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        self.submit_calls.append((context, request))
+        return delegate(request)
+
+    def cancel(
+        self,
+        *,
+        context: LiveGateContext,
+        command: CancelCommand,
+        delegate: LiveCancelDelegate,
+    ) -> CancelResult:
+        self.cancel_calls.append((context, command))
+        return delegate(command)
 
 
 class _MutableTestGuard(_AllowingTestGuard):
     def __init__(self) -> None:
         super().__init__()
+        self._lock = threading.Lock()
         self.allowed = True
 
-    def authorize(
+    def revoke(self) -> None:
+        with self._lock:
+            self.allowed = False
+
+    def submit(
         self,
         *,
-        settings: Settings,
-        operation: LiveGuardOperation,
-    ) -> None:
-        super().authorize(settings=settings, operation=operation)
-        if not self.allowed:
-            raise RuntimeStartupError(
-                "test kill switch is active",
-                code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
-            )
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        with self._lock:
+            self._assert_allowed()
+            return super().submit(context=context, request=request, delegate=delegate)
+
+    def cancel(
+        self,
+        *,
+        context: LiveGateContext,
+        command: CancelCommand,
+        delegate: LiveCancelDelegate,
+    ) -> CancelResult:
+        with self._lock:
+            self._assert_allowed()
+            return super().cancel(context=context, command=command, delegate=delegate)
+
+    def _assert_allowed(self) -> None:
+        if self.allowed:
+            return
+        raise RuntimeStartupError(
+            "test kill switch is active",
+            code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+        )
+
+
+class _PausingMutableGuard(_MutableTestGuard):
+    """Pause request preprocessing before the final locked gate decision."""
+
+    def __init__(self) -> None:
+        super().__init__()
+        self.preprocessing_started = threading.Event()
+        self.continue_to_gate = threading.Event()
+
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        self.preprocessing_started.set()
+        if not self.continue_to_gate.wait(timeout=5):
+            raise TimeoutError("test did not release request preprocessing")
+        return super().submit(context=context, request=request, delegate=delegate)
 
 
 class _SpoofedProductionGuard(_AllowingTestGuard):
@@ -387,7 +531,9 @@ def test_production_live_unconditionally_rejects_spoofed_ready_guard() -> None:
         )
 
     assert exc_info.value.code is RuntimeStartupErrorCode.PRODUCTION_LIVE_DISABLED
-    assert guard.calls == []
+    assert guard.startup_contexts == []
+    assert guard.submit_calls == []
+    assert guard.cancel_calls == []
     assert factory_called is False
 
 
@@ -401,14 +547,57 @@ def test_live_write_is_constructed_only_through_explicit_guard() -> None:
         live_write_factory=_WritePort,
     )
 
-    assert guard.calls == [LiveGuardOperation.STARTUP]
+    assert guard.startup_contexts == [
+        LiveGateContext(environment=AinvestEnv.DEVELOPMENT, mode=TradingMode.LIVE)
+    ]
     assert isinstance(runtime.broker_write, BrokerWritePort)
     assert BrokerCapability.ROBINHOOD_WRITE in runtime.capabilities.broker
     assert runtime.active_broker_capabilities == frozenset({BrokerCapability.ROBINHOOD_WRITE})
 
 
 @pytest.mark.unit
-def test_live_guard_rechecks_before_every_write_and_blocks_after_flip() -> None:
+def test_live_guard_owns_payload_aware_submit_and_cancel_delegation() -> None:
+    guard = _AllowingTestGuard()
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=guard,
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+    submit_request = _live_submit_request()
+    cancel_command = _live_cancel_command(submit_request)
+
+    assert write.submit(submit_request) is delegate.submit_result
+    assert write.cancel(cancel_command) is delegate.cancel_result
+
+    context = LiveGateContext(environment=AinvestEnv.DEVELOPMENT, mode=TradingMode.LIVE)
+    assert guard.submit_calls == [(context, submit_request)]
+    assert guard.cancel_calls == [(context, cancel_command)]
+    assert delegate.last_submit_request is submit_request
+    assert delegate.last_cancel_command is cancel_command
+
+
+@pytest.mark.unit
+def test_guarded_live_port_preserves_delegate_failures() -> None:
+    failure = RuntimeError("sanitized broker failure")
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_AllowingTestGuard(),
+        live_write_factory=lambda: _FailingWritePort(failure),
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(RuntimeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    assert exc_info.value is failure
+
+
+@pytest.mark.unit
+def test_live_guard_blocks_every_write_after_kill_switch_flip() -> None:
     guard = _MutableTestGuard()
     delegate = _CountingWritePort()
     runtime = start_runtime(
@@ -418,20 +607,15 @@ def test_live_guard_rechecks_before_every_write_and_blocks_after_flip() -> None:
     )
     write = runtime.broker_write
     assert write is not None
-    submit_request = cast(BrokerSubmitRequest, object())
-    cancel_command = cast(CancelCommand, object())
+    submit_request = _live_submit_request()
+    cancel_command = _live_cancel_command(submit_request)
 
     assert write.submit(submit_request) is delegate.submit_result
     assert write.cancel(cancel_command) is delegate.cancel_result
-    assert guard.calls == [
-        LiveGuardOperation.STARTUP,
-        LiveGuardOperation.SUBMIT,
-        LiveGuardOperation.CANCEL,
-    ]
     assert delegate.submit_calls == 1
     assert delegate.cancel_calls == 1
 
-    guard.allowed = False
+    guard.revoke()
     with pytest.raises(RuntimeStartupError) as submit_rejected:
         write.submit(submit_request)
     with pytest.raises(RuntimeStartupError) as cancel_rejected:
@@ -441,10 +625,94 @@ def test_live_guard_rechecks_before_every_write_and_blocks_after_flip() -> None:
     assert cancel_rejected.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
     assert delegate.submit_calls == 1
     assert delegate.cancel_calls == 1
-    assert guard.calls[-2:] == [
-        LiveGuardOperation.SUBMIT,
-        LiveGuardOperation.CANCEL,
-    ]
+
+
+@pytest.mark.unit
+def test_concurrent_kill_flip_during_preprocessing_prevents_broker_send() -> None:
+    guard = _PausingMutableGuard()
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=guard,
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+    request = _live_submit_request()
+    failures: list[BaseException] = []
+
+    def submit_in_worker() -> None:
+        try:
+            write.submit(request)
+        except BaseException as exc:
+            failures.append(exc)
+
+    worker = threading.Thread(target=submit_in_worker)
+    worker.start()
+    assert guard.preprocessing_started.wait(timeout=5)
+
+    guard.revoke()
+    guard.continue_to_gate.set()
+    worker.join(timeout=5)
+
+    assert not worker.is_alive()
+    assert len(failures) == 1
+    assert isinstance(failures[0], RuntimeStartupError)
+    assert failures[0].code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert delegate.submit_calls == 0
+    assert delegate.last_submit_request is None
+
+
+@pytest.mark.unit
+def test_live_write_factory_failure_is_sanitized_and_fail_closed() -> None:
+    adapter_secret = "adapter-secret-that-must-not-escape"
+
+    def failing_factory() -> BrokerWritePort:
+        raise RuntimeError(adapter_secret)
+
+    with pytest.raises(RuntimeStartupError) as exc_info:
+        start_runtime(
+            _live_settings(),
+            live_guard=_AllowingTestGuard(),
+            live_write_factory=failing_factory,
+        )
+
+    error = exc_info.value
+    assert error.code is RuntimeStartupErrorCode.LIVE_WRITE_FACTORY_FAILED
+    assert adapter_secret not in str(error)
+    assert adapter_secret not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+
+
+@pytest.mark.unit
+def test_live_runtime_and_write_capability_reject_copy_and_serialization_without_leaks() -> None:
+    secret = "runtime-capability-secret-that-must-not-leak"
+    settings = _live_settings().model_copy(
+        update={
+            "database_password": SecretStr(secret),
+            "robinhood_oauth_token": SecretStr(secret),
+        }
+    )
+    runtime = start_runtime(
+        settings,
+        live_guard=_AllowingTestGuard(),
+        live_write_factory=_CountingWritePort,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    for capability in (runtime, write):
+        with pytest.raises(TypeError):
+            copy.copy(capability)
+        with pytest.raises(TypeError):
+            copy.deepcopy(capability)
+
+        serialized = io.BytesIO()
+        with pytest.raises(TypeError):
+            pickle.Pickler(serialized).dump(capability)
+        assert secret.encode() not in serialized.getvalue()
+        assert secret not in repr(capability)
 
 
 @pytest.mark.unit
