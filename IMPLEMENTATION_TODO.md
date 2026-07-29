@@ -166,9 +166,12 @@ flowchart TD
     G1 --> P05["Phase 05: Telegram Paper approval"]
     P04 --> G2["Gate 2: Structured and traceable research"]
     P05 --> G3["Gate 3: Paper-only secure approval"]
-    G2 --> P06["Phase 06: Robinhood read-only integration"]
-    G3 --> P06
-    P06 --> G4["Gate 4: Real portfolio data with Paper execution"]
+    P01 --> S08["P08-T7: read-broker identity and secrets"]
+    G1 --> P06["P06-T0 through P06-T2: Robinhood Read-only Preview"]
+    S08 --> P06
+    P06 --> G4["P06-T3 / Gate 4: Real portfolio data with Paper execution"]
+    G2 --> G4
+    G3 --> G4
     G4 --> P07["Phase 07: Controlled live execution"]
     P07 --> G5["Gate 5: Minimal controlled live exercise"]
     P01 --> P08["Phase 08: Parallel assurance workstream"]
@@ -179,7 +182,10 @@ Primary parallelization opportunities:
 - After Phase 01 foundations exist, domain schemas, CI, and the threat model can proceed in parallel.
 - After schemas stabilize, persistence, the strategy protocol, the Paper Broker interface, and the workflow state machine can be assigned independently.
 - After Gate 1, the Research and Paper Approval tracks can run in parallel.
-- Robinhood read-only work waits for domain models, persistence, and baseline observability.
+- The Robinhood Read-only Preview may start as soon as its task dependencies
+  are merged: `P08-T7` → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2, Gate 3, and
+  complete observability remain prerequisites for `P06-T3` / Gate 4, not for
+  the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
 - Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
@@ -963,6 +969,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ## 9. Phase 06 — Official Robinhood MCP Read-Only Integration
 
+`P06-T0` through `P06-T2` are an early **Robinhood Read-only Preview**. They
+may run after their own dependencies without waiting for all of Batch E, Gate
+2, or Gate 3. This preview does not accept Gate 4 and never enables a broker
+write capability. `P06-T3` remains the Gate 4 acceptance card and retains all
+of its research, Paper-approval, and observability dependencies.
+
 ### P06-T0 — Connect to MCP and Expose a Read-Only Robinhood Client
 
 - **Objective:** Connect to the official `https://agent.robinhood.com/mcp/trading` endpoint and expose only a fixed allowlist through the Robinhood Read Gateway.
@@ -990,23 +1002,28 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Store raw-response digests and normalized snapshots.
 - **Acceptance criteria:** Recorded/synthetic contracts cover unknown enum, missing account scope, amount mismatch, missing bid/ask/time, and stale quotes; all fail closed.
 
-### P06-T2 — Enforce Read-Only Runtime and Real-Portfolio Paper Mode
+### P06-T2 — Expose Read-Only CLI and Real-Portfolio Paper Mode
 
 - **Objective:** Make it technically impossible for a Phase 06 process to submit a live order.
 - **Dependencies:** P06-T0, P06-T1, P03-T16, and P08-T0.
-- **Primary files:** read-only service entry point, deployment permissions, integration tests.
+- **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
 - **Implementation checklist:**
   - Use the read protocol, read-only MCP tool allowlist, and an independent service identity.
+  - Provide an ainvest CLI surface for portfolio, positions, buying power,
+    orders, and symbol quote queries through normalized Read Gateway responses;
+    never expose a raw MCP session or tool invocation.
   - Inject Robinhood quotes, fundamentals, and real portfolio snapshots into Strategy/Sizer/Risk while fixing the broker to PaperBroker.
   - Startup logs and health state show `read_only=true` and `execution=paper`.
   - Reject a trade when an MCP quote fails; never construct an Alpaca/yfinance fallback.
   - Make submit attempts fail at two or more of client, configuration, and deployment-permission layers.
-- **Acceptance criteria:** Real data drives a Paper proposal, and no code path reaches a Robinhood write tool.
+- **Acceptance criteria:** The CLI returns normalized read-only account/market
+  results, real data drives a Paper proposal, and no code path reaches a
+  Robinhood write tool.
 
 ### P06-T3 — Gate 4: Accept Robinhood Read-Only Paper Trading
 
 - **Objective:** Prove real account state can drive Paper while no live write path exists.
-- **Dependencies:** P06-T0 through P06-T2, P03-T17, P04-T12, P05-T8, P08-T3, and P08-T4.
+- **Dependencies:** P06-T0 through P06-T2, P03-T17, P04-T12 (Gate 2), P05-T8 (Gate 3), P08-T3, and P08-T4.
 - **Primary file:** `docs/releases/phase-4-acceptance.md`.
 - **Implementation checklist:**
   - Read quotes, price book, historicals, fundamentals, account, positions, buying power, and orders into snapshots.
@@ -1373,15 +1390,26 @@ line.
 - Paper approval: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 -> P05-T8.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
+- Priority lane: after the already merged P04-T0, P05-T0, P08-T0, and
+  P08-T3, integrate `P08-T7` -> `P06-T0` -> `P06-T1` -> `P06-T2` serially
+  for the earliest safe Robinhood Read-only Preview. P04-T2 and P05-T4 may be
+  implemented in parallel on disjoint worktrees, but they remain behind this
+  lane in the merge queue and must rebase onto latest `main` before review.
 
-### Batch F — Serialize Broker Work
+### Batch F — Robinhood Preview First, Gate 4 Later
 
-1. P06-T0 through P06-T2.
-2. P06-T3 read-only permission audit.
-3. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
-4. P07-T0 through P07-T5.
-5. P08-T15 plus an independent security review.
-6. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
+1. Complete the priority lane `P08-T7` -> `P06-T0` -> `P06-T1` -> `P06-T2`
+   without waiting for every Batch E track. This is a Read-only Preview, not a
+   gate acceptance.
+2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
+   task-card/tracker change built on the Read Gateway and P05-T4/P05-T5. Do not
+   combine queries with Telegram approval or broker writes.
+3. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
+   then perform the P06-T3 read-only permission audit and Gate 4 acceptance.
+4. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
+5. P07-T0 through P07-T5.
+6. P08-T15 plus an independent security review.
+7. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
 
 ### Parallel-Edit Warnings
 
