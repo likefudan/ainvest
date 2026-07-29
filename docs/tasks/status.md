@@ -372,6 +372,15 @@ Robinhood implementation, or Research Agent behavior.
   Focused adversarial runtime tests passed (31 tests). Final
   `./scripts/dev verify` passed: Ruff/format/mypy/schema snapshots, 711 unit,
   102 contract, 15 integration, and 828 total tests with 86.79% coverage.
+  Independent-review round-4 remediation
+  `2ea9ff53928795d2f57a028b389b9209b488a818` binds every call-scoped
+  delegate to its guard-call thread and rejects spawned-worker use before
+  adapter preprocessing or broker access. The synchronous same-thread
+  lock/lease contract is explicit in the API and runtime-mode documentation.
+  The deterministic worker-thread regression returns stable guard rejection
+  with zero raw touches after the public call, while the same-thread path
+  remains green. Focused tests remained 31; canonical verification remained
+  711 unit, 102 contract, 15 integration, 828 total, and 86.79% coverage.
   Scoped readability/duplication and secret-signature inspection found no
   copied broker/config logic or credential values.
   Independent re-review, PR, and squash-merge commit remain pending.
