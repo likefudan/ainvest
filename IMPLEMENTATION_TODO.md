@@ -1386,15 +1386,17 @@ line.
 
 ### Batch E — Parallel Tracks After Gate 1
 
-- Research: P04-T0 through P04-T8 -> P04-T9 through P04-T11 -> P04-T12.
-- Paper approval: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 -> P05-T8.
+- Research topology: P04-T0 through P04-T8 -> P04-T9 through P04-T11 ->
+  P04-T12; dispatch is currently paused at P04-T2.
+- Paper approval topology: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 ->
+  P05-T8; dispatch is currently paused at P05-T4.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, and
   P08-T3, integrate `P08-T7` -> `P06-T0` -> `P06-T1` -> `P06-T2` serially
-  for the earliest safe Robinhood Read-only Preview. P04-T2 and P05-T4 may be
-  implemented in parallel on disjoint worktrees, but they remain behind this
-  lane in the merge queue and must rebase onto latest `main` before review.
+  for the earliest safe Robinhood Read-only Preview. By owner instruction,
+  `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
+  they may not start until the owner/coordinator explicitly resumes them.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
