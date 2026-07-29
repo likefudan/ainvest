@@ -5,7 +5,8 @@ from __future__ import annotations
 import copy
 import json
 import pickle
-from collections.abc import Mapping
+from collections.abc import Iterator, Mapping
+from dataclasses import asdict
 from io import StringIO
 from typing import Any
 
@@ -52,10 +53,15 @@ def _provider_for_all() -> MemorySecretProvider:
     )
 
 
-def _service(provider: object | None = None) -> SecretAccessService:
+def _service(
+    role: ServiceRole = ServiceRole.RESEARCH,
+    provider: Any | None = None,
+    references: Mapping[SecretId, SecretRef] = _REFERENCES,
+) -> SecretAccessService:
     return SecretAccessService(
-        _provider_for_all() if provider is None else provider,  # type: ignore[arg-type]
-        _REFERENCES,
+        role,
+        _provider_for_all() if provider is None else provider,
+        references,
     )
 
 
@@ -73,9 +79,10 @@ def test_every_granted_role_can_read_only_its_secret(
     role: ServiceRole,
     secret_id: SecretId,
 ) -> None:
-    value = _service().get(role, secret_id)
+    service = _service(role)
 
-    assert value.reveal() == _sentinel(secret_id)
+    assert service.role is role
+    assert service.get(secret_id).reveal() == _sentinel(secret_id)
 
 
 @pytest.mark.unit
@@ -99,71 +106,73 @@ def test_every_cross_role_access_is_denied_before_provider_call(
         def read(self, reference: SecretRef) -> SecretValue:
             raise AssertionError(reference)
 
-    service = _service(ProviderMustNotRun())
+    service = _service(role, ProviderMustNotRun())
 
-    probe = service.probe(role, secret_id)
+    probe = service.probe(secret_id)
     assert probe.status is SecretAccessStatus.DENIED
     assert not probe.is_permitted
     with pytest.raises(SecretAccessError) as caught:
-        service.get(role, secret_id)
+        service.get(secret_id)
     assert caught.value.probe.status is SecretAccessStatus.DENIED
 
 
 @pytest.mark.unit
-def test_research_alone_can_read_openai_and_read_broker_cannot_read_write_secret() -> None:
-    service = _service()
+def test_role_is_bound_once_and_cannot_be_impersonated_per_call() -> None:
+    service = _service(ServiceRole.READ_BROKER)
 
-    assert (
-        service.probe(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY).status
-        is SecretAccessStatus.AVAILABLE
-    )
-    for role in set(ServiceRole) - {ServiceRole.RESEARCH}:
-        assert service.probe(role, SecretId.OPENAI_API_KEY).status is SecretAccessStatus.DENIED
-    assert (
-        service.probe(ServiceRole.READ_BROKER, SecretId.ROBINHOOD_READ_CREDENTIAL).status
-        is SecretAccessStatus.AVAILABLE
-    )
-    assert (
-        service.probe(ServiceRole.READ_BROKER, SecretId.ROBINHOOD_WRITE_CREDENTIAL).status
-        is SecretAccessStatus.DENIED
-    )
+    assert service.probe(SecretId.ROBINHOOD_READ_CREDENTIAL).status is SecretAccessStatus.AVAILABLE
+    assert service.probe(SecretId.ROBINHOOD_WRITE_CREDENTIAL).status is SecretAccessStatus.DENIED
+    with pytest.raises(TypeError):
+        service.get(  # type: ignore[call-arg]
+            ServiceRole.WRITE_BROKER,
+            SecretId.ROBINHOOD_WRITE_CREDENTIAL,
+        )
+    with pytest.raises(AttributeError, match="immutable"):
+        service._role = ServiceRole.WRITE_BROKER
+    assert service.role is ServiceRole.READ_BROKER
 
 
 @pytest.mark.unit
-def test_unknown_roles_and_secret_ids_are_value_free_and_default_deny() -> None:
+def test_research_alone_can_construct_boundary_that_reads_openai() -> None:
+    assert (
+        _service(ServiceRole.RESEARCH).probe(SecretId.OPENAI_API_KEY).status
+        is SecretAccessStatus.AVAILABLE
+    )
+    for role in set(ServiceRole) - {ServiceRole.RESEARCH}:
+        assert _service(role).probe(SecretId.OPENAI_API_KEY).status is SecretAccessStatus.DENIED
+
+
+@pytest.mark.unit
+def test_unknown_role_and_secret_are_value_free_and_default_deny() -> None:
     secret_like_unknown = "synthetic-unknown-material-that-must-not-echo"
+
+    with pytest.raises(ValueError) as invalid_role:
+        _service(secret_like_unknown)  # type: ignore[arg-type]
+    assert secret_like_unknown not in str(invalid_role.value)
+
     service = _service()
-
-    role_probe = service.probe(secret_like_unknown, SecretId.OPENAI_API_KEY)
-    secret_probe = service.probe(ServiceRole.RESEARCH, secret_like_unknown)
-
-    assert role_probe.status is SecretAccessStatus.UNKNOWN_ROLE
-    assert role_probe.role == "unknown"
-    assert role_probe.secret_id == "unknown"
-    assert secret_probe.status is SecretAccessStatus.UNKNOWN_SECRET
-    assert secret_probe.secret_id == "unknown"
+    probe = service.probe(secret_like_unknown)
+    assert probe.status is SecretAccessStatus.UNKNOWN_SECRET
+    assert probe.secret_id == "unknown"
     with pytest.raises(SecretAccessError) as caught:
-        service.get(secret_like_unknown, SecretId.OPENAI_API_KEY)
+        service.get(secret_like_unknown)
     assert secret_like_unknown not in str(caught.value)
 
 
 @pytest.mark.unit
-def test_unconfigured_reference_fails_before_provider_call() -> None:
-    service = SecretAccessService(
-        _provider_for_all(),
-        {
-            secret_id: reference
-            for secret_id, reference in _REFERENCES.items()
-            if secret_id is not SecretId.OPENAI_API_KEY
-        },
-    )
+def test_unconfigured_role_reference_fails_before_provider_call() -> None:
+    references: dict[SecretId, SecretRef] = {
+        secret_id: reference
+        for secret_id, reference in _REFERENCES.items()
+        if secret_id is not SecretId.OPENAI_API_KEY
+    }
+    service = _service(references=references)
 
     assert (
-        service.probe(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY).status
-        is SecretAccessStatus.REFERENCE_UNCONFIGURED
+        service.probe(SecretId.OPENAI_API_KEY).status is SecretAccessStatus.REFERENCE_UNCONFIGURED
     )
     with pytest.raises(SecretAccessError, match="reference_unconfigured"):
-        service.get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY)
+        service.get(SecretId.OPENAI_API_KEY)
 
 
 @pytest.mark.unit
@@ -182,15 +191,87 @@ def test_unconfigured_reference_fails_before_provider_call() -> None:
     ],
 )
 def test_missing_permission_denied_and_unavailable_providers_fail_closed(
-    provider: object,
+    provider: Any,
     expected: SecretAccessStatus,
 ) -> None:
-    service = _service(provider)
+    service = _service(provider=provider)
 
-    assert service.probe(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY).status is expected
+    assert service.probe(SecretId.OPENAI_API_KEY).status is expected
     with pytest.raises(SecretAccessError) as caught:
-        service.get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY)
+        service.get(SecretId.OPENAI_API_KEY)
     assert caught.value.probe.status is expected
+
+
+class _SpyMapping(Mapping[str, str]):
+    def __init__(self, values: Mapping[str, str]) -> None:
+        self._items = dict(values)
+        self.getitem_calls = 0
+
+    def __getitem__(self, key: str) -> str:
+        self.getitem_calls += 1
+        return self._items[key]
+
+    def __iter__(self) -> Iterator[str]:
+        return iter(self._items)
+
+    def __len__(self) -> int:
+        return len(self._items)
+
+
+@pytest.mark.unit
+def test_development_probe_uses_key_metadata_without_fetching_or_truth_testing() -> None:
+    secret_id = SecretId.OPENAI_API_KEY
+    provider_reference = _REF_NAMES[secret_id]
+    environment_key = "AINVEST_TEST_RESEARCH_VALUE"
+    source = _SpyMapping({environment_key: _sentinel(secret_id)})
+    provider = DevelopmentEnvironmentSecretProvider(
+        source,
+        bindings={provider_reference: environment_key},
+        deployment_environment="development",
+    )
+    service = _service(provider=provider)
+
+    assert service.probe(secret_id).status is SecretAccessStatus.AVAILABLE
+    assert source.getitem_calls == 0
+    assert service.get(secret_id).reveal() == _sentinel(secret_id)
+    assert source.getitem_calls == 1
+
+
+@pytest.mark.unit
+def test_memory_probe_does_not_fetch_wrapped_value() -> None:
+    secret_id = SecretId.OPENAI_API_KEY
+    provider_reference = _REF_NAMES[secret_id]
+    source = _SpyMapping({provider_reference: _sentinel(secret_id)})
+    provider = MemorySecretProvider(source, allowed_references={provider_reference})
+    source.getitem_calls = 0
+    service = _service(provider=provider)
+
+    assert service.probe(secret_id).status is SecretAccessStatus.AVAILABLE
+    assert source.getitem_calls == 0
+
+
+@pytest.mark.unit
+def test_development_read_validates_empty_or_disappearing_values_without_leak() -> None:
+    secret_id = SecretId.OPENAI_API_KEY
+    provider_reference = _REF_NAMES[secret_id]
+    environment_key = "AINVEST_TEST_RESEARCH_VALUE"
+    source = _SpyMapping({environment_key: ""})
+    provider = DevelopmentEnvironmentSecretProvider(
+        source,
+        bindings={provider_reference: environment_key},
+        deployment_environment="development",
+    )
+    service = _service(provider=provider)
+
+    assert service.probe(secret_id).status is SecretAccessStatus.AVAILABLE
+    with pytest.raises(SecretAccessError) as empty:
+        service.get(secret_id)
+    assert empty.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
+
+    del source._items[environment_key]
+    with pytest.raises(SecretAccessError) as missing:
+        service.get(secret_id)
+    assert missing.value.probe.status is SecretAccessStatus.MISSING
 
 
 @pytest.mark.unit
@@ -200,11 +281,11 @@ def test_reference_based_rotation_changes_value_without_service_or_reference_cha
         {reference.provider_reference: _sentinel(reference.secret_id, 1)},
         allowed_references={reference.provider_reference},
     )
-    service = _service(provider)
+    service = _service(ServiceRole.READ_BROKER, provider)
 
-    before = service.get(ServiceRole.READ_BROKER, reference.secret_id).reveal()
+    before = service.get(reference.secret_id).reveal()
     provider.rotate(reference.provider_reference, _sentinel(reference.secret_id, 2))
-    after = service.get(ServiceRole.READ_BROKER, reference.secret_id).reveal()
+    after = service.get(reference.secret_id).reveal()
 
     assert before != after
     assert before.endswith("generation-1")
@@ -212,7 +293,7 @@ def test_reference_based_rotation_changes_value_without_service_or_reference_cha
 
 
 @pytest.mark.unit
-def test_secret_value_and_reference_never_render_plaintext_or_provider_location() -> None:
+def test_secret_value_and_reference_never_render_sensitive_material() -> None:
     plaintext = _sentinel(SecretId.OPENAI_API_KEY)
     provider_location = _REF_NAMES[SecretId.OPENAI_API_KEY]
     value = SecretValue(plaintext)
@@ -224,17 +305,58 @@ def test_secret_value_and_reference_never_render_plaintext_or_provider_location(
 
 
 @pytest.mark.unit
-def test_secret_value_blocks_json_pickle_and_copy_serialization() -> None:
-    value = SecretValue(_sentinel(SecretId.OPENAI_API_KEY))
-
+@pytest.mark.parametrize(
+    "holder",
+    [
+        SecretValue(_sentinel(SecretId.OPENAI_API_KEY)),
+        _REFERENCES[SecretId.OPENAI_API_KEY],
+    ],
+)
+def test_value_and_reference_block_json_pickle_and_copy(holder: object) -> None:
     with pytest.raises(TypeError):
-        json.dumps(value)
+        json.dumps(holder)
     with pytest.raises(TypeError, match="serialized"):
-        pickle.dumps(value)
+        pickle.dumps(holder)
     with pytest.raises(TypeError, match="copied"):
-        copy.copy(value)
+        copy.copy(holder)
     with pytest.raises(TypeError, match="copied"):
-        copy.deepcopy(value)
+        copy.deepcopy(holder)
+    if isinstance(holder, SecretRef):
+        with pytest.raises(TypeError):
+            asdict(holder)  # type: ignore[call-overload]
+        with pytest.raises(TypeError):
+            vars(holder)
+        with pytest.raises(AttributeError, match="immutable"):
+            holder.provider_reference = "ainvest/test/replacement"  # type: ignore[misc]
+
+
+@pytest.mark.unit
+def test_provider_holders_block_copy_pickle_and_state_exposure() -> None:
+    plaintext = _sentinel(SecretId.OPENAI_API_KEY)
+    provider_reference = _REF_NAMES[SecretId.OPENAI_API_KEY]
+    environment_key = "AINVEST_TEST_RESEARCH_VALUE"
+    providers = (
+        MemorySecretProvider(
+            {provider_reference: plaintext},
+            allowed_references={provider_reference},
+        ),
+        DevelopmentEnvironmentSecretProvider(
+            {environment_key: plaintext},
+            bindings={provider_reference: environment_key},
+            deployment_environment="development",
+        ),
+    )
+
+    for provider in providers:
+        assert plaintext not in repr(provider)
+        with pytest.raises(TypeError, match="serialized"):
+            pickle.dumps(provider)
+        with pytest.raises(TypeError, match="copied"):
+            copy.copy(provider)
+        with pytest.raises(TypeError, match="copied"):
+            copy.deepcopy(provider)
+        with pytest.raises(TypeError, match="serialized"):
+            provider.__getstate__()
 
 
 @pytest.mark.unit
@@ -260,7 +382,7 @@ def test_audit_and_structured_logging_redact_secret_values() -> None:
 
 
 @pytest.mark.unit
-def test_provider_failure_messages_and_values_are_not_propagated() -> None:
+def test_provider_failure_has_no_cause_context_or_plaintext_in_exception_log() -> None:
     plaintext = _sentinel(SecretId.OPENAI_API_KEY)
 
     class LeakyProvider:
@@ -272,15 +394,91 @@ def test_provider_failure_messages_and_values_are_not_propagated() -> None:
             del reference
             raise RuntimeError(plaintext)
 
-    service = _service(LeakyProvider())
+    service = _service(provider=LeakyProvider())
+    assert service.probe(SecretId.OPENAI_API_KEY).status is SecretAccessStatus.PROVIDER_ERROR
 
-    probe = service.probe(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY)
-    assert probe.status is SecretAccessStatus.PROVIDER_ERROR
+    stream = StringIO()
+    configure_logging(stream=stream, environment="test")
+    try:
+        service.get(SecretId.OPENAI_API_KEY)
+    except SecretAccessError as error:
+        assert error.probe.status is SecretAccessStatus.PROVIDER_ERROR
+        assert error.__cause__ is None
+        assert error.__context__ is None
+        get_logger("secret-test").exception("secret_provider_failed")
+    else:
+        pytest.fail("provider failure must fail closed")
+
+    assert plaintext not in stream.getvalue()
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("hostile_status", [[], {"poisoned": "status"}, object()])
+def test_hostile_unhashable_or_foreign_probe_status_fails_closed(
+    hostile_status: object,
+) -> None:
+    class HostileStatusProvider:
+        def probe(self, reference: SecretRef) -> Any:
+            del reference
+            return hostile_status
+
+        def read(self, reference: SecretRef) -> SecretValue:
+            del reference
+            raise AssertionError("read is not part of this test")
+
+    assert (
+        _service(provider=HostileStatusProvider()).probe(SecretId.OPENAI_API_KEY).status
+        is SecretAccessStatus.PROVIDER_ERROR
+    )
+
+
+@pytest.mark.unit
+def test_poisoned_provider_error_status_and_message_are_not_observed() -> None:
+    plaintext = _sentinel(SecretId.OPENAI_API_KEY)
+
+    class PoisonedProviderError(SecretProviderError):
+        @property
+        def status(self) -> ProviderSecretStatus:
+            raise RuntimeError(plaintext)
+
+        def __str__(self) -> str:
+            return plaintext
+
+    class PoisonedProvider:
+        def probe(self, reference: SecretRef) -> ProviderSecretStatus:
+            del reference
+            return ProviderSecretStatus.PRESENT
+
+        def read(self, reference: SecretRef) -> SecretValue:
+            del reference
+            raise PoisonedProviderError(ProviderSecretStatus.MISSING)
+
     with pytest.raises(SecretAccessError) as caught:
-        service.get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY)
+        _service(provider=PoisonedProvider()).get(SecretId.OPENAI_API_KEY)
+
     assert caught.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
-    assert plaintext not in str(caught.value)
     assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert plaintext not in str(caught.value)
+
+
+@pytest.mark.unit
+def test_exact_provider_error_with_mutated_unhashable_status_fails_closed() -> None:
+    error = SecretProviderError(ProviderSecretStatus.MISSING)
+    error._status = []  # type: ignore[assignment]
+
+    class MutatedStatusProvider:
+        def probe(self, reference: SecretRef) -> ProviderSecretStatus:
+            del reference
+            return ProviderSecretStatus.PRESENT
+
+        def read(self, reference: SecretRef) -> SecretValue:
+            del reference
+            raise error
+
+    with pytest.raises(SecretAccessError) as caught:
+        _service(provider=MutatedStatusProvider()).get(SecretId.OPENAI_API_KEY)
+    assert caught.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
 
 
 @pytest.mark.unit
@@ -295,7 +493,7 @@ def test_provider_returning_raw_value_fails_closed() -> None:
             return _sentinel(SecretId.OPENAI_API_KEY)
 
     with pytest.raises(SecretAccessError) as caught:
-        _service(InvalidProvider()).get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY)
+        _service(provider=InvalidProvider()).get(SecretId.OPENAI_API_KEY)
     assert caught.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
 
 
@@ -310,12 +508,11 @@ def test_development_environment_provider_requires_explicit_safe_environment() -
         bindings={provider_reference: environment_key},
         deployment_environment="development",
     )
-    service = _service(provider)
-
     assert (
-        service.get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY).reveal()
+        _service(provider=provider).get(SecretId.OPENAI_API_KEY).reveal()
         == environment[environment_key]
     )
+
     with pytest.raises(ValueError, match="outside development"):
         DevelopmentEnvironmentSecretProvider(
             environment,
@@ -338,28 +535,28 @@ def test_process_environment_access_requires_explicit_factory(
         deployment_environment="development",
     )
 
-    assert (
-        _service(provider).get(ServiceRole.RESEARCH, SecretId.OPENAI_API_KEY).reveal() == plaintext
-    )
+    assert _service(provider=provider).get(SecretId.OPENAI_API_KEY).reveal() == plaintext
 
 
 @pytest.mark.unit
 def test_reference_registry_rejects_mismatched_logical_id() -> None:
     with pytest.raises(ValueError, match="does not match"):
-        SecretAccessService(
-            _provider_for_all(),
-            {
+        _service(
+            references={
                 SecretId.OPENAI_API_KEY: SecretRef(
                     SecretId.TELEGRAM_BOT_TOKEN,
                     _REF_NAMES[SecretId.OPENAI_API_KEY],
                 )
-            },
+            }
         )
 
 
 @pytest.mark.unit
-def test_provider_errors_are_sanitized() -> None:
-    error = SecretProviderError(ProviderSecretStatus.PERMISSION_DENIED)
+def test_provider_errors_are_sanitized_at_construction() -> None:
+    expected = SecretProviderError(ProviderSecretStatus.PERMISSION_DENIED)
+    hostile = SecretProviderError(["unhashable", "status"])
 
-    assert str(error) == "secret provider access failed: permission_denied"
-    assert not error.__dict__.get("value")
+    assert str(expected) == "secret provider access failed: permission_denied"
+    assert expected.status is ProviderSecretStatus.PERMISSION_DENIED
+    assert str(hostile) == "secret provider access failed: error"
+    assert hostile.status is ProviderSecretStatus.ERROR

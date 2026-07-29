@@ -14,14 +14,19 @@ their absence keeps production secret access unavailable.
 
 1. Code requests a stable logical `SecretId`; it never embeds a credential or
    provider-specific resource name.
-2. `SecretAccessService` checks the caller's `ServiceRole` before invoking a
-   provider. Unknown roles, unknown identifiers, unconfigured references, and
-   cross-role requests fail closed.
+2. Each `SecretAccessService` is permanently bound to exactly one
+   `ServiceRole` at construction. `get` and `probe` do not accept a role, so a
+   request cannot impersonate another identity per call. The boundary retains
+   only that role's configured references. Unknown construction roles, unknown
+   identifiers, unconfigured references, and cross-role requests fail closed.
 3. A presence probe returns only role, logical identifier, and status. It does
    not fetch, serialize, log, audit, or return the secret or provider reference.
 4. A successful read returns `SecretValue`. Plaintext is available only through
    an explicit `reveal()` call after authorization. Its `str` and `repr` are
    redacted, and common copy, pickle, and JSON serialization paths are blocked.
+   `SecretRef`, development/in-memory providers, and the access service also
+   block copying and serialization so their private state cannot become an
+   accidental snapshot.
 5. Provider exceptions are replaced by sanitized access errors without
    propagating provider messages, exception chains, or values.
 6. Strategy workers receive none of these credentials. Their environment
@@ -49,14 +54,21 @@ module alone cannot enable it.
 
 `SecretProvider` has two operations:
 
-- `probe(ref)` returns `present`, `missing`, `permission_denied`, or
-  `unavailable` without a value.
+- `probe(ref)` uses reference/key metadata only and returns `present`,
+  `missing`, `permission_denied`, or `unavailable` without fetching or
+  truth-testing a value.
 - `read(ref)` returns a `SecretValue` or raises a sanitized
   `SecretProviderError`.
 
 Implementations must apply provider-side IAM in addition to the application
 role policy. Application authorization is defense in depth, not a replacement
 for separate workload identities and provider permissions.
+
+Provider statuses are accepted only when they are exact known enum values.
+Foreign, unhashable, or otherwise hostile statuses become `provider_error`.
+Provider exceptions, including exceptions with hostile status properties, are
+translated after leaving the provider exception context; neither the cause nor
+the context is retained in the public `SecretAccessError`.
 
 The repository includes only:
 
@@ -85,8 +97,9 @@ working directory. Development composition must:
 2. bind stable provider-neutral references to development environment keys;
 3. construct `DevelopmentEnvironmentSecretProvider` with the explicit
    `development` label; and
-4. inject `SecretAccessService` only into the service process that owns that
-   role.
+4. construct a separate `SecretAccessService(role, provider, references)` for
+   the process identity; and
+5. inject that already-bound service only into the process that owns the role.
 
 `.env`, credentials, provider resource IDs, account IDs, and resolved values
 must never be committed. Repository examples may contain empty placeholders
@@ -98,7 +111,8 @@ For every secret required by the selected non-live capability, startup calls
 `probe` and accepts only `available`. The following remain value-free:
 
 - `denied`: the role is not allowed to request the logical secret;
-- `unknown_role` / `unknown_secret`: invalid caller input;
+- construction rejects an unknown role without echoing the input;
+- `unknown_secret`: an invalid logical identifier was requested;
 - `reference_unconfigured`: no provider-neutral binding exists;
 - `missing`: the provider permits the reference but no value is present;
 - `provider_permission_denied`: provider IAM rejected it;

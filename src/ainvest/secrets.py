@@ -11,10 +11,10 @@ from __future__ import annotations
 import os
 import re
 from collections.abc import Iterable, Mapping
-from dataclasses import dataclass, field
+from dataclasses import dataclass
 from enum import StrEnum
 from types import MappingProxyType
-from typing import Any, Final, Protocol, Self, SupportsIndex
+from typing import Any, Final, Protocol, Self, SupportsIndex, final
 
 from pydantic import SecretStr
 
@@ -69,8 +69,31 @@ DEFAULT_ROLE_GRANTS: Final[Mapping[ServiceRole, frozenset[SecretId]]] = MappingP
 )
 
 
-@dataclass(frozen=True, slots=True, repr=False)
-class SecretRef:
+class _NonSerializable:
+    """Block common accidental copies and serialized snapshots of secret holders."""
+
+    __slots__ = ()
+
+    def __copy__(self) -> Self:
+        raise TypeError(f"{type(self).__name__} cannot be copied")
+
+    def __deepcopy__(self, memo: dict[int, object]) -> Self:
+        del memo
+        raise TypeError(f"{type(self).__name__} cannot be copied")
+
+    def __reduce__(self) -> str | tuple[Any, ...]:
+        raise TypeError(f"{type(self).__name__} cannot be serialized")
+
+    def __reduce_ex__(self, protocol: SupportsIndex) -> str | tuple[Any, ...]:
+        del protocol
+        raise TypeError(f"{type(self).__name__} cannot be serialized")
+
+    def __getstate__(self) -> object:
+        raise TypeError(f"{type(self).__name__} cannot be serialized")
+
+
+@final
+class SecretRef(_NonSerializable):
     """Provider-neutral location for one logical secret.
 
     The provider reference is configuration, not secret material, but it is
@@ -78,14 +101,32 @@ class SecretRef:
     naming in logs and status responses.
     """
 
-    secret_id: SecretId
-    provider_reference: str = field(repr=False)
+    __slots__ = ("__provider_reference", "__secret_id")
+    __provider_reference: str
+    __secret_id: SecretId
 
-    def __post_init__(self) -> None:
-        if not isinstance(self.provider_reference, str) or not _REFERENCE_PATTERN.fullmatch(
-            self.provider_reference
+    def __init__(self, secret_id: SecretId, provider_reference: str) -> None:
+        if not isinstance(secret_id, SecretId):
+            raise ValueError("secret reference requires a known logical identifier")
+        if not isinstance(provider_reference, str) or not _REFERENCE_PATTERN.fullmatch(
+            provider_reference
         ):
             raise ValueError("secret provider reference must be a non-secret opaque identifier")
+        object.__setattr__(self, "_SecretRef__secret_id", secret_id)
+        object.__setattr__(self, "_SecretRef__provider_reference", provider_reference)
+
+    def __setattr__(self, name: str, value: object) -> None:
+        del name, value
+        raise AttributeError("SecretRef is immutable")
+
+    @property
+    def secret_id(self) -> SecretId:
+        return self.__secret_id
+
+    @property
+    def provider_reference(self) -> str:
+        """Return the opaque reference to provider implementations only."""
+        return self.__provider_reference
 
     def __repr__(self) -> str:
         return f"SecretRef(secret_id={self.secret_id.value!r}, provider_reference={REDACTED})"
@@ -94,7 +135,8 @@ class SecretRef:
         return f"{self.secret_id.value}:{REDACTED}"
 
 
-class SecretValue:
+@final
+class SecretValue(_NonSerializable):
     """Redacted wrapper whose plaintext requires an explicit ``reveal`` call.
 
     Secret values cannot be copied or pickled, and their string
@@ -120,23 +162,6 @@ class SecretValue:
     def __str__(self) -> str:
         return REDACTED
 
-    def __copy__(self) -> Self:
-        raise TypeError("SecretValue cannot be copied")
-
-    def __deepcopy__(self, memo: dict[int, object]) -> Self:
-        del memo
-        raise TypeError("SecretValue cannot be copied")
-
-    def __reduce__(self) -> str | tuple[Any, ...]:
-        raise TypeError("SecretValue cannot be serialized")
-
-    def __reduce_ex__(self, protocol: SupportsIndex) -> str | tuple[Any, ...]:
-        del protocol
-        raise TypeError("SecretValue cannot be serialized")
-
-    def __getstate__(self) -> object:
-        raise TypeError("SecretValue cannot be serialized")
-
 
 class ProviderSecretStatus(StrEnum):
     """Value-free result returned by a provider presence probe."""
@@ -145,14 +170,22 @@ class ProviderSecretStatus(StrEnum):
     MISSING = "missing"
     PERMISSION_DENIED = "permission_denied"
     UNAVAILABLE = "unavailable"
+    ERROR = "error"
 
 
 class SecretProviderError(RuntimeError):
     """Sanitized provider failure with no provider exception or secret value."""
 
-    def __init__(self, status: ProviderSecretStatus) -> None:
-        self.status = status
-        super().__init__(f"secret provider access failed: {status.value}")
+    __slots__ = ("_status",)
+
+    def __init__(self, status: object) -> None:
+        safe_status = status if type(status) is ProviderSecretStatus else ProviderSecretStatus.ERROR
+        self._status = safe_status
+        super().__init__(f"secret provider access failed: {safe_status.value}")
+
+    @property
+    def status(self) -> ProviderSecretStatus:
+        return self._status
 
 
 class SecretProvider(Protocol):
@@ -165,10 +198,10 @@ class SecretProvider(Protocol):
         """Read a secret or raise a sanitized :class:`SecretProviderError`."""
 
 
-class MemorySecretProvider:
+class MemorySecretProvider(_NonSerializable):
     """Deterministic mutable provider for tests and offline development."""
 
-    __slots__ = ("_allowed", "_values")
+    __slots__ = ("_allowed", "_present", "_values")
 
     def __init__(
         self,
@@ -176,7 +209,11 @@ class MemorySecretProvider:
         *,
         allowed_references: Iterable[str] | None = None,
     ) -> None:
-        self._values = dict(values or {})
+        self._values = {
+            provider_reference: SecretValue(value)
+            for provider_reference, value in (values or {}).items()
+        }
+        self._present = set(self._values)
         self._allowed = frozenset(
             self._values if allowed_references is None else allowed_references
         )
@@ -185,7 +222,7 @@ class MemorySecretProvider:
         provider_reference = reference.provider_reference
         if provider_reference not in self._allowed:
             return ProviderSecretStatus.PERMISSION_DENIED
-        if not self._values.get(provider_reference):
+        if provider_reference not in self._present:
             return ProviderSecretStatus.MISSING
         return ProviderSecretStatus.PRESENT
 
@@ -193,18 +230,21 @@ class MemorySecretProvider:
         status = self.probe(reference)
         if status is not ProviderSecretStatus.PRESENT:
             raise SecretProviderError(status)
-        return SecretValue(self._values[reference.provider_reference])
+        try:
+            stored = self._values[reference.provider_reference]
+            return SecretValue(stored.reveal())
+        except Exception:
+            raise SecretProviderError(ProviderSecretStatus.ERROR) from None
 
     def rotate(self, provider_reference: str, value: str) -> None:
         """Replace material behind an existing reference without code changes."""
         if provider_reference not in self._allowed:
             raise SecretProviderError(ProviderSecretStatus.PERMISSION_DENIED)
-        if not value:
-            raise ValueError("secret value must be a non-empty string")
-        self._values[provider_reference] = value
+        self._values[provider_reference] = SecretValue(value)
+        self._present.add(provider_reference)
 
 
-class DevelopmentEnvironmentSecretProvider:
+class DevelopmentEnvironmentSecretProvider(_NonSerializable):
     """Explicit development-only adapter over a supplied environment mapping.
 
     This provider never reads ``os.environ`` implicitly.  A caller that
@@ -246,7 +286,7 @@ class DevelopmentEnvironmentSecretProvider:
         environment_key = self._bindings.get(reference.provider_reference)
         if environment_key is None:
             return ProviderSecretStatus.PERMISSION_DENIED
-        if not self._environment.get(environment_key):
+        if not any(candidate == environment_key for candidate in self._environment):
             return ProviderSecretStatus.MISSING
         return ProviderSecretStatus.PRESENT
 
@@ -255,10 +295,15 @@ class DevelopmentEnvironmentSecretProvider:
         if status is not ProviderSecretStatus.PRESENT:
             raise SecretProviderError(status)
         environment_key = self._bindings[reference.provider_reference]
-        return SecretValue(self._environment[environment_key])
+        try:
+            return SecretValue(self._environment[environment_key])
+        except KeyError:
+            raise SecretProviderError(ProviderSecretStatus.MISSING) from None
+        except Exception:
+            raise SecretProviderError(ProviderSecretStatus.ERROR) from None
 
 
-class UnavailableProductionSecretProvider:
+class UnavailableProductionSecretProvider(_NonSerializable):
     """Fail-closed placeholder until an approved production provider exists."""
 
     __slots__ = ()
@@ -277,7 +322,6 @@ class SecretAccessStatus(StrEnum):
 
     AVAILABLE = "available"
     DENIED = "denied"
-    UNKNOWN_ROLE = "unknown_role"
     UNKNOWN_SECRET = "unknown_secret"
     REFERENCE_UNCONFIGURED = "reference_unconfigured"
     MISSING = "missing"
@@ -302,7 +346,6 @@ class SecretAccessProbe:
     def is_permitted(self) -> bool:
         return self.status not in {
             SecretAccessStatus.DENIED,
-            SecretAccessStatus.UNKNOWN_ROLE,
             SecretAccessStatus.UNKNOWN_SECRET,
         }
 
@@ -332,141 +375,156 @@ def _known_secret(value: SecretId | str) -> SecretId | None:
         return None
 
 
-class SecretAccessService:
-    """Default-deny role authorization in front of a secret provider."""
+def _translate_provider_status(status: object) -> SecretAccessStatus:
+    """Translate only exact known status singletons; hostile objects fail closed."""
+    if status is ProviderSecretStatus.PRESENT:
+        return SecretAccessStatus.AVAILABLE
+    if status is ProviderSecretStatus.MISSING:
+        return SecretAccessStatus.MISSING
+    if status is ProviderSecretStatus.PERMISSION_DENIED:
+        return SecretAccessStatus.PROVIDER_PERMISSION_DENIED
+    if status is ProviderSecretStatus.UNAVAILABLE:
+        return SecretAccessStatus.PROVIDER_UNAVAILABLE
+    return SecretAccessStatus.PROVIDER_ERROR
 
-    __slots__ = ("_provider", "_references")
+
+def _translate_provider_exception(error: Exception) -> SecretAccessStatus:
+    """Read an exact provider error defensively without retaining it."""
+    if type(error) is not SecretProviderError:
+        return SecretAccessStatus.PROVIDER_ERROR
+    try:
+        status: object = error.status
+    except Exception:
+        return SecretAccessStatus.PROVIDER_ERROR
+    translated = _translate_provider_status(status)
+    if translated is SecretAccessStatus.AVAILABLE:
+        return SecretAccessStatus.PROVIDER_ERROR
+    return translated
+
+
+@final
+class SecretAccessService(_NonSerializable):
+    """Default-deny provider boundary permanently bound to one service role."""
+
+    __slots__ = ("_provider", "_references", "_role")
+    _provider: SecretProvider
+    _references: Mapping[SecretId, SecretRef]
+    _role: ServiceRole
 
     def __init__(
         self,
+        role: ServiceRole | str,
         provider: SecretProvider,
         references: Mapping[SecretId, SecretRef],
     ) -> None:
+        known_role = _known_role(role)
+        if known_role is None:
+            raise ValueError("secret access service requires a known role")
         for secret_id, reference in references.items():
             if reference.secret_id is not secret_id:
                 raise ValueError("secret reference identifier does not match registry key")
-        self._provider = provider
-        self._references = MappingProxyType(dict(references))
+        allowed = DEFAULT_ROLE_GRANTS[known_role]
+        object.__setattr__(self, "_role", known_role)
+        object.__setattr__(self, "_provider", provider)
+        object.__setattr__(
+            self,
+            "_references",
+            MappingProxyType(
+                {
+                    secret_id: reference
+                    for secret_id, reference in references.items()
+                    if secret_id in allowed
+                }
+            ),
+        )
+
+    def __setattr__(self, name: str, value: object) -> None:
+        del name, value
+        raise AttributeError("SecretAccessService is immutable")
+
+    @property
+    def role(self) -> ServiceRole:
+        """The immutable identity this boundary was constructed for."""
+        return self._role
 
     def _authorize(
         self,
-        role: ServiceRole | str,
         secret_id: SecretId | str,
-    ) -> tuple[ServiceRole | None, SecretId | None, SecretAccessProbe | None]:
-        known_role = _known_role(role)
-        if known_role is None:
-            return (
-                None,
-                None,
-                SecretAccessProbe(
-                    role="unknown",
-                    secret_id="unknown",
-                    status=SecretAccessStatus.UNKNOWN_ROLE,
-                ),
-            )
+    ) -> tuple[SecretId | None, SecretAccessProbe | None]:
         known_secret = _known_secret(secret_id)
         if known_secret is None:
             return (
-                known_role,
                 None,
                 SecretAccessProbe(
-                    role=known_role.value,
+                    role=self._role.value,
                     secret_id="unknown",
                     status=SecretAccessStatus.UNKNOWN_SECRET,
                 ),
             )
-        if known_secret not in DEFAULT_ROLE_GRANTS[known_role]:
+        if known_secret not in DEFAULT_ROLE_GRANTS[self._role]:
             return (
-                known_role,
                 known_secret,
                 SecretAccessProbe(
-                    role=known_role.value,
+                    role=self._role.value,
                     secret_id=known_secret.value,
                     status=SecretAccessStatus.DENIED,
                 ),
             )
         if known_secret not in self._references:
             return (
-                known_role,
                 known_secret,
                 SecretAccessProbe(
-                    role=known_role.value,
+                    role=self._role.value,
                     secret_id=known_secret.value,
                     status=SecretAccessStatus.REFERENCE_UNCONFIGURED,
                 ),
             )
-        return known_role, known_secret, None
+        return known_secret, None
 
-    def probe(
-        self,
-        role: ServiceRole | str,
-        secret_id: SecretId | str,
-    ) -> SecretAccessProbe:
+    def probe(self, secret_id: SecretId | str) -> SecretAccessProbe:
         """Check permission and presence without returning secret material."""
-        known_role, known_secret, denied = self._authorize(role, secret_id)
+        known_secret, denied = self._authorize(secret_id)
         if denied is not None:
             return denied
-        assert known_role is not None
         assert known_secret is not None
         reference = self._references[known_secret]
         try:
             status = self._provider.probe(reference)
         except Exception:
-            status = None
-        if status is None:
             translated = SecretAccessStatus.PROVIDER_ERROR
         else:
-            translated = {
-                ProviderSecretStatus.PRESENT: SecretAccessStatus.AVAILABLE,
-                ProviderSecretStatus.MISSING: SecretAccessStatus.MISSING,
-                ProviderSecretStatus.PERMISSION_DENIED: (
-                    SecretAccessStatus.PROVIDER_PERMISSION_DENIED
-                ),
-                ProviderSecretStatus.UNAVAILABLE: SecretAccessStatus.PROVIDER_UNAVAILABLE,
-            }.get(status, SecretAccessStatus.PROVIDER_ERROR)
+            translated = _translate_provider_status(status)
         return SecretAccessProbe(
-            role=known_role.value,
+            role=self._role.value,
             secret_id=known_secret.value,
             status=translated,
         )
 
-    def get(
-        self,
-        role: ServiceRole | str,
-        secret_id: SecretId | str,
-    ) -> SecretValue:
-        """Return a value only after the role policy authorizes the logical ID."""
-        known_role, known_secret, denied = self._authorize(role, secret_id)
+    def get(self, secret_id: SecretId | str) -> SecretValue:
+        """Return a value only after this boundary's role authorizes its logical ID."""
+        known_secret, denied = self._authorize(secret_id)
         if denied is not None:
             raise SecretAccessError(denied)
-        assert known_role is not None
         assert known_secret is not None
         reference = self._references[known_secret]
+        failure: SecretAccessProbe | None = None
+        value: object | None = None
         try:
             value = self._provider.read(reference)
-        except SecretProviderError as exc:
-            status = {
-                ProviderSecretStatus.MISSING: SecretAccessStatus.MISSING,
-                ProviderSecretStatus.PERMISSION_DENIED: (
-                    SecretAccessStatus.PROVIDER_PERMISSION_DENIED
-                ),
-                ProviderSecretStatus.UNAVAILABLE: SecretAccessStatus.PROVIDER_UNAVAILABLE,
-            }.get(exc.status, SecretAccessStatus.PROVIDER_ERROR)
-            raise SecretAccessError(
-                SecretAccessProbe(known_role.value, known_secret.value, status)
-            ) from None
-        except Exception:
-            raise SecretAccessError(
-                SecretAccessProbe(
-                    known_role.value,
-                    known_secret.value,
-                    SecretAccessStatus.PROVIDER_ERROR,
-                )
-            ) from None
+        except Exception as provider_error:
+            failure = SecretAccessProbe(
+                self._role.value,
+                known_secret.value,
+                _translate_provider_exception(provider_error),
+            )
+        if failure is not None:
+            # Raise outside the provider exception handler: no leaky provider
+            # exception remains in ``__cause__`` or ``__context__``.
+            raise SecretAccessError(failure)
         if not isinstance(value, SecretValue):
             raise SecretAccessError(
                 SecretAccessProbe(
-                    known_role.value,
+                    self._role.value,
                     known_secret.value,
                     SecretAccessStatus.PROVIDER_ERROR,
                 )
