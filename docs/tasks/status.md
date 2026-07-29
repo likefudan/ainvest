@@ -361,6 +361,17 @@ Robinhood implementation, or Research Agent behavior.
   adversarial runtime tests passed (22 tests). `./scripts/dev verify` passed
   after remediation: Ruff/format/mypy/schema snapshots, 702 unit, 102 contract,
   15 integration, and 819 total tests with 86.69% coverage.
+  Independent-review round-3 remediation
+  `b581906be9eea8881c944ff5d4e107b7a2006fef` replaces the replayable raw
+  delegate with a thread-safe, call-scoped exactly-once capability; fails
+  closed on late, omitted, repeated, concurrent, and result-substituting use;
+  preserves established broker-domain errors while mapping any inconsistent
+  post-delegate path to the existing reconciliation-required unknown-outcome
+  taxonomy; sanitizes non-domain guard exceptions without retained
+  cause/context; and makes submit/cancel authorization explicitly independent.
+  Focused adversarial runtime tests passed (31 tests). Final
+  `./scripts/dev verify` passed: Ruff/format/mypy/schema snapshots, 711 unit,
+  102 contract, 15 integration, and 828 total tests with 86.79% coverage.
   Scoped readability/duplication and secret-signature inspection found no
   copied broker/config logic or credential values.
   Independent re-review, PR, and squash-merge commit remain pending.
