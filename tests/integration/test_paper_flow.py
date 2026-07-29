@@ -2,12 +2,21 @@
 
 from __future__ import annotations
 
+import json
+from concurrent.futures import ThreadPoolExecutor
 from decimal import Decimal
+from io import StringIO
 
 import pytest
 
 from ainvest.execution import BrokerSubmitOutcome, BrokerSubmitRequest, BrokerSubmitResult
 from ainvest.execution.state_machine import OrderLifecycleState
+from ainvest.observability import (
+    bind_log_context,
+    clear_log_context,
+    configure_logging,
+    get_logger,
+)
 from ainvest.orchestrator import PaperFlowTerminal, run_paper_flow
 from ainvest.orchestrator.fixtures import make_paper_flow_config, make_risk_config
 from ainvest.risk import AllowlistEntry
@@ -63,6 +72,133 @@ def test_paper_flow_success_replayable() -> None:
 
 
 @pytest.mark.integration
+def test_paper_flow_logs_connect_every_step_without_money_payloads() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(
+        service="paper-orchestrator",
+        environment="test",
+        version="test-version",
+        stream=stream,
+    )
+
+    result = run_paper_flow(make_paper_flow_config(inject_approval=True))
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+
+    assert [event["event"] for event in events] == [step.name for step in result.steps]
+    assert {event["correlation_id"] for event in events} == {result.correlation_id}
+    assert {event["strategy_run_id"] for event in events} == {"srun_01HZYD4APAPER0001"}
+    assert all(event["service"] == "paper-orchestrator" for event in events)
+    assert all(event["environment"] == "test" for event in events)
+    assert all("causation_id" in event for event in events)
+    assert all("proposal_id" in event for event in events)
+    assert all("quantity" not in event for event in events)
+    assert all("limit_price" not in event for event in events)
+    assert any(event["proposal_id"] == result.proposal_id for event in events)
+
+
+@pytest.mark.integration
+def test_filled_flow_preserves_money_lifecycle_when_sampling_is_zero() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(
+        service="paper-orchestrator",
+        environment="test",
+        version="test-version",
+        sample_rate=0,
+        stream=stream,
+    )
+    get_logger().debug("ordinary_debug_event")
+
+    result = run_paper_flow(make_paper_flow_config(inject_approval=True))
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    event_names = {event["event"] for event in events}
+
+    assert result.terminal is PaperFlowTerminal.FILLED
+    assert "ordinary_debug_event" not in event_names
+    assert event_names >= {
+        "size_position",
+        "evaluate_risk",
+        "create_proposal",
+        "create_challenge",
+        "consume_challenge",
+        "evaluate_pretrade",
+        "execute_order",
+        "inject_market_event",
+        "reconcile",
+    }
+    assert all(event["funds_safety"] is True for event in events)
+    assert all(event["sampling_exempt"] is True for event in events)
+    assert all(event["level"] == "info" for event in events)
+
+
+@pytest.mark.integration
+def test_paper_flow_resets_stale_ids_and_restores_caller_context() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(stream=stream, environment="test")
+    bind_log_context(
+        correlation_id="corr_outer_12345678",
+        causation_id="cmd_outer_12345678",
+        proposal_id="ordp_outer_12345678",
+        strategy_run_id="srun_outer_12345678",
+        client_order_id="client_outer_12345678",
+        broker_order_id="broker_outer_12345678",
+    )
+
+    config = make_paper_flow_config(inject_approval=True)
+    config.correlation_id = "corr_inner_12345678"
+    result = run_paper_flow(config)
+    get_logger().info("caller_context_restored")
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    flow_events, caller_event = events[:-1], events[-1]
+
+    assert result.terminal is PaperFlowTerminal.FILLED
+    assert {event["correlation_id"] for event in flow_events} == {"corr_inner_12345678"}
+    assert flow_events[0]["proposal_id"] is None
+    assert flow_events[0]["client_order_id"] is None
+    assert flow_events[0]["broker_order_id"] is None
+    by_name = {event["event"]: event for event in flow_events}
+    assert by_name["create_proposal"]["proposal_id"] == result.proposal_id
+    assert by_name["consume_challenge"]["causation_id"] == result.approval_event_id
+    assert by_name["evaluate_pretrade"]["client_order_id"] == result.client_order_id
+    assert by_name["execute_order"]["broker_order_id"] == result.broker_order_id
+    assert by_name["reconcile"]["proposal_id"] == result.proposal_id
+    assert all(event["causation_id"] != "cmd_outer_12345678" for event in flow_events)
+    assert caller_event["correlation_id"] == "corr_outer_12345678"
+    assert caller_event["causation_id"] == "cmd_outer_12345678"
+    assert caller_event["proposal_id"] == "ordp_outer_12345678"
+    assert caller_event["strategy_run_id"] == "srun_outer_12345678"
+    assert caller_event["client_order_id"] == "client_outer_12345678"
+    assert caller_event["broker_order_id"] == "broker_outer_12345678"
+
+
+@pytest.mark.integration
+def test_concurrent_paper_flows_do_not_leak_context() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(stream=stream, environment="test")
+    correlations = ("corr_concurrent_a_12345678", "corr_concurrent_b_12345678")
+
+    def run(correlation_id: str) -> PaperFlowTerminal:
+        config = make_paper_flow_config(inject_approval=True)
+        config.correlation_id = correlation_id
+        return run_paper_flow(config).terminal
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        terminals = tuple(executor.map(run, correlations))
+
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    assert terminals == (PaperFlowTerminal.FILLED, PaperFlowTerminal.FILLED)
+    assert {event["correlation_id"] for event in events} == set(correlations)
+    for correlation_id in correlations:
+        flow_events = [event for event in events if event["correlation_id"] == correlation_id]
+        assert flow_events
+        assert all(event["causation_id"] != "cmd_outer_12345678" for event in flow_events)
+        assert {event["strategy_run_id"] for event in flow_events} == {"srun_01HZYD4APAPER0001"}
+
+
+@pytest.mark.integration
 def test_paper_flow_dry_run_stops_at_approval_pending() -> None:
     result = run_paper_flow(make_paper_flow_config(inject_approval=False))
     assert result.terminal is PaperFlowTerminal.APPROVAL_PENDING
@@ -105,8 +241,18 @@ def test_paper_flow_expired_approval() -> None:
 
 @pytest.mark.integration
 def test_paper_flow_unknown_broker_then_reconcile() -> None:
+    stream = StringIO()
+    clear_log_context()
+    configure_logging(
+        stream=stream,
+        environment="test",
+        sample_rate=0,
+    )
     port = _UnknownWritePort()
     result = run_paper_flow(make_paper_flow_config(inject_approval=True, write_port=port))
+    events = [json.loads(line) for line in stream.getvalue().splitlines()]
+    by_name = {event["event"]: event for event in events}
+
     assert result.terminal is PaperFlowTerminal.SUBMIT_UNKNOWN
     assert result.lifecycle is OrderLifecycleState.MANUAL_REVIEW
     assert port.submit_calls == 1
@@ -116,6 +262,13 @@ def test_paper_flow_unknown_broker_then_reconcile() -> None:
     assert "blind" in result.error.lower() or "SUBMIT_UNKNOWN" in result.error
     assert len(result.audit_events) >= 3
     assert all(event.correlation_id == result.correlation_id for event in result.audit_events)
+    assert by_name["create_proposal"]["level"] == "info"
+    assert by_name["create_proposal"]["sampling_exempt"] is True
+    assert by_name["execute_order"]["outcome"] == "SUBMIT_UNKNOWN"
+    assert by_name["execute_order"]["level"] == "critical"
+    assert by_name["reconcile_after_unknown"]["outcome"] == "MANUAL_REVIEW"
+    assert by_name["reconcile_after_unknown"]["level"] == "critical"
+    assert by_name["blind_retry_blocked"]["level"] == "warning"
 
 
 @pytest.mark.integration
