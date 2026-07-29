@@ -166,8 +166,9 @@ Initial worktree evidence verified 2026-07-28: `.worktrees/p08-t0` was clean on
 `agent/p08-t0-runtime`, and `.worktrees/p08-t3` was clean on
 `agent/p08-t3-logging`; both initially resolved to
 `263f777c0b9fc438aa8f5ab87b3a8dd108765cbd`. Before implementation, P08-T0
-was rebased to the newer immutable base recorded in its envelope; P08-T3
-remains unchanged.
+was rebased to its assigned implementation base, then rebased again to the
+post-P05-T0 `main` commit recorded in its envelope before integration review;
+P08-T3 remains unchanged.
 
 `P04-T0` may write `src/ainvest/data/{models,ports,fakes}.py`,
 `src/ainvest/data/__init__.py`, `tests/unit/data/test_models.py`,
@@ -339,15 +340,19 @@ Robinhood implementation, or Research Agent behavior.
   scoped diff and secret signatures; assert the mode/capability matrix,
   redacted health summary, invalid combinations, and default-rejecting live
   startup in `tests/unit/test_runtime.py`
-- **Handoff:** implementation commits
-  `f48e86325072267f2ee89fe572a540c915431dd0` and
-  `30ffca1940ef08a44feeaf1d15e60f61aecfd944`; one immutable capability matrix,
+- **Handoff:** rebased implementation commits
+  `2b99fe3ca86aa0676c3df6fb9f82bb7752efe43c` and
+  `a0c07394be4ed4ea835937009b66c03ac23e40c4`; tracker handoff tip
+  `321847ef0969cdd5e931a50b3454dd69b9e6bf6f`. Provides one immutable
+  capability matrix,
   concrete PaperBroker-only writes, optional isolated read port, guarded Live
   write construction, production/default rejection, stable startup error
-  codes, and redacted health output. `./scripts/dev verify` passed locally:
-  Ruff/format/mypy/schema snapshots, 537 unit, 72 contract, 15 integration,
-  and 624 total tests. Scoped readability/duplication and secret-signature
-  inspection found no copied broker/config logic or credential values.
+  codes, and redacted health output. Focused runtime tests passed (15 tests).
+  `./scripts/dev verify` passed after
+  rebasing onto the P05-T0 merge: Ruff/format/mypy/schema snapshots, 695 unit,
+  102 contract, 15 integration, and 812 total tests with 86.64% coverage.
+  Scoped readability/duplication and secret-signature inspection found no
+  copied broker/config logic or credential values.
   Independent review, PR, and squash-merge commit remain pending.
 
 ##### Execution envelope: P08-T3
@@ -458,7 +463,7 @@ task row is in the cross-cutting table below.
 
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
-| `P08-T0` | `in_progress` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
+| `P08-T0` | `in_review` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `in_progress` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
