@@ -26,7 +26,12 @@ from ainvest.config import (
     WebAuthnSettings,
 )
 from ainvest.execution import BrokerWritePort, PaperBroker, PaperCostModel
-from ainvest.execution.broker import BrokerSubmitRequest, BrokerSubmitResult
+from ainvest.execution.broker import (
+    BrokerRejectedError,
+    BrokerSubmitRequest,
+    BrokerSubmitResult,
+    BrokerUnknownOutcomeError,
+)
 from ainvest.runtime import (
     MODE_CAPABILITY_MATRIX,
     BrokerCapability,
@@ -149,7 +154,7 @@ class _CountingWritePort:
 
 
 class _FailingWritePort:
-    def __init__(self, failure: RuntimeError) -> None:
+    def __init__(self, failure: Exception) -> None:
         self.failure = failure
 
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
@@ -254,7 +259,7 @@ class _AllowingTestGuard:
         return delegate(command)
 
 
-class _MutableTestGuard(_AllowingTestGuard):
+class _FullRevocationGuard(_AllowingTestGuard):
     def __init__(self) -> None:
         super().__init__()
         self._lock = threading.Lock()
@@ -295,7 +300,7 @@ class _MutableTestGuard(_AllowingTestGuard):
         )
 
 
-class _PausingMutableGuard(_MutableTestGuard):
+class _PausingFullRevocationGuard(_FullRevocationGuard):
     """Pause request preprocessing before the final locked gate decision."""
 
     def __init__(self) -> None:
@@ -314,6 +319,147 @@ class _PausingMutableGuard(_MutableTestGuard):
         if not self.continue_to_gate.wait(timeout=5):
             raise TimeoutError("test did not release request preprocessing")
         return super().submit(context=context, request=request, delegate=delegate)
+
+
+class _SubmitBlockedCancelAllowedGuard(_AllowingTestGuard):
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context, request, delegate
+        raise RuntimeStartupError(
+            "new submissions are disabled",
+            code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+        )
+
+
+class _RetainingGuard(_AllowingTestGuard):
+    def __init__(self) -> None:
+        super().__init__()
+        self.retained_submit: LiveSubmitDelegate | None = None
+
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        self.retained_submit = delegate
+        return super().submit(context=context, request=request, delegate=delegate)
+
+
+class _ZeroCallGuard(_AllowingTestGuard):
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context, request, delegate
+        return cast(BrokerSubmitResult, object())
+
+
+class _DoubleCallGuard(_AllowingTestGuard):
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context
+        result = delegate(request)
+        delegate(request)
+        return result
+
+
+class _MismatchedResultGuard(_AllowingTestGuard):
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context
+        delegate(request)
+        return cast(BrokerSubmitResult, object())
+
+
+class _CallThenRaiseGuard(_AllowingTestGuard):
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        self.secret = secret
+
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context
+        delegate(request)
+        raise ValueError(self.secret)
+
+
+class _PreDelegateFailingGuard(_AllowingTestGuard):
+    def __init__(self, secret: str) -> None:
+        super().__init__()
+        self.secret = secret
+
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context, request, delegate
+        raise ValueError(self.secret)
+
+
+class _ConcurrentCallGuard(_AllowingTestGuard):
+    def submit(
+        self,
+        *,
+        context: LiveGateContext,
+        request: BrokerSubmitRequest,
+        delegate: LiveSubmitDelegate,
+    ) -> BrokerSubmitResult:
+        del context
+        barrier = threading.Barrier(3)
+        collection_lock = threading.Lock()
+        results: list[BrokerSubmitResult] = []
+        errors: list[Exception] = []
+
+        def invoke() -> None:
+            barrier.wait()
+            try:
+                result = delegate(request)
+            except Exception as exc:
+                with collection_lock:
+                    errors.append(exc)
+            else:
+                with collection_lock:
+                    results.append(result)
+
+        workers = [threading.Thread(target=invoke) for _ in range(2)]
+        for worker in workers:
+            worker.start()
+        barrier.wait()
+        for worker in workers:
+            worker.join(timeout=5)
+            assert not worker.is_alive()
+
+        if errors:
+            raise errors[0]
+        return results[0]
 
 
 class _SpoofedProductionGuard(_AllowingTestGuard):
@@ -581,7 +727,10 @@ def test_live_guard_owns_payload_aware_submit_and_cancel_delegation() -> None:
 
 @pytest.mark.unit
 def test_guarded_live_port_preserves_delegate_failures() -> None:
-    failure = RuntimeError("sanitized broker failure")
+    failure = BrokerRejectedError(
+        "sanitized broker rejection",
+        reason_code="BROKER_REJECTED",
+    )
     runtime = start_runtime(
         _live_settings(),
         live_guard=_AllowingTestGuard(),
@@ -590,15 +739,192 @@ def test_guarded_live_port_preserves_delegate_failures() -> None:
     write = runtime.broker_write
     assert write is not None
 
-    with pytest.raises(RuntimeError) as exc_info:
+    with pytest.raises(BrokerRejectedError) as exc_info:
         write.submit(_live_submit_request())
 
     assert exc_info.value is failure
 
 
 @pytest.mark.unit
-def test_live_guard_blocks_every_write_after_kill_switch_flip() -> None:
-    guard = _MutableTestGuard()
+def test_non_domain_delegate_failure_becomes_sanitized_unknown_outcome() -> None:
+    secret = "adapter-write-secret-that-must-not-escape"
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_AllowingTestGuard(),
+        live_write_factory=lambda: _FailingWritePort(RuntimeError(secret)),
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    error = exc_info.value
+    assert error.code == "UNKNOWN_OUTCOME"
+    assert error.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert error.operation == "submit"
+    assert error.idempotency_key == "live_client_order_1"
+    assert secret not in str(error)
+    assert secret not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+
+
+@pytest.mark.unit
+def test_retained_delegate_expires_after_guard_returns() -> None:
+    guard = _RetainingGuard()
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=guard,
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+    request = _live_submit_request()
+
+    assert write.submit(request) is delegate.submit_result
+    assert guard.retained_submit is not None
+    with pytest.raises(RuntimeStartupError) as exc_info:
+        guard.retained_submit(request)
+
+    assert exc_info.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert delegate.submit_calls == 1
+
+
+@pytest.mark.unit
+def test_guard_return_without_delegate_fails_closed() -> None:
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_ZeroCallGuard(),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(RuntimeStartupError) as exc_info:
+        write.submit(_live_submit_request())
+
+    assert exc_info.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert delegate.submit_calls == 0
+
+
+@pytest.mark.unit
+def test_double_delegate_call_is_single_send_and_unknown_outcome() -> None:
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_DoubleCallGuard(),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    assert exc_info.value.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert delegate.submit_calls == 1
+
+
+@pytest.mark.unit
+def test_guard_cannot_substitute_a_different_result_after_delegate_call() -> None:
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_MismatchedResultGuard(),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    assert exc_info.value.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert delegate.submit_calls == 1
+
+
+@pytest.mark.unit
+def test_guard_failure_before_delegate_is_sanitized_rejection() -> None:
+    secret = "pre-delegate-guard-secret-that-must-not-escape"
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_PreDelegateFailingGuard(secret),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(RuntimeStartupError) as exc_info:
+        write.submit(_live_submit_request())
+
+    error = exc_info.value
+    assert error.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert secret not in str(error)
+    assert secret not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert delegate.submit_calls == 0
+
+
+@pytest.mark.unit
+def test_guard_failure_after_delegate_is_sanitized_unknown_outcome() -> None:
+    secret = "post-delegate-guard-secret-that-must-not-escape"
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_CallThenRaiseGuard(secret),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    error = exc_info.value
+    assert error.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert secret not in str(error)
+    assert secret not in repr(error)
+    assert error.__cause__ is None
+    assert error.__context__ is None
+    assert delegate.submit_calls == 1
+
+
+@pytest.mark.unit
+def test_concurrent_delegate_calls_allow_only_one_broker_send() -> None:
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=_ConcurrentCallGuard(),
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+
+    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+        write.submit(_live_submit_request())
+
+    assert exc_info.value.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert exc_info.value.__cause__ is None
+    assert exc_info.value.__context__ is None
+    assert delegate.submit_calls == 1
+
+
+@pytest.mark.unit
+def test_full_guard_revocation_blocks_submit_and_cancel() -> None:
+    guard = _FullRevocationGuard()
     delegate = _CountingWritePort()
     runtime = start_runtime(
         _live_settings(),
@@ -628,8 +954,33 @@ def test_live_guard_blocks_every_write_after_kill_switch_flip() -> None:
 
 
 @pytest.mark.unit
-def test_concurrent_kill_flip_during_preprocessing_prevents_broker_send() -> None:
-    guard = _PausingMutableGuard()
+def test_submit_block_does_not_implicitly_block_authorized_cancel() -> None:
+    guard = _SubmitBlockedCancelAllowedGuard()
+    delegate = _CountingWritePort()
+    runtime = start_runtime(
+        _live_settings(),
+        live_guard=guard,
+        live_write_factory=lambda: delegate,
+    )
+    write = runtime.broker_write
+    assert write is not None
+    request = _live_submit_request()
+    command = _live_cancel_command(request)
+
+    with pytest.raises(RuntimeStartupError) as submit_rejected:
+        write.submit(request)
+    cancel_result = write.cancel(command)
+
+    assert submit_rejected.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
+    assert cancel_result is delegate.cancel_result
+    assert delegate.submit_calls == 0
+    assert delegate.cancel_calls == 1
+    assert delegate.last_cancel_command is command
+
+
+@pytest.mark.unit
+def test_concurrent_full_guard_revocation_during_preprocessing_prevents_send() -> None:
+    guard = _PausingFullRevocationGuard()
     delegate = _CountingWritePort()
     runtime = start_runtime(
         _live_settings(),

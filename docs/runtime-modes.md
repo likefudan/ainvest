@@ -54,15 +54,28 @@ Use `start_runtime(settings, ...)` as the composition root:
   fail-closed error without retaining adapter messages or exception context.
   The raw port is retained only inside a private write-only proxy.
 - For every submit and cancel, the proxy passes the concrete
-  `BrokerSubmitRequest` or `CancelCommand` and the raw delegate to the guard.
-  The guard owns final request validation and delegate invocation. The P07-T4
+  `BrokerSubmitRequest` or `CancelCommand` and a thread-safe, call-scoped
+  delegate to the guard. The delegate expires when the guard method returns and
+  permits exactly one call. The guard must return the exact result of that one
+  call. Retained, late, concurrent, repeated, omitted, or result-substituting
+  use fails closed without granting another broker send.
+- The guard owns final request validation and delegate invocation. The P07-T4
   implementation must hold its lock, lease, or equivalent atomic decision
   boundary across its final order/account/allowlist/session/budget/kill-switch
   checks and the delegate call. A payload-blind check followed by a separate
   broker call is not a valid implementation.
+- A non-domain guard failure before the broker delegate starts is a sanitized
+  guard rejection. Once the delegate starts, any inconsistent guard outcome or
+  non-domain failure is a stable `UNKNOWN_OUTCOME`; callers must reconcile by
+  the submit/cancel idempotency key before any further write. A broker-domain
+  error established by the delegate retains its normal broker taxonomy.
 - The built-in `RejectingLiveGuard` always fails authorization. A guard decision
   is not cached: activating a kill switch or losing a prerequisite after
   startup blocks the next write before the underlying broker is called.
+- Submit and cancel authorization are independent decisions. A switch that
+  disables new submissions must not implicitly prevent an otherwise authorized
+  risk-reducing cancel. A full guard revocation may block both. The built-in
+  guard rejects both only because Live itself is unavailable in P08-T0.
 - The proxy retains only an immutable `LiveGateContext` containing environment
   and mode; it never retains `Settings` or secret values. `Runtime` and the Live
   write proxy explicitly reject copying, deep-copying, and serialization so a

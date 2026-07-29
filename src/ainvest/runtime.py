@@ -15,8 +15,17 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
+from threading import Lock
 from types import MappingProxyType
-from typing import TYPE_CHECKING, Never, Protocol, SupportsIndex, runtime_checkable
+from typing import (
+    TYPE_CHECKING,
+    Literal,
+    Never,
+    Protocol,
+    SupportsIndex,
+    cast,
+    runtime_checkable,
+)
 
 from ainvest.config import AinvestEnv, Settings, TradingMode
 
@@ -217,6 +226,7 @@ class RuntimeStartupError(RuntimeError):
 LiveWriteFactory = Callable[[], "BrokerWritePort"]
 LiveSubmitDelegate = Callable[["BrokerSubmitRequest"], "BrokerSubmitResult"]
 LiveCancelDelegate = Callable[["CancelCommand"], "CancelResult"]
+_UNSET = object()
 
 
 @dataclass(frozen=True, slots=True)
@@ -233,9 +243,12 @@ class LiveGuard(Protocol):
 
     Implementations must raise :class:`RuntimeStartupError` whenever any P07-T4
     prerequisite is absent, disabled, stale, or uncertain. Submit/cancel
-    implementations receive the concrete payload and the only delegate that
-    can reach the raw write port, allowing an implementation to hold a lock or
-    lease across final validation and delegation. P08-T0 supplies no production
+    implementations receive the concrete payload and a call-scoped, single-use
+    delegate. They must return the exact result from exactly one delegate call,
+    allowing an implementation to hold a lock or lease across final validation
+    and delegation. Submit and cancel authorization are operation-specific:
+    disabling new submissions must not implicitly disable a separately
+    authorized risk-reducing cancellation. P08-T0 supplies no production
     implementation.
     """
 
@@ -509,6 +522,167 @@ def _authorize_live_startup(guard: LiveGuard, *, context: LiveGateContext) -> No
         ) from None
 
 
+@dataclass(frozen=True, slots=True)
+class _DelegateSnapshot[ResultT]:
+    """Atomic state captured when a call-scoped delegate is closed."""
+
+    started: bool
+    completed: bool
+    misused: bool
+    result: ResultT | object
+    error: Exception | None
+
+
+class _SingleUseLiveDelegate[RequestT, ResultT]:
+    """Thread-safe raw broker capability valid for one guard method only."""
+
+    __slots__ = (
+        "__active",
+        "__completed",
+        "__delegate",
+        "__error",
+        "__lock",
+        "__misused",
+        "__result",
+        "__started",
+    )
+
+    def __init__(self, delegate: Callable[[RequestT], ResultT]) -> None:
+        self.__delegate = delegate
+        self.__lock = Lock()
+        self.__active = True
+        self.__started = False
+        self.__completed = False
+        self.__misused = False
+        self.__result: ResultT | object = _UNSET
+        self.__error: Exception | None = None
+
+    def __call__(self, payload: RequestT) -> ResultT:
+        rejected = False
+        with self.__lock:
+            if not self.__active or self.__started:
+                self.__misused = True
+                rejected = True
+            else:
+                self.__started = True
+        if rejected:
+            raise RuntimeStartupError(
+                "Live broker delegate is expired or was already used",
+                code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+            ) from None
+
+        try:
+            result = self.__delegate(payload)
+        except Exception as exc:
+            with self.__lock:
+                self.__error = exc
+            raise
+
+        with self.__lock:
+            self.__completed = True
+            self.__result = result
+        return result
+
+    def close(self) -> _DelegateSnapshot[ResultT]:
+        """Expire the delegate and capture state for outcome classification."""
+        with self.__lock:
+            self.__active = False
+            return _DelegateSnapshot(
+                started=self.__started,
+                completed=self.__completed,
+                misused=self.__misused,
+                result=self.__result,
+                error=self.__error,
+            )
+
+
+def _raise_guard_rejected(operation: Literal["submit", "cancel"]) -> Never:
+    raise RuntimeStartupError(
+        f"LiveGuard failed closed while authorizing {operation}",
+        code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
+    )
+
+
+def _raise_unknown_live_outcome(
+    *,
+    operation: Literal["submit", "cancel"],
+    idempotency_key: str,
+) -> Never:
+    from ainvest.execution.broker import BrokerUnknownOutcomeError
+
+    raise BrokerUnknownOutcomeError(
+        "Live broker outcome is unknown; reconcile before any further write",
+        reason_code="LIVE_GUARD_OUTCOME_UNKNOWN",
+        operation=operation,
+        idempotency_key=idempotency_key,
+    )
+
+
+def _resolve_guarded_write[ResultT](
+    *,
+    operation: Literal["submit", "cancel"],
+    idempotency_key: str,
+    snapshot: _DelegateSnapshot[ResultT],
+    guard_result: ResultT | object,
+    guard_error: Exception | None,
+) -> ResultT:
+    """Classify one guard invocation without retaining exception context."""
+    from ainvest.execution.broker import BrokerError
+
+    # Only a BrokerError recorded at the raw delegate boundary is established
+    # broker-domain evidence. A guard cannot manufacture one and bypass the
+    # per-write fail-closed boundary.
+    if isinstance(snapshot.error, BrokerError):
+        raise snapshot.error
+
+    if not snapshot.started:
+        if isinstance(guard_error, RuntimeStartupError):
+            raise guard_error
+        _raise_guard_rejected(operation)
+
+    if (
+        not snapshot.completed
+        or snapshot.misused
+        or snapshot.error is not None
+        or guard_error is not None
+        or guard_result is not snapshot.result
+    ):
+        _raise_unknown_live_outcome(
+            operation=operation,
+            idempotency_key=idempotency_key,
+        )
+
+    return cast(ResultT, snapshot.result)
+
+
+def _invoke_guarded_write[RequestT, ResultT](
+    *,
+    operation: Literal["submit", "cancel"],
+    idempotency_key: str,
+    raw_delegate: Callable[[RequestT], ResultT],
+    guard_call: Callable[[Callable[[RequestT], ResultT]], ResultT],
+) -> ResultT:
+    """Expose one scoped delegate and close it on every guard exit path."""
+    scoped_delegate = _SingleUseLiveDelegate(raw_delegate)
+    guard_result: ResultT | object = _UNSET
+    guard_error: Exception | None = None
+    try:
+        try:
+            guard_result = guard_call(scoped_delegate)
+        except Exception as exc:
+            guard_error = exc
+    finally:
+        snapshot = scoped_delegate.close()
+
+    return _resolve_guarded_write(
+        operation=operation,
+        idempotency_key=idempotency_key,
+        snapshot=snapshot,
+        guard_result=guard_result,
+        guard_error=guard_error,
+    )
+
+
 class _GuardedLiveWritePort:
     """Write-only proxy whose guard owns final validation and delegation."""
 
@@ -526,17 +700,27 @@ class _GuardedLiveWritePort:
         self.__delegate = delegate
 
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
-        return self.__guard.submit(
-            context=self.__context,
-            request=request,
-            delegate=self.__delegate.submit,
+        return _invoke_guarded_write(
+            operation="submit",
+            idempotency_key=request.client_order_id,
+            raw_delegate=self.__delegate.submit,
+            guard_call=lambda delegate: self.__guard.submit(
+                context=self.__context,
+                request=request,
+                delegate=delegate,
+            ),
         )
 
     def cancel(self, command: CancelCommand) -> CancelResult:
-        return self.__guard.cancel(
-            context=self.__context,
-            command=command,
-            delegate=self.__delegate.cancel,
+        return _invoke_guarded_write(
+            operation="cancel",
+            idempotency_key=command.idempotency_key,
+            raw_delegate=self.__delegate.cancel,
+            guard_call=lambda delegate: self.__guard.cancel(
+                context=self.__context,
+                command=command,
+                delegate=delegate,
+            ),
         )
 
     def __copy__(self) -> _GuardedLiveWritePort:
