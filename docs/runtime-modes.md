@@ -56,14 +56,16 @@ Use `start_runtime(settings, ...)` as the composition root:
 - For every submit and cancel, the proxy passes the concrete
   `BrokerSubmitRequest` or `CancelCommand` and a thread-safe, call-scoped
   delegate to the guard. The delegate expires when the guard method returns and
-  permits exactly one call. The guard must return the exact result of that one
-  call. Retained, late, concurrent, repeated, omitted, or result-substituting
-  use fails closed without granting another broker send.
+  permits exactly one synchronous call on the same thread. Cross-thread use is
+  rejected before adapter preprocessing or broker access. The guard must return
+  the exact result of that one call; it must not spawn a worker to delegate.
+  Retained, late, repeated, omitted, or result-substituting use fails closed
+  without granting another broker send.
 - The guard owns final request validation and delegate invocation. The P07-T4
   implementation must hold its lock, lease, or equivalent atomic decision
   boundary across its final order/account/allowlist/session/budget/kill-switch
-  checks and the delegate call. A payload-blind check followed by a separate
-  broker call is not a valid implementation.
+  checks and the same-thread delegate call. A payload-blind check followed by a
+  separate or spawned-worker broker call is not a valid implementation.
 - A non-domain guard failure before the broker delegate starts is a sanitized
   guard rejection. Once the delegate starts, any inconsistent guard outcome or
   non-domain failure is a stable `UNKNOWN_OUTCOME`; callers must reconcile by

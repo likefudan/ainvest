@@ -137,12 +137,14 @@ class _CountingWritePort:
     def __init__(self) -> None:
         self.submit_calls = 0
         self.cancel_calls = 0
+        self.submit_touched = threading.Event()
         self.last_submit_request: BrokerSubmitRequest | None = None
         self.last_cancel_command: CancelCommand | None = None
         self.submit_result = cast(BrokerSubmitResult, object())
         self.cancel_result = cast(CancelResult, object())
 
     def submit(self, request: BrokerSubmitRequest) -> BrokerSubmitResult:
+        self.submit_touched.set()
         self.submit_calls += 1
         self.last_submit_request = request
         return self.submit_result
@@ -424,7 +426,11 @@ class _PreDelegateFailingGuard(_AllowingTestGuard):
         raise ValueError(self.secret)
 
 
-class _ConcurrentCallGuard(_AllowingTestGuard):
+class _WorkerThreadCallGuard(_AllowingTestGuard):
+    def __init__(self) -> None:
+        super().__init__()
+        self.worker_failure: Exception | None = None
+
     def submit(
         self,
         *,
@@ -433,33 +439,20 @@ class _ConcurrentCallGuard(_AllowingTestGuard):
         delegate: LiveSubmitDelegate,
     ) -> BrokerSubmitResult:
         del context
-        barrier = threading.Barrier(3)
-        collection_lock = threading.Lock()
-        results: list[BrokerSubmitResult] = []
-        errors: list[Exception] = []
 
         def invoke() -> None:
-            barrier.wait()
             try:
-                result = delegate(request)
+                delegate(request)
             except Exception as exc:
-                with collection_lock:
-                    errors.append(exc)
-            else:
-                with collection_lock:
-                    results.append(result)
+                self.worker_failure = exc
 
-        workers = [threading.Thread(target=invoke) for _ in range(2)]
-        for worker in workers:
-            worker.start()
-        barrier.wait()
-        for worker in workers:
-            worker.join(timeout=5)
-            assert not worker.is_alive()
+        worker = threading.Thread(target=invoke)
+        worker.start()
+        worker.join(timeout=5)
+        assert not worker.is_alive()
+        assert self.worker_failure is not None
 
-        if errors:
-            raise errors[0]
-        return results[0]
+        raise self.worker_failure
 
 
 class _SpoofedProductionGuard(_AllowingTestGuard):
@@ -903,23 +896,26 @@ def test_guard_failure_after_delegate_is_sanitized_unknown_outcome() -> None:
 
 
 @pytest.mark.unit
-def test_concurrent_delegate_calls_allow_only_one_broker_send() -> None:
+def test_worker_thread_delegate_is_rejected_before_adapter_touch() -> None:
+    guard = _WorkerThreadCallGuard()
     delegate = _CountingWritePort()
     runtime = start_runtime(
         _live_settings(),
-        live_guard=_ConcurrentCallGuard(),
+        live_guard=guard,
         live_write_factory=lambda: delegate,
     )
     write = runtime.broker_write
     assert write is not None
 
-    with pytest.raises(BrokerUnknownOutcomeError) as exc_info:
+    with pytest.raises(RuntimeStartupError) as exc_info:
         write.submit(_live_submit_request())
 
-    assert exc_info.value.reason_code == "LIVE_GUARD_OUTCOME_UNKNOWN"
+    assert exc_info.value.code is RuntimeStartupErrorCode.LIVE_GUARD_REJECTED
     assert exc_info.value.__cause__ is None
     assert exc_info.value.__context__ is None
-    assert delegate.submit_calls == 1
+    assert guard.worker_failure is exc_info.value
+    assert delegate.submit_calls == 0
+    assert not delegate.submit_touched.is_set()
 
 
 @pytest.mark.unit

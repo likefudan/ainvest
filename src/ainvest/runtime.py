@@ -15,7 +15,7 @@ from __future__ import annotations
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
 from enum import StrEnum
-from threading import Lock
+from threading import Lock, get_ident
 from types import MappingProxyType
 from typing import (
     TYPE_CHECKING,
@@ -245,11 +245,12 @@ class LiveGuard(Protocol):
     prerequisite is absent, disabled, stale, or uncertain. Submit/cancel
     implementations receive the concrete payload and a call-scoped, single-use
     delegate. They must return the exact result from exactly one delegate call,
-    allowing an implementation to hold a lock or lease across final validation
-    and delegation. Submit and cancel authorization are operation-specific:
-    disabling new submissions must not implicitly disable a separately
-    authorized risk-reducing cancellation. P08-T0 supplies no production
-    implementation.
+    synchronously on the same thread. Implementations must hold their lock or
+    lease across final validation and that call; spawned-worker delegation is
+    rejected before the raw broker is reached. Submit and cancel authorization
+    are operation-specific: disabling new submissions must not implicitly
+    disable a separately authorized risk-reducing cancellation. P08-T0 supplies
+    no production implementation.
     """
 
     def authorize_startup(self, *, context: LiveGateContext) -> None:
@@ -543,6 +544,7 @@ class _SingleUseLiveDelegate[RequestT, ResultT]:
         "__error",
         "__lock",
         "__misused",
+        "__owner_thread_id",
         "__result",
         "__started",
     )
@@ -550,6 +552,7 @@ class _SingleUseLiveDelegate[RequestT, ResultT]:
     def __init__(self, delegate: Callable[[RequestT], ResultT]) -> None:
         self.__delegate = delegate
         self.__lock = Lock()
+        self.__owner_thread_id = get_ident()
         self.__active = True
         self.__started = False
         self.__completed = False
@@ -560,14 +563,14 @@ class _SingleUseLiveDelegate[RequestT, ResultT]:
     def __call__(self, payload: RequestT) -> ResultT:
         rejected = False
         with self.__lock:
-            if not self.__active or self.__started:
+            if get_ident() != self.__owner_thread_id or not self.__active or self.__started:
                 self.__misused = True
                 rejected = True
             else:
                 self.__started = True
         if rejected:
             raise RuntimeStartupError(
-                "Live broker delegate is expired or was already used",
+                "Live broker delegate is cross-thread, expired, or already used",
                 code=RuntimeStartupErrorCode.LIVE_GUARD_REJECTED,
             ) from None
 
