@@ -88,8 +88,8 @@ class YahooInstrumentConfig:
     def __post_init__(self) -> None:
         try:
             ZoneInfo(self.exchange_timezone)
-        except (ZoneInfoNotFoundError, ValueError) as exc:
-            raise ValueError("exchange_timezone must be a valid IANA timezone") from exc
+        except (ZoneInfoNotFoundError, ValueError):
+            raise ValueError("exchange_timezone must be a valid IANA timezone") from None
 
 
 @dataclass(frozen=True, slots=True)
@@ -402,11 +402,11 @@ class YahooDevelopmentAdapter:
     ) -> ObservationPage[CorporateAction]:
         self._require_non_live(DataOperation.CORPORATE_ACTIONS)
         deadline = self._deadline(request.timeout_seconds)
-        self._validate_corporate_action_request(request)
         configured = self._resolve_instruments(
             request.instrument_ids, DataOperation.CORPORATE_ACTIONS
         )
         timezone = self._single_timezone(configured, DataOperation.CORPORATE_ACTIONS)
+        self._validate_corporate_action_request(request, timezone)
         raw_by_instrument: list[tuple[YahooInstrumentConfig, _YahooAction]] = []
         for item in configured:
             symbol = item.instrument.symbol
@@ -578,7 +578,11 @@ class YahooDevelopmentAdapter:
             )
         return _YFINANCE_INTERVAL.get(request.interval, request.interval)
 
-    def _validate_corporate_action_request(self, request: CorporateActionRequest) -> None:
+    def _validate_corporate_action_request(
+        self,
+        request: CorporateActionRequest,
+        exchange_timezone: str,
+    ) -> None:
         if (request.effective_to - request.effective_from).days > _MAX_ACTION_WINDOW_DAYS:
             raise DataInvalidRequestError(
                 "Yahoo corporate-action window exceeds the development adapter bound",
@@ -586,7 +590,11 @@ class YahooDevelopmentAdapter:
                 reason_code="YAHOO_ACTION_WINDOW_INVALID",
                 source=self.source_id,
             )
-        today = self._now(DataOperation.CORPORATE_ACTIONS).date()
+        today = (
+            self._now(DataOperation.CORPORATE_ACTIONS)
+            .astimezone(ZoneInfo(exchange_timezone))
+            .date()
+        )
         if request.effective_from > today or request.effective_to > today + timedelta(days=1):
             raise DataInvalidRequestError(
                 "Yahoo corporate-action request cannot include future effective dates",

@@ -191,12 +191,13 @@ def _adapter(
     boundary: RecordingBoundary | None = None,
     *,
     instruments: tuple[YahooInstrumentConfig, ...] | None = None,
+    clock: Callable[[], datetime] | None = None,
     monotonic_clock: Callable[[], float] | None = None,
 ) -> YahooDevelopmentAdapter:
     return YahooDevelopmentAdapter(
         mode=TradingMode.RESEARCH,
         instruments=instruments or (_instrument(),),
-        clock=lambda: NOW,
+        clock=clock or (lambda: NOW),
         monotonic_clock=monotonic_clock or (lambda: 0.0),
         boundary=boundary or RecordingBoundary(),
     )
@@ -538,6 +539,61 @@ def test_corporate_action_window_bounds_are_checked_before_transport() -> None:
         )
     assert future.value.reason_code == "YAHOO_ACTION_FUTURE_WINDOW"
     assert boundary.calls == []
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "now",
+    (
+        datetime(2026, 8, 1, 23, 59, 59, tzinfo=UTC),
+        datetime(2026, 8, 2, 0, 0, 1, tzinfo=UTC),
+    ),
+)
+def test_action_future_guard_uses_exchange_date_across_utc_midnight(
+    now: datetime,
+) -> None:
+    boundary = RecordingBoundary()
+    adapter = _adapter(boundary, clock=lambda: now)
+
+    adapter.get_corporate_actions(
+        _actions_request(effective_from="2026-08-01", effective_to="2026-08-02")
+    )
+    assert boundary.calls == ["actions:AAPL:30"]
+
+    boundary.calls.clear()
+    with pytest.raises(DataInvalidRequestError) as caught:
+        adapter.get_corporate_actions(
+            _actions_request(effective_from="2026-08-02", effective_to="2026-08-03")
+        )
+
+    assert caught.value.reason_code == "YAHOO_ACTION_FUTURE_WINDOW"
+    assert caught.value.__cause__ is None
+    assert boundary.calls == []
+
+
+@pytest.mark.unit
+def test_action_timezone_configuration_fails_closed_before_transport() -> None:
+    boundary = RecordingBoundary()
+    ny = _instrument()
+    utc = YahooInstrumentConfig(
+        instrument=_instrument("rh_inst_spy_arcx", "SPY", "ARCX").instrument,
+        exchange_timezone="UTC",
+    )
+    with pytest.raises(DataInvalidRequestError) as mixed:
+        _adapter(boundary, instruments=(ny, utc)).get_corporate_actions(
+            _actions_request(instrument_ids=("rh_inst_aapl_xnas", "rh_inst_spy_arcx"))
+        )
+    assert mixed.value.reason_code == "YAHOO_MIXED_TIMEZONES"
+    assert mixed.value.__cause__ is None
+    assert boundary.calls == []
+
+    with pytest.raises(ValueError) as invalid:
+        YahooInstrumentConfig(
+            instrument=ny.instrument,
+            exchange_timezone="Invalid/secret-shaped-zone",
+        )
+    assert str(invalid.value) == "exchange_timezone must be a valid IANA timezone"
+    assert invalid.value.__cause__ is None
 
 
 @pytest.mark.unit

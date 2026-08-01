@@ -199,7 +199,8 @@ Empty quote responses are errors. Empty historical and corporate-action
 windows remain valid, provenanced pages for an explicitly configured
 instrument. Tests use a checked-in recording behind an injected transport and
 make no public requests. Corporate-action requests reject windows over 3,660
-days and future effective-date windows before the first transport call, then
+days and future effective-date windows, using the single configured exchange
+timezone's calendar date, before the first transport call, then
 apply an independent 10,000-row/result cap as defense in depth. The same
 recorded factory participates in the shared quote, OHLCV, and corporate-action
 provider contract suite.
