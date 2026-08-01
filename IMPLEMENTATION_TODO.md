@@ -186,11 +186,12 @@ Primary parallelization opportunities:
 - After schemas stabilize, persistence, the strategy protocol, the Paper Broker interface, and the workflow state machine can be assigned independently.
 - After Gate 1, the Research and Paper Approval tracks can run in parallel.
 - The Robinhood Read-only Preview may start as soon as its task dependencies
-  are merged. Its serial cross-repository order is: reviewed `rh-mcp`
-  implementation/release → ainvest tracker records the immutable version and
-  expected full-manifest digest → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2,
-  Gate 3, and complete observability remain prerequisites for `P06-T3` / Gate
-  4, not for the preview.
+  are merged. Its serial cross-repository order is: independently reviewed
+  tagged SemVer `rh-mcp` release with an immutable artifact → ainvest tracker
+  records the tag, artifact provenance/digest, and expected full-manifest
+  digest → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2, Gate 3, and complete
+  observability remain prerequisites for `P06-T3` / Gate 4, not for the
+  preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
 - Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
@@ -985,8 +986,10 @@ owns the default-deny Read Gateway: OAuth/DCR/PKCE/refresh, its credential-store
 protocol, private MCP SDK v2 transport, the reviewed read-tool manifest and
 schema digests, and a stable SDK-neutral result/error envelope. P06-T0 remains
 blocked and unclaimed until that implementation has an independently reviewed
-immutable release or commit and a committed full-manifest digest. A design-only
-commit is not a usable gateway release.
+tagged SemVer release, an immutable artifact with source provenance and an
+artifact digest/checksum, and a committed full-manifest digest. A source commit
+may be recorded as provenance evidence but cannot substitute for the consumable
+release artifact.
 
 ### P06-T0 — Integrate the External Robinhood Read Gateway
 
@@ -995,14 +998,21 @@ commit is not a usable gateway release.
   types.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
-  release/commit with a committed reviewed read manifest and full-manifest
-  digest recorded in `docs/tasks/status.md`.
+  artifact from a tagged SemVer release, with its source provenance, artifact
+  digest/checksum, committed reviewed read manifest, and full-manifest digest
+  recorded in `docs/tasks/status.md`.
 - **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
 - **Implementation checklist:**
-  - Pin an immutable `rh-mcp` release or commit and the expected digest of its
-    complete reviewed manifest; never follow a branch or mutable tag.
-  - Verify the gateway's version and full-manifest digest at startup and before
-    accepting results. Missing, unknown, or mismatched values fail closed.
+  - Pin an independently reviewed tagged SemVer `rh-mcp` release, immutable
+    artifact identity, artifact digest/checksum and provenance, plus the
+    expected digest of its complete reviewed manifest; never follow a branch,
+    mutable tag, or use a bare source commit as the consumable dependency.
+  - At deployment composition and startup, verify the installed release and
+    artifact identity against those pins. At readiness, verify
+    `manifest_version` and the full-manifest `manifest_digest`; for every result
+    envelope, additionally verify its `envelope_version`. Missing, unsupported,
+    or mismatched values fail closed; do not require a package-version field in
+    the gateway readiness or result envelope.
   - Consume only the stable SDK-neutral read result/error envelope. Never
     import or expose `mcp.*` types, OAuth tokens, credentials, raw sessions,
     arbitrary tool invocation, or `CallToolResult`.
@@ -1023,7 +1033,8 @@ commit is not a usable gateway release.
 
 ### P06-T1 — Normalize Robinhood Market, Fundamental, and Portfolio Data
 
-- **Objective:** Map MCP results into versioned ainvest schemas.
+- **Objective:** Map validated payloads from SDK-neutral `rh-mcp` result
+  envelopes into versioned ainvest schemas.
 - **Dependencies:** P06-T0, P02-T1 through P02-T3, and P02-T6.
 - **Primary file:** `src/ainvest/execution/robinhood/mappers.py`.
 - **Implementation checklist:**
@@ -1430,19 +1441,21 @@ line.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
-  and P08-T7, implement and independently review an immutable `rh-mcp`
-  release, record its immutable version and expected full-manifest digest in
-  the ainvest tracker, then integrate `P06-T0` -> `P06-T1` -> `P06-T2`
-  serially for the earliest safe Robinhood Read-only Preview. By owner instruction,
+  and P08-T7, implement and independently review a tagged SemVer `rh-mcp`
+  release with an immutable artifact, record its tag, artifact
+  provenance/digest, and expected full-manifest digest in the ainvest tracker,
+  then integrate `P06-T0` -> `P06-T1` -> `P06-T2` serially for the earliest
+  safe Robinhood Read-only Preview. By owner instruction,
   `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
-1. Complete the priority lane: reviewed immutable `rh-mcp` implementation and
-   release -> ainvest tracker records the release/commit and expected
-   full-manifest digest -> `P06-T0` -> `P06-T1` -> `P06-T2`, without waiting
-   for every Batch E track. This is a Read-only Preview, not a gate acceptance.
+1. Complete the priority lane: independently reviewed tagged SemVer `rh-mcp`
+   release with an immutable artifact -> ainvest tracker records its tag,
+   artifact provenance/digest, and expected full-manifest digest -> `P06-T0`
+   -> `P06-T1` -> `P06-T2`, without waiting for every Batch E track. This is a
+   Read-only Preview, not a gate acceptance.
 2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
    task-card/tracker change built on the Read Gateway and P05-T4/P05-T5. Do not
    combine queries with Telegram approval or broker writes.
