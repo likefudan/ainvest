@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-07-29
+Last updated: 2026-08-01
 
 ## Status vocabulary
 
@@ -103,8 +103,8 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` merged) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
-| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3` merged) |
-| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` claimed); serial merge queue |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T7` merged) |
+| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` merged; `P06-T0` claimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -148,12 +148,13 @@ scope, and integration order.
    Batch E task enables live broker writes.
 
 Tracker claim changes merge before their implementation PRs. The initial queue
-(`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) is merged. The next priority
-queue is the earliest safe **Robinhood Read-only Preview**:
-`P08-T7` → `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge
-queue only after their recorded dependencies are on `main`. The coordinator
-may reorder independent ready branches to reduce conflicts, but may not bypass
-the rebase, review, checks, or squash-merge rules above.
+(`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
+`P08-T7` are merged. `P06-T0` is the sole active implementation in the
+remaining earliest-safe **Robinhood Read-only Preview** queue:
+`P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue only
+after their recorded dependencies are on `main`. The coordinator may reorder
+independent ready branches to reduce conflicts, but may not bypass the rebase,
+review, checks, or squash-merge rules above.
 
 #### Initial claims
 
@@ -492,15 +493,15 @@ or enabling broker writes. Its serial merge order is:
 
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
-| `P08-T7` | `in_progress` | `P01-T4`, `P01-T1` (satisfied) | Claimed below; only active priority-lane implementation |
-| `P06-T0` | `not_started` (queued/unclaimed) | `P03-T13`, `P01-T4` (satisfied), then `P08-T7`; real connection also needs owner-supplied Robinhood authorization | Claim only after `P08-T7` merges; create from/rebase onto that latest `main` |
+| `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
+| `P06-T0` | `in_progress` | `P03-T13`, `P01-T4`, `P08-T7` (satisfied); real connection also needs owner-supplied Robinhood authorization | Sole active implementation; claimed below from post-P08-T7 `main` |
 | `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
 | `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
 
 ##### Execution envelope: P08-T7
 
 - **Title:** Isolate Secrets, Identities, and Least-Privilege Access
-- **Status/owner:** `in_progress` — `p08_t7_secrets_iam`
+- **Status/owner:** `merged` — `p08_t7_secrets_iam`
 - **Branch/worktree:** `agent/p08-t7-secrets-iam` / `.worktrees/p08-t7`
 - **Immutable base:** `61636dd04037911b203726811f91ccabeaa9ecc1`
   (includes the Robinhood priority-lane scheduling change in #80)
@@ -557,11 +558,119 @@ or enabling broker writes. Its serial merge order is:
   separate sub-agent reviews functionality, fail-closed security, tests,
   readability, and duplication directly on the PR; every actionable finding
   is fixed and re-reviewed before required checks pass and the PR is squash-
-  merged. Only then may `P06-T0` be claimed.
-- **Handoff/blockers:** no current implementation blocker. Production
+  merged. P08-T7 satisfied that contract in #82, so `P06-T0` is now claimed.
+- **Handoff/blockers:** the provider-neutral boundary is merged. Production
   deployment artifacts and real credential validation remain intentionally
-  blocked on owner decisions; they do not block the provider-neutral,
-  fail-closed implementation.
+  blocked on owner decisions; they did not block this fail-closed
+  implementation.
+- **PR:** [#82](https://github.com/likefudan/ainvest/pull/82)
+- **Squash-merge commit:**
+  `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`
+
+##### Execution envelope: P06-T0
+
+- **Title:** Connect to MCP and Expose a Read-Only Robinhood Client
+- **Status/owner:** `in_progress` — `p06_t0_robinhood_read_gateway`
+- **Branch/worktree:** `agent/p06-t0-robinhood-read-gateway` /
+  `.worktrees/p06-t0`
+- **Immutable base:** `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`
+  (P08-T7 squash-merged in #82)
+- **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7`, all merged and
+  satisfied on the immutable base. Real endpoint/schema verification also
+  requires owner-assisted Robinhood authorization; no credential is required
+  to implement and test the deterministic fake transport.
+- **Design and task authority:** `design.md` sections 3.5, 5.1, 5.2, 5.6,
+  10.1, and 11; `IMPLEMENTATION_TODO.md` sections 1, 9 (`P06-T0`), 12
+  (Batch E/F priority lane), and 16; `docs/security/secrets.md` and
+  `docs/architecture/dependency-direction.md`; `DEC-003`, `DEC-009`,
+  `DEC-015`, and `DEC-018`
+- **Expected dependency artifacts:** the MCP dependency already locked at
+  `1.28.1` by the `broker` extra (`mcp>=1.8,<2`); P06-T0 uses that API behind
+  the injected transport and does not perform an SDK-major migration. The
+  P08-T7 `ServiceRole.READ_BROKER`,
+  `SecretId.ROBINHOOD_READ_CREDENTIAL`, and `SecretAccessService` policy
+  boundary are available to a future composition layer for static bootstrap
+  or reference material only; the P06-T0 read client receives an already-
+  authenticated injected MCP transport/session. The P08-T3
+  structured/redacted observability boundary and the accepted live-data rule
+  require Robinhood MCP failures never to trigger an automatic Alpaca,
+  yfinance, or other provider fallback.
+- **Allowed paths:** new
+  `src/ainvest/execution/robinhood/{__init__,read_client}.py`;
+  `tests/unit/execution/robinhood/test_read_client.py`;
+  `tests/contract/execution/robinhood/test_read_client_contract.py`; and
+  deterministic, credential-free fake MCP fixtures under
+  `tests/contract/fixtures/robinhood_mcp/`. One narrow existing document may
+  change only if necessary to record the verified official schema/digest;
+  coordinate and record that exact expansion before editing it. Do not edit
+  package-wide exports or shared tracker/configuration surfaces.
+- **Required behavior:** define the official
+  `https://agent.robinhood.com/mcp/trading` endpoint as a constant; require an
+  already-authenticated MCP transport/session behind an injected protocol;
+  discover tool schemas before any tool call; validate an exact pinned schema
+  and digest; and expose an explicit allowlist containing only independently
+  verified read tools. The core/read client neither performs OAuth nor reads,
+  refreshes, or persists credentials. Reject unknown, write-capable, mutating,
+  unpinned, or schema-drifted tools before invoking the transport. Bound
+  connection/call timeouts and map authentication, transport, timeout,
+  protocol, schema, and result failures to stable sanitized errors without
+  exception chaining or credential/session data. Log only tool name, bounded
+  duration, and result digest through the existing observability boundary.
+  Never return or expose a raw MCP session, token, credential, or provider
+  reference to Research or Strategy, and never add an automatic data-provider
+  fallback.
+- **Verified-name rule:** do not guess unstable Robinhood tool names or
+  schemas. Offline fakes may cover the design-accepted
+  `get_equity_quotes` and `get_equity_price_book` names. Every additional
+  allowlisted name and its exact schema/digest must come from owner-assisted
+  discovery against the authenticated official endpoint and be recorded as
+  verification evidence; absence of that evidence fails closed rather than
+  broadening the allowlist.
+- **Forbidden scope:** no P06-T1 mapping or normalized domain schemas; no
+  P06-T2 CLI, service composition, or real-portfolio Paper integration; no
+  P06-T3/Gate 4 claim; no write client, mutating tool, live order, order
+  submission/cancellation/replacement, or write credential; no unofficial
+  Robinhood API; no credential, config, runtime-mode, dependency, lock-file,
+  shared-schema, database/migration, deployment, CI, or broad logging changes
+  unless the coordinator first expands and records scope. In particular, this
+  envelope does not implement MCP v1 OAuth redirect/callback handling, a
+  writable `TokenStorage` for access/refresh tokens or client information,
+  token refresh/persistence, desktop onboarding, authenticated transport
+  construction/composition, or a production token store.
+- **Owner-assisted verification:** implementation and deterministic tests may
+  proceed without owner values. Real OAuth composition and creation of the
+  already-authenticated transport are an owner-assisted blocked verification
+  and explicit scope decision, not hidden read-client behavior. Before
+  claiming authenticated official schema evidence or accepting a real
+  connection, the owner must complete Robinhood's official desktop
+  authorization/onboarding outside logs and chat; the agent must never request
+  or record the token, account number, or password. Tokens and MCP client
+  information must not be stored in the repository, ainvest configuration, or
+  logs. If authorization, an approved secure token-storage composition, or the
+  official schema is unavailable, report the exact blocked check and keep the
+  client fail closed; do not invent a schema, obtain authentication from an
+  unofficial source, or substitute another provider.
+- **Verification contract:** run focused unit and fake-MCP contract tests for
+  exact schema/digest pinning, allowlisted reads, pre-transport denial of
+  unknown/write/mutating/unpinned/drifted tools, authentication failure,
+  timeout, sanitized stable errors, secret/session non-disclosure, bounded
+  logs, and no fallback; then run `git diff --check` and
+  `./scripts/dev verify`. Inspect the complete scoped diff for secret-like
+  values, guessed tool names, write paths, duplicated MCP/config/observability
+  abstractions, and accidental changes outside the envelope.
+- **Review/integration contract:** the implementation agent commits but does
+  not merge. After this claim PR is on `main`, create the implementation
+  worktree from the immutable base above. Immediately before integration
+  review, rebase onto the then-latest `main`, rerun the verification contract,
+  and update the Draft PR. A separate sub-agent reviews functionality,
+  fail-closed behavior, security, tests, readability, dependency use, and
+  duplication directly on GitHub; every actionable finding is fixed and
+  re-reviewed before required checks pass and the PR is squash-merged. Only
+  then may `P06-T1` be claimed.
+- **Handoff/blockers:** no blocker for the injected protocol, deterministic
+  fake implementation, or fail-closed contract tests. Authenticated discovery
+  and real endpoint verification require the owner's manual authorization and
+  must remain explicitly unverified until that step occurs.
 
 `P06-T0` through `P06-T2` form the **Read-only Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
@@ -647,15 +756,16 @@ task row is in the cross-cutting table below.
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
-| `P08-T7` | `in_progress` (`p08_t7_secrets_iam`) | `P01-T4`, `P01-T1` | claimed in the priority-lane execution envelope above |
+| `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0` and `P08-T3` are merged. `P08-T7` is the only claimed implementation;
-`P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but remain unclaimed.
+`P08-T0`, `P08-T3`, and `P08-T7` are merged. `P06-T0` is the sole active
+implementation; `P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but
+remain unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
