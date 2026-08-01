@@ -100,10 +100,10 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
-| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` merged) |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` merged; `P04-T1` claimed) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
-| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T7` merged) |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T7` merged; `P08-T4`, `P08-T6` claimed) |
 | Robinhood Read-only Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
@@ -476,6 +476,215 @@ Robinhood implementation, or Research Agent behavior.
 - **Squash-merge commit:**
   `14467cdb9da999ff1f73697be9bc83c27371e7a1`
 
+#### Active three-task claim
+
+This coordinator claim assigns exactly `P08-T4`, `P04-T1`, and `P08-T6`.
+No other task is started or implicitly assigned. Their implementation work may
+run in parallel from immutable base
+`826ad84dafd3f2f875d3589b8fcfba6240f85d3d` after this tracker claim merges,
+but integration is strictly serial: **P08-T4 → P04-T1 → P08-T6**. The branches
+and worktrees are fixed as follows:
+
+| Task | Status / owner | Branch / worktree | Satisfied dependency |
+|---|---|---|---|
+| `P08-T4` | `in_progress` — `p08_t4_observability` | `agent/p08-t4-observability` / `.worktrees/p08-t4` | `P08-T3` merged in #79 |
+| `P04-T1` | `in_progress` — `p04_t1_yahoo_dev_adapter` | `agent/p04-t1-yahoo-dev-adapter` / `.worktrees/p04-t1` | `P04-T0` merged in #76 |
+| `P08-T6` | `in_progress` — `p08_t6_security_controls` | `agent/p08-t6-security-controls` / `.worktrees/p08-t6` | `P01-T1` merged in Batch A |
+
+The implementation agents commit and open PRs but do not merge. Immediately
+before each task's integration review, the coordinator rebases that branch
+onto the then-latest `main`, reruns its focused checks and
+`./scripts/dev verify`, and updates the PR. A different sub-agent, independent
+of the implementation, checks functionality, fail-closed behavior, tests,
+readability, duplication, dependency use, and the scoped diff from a separate
+internal review worktree, then posts findings directly on GitHub. Actionable
+findings must be fixed by the implementation owner and re-reviewed until none
+remain. Required checks must pass on the final rebased revision. Only then may
+the coordinator squash-merge the PR. Merges never run in parallel; the next
+branch does not enter integration review until the preceding squash commit is
+on `main`.
+
+Shared-surface ownership for this claim is exclusive:
+
+- `docs/tasks/status.md` remains coordinator-only while all three agents are
+  active. Task branches must not edit it.
+- `src/ainvest/observability/**` and the focused observability tests belong
+  only to `P08-T4`.
+- `src/ainvest/data/providers/**`, Yahoo fixtures/tests, and the narrowly
+  assigned offline-adapter documentation/configuration surface belong only to
+  `P04-T1`. `pyproject.toml` and `uv.lock` may be changed only by `P04-T1`, and
+  only if a dependency is genuinely required; `yfinance` is already in the
+  `offline-data` extra, so an edit is not expected.
+- `.github/workflows/ci.yml`, any new security-only workflow, and the assigned
+  CI-policy tests belong only to `P08-T6`. The other two agents must not edit
+  CI. P08-T6 must not edit dependencies or the lock file.
+- Any surface not listed in the task envelope below is read-only. If a task
+  cannot finish without another shared or production path, its agent stops and
+  obtains a coordinator-recorded scope expansion before editing it.
+
+The owner pause on `P04-T2` and `P05-T4` remains in force. `P06-T0` remains
+blocked on the independently reviewed external `rh-mcp` release and recorded
+artifact/manifest evidence. No agent may start those tasks, their dependent
+chains, or any other task as part of this claim.
+
+##### Execution envelope: P08-T4
+
+- **Title:** Add Metrics, Tracing, and Health Checks
+- **Status/owner:** `in_progress` — `p08_t4_observability`
+- **Branch/worktree/base:** `agent/p08-t4-observability` /
+  `.worktrees/p08-t4` from
+  `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
+- **Dependencies:** `P08-T3` is merged and satisfied.
+- **Design and task authority:** `design.md` section 13 and
+  `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T4`), 12 (Batch E), and 16;
+  the redaction contract delivered by `P08-T3`; the capability and health
+  semantics in `src/ainvest/runtime.py` and `docs/runtime-modes.md`.
+- **Allowed paths:**
+  `src/ainvest/observability/{__init__,metrics,tracing,health}.py`;
+  `tests/unit/observability/test_{metrics,tracing,health}.py`;
+  `docs/observability.md`; and a narrowly scoped health-semantics clarification
+  in `docs/runtime-modes.md` if required. The already-declared observability
+  dependency profile is read-only.
+- **Required behavior:** expose stable low-cardinality Prometheus metrics and
+  safe OpenTelemetry span helpers for the task-card categories; never use
+  symbol, proposal/order/account IDs, free-form error text, or other unbounded
+  values as labels; retain only approved stable IDs/digests in traces; and
+  provide deterministic liveness and dependency-aware readiness that
+  distinguishes `ready`, `degraded`, and `not_ready` while reporting explicit
+  `read_only` and `paper` posture. A temporary external-provider failure may
+  degrade or remove readiness but must not fail liveness and create a restart
+  storm. APIs must be usable with deterministic fakes and without requiring a
+  real exporter, provider, broker, token, or network.
+- **Security/readability constraints:** metrics, traces, health payloads,
+  exceptions, and resource attributes must never contain secrets, credentials,
+  account payloads/numbers, raw prompts, authorization material, or full
+  money-moving payloads. Reuse P08-T3 redaction and Runtime capability concepts
+  rather than creating another logger, runtime mode matrix, or provider
+  abstraction.
+- **Forbidden scope:** provider-specific or MCP implementation; broker or
+  Robinhood integration; alerting (`P08-T5`); data adapter work; Runtime,
+  config, dependency/lock, schema, database/migration, CI, deployment,
+  approval, risk, execution, and tracker changes; any Live enablement.
+- **Verification:** focused observability unit tests must cover metric
+  registration/update/exposition, label rejection or bounded normalization,
+  secret/high-cardinality exclusion, trace attributes/error paths, all health
+  states, temporary dependency failure, and deterministic no-exporter use.
+  Run those focused tests, `./scripts/dev unit`, `git diff --check`, and
+  `./scripts/dev verify`; inspect the full scoped diff for secret-bearing
+  fields, unbounded labels, duplicate health/runtime abstractions, and imports
+  outside the observability profile contract.
+
+##### Execution envelope: P04-T1
+
+- **Title:** Add the Optional Development/Offline Market Adapter
+- **Status/owner:** `in_progress` — `p04_t1_yahoo_dev_adapter`
+- **Branch/worktree/base:** `agent/p04-t1-yahoo-dev-adapter` /
+  `.worktrees/p04-t1` from
+  `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
+- **Dependencies:** `P04-T0` is merged and satisfied.
+- **Design and task authority:** `design.md` sections 5.2, 5.3, 10.1, and 11;
+  `IMPLEMENTATION_TODO.md` sections 1, 7 (`P04-T1`), 12 (Batch E), and 16;
+  `DEC-003`; and the provider contracts in `src/ainvest/data/{models,ports}.py`
+  plus `docs/data-adapters.md`.
+- **Allowed paths:** `src/ainvest/data/providers/{__init__,yahoo}.py`;
+  `tests/unit/data/providers/{__init__,test_yahoo}.py`;
+  `tests/contract/data/test_yahoo_provider.py`;
+  sanitized recorded fixtures under `tests/fixtures/data/yahoo/**`; and
+  `docs/data-adapters.md`. If and only if startup-time adapter selection cannot
+  be expressed through the existing explicit constructor/mode boundary, the
+  agent may narrowly edit `src/ainvest/config/{__init__,settings}.py` and
+  `tests/unit/config/test_settings.py` solely for a default-disabled
+  `development_only` selection that rejects Live. `pyproject.toml` and
+  `uv.lock` may change only if the existing `offline-data` declaration is
+  insufficient and both files remain consistent; no other agent owns them.
+- **Required behavior:** implement thin quote, historical OHLCV, split, and
+  dividend capabilities behind the P04-T0 ports. Mark the module, adapter, and
+  documentation `development_only`. Construction and every public operation
+  must fail closed in Live before an SDK or network call, and this adapter must
+  never be selected as a live quote, risk-input, or Robinhood failure fallback.
+  Preserve original `observed_at` across cached/recorded results and make
+  adjustment policy, exchange timezone, provider delay/restrictions, missing
+  data, and quality flags explicit. Normalize timeout, rate-limit, empty
+  response, malformed/duplicate indexes, and upstream failures into the
+  existing stable provider-error taxonomy.
+- **Test/data constraints:** all canonical tests use deterministic fakes or
+  sanitized recorded fixtures and make zero public-network requests. Cover
+  adjusted and unadjusted bars, timezone conversion, delay metadata,
+  splits/dividends, missing bars, duplicate indexes, cache timestamp
+  preservation, stable errors, and Live construction/call denial before any
+  provider touch. Fixtures contain no cookie, crumb, token, credential,
+  account data, or unnecessary copyrighted bulk data.
+- **Forbidden scope:** Live data/risk wiring or automatic fallback; Robinhood,
+  MCP, Alpaca, SEC, news/calendar, Research Agent, strategy/backtest, broker,
+  risk, approval, execution, schema, database/migration, observability, CI,
+  deployment, and tracker changes. Do not copy P04-T0 models/ports or introduce
+  a second provider error/config/runtime framework.
+- **Verification:** run focused Yahoo unit and contract tests with the
+  `offline-data` extra when needed, prove the same tests never contact the
+  public network, run the focused config tests if that optional scope is used,
+  then run `./scripts/dev unit`, `git diff --check`, and
+  `./scripts/dev verify`. Inspect the full scoped diff for provider-specific
+  types leaking across the port, hidden live fallback, secrets, stale
+  timestamp replacement, duplicated shared primitives, and unnecessary
+  dependency changes.
+
+##### Execution envelope: P08-T6
+
+- **Title:** Implement and Audit Security Controls
+- **Status/owner:** `in_progress` — `p08_t6_security_controls`
+- **Branch/worktree/base:** `agent/p08-t6-security-controls` /
+  `.worktrees/p08-t6` from
+  `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
+- **Dependencies:** `P01-T1` is merged and satisfied. P08-T6 rebases and
+  integrates last so its matrix and evidence include the merged P08-T4 and
+  P04-T1 results.
+- **Design and task authority:** `design.md` sections 3, 5, 7–9, 11, 13, and
+  15; `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T6`), 12 (Batch E), and
+  16; `docs/security/{threat-model,data-flow,secrets}.md`; and existing
+  repository CI/dependency policy.
+- **Allowed paths:** `docs/security/{control-matrix,README}.md`;
+  `docs/development.md` only for the exact implemented security-gate contract;
+  `tests/unit/security/{__init__,test_control_matrix}.py`;
+  `tests/unit/test_ci_policy.py`; `.github/workflows/ci.yml`; and, only if
+  separation is clearer, one new `.github/workflows/security.yml`. These are
+  the only assigned security-test and CI surfaces. No dependency or lock-file
+  change is authorized.
+- **Required behavior:** map every threat in the accepted threat model to its
+  preventive and detective controls, accountable owner, implementing task or
+  code, automated test/evidence, current implementation state, and residual
+  risk. No Critical threat may be left without a mapped control, and planned or
+  blocked evidence must be labeled honestly rather than counted as passing.
+  Preserve and verify secret scanning and full locked-profile dependency audit;
+  add an applicable SAST gate; pin every third-party action to an immutable
+  commit and retain least-privilege workflow permissions. Add container and IaC
+  scanning only if corresponding deployable artifacts actually exist; when
+  absent, record them as not applicable/pending instead of fabricating scan
+  coverage. Release-facing evidence must be mechanically checkable where
+  practical.
+- **Required audits:** explicitly assess the existing strategy isolation,
+  outbox/idempotency, secret-role separation, and currently implemented
+  approval controls. Record WebAuthn and external `rh-mcp` read-tool allowlist
+  controls as blocked/planned until their owning tasks or externally reviewed
+  release exist. The lack of a Robinhood read-only OAuth scope requires a
+  default-deny external allowlist and separate identity as compensating
+  controls; it is not evidence that P06 is implemented.
+- **Forbidden scope:** do not implement or modify `rh-mcp`/P06, WebAuthn,
+  strategy sandboxing, outbox/domain behavior, secret providers, production
+  deployment, runtime/observability, data providers, approval/execution/risk,
+  schemas, database/migrations, dependencies, or any other production feature.
+  Do not claim independent Live review, production identity enforcement,
+  container/IaC scanning, or deployment evidence that does not exist. Do not
+  weaken required checks, permissions, action pinning, or Paper/default-deny
+  safety to make a scan pass.
+- **Verification:** focused matrix tests must prove full threat-ID coverage,
+  required fields/owners/evidence states, Critical-control mapping, and honest
+  planned/blocked handling; CI-policy tests must prove immutable action pins,
+  least privilege, secret scan, dependency audit, and the selected SAST gate.
+  Run those focused tests, `./scripts/dev audit`, `git diff --check`, and
+  `./scripts/dev verify`; inspect the rebased full repository and scoped diff
+  for duplicate scanners, unpinned actions, excessive permissions, false
+  completion claims, secret-like values, and applicability gaps.
+
 #### Priority lane — Robinhood Read-only Preview
 
 This lane provides an early, useful Robinhood result without claiming Gate 4
@@ -716,7 +925,7 @@ can never become a live quote fallback.
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
-| `P04-T1` | `not_started` | `P04-T0` | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
+| `P04-T1` | `in_progress` (`p04_t1_yahoo_dev_adapter`) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `not_started` (owner-paused/unclaimed) | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
@@ -773,9 +982,9 @@ task row is in the cross-cutting table below.
 |---|---|---|---|
 | `P08-T0` | `merged` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `merged` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
-| `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
+| `P08-T4` | `in_progress` (`p08_t4_observability`) | `P08-T3` (satisfied) | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
-| `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
+| `P08-T6` | `in_progress` (`p08_t6_security_controls`) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
@@ -786,8 +995,9 @@ task row is in the cross-cutting table below.
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. No P06 implementation is active;
 `P06-T0` is blocked and unclaimed pending the reviewed tagged SemVer external
 gateway release artifact and recorded provenance, artifact, and full-manifest
-digests. `P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but remain
-unclaimed.
+digests. `P08-T4`, `P04-T1`, and `P08-T6` are claimed in the three-task
+execution envelopes above. `P08-T8` and `P08-T9` are dependency-ready but
+remain unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
