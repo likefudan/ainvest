@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T7` merged) |
-| Robinhood Read-only Preview | Batch E/F priority lane | `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` merged; `P06-T0` claimed); serial merge queue |
+| Robinhood Read-only Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -149,12 +149,14 @@ scope, and integration order.
 
 Tracker claim changes merge before their implementation PRs. The initial queue
 (`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
-`P08-T7` are merged. `P06-T0` is the sole active implementation in the
-remaining earliest-safe **Robinhood Read-only Preview** queue:
-`P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue only
-after their recorded dependencies are on `main`. The coordinator may reorder
-independent ready branches to reduce conflicts, but may not bypass the rebase,
-review, checks, or squash-merge rules above.
+`P08-T7` are merged. No P06 implementation is active. The remaining
+earliest-safe **Robinhood Read-only Preview** queue is: independently reviewed
+tagged SemVer `likefudan/rh-mcp` release with an immutable artifact → tracker
+records its tag, artifact provenance/digest, and expected full-manifest digest
+→ `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue
+only after their recorded dependencies are on `main`. The coordinator may
+reorder independent ready branches to reduce conflicts, but may not bypass the
+rebase, review, checks, or squash-merge rules above.
 
 #### Initial claims
 
@@ -480,21 +482,32 @@ This lane provides an early, useful Robinhood result without claiming Gate 4
 or enabling broker writes. Its serial merge order is:
 
 1. `P08-T7` establishes role-separated secret access and the read-broker
-   identity boundary required by `P06-T0`.
-2. `P06-T0` connects the official MCP Read Gateway, discovers and pins tool
-   schemas, permits only an explicit read allowlist, and default-denies every
-   write or unknown tool.
-3. `P06-T1` normalizes portfolio, positions, buying power, order history/open
+   identity boundary required by the preview. This step is merged.
+2. `likefudan/rh-mcp` implements and independently reviews the external
+   default-deny Read Gateway, then publishes a tagged SemVer release with an
+   immutable artifact, source provenance and artifact digest/checksum,
+   committed reviewed read manifest, and full-manifest digest.
+3. An ainvest tracker PR records that exact release tag, artifact identity,
+   source provenance, artifact digest/checksum, and expected full-manifest
+   digest. A source commit may be provenance evidence but cannot substitute for
+   the consumable release artifact.
+4. `P06-T0` composes a thin adapter over the pinned SDK-neutral gateway
+   contract. Deployment/startup verifies the installed release/artifact pins;
+   readiness verifies manifest version and full-manifest digest, while every
+   result additionally verifies envelope version.
+5. `P06-T1` normalizes portfolio, positions, buying power, order history/open
    orders, quotes, price books, and the other accepted read data into versioned
    ainvest schemas.
-4. `P06-T2` exposes those reads through an ainvest CLI/read-only entry point
-   and uses real data only with PaperBroker; it cannot construct a broker write
-   client.
+6. `P06-T2` exposes those normalized reads through an ainvest CLI/read-only
+   entry point, Paper workflows, and a later Telegram read-query adapter under
+   an independent Read Broker deployment identity; it cannot construct a
+   broker write client.
 
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
-| `P06-T0` | `in_progress` | `P03-T13`, `P01-T4`, `P08-T7` (satisfied); real connection also needs owner-supplied Robinhood authorization | Sole active implementation; claimed below from post-P08-T7 `main` |
+| external `rh-mcp` gateway | `blocked` (implementation/release pending) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest remain required | This is a cross-repository prerequisite, not an ainvest task completion claim; the source commit is traceability evidence only |
+| `P06-T0` | `blocked` (unclaimed) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; reviewed tagged SemVer `rh-mcp` release artifact and tracker-recorded provenance/artifact/full-manifest digests missing | Do not use the old implementation branch/worktree; coordinator recreates or rebases only after the external release is recorded |
 | `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
 | `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
 
@@ -558,7 +571,10 @@ or enabling broker writes. Its serial merge order is:
   separate sub-agent reviews functionality, fail-closed security, tests,
   readability, and duplication directly on the PR; every actionable finding
   is fixed and re-reviewed before required checks pass and the PR is squash-
-  merged. P08-T7 satisfied that contract in #82, so `P06-T0` is now claimed.
+  merged. P08-T7 satisfied that contract in #82; P06-T0 is now blocked and
+  unclaimed until the independently reviewed tagged SemVer external `rh-mcp`
+  release artifact, its provenance/artifact digest, and full-manifest digest
+  are recorded.
 - **Handoff/blockers:** the provider-neutral boundary is merged. Production
   deployment artifacts and real credential validation remain intentionally
   blocked on owner decisions; they did not block this fail-closed
@@ -569,108 +585,112 @@ or enabling broker writes. Its serial merge order is:
 
 ##### Execution envelope: P06-T0
 
-- **Title:** Connect to MCP and Expose a Read-Only Robinhood Client
-- **Status/owner:** `in_progress` — `p06_t0_robinhood_read_gateway`
-- **Branch/worktree:** `agent/p06-t0-robinhood-read-gateway` /
-  `.worktrees/p06-t0`
-- **Immutable base:** `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`
-  (P08-T7 squash-merged in #82)
-- **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7`, all merged and
-  satisfied on the immutable base. Real endpoint/schema verification also
-  requires owner-assisted Robinhood authorization; no credential is required
-  to implement and test the deterministic fake transport.
+- **Title:** Integrate the External Robinhood Read Gateway
+- **Status/owner:** `blocked` — unclaimed; implementation must not start before
+  the external dependency conditions below are recorded
+- **Superseded claim:** the earlier `p06_t0_robinhood_read_gateway` claim and
+  `agent/p06-t0-robinhood-read-gateway` / `.worktrees/p06-t0` execution
+  envelope assumed ainvest-owned MCP v1 transport with an injected
+  authenticated session. That claim is superseded by the external
+  `likefudan/rh-mcp` gateway boundary. The old branch/worktree is not an active
+  implementation surface and must not be reused. After the external release is
+  recorded, the coordinator must recreate the worktree or explicitly rebase
+  and issue a new immutable execution envelope.
+- **Implementation base:** not assigned. The future immutable base must include
+  this scope correction and the tracker commit that pins the reviewed `rh-mcp`
+  release tag, artifact identity and provenance/digest, plus expected
+  full-manifest digest.
+- **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7` are merged. P06-T0 also
+  requires an independently reviewed tagged SemVer `rh-mcp` release, an
+  immutable consumable artifact with source provenance and artifact
+  digest/checksum, a committed reviewed read-tool manifest and full-manifest
+  digest, and a subsequent ainvest tracker PR that records those exact values.
+  The merged `rh-mcp` design correction
+  `366e7556cc765a0742fed7d6e17e0b9ec8e20aec` defines direction but is not an
+  implementation release and does not unblock P06-T0.
 - **Design and task authority:** `design.md` sections 3.5, 5.1, 5.2, 5.6,
   10.1, and 11; `IMPLEMENTATION_TODO.md` sections 1, 9 (`P06-T0`), 12
   (Batch E/F priority lane), and 16; `docs/security/secrets.md` and
   `docs/architecture/dependency-direction.md`; `DEC-003`, `DEC-009`,
   `DEC-015`, and `DEC-018`
-- **Expected dependency artifacts:** the MCP dependency already locked at
-  `1.28.1` by the `broker` extra (`mcp>=1.8,<2`); P06-T0 uses that API behind
-  the injected transport and does not perform an SDK-major migration. The
-  P08-T7 `ServiceRole.READ_BROKER`,
-  `SecretId.ROBINHOOD_READ_CREDENTIAL`, and `SecretAccessService` policy
-  boundary are available to a future composition layer for static bootstrap
-  or reference material only; the P06-T0 read client receives an already-
-  authenticated injected MCP transport/session. The P08-T3
-  structured/redacted observability boundary and the accepted live-data rule
-  require Robinhood MCP failures never to trigger an automatic Alpaca,
-  yfinance, or other provider fallback.
-- **Allowed paths:** new
-  `src/ainvest/execution/robinhood/{__init__,read_client}.py`;
-  `tests/unit/execution/robinhood/test_read_client.py`;
-  `tests/contract/execution/robinhood/test_read_client_contract.py`; and
-  deterministic, credential-free fake MCP fixtures under
-  `tests/contract/fixtures/robinhood_mcp/`. One narrow existing document may
-  change only if necessary to record the verified official schema/digest;
-  coordinate and record that exact expansion before editing it. Do not edit
-  package-wide exports or shared tracker/configuration surfaces.
-- **Required behavior:** define the official
-  `https://agent.robinhood.com/mcp/trading` endpoint as a constant; require an
-  already-authenticated MCP transport/session behind an injected protocol;
-  discover tool schemas before any tool call; validate an exact pinned schema
-  and digest; and expose an explicit allowlist containing only independently
-  verified read tools. The core/read client neither performs OAuth nor reads,
-  refreshes, or persists credentials. Reject unknown, write-capable, mutating,
-  unpinned, or schema-drifted tools before invoking the transport. Bound
-  connection/call timeouts and map authentication, transport, timeout,
-  protocol, schema, and result failures to stable sanitized errors without
-  exception chaining or credential/session data. Log only tool name, bounded
-  duration, and result digest through the existing observability boundary.
-  Never return or expose a raw MCP session, token, credential, or provider
-  reference to Research or Strategy, and never add an automatic data-provider
-  fallback.
-- **Verified-name rule:** do not guess unstable Robinhood tool names or
-  schemas. Offline fakes may cover the design-accepted
-  `get_equity_quotes` and `get_equity_price_book` names. Every additional
-  allowlisted name and its exact schema/digest must come from owner-assisted
-  discovery against the authenticated official endpoint and be recorded as
-  verification evidence; absence of that evidence fails closed rather than
-  broadening the allowlist.
+- **External gateway ownership:** `likefudan/rh-mcp` owns OAuth, DCR, PKCE,
+  token refresh, the credential-store protocol, private MCP Python SDK v2
+  transport, session lifecycle, bounded pagination/results, tool discovery,
+  the committed reviewed read manifest and schema digests, default-deny
+  enforcement, and a stable sanitized SDK-neutral result/error envelope. Its
+  public contract must not expose arbitrary tool invocation, raw
+  `CallToolResult`, MCP sessions, tokens, or provider SDK types.
+- **ainvest ownership:** P06-T0 is a thin adapter and composition boundary. It
+  pins an independently reviewed tagged SemVer `rh-mcp` release, immutable
+  artifact identity, source provenance, artifact digest/checksum, and expected
+  full-manifest digest. Deployment composition and startup verify the installed
+  release/artifact identity; readiness verifies the supported
+  `manifest_version` and full-manifest `manifest_digest`, while every result
+  envelope additionally verifies its `envelope_version`, without assuming
+  either gateway envelope contains a package-version field. It maps only
+  validated SDK-neutral envelope payloads into the input boundary owned by
+  P06-T1.
+  It never imports `mcp.*`, obtains or refreshes OAuth tokens, accepts a raw
+  session, discovers arbitrary tools, or exposes `CallToolResult`. P06-T1 owns
+  Robinhood-to-ainvest domain normalization. P06-T2 owns the normalized ainvest
+  CLI/Paper-facing read surface, supports a later Telegram read-query adapter,
+  and composes the gateway only under an independent Read Broker deployment
+  identity.
+- **Allowed paths:** a future execution envelope may assign the thin adapter,
+  SDK-neutral cross-repository fixtures/tests, and narrow composition files
+  only after the dependency is pinned. No production path is assigned while
+  this task is blocked. Dependency or lock-file changes require their own
+  explicit reviewed scope and must not install a second conflicting public MCP
+  SDK surface in ainvest.
+- **Required behavior:** accept only the pinned gateway release/artifact and
+  expected full-manifest digest. Reject a missing, mutable, or mismatched
+  installed artifact during deployment/startup. Reject an unsupported or
+  mismatched `envelope_version`, `manifest_version`, or full-manifest
+  `manifest_digest` at readiness/result validation before consuming its
+  payload. Validate bounded SDK-neutral result/error envelopes and produce
+  stable sanitized errors. Log only approved
+  metadata such as capability name, bounded duration, manifest/result digest,
+  and status. Never expose token, credential, MCP/provider type, raw session,
+  raw account payload, or arbitrary tool name to Research, Strategy, CLI,
+  Paper, or Telegram, and never add an automatic data-provider fallback.
 - **Forbidden scope:** no P06-T1 mapping or normalized domain schemas; no
   P06-T2 CLI, service composition, or real-portfolio Paper integration; no
   P06-T3/Gate 4 claim; no write client, mutating tool, live order, order
   submission/cancellation/replacement, or write credential; no unofficial
-  Robinhood API; no credential, config, runtime-mode, dependency, lock-file,
-  shared-schema, database/migration, deployment, CI, or broad logging changes
-  unless the coordinator first expands and records scope. In particular, this
-  envelope does not implement MCP v1 OAuth redirect/callback handling, a
-  writable `TokenStorage` for access/refresh tokens or client information,
-  token refresh/persistence, desktop onboarding, authenticated transport
-  construction/composition, or a production token store.
+  Robinhood API; and no credential, config, runtime-mode, dependency,
+  lock-file, shared-schema, database/migration, deployment, CI, or broad
+  logging changes unless the coordinator first assigns and records them.
 - **Owner-assisted verification:** implementation and deterministic tests may
-  proceed without owner values. Real OAuth composition and creation of the
-  already-authenticated transport are an owner-assisted blocked verification
-  and explicit scope decision, not hidden read-client behavior. Before
-  claiming authenticated official schema evidence or accepting a real
-  connection, the owner must complete Robinhood's official desktop
-  authorization/onboarding outside logs and chat; the agent must never request
-  or record the token, account number, or password. Tokens and MCP client
-  information must not be stored in the repository, ainvest configuration, or
-  logs. If authorization, an approved secure token-storage composition, or the
-  official schema is unavailable, report the exact blocked check and keep the
-  client fail closed; do not invent a schema, obtain authentication from an
-  unofficial source, or substitute another provider.
-- **Verification contract:** run focused unit and fake-MCP contract tests for
-  exact schema/digest pinning, allowlisted reads, pre-transport denial of
-  unknown/write/mutating/unpinned/drifted tools, authentication failure,
-  timeout, sanitized stable errors, secret/session non-disclosure, bounded
-  logs, and no fallback; then run `git diff --check` and
-  `./scripts/dev verify`. Inspect the complete scoped diff for secret-like
-  values, guessed tool names, write paths, duplicated MCP/config/observability
-  abstractions, and accidental changes outside the envelope.
-- **Review/integration contract:** the implementation agent commits but does
-  not merge. After this claim PR is on `main`, create the implementation
-  worktree from the immutable base above. Immediately before integration
-  review, rebase onto the then-latest `main`, rerun the verification contract,
-  and update the Draft PR. A separate sub-agent reviews functionality,
-  fail-closed behavior, security, tests, readability, dependency use, and
-  duplication directly on GitHub; every actionable finding is fixed and
-  re-reviewed before required checks pass and the PR is squash-merged. Only
-  then may `P06-T1` be claimed.
-- **Handoff/blockers:** no blocker for the injected protocol, deterministic
-  fake implementation, or fail-closed contract tests. Authenticated discovery
-  and real endpoint verification require the owner's manual authorization and
-  must remain explicitly unverified until that step occurs.
+  proceed later without owner values using only sanitized deterministic
+  cross-repository fixtures. No agent may claim real authorization, official
+  tool/schema evidence, account-scope evidence, or a usable manifest until the
+  owner completes Robinhood authorization in an external browser. Tokens,
+  refresh tokens, DCR client information, passwords, account IDs/numbers, and
+  raw account payloads must never enter either repository, fixtures, logs,
+  issues/PRs, or chat. If owner authorization or secure credential composition
+  is unavailable, keep the real check explicitly unverified and fail closed.
+- **Cross-repository completion conditions:** in order: (1) `rh-mcp`
+  implementation and tests pass independent review; (2) it publishes an
+  immutable artifact in a tagged SemVer release with source provenance and an
+  artifact digest/checksum, the reviewed manifest, and full-manifest digest;
+  (3) an ainvest tracker PR records the exact tag, artifact identity, source
+  provenance, artifact digest/checksum, and expected full-manifest digest;
+  (4) the coordinator creates a new P06-T0
+  execution envelope/worktree; (5) P06-T0 adapter and cross-repository contracts
+  merge; then and only then may P06-T1 be claimed, followed serially by P06-T2.
+- **Future verification contract:** focused offline contract tests must cover
+  release/artifact provenance pinning; supported envelope/manifest versions;
+  full-manifest pinning; SDK-neutral envelope validation; bounded results;
+  authentication/timeout/sanitized error handling,
+  provider-object and secret non-disclosure, stable bounded logs, and no
+  fallback; then run `git diff --check` and `./scripts/dev verify`. Independent
+  PR review must cover functionality, fail-closed security, tests, readability,
+  dependency direction, and duplication before squash merge.
+- **Handoff/blockers:** blocked only on the reviewed immutable external
+  tagged SemVer release artifact, its provenance/artifact digest, and committed
+  full-manifest digest. The design correction commit above is recorded for
+  traceability but cannot be treated as a consumable release, runtime artifact,
+  or schema evidence.
 
 `P06-T0` through `P06-T2` form the **Read-only Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
@@ -763,9 +783,11 @@ task row is in the cross-cutting table below.
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0`, `P08-T3`, and `P08-T7` are merged. `P06-T0` is the sole active
-implementation; `P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but
-remain unclaimed.
+`P08-T0`, `P08-T3`, and `P08-T7` are merged. No P06 implementation is active;
+`P06-T0` is blocked and unclaimed pending the reviewed tagged SemVer external
+gateway release artifact and recorded provenance, artifact, and full-manifest
+digests. `P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but remain
+unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
