@@ -24,6 +24,8 @@ their absence keeps production secret access unavailable.
 4. A successful read returns `SecretValue`. Plaintext is available only through
    an explicit `reveal()` call after authorization. Its `str` and `repr` are
    redacted, and common copy, pickle, and JSON serialization paths are blocked.
+   The access boundary accepts only the exact runtime `SecretValue` type; a
+   subclass cannot override `reveal`, `str`, or `repr` and pass validation.
    `SecretRef`, development/in-memory providers, and the access service also
    block copying and serialization so their private state cannot become an
    accidental snapshot.
@@ -66,6 +68,9 @@ for separate workload identities and provider permissions.
 
 Provider statuses are accepted only when they are exact known enum values.
 Foreign, unhashable, or otherwise hostile statuses become `provider_error`.
+Reference registries and provider entry points likewise accept only the exact
+runtime `SecretRef` type, before reading either of its properties; subclasses
+and duck-typed objects cannot substitute hostile reference behavior.
 Provider exceptions, including exceptions with hostile status properties, are
 translated after leaving the provider exception context; neither the cause nor
 the context is retained in the public `SecretAccessError`.

@@ -135,6 +135,13 @@ class SecretRef(_NonSerializable):
         return f"{self.secret_id.value}:{REDACTED}"
 
 
+def _exact_secret_ref(value: object) -> SecretRef | None:
+    """Return only the exact runtime reference type, never a subclass or duck type."""
+    if type(value) is SecretRef:
+        return value
+    return None
+
+
 @final
 class SecretValue(_NonSerializable):
     """Redacted wrapper whose plaintext requires an explicit ``reveal`` call.
@@ -219,6 +226,8 @@ class MemorySecretProvider(_NonSerializable):
         )
 
     def probe(self, reference: SecretRef) -> ProviderSecretStatus:
+        if _exact_secret_ref(reference) is None:
+            return ProviderSecretStatus.ERROR
         provider_reference = reference.provider_reference
         if provider_reference not in self._allowed:
             return ProviderSecretStatus.PERMISSION_DENIED
@@ -227,6 +236,8 @@ class MemorySecretProvider(_NonSerializable):
         return ProviderSecretStatus.PRESENT
 
     def read(self, reference: SecretRef) -> SecretValue:
+        if _exact_secret_ref(reference) is None:
+            raise SecretProviderError(ProviderSecretStatus.ERROR)
         status = self.probe(reference)
         if status is not ProviderSecretStatus.PRESENT:
             raise SecretProviderError(status)
@@ -283,6 +294,8 @@ class DevelopmentEnvironmentSecretProvider(_NonSerializable):
         )
 
     def probe(self, reference: SecretRef) -> ProviderSecretStatus:
+        if _exact_secret_ref(reference) is None:
+            return ProviderSecretStatus.ERROR
         environment_key = self._bindings.get(reference.provider_reference)
         if environment_key is None:
             return ProviderSecretStatus.PERMISSION_DENIED
@@ -291,6 +304,8 @@ class DevelopmentEnvironmentSecretProvider(_NonSerializable):
         return ProviderSecretStatus.PRESENT
 
     def read(self, reference: SecretRef) -> SecretValue:
+        if _exact_secret_ref(reference) is None:
+            raise SecretProviderError(ProviderSecretStatus.ERROR)
         status = self.probe(reference)
         if status is not ProviderSecretStatus.PRESENT:
             raise SecretProviderError(status)
@@ -309,11 +324,13 @@ class UnavailableProductionSecretProvider(_NonSerializable):
     __slots__ = ()
 
     def probe(self, reference: SecretRef) -> ProviderSecretStatus:
-        del reference
+        if _exact_secret_ref(reference) is None:
+            return ProviderSecretStatus.ERROR
         return ProviderSecretStatus.UNAVAILABLE
 
     def read(self, reference: SecretRef) -> SecretValue:
-        del reference
+        if _exact_secret_ref(reference) is None:
+            raise SecretProviderError(ProviderSecretStatus.ERROR)
         raise SecretProviderError(ProviderSecretStatus.UNAVAILABLE)
 
 
@@ -421,6 +438,8 @@ class SecretAccessService(_NonSerializable):
         if known_role is None:
             raise ValueError("secret access service requires a known role")
         for secret_id, reference in references.items():
+            if _exact_secret_ref(reference) is None:
+                raise ValueError("secret reference registry requires exact SecretRef values")
             if reference.secret_id is not secret_id:
                 raise ValueError("secret reference identifier does not match registry key")
         allowed = DEFAULT_ROLE_GRANTS[known_role]
@@ -521,7 +540,7 @@ class SecretAccessService(_NonSerializable):
             # Raise outside the provider exception handler: no leaky provider
             # exception remains in ``__cause__`` or ``__context__``.
             raise SecretAccessError(failure)
-        if not isinstance(value, SecretValue):
+        if type(value) is not SecretValue:
             raise SecretAccessError(
                 SecretAccessProbe(
                     self._role.value,

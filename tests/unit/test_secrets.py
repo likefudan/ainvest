@@ -8,7 +8,7 @@ import pickle
 from collections.abc import Iterator, Mapping
 from dataclasses import asdict
 from io import StringIO
-from typing import Any
+from typing import Any, cast
 
 import pytest
 
@@ -495,6 +495,92 @@ def test_provider_returning_raw_value_fails_closed() -> None:
     with pytest.raises(SecretAccessError) as caught:
         _service(provider=InvalidProvider()).get(SecretId.OPENAI_API_KEY)
     assert caught.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
+
+
+@pytest.mark.unit
+def test_provider_returning_hostile_secret_value_subclass_fails_closed() -> None:
+    calls: list[str] = []
+
+    class HostileSecretValue(SecretValue):  # type: ignore[misc]
+        def reveal(self) -> str:
+            calls.append("reveal")
+            return _sentinel(SecretId.ROBINHOOD_WRITE_CREDENTIAL)
+
+        def __repr__(self) -> str:
+            calls.append("repr")
+            return self.reveal()
+
+        def __str__(self) -> str:
+            calls.append("str")
+            return self.reveal()
+
+    class HostileValueProvider:
+        def probe(self, reference: SecretRef) -> ProviderSecretStatus:
+            del reference
+            return ProviderSecretStatus.PRESENT
+
+        def read(self, reference: SecretRef) -> SecretValue:
+            del reference
+            return HostileSecretValue(_sentinel(SecretId.OPENAI_API_KEY))
+
+    with pytest.raises(SecretAccessError) as caught:
+        _service(provider=HostileValueProvider()).get(SecretId.OPENAI_API_KEY)
+
+    assert caught.value.probe.status is SecretAccessStatus.PROVIDER_ERROR
+    assert calls == []
+
+
+@pytest.mark.unit
+def test_registry_and_providers_reject_hostile_secret_reference_runtime_types() -> None:
+    calls: list[str] = []
+
+    class HostileSecretRef(SecretRef):  # type: ignore[misc]
+        @property
+        def secret_id(self) -> SecretId:
+            calls.append("secret_id")
+            return SecretId.OPENAI_API_KEY
+
+        @property
+        def provider_reference(self) -> str:
+            calls.append("provider_reference")
+            return _sentinel(SecretId.ROBINHOOD_WRITE_CREDENTIAL)
+
+    class DuckReference:
+        @property
+        def secret_id(self) -> SecretId:
+            calls.append("duck_secret_id")
+            raise AssertionError("duck reference must not be inspected")
+
+        @property
+        def provider_reference(self) -> str:
+            calls.append("duck_provider_reference")
+            raise AssertionError("duck reference must not be inspected")
+
+    hostile = HostileSecretRef(
+        SecretId.OPENAI_API_KEY,
+        _REF_NAMES[SecretId.OPENAI_API_KEY],
+    )
+    duck = cast(SecretRef, DuckReference())
+
+    for reference in (hostile, duck):
+        with pytest.raises(ValueError, match="exact SecretRef"):
+            _service(references={SecretId.OPENAI_API_KEY: reference})
+
+        for provider in (
+            _provider_for_all(),
+            DevelopmentEnvironmentSecretProvider(
+                {},
+                bindings={},
+                deployment_environment="development",
+            ),
+            UnavailableProductionSecretProvider(),
+        ):
+            assert provider.probe(reference) is ProviderSecretStatus.ERROR
+            with pytest.raises(SecretProviderError) as caught:
+                provider.read(reference)
+            assert caught.value.status is ProviderSecretStatus.ERROR
+
+    assert calls == []
 
 
 @pytest.mark.unit
