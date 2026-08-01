@@ -153,7 +153,12 @@ flowchart LR
 6. 新闻和外部事件使用 GDELT、SEC 8-K/Form 4 和公司 Investor Relations 公告。只有 Robinhood MCP 正式工具清单中存在并通过契约测试的能力，才可以替代对应外部适配器。
 7. yfinance 只作为无需 Robinhood 授权时的可选开发、回测或离线研究适配器。Alpaca 不作为首版默认依赖。
 
-Robinhood Read Gateway 启动时必须发现并固定允许的 MCP 工具 schema。任何新增、删除或不兼容变更都需要重新通过契约测试，不能在运行时自动扩大工具权限。
+Robinhood Read Gateway 由独立的
+[`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) 项目实现；它私有持有
+MCP SDK v2 传输与 OAuth 生命周期，并固定经过审查的只读工具 manifest 和
+schema digest。ainvest 只固定并验证其不可变版本、完整 manifest digest 与
+SDK-neutral 结果/错误协议，不导入 `mcp.*` 类型或接收原始 session/token。
+任何新增、删除或不兼容变更都需要重新通过契约测试，不能在运行时自动扩大工具权限。
 
 ### 5.2 Research Agent
 
@@ -749,7 +754,7 @@ stateDiagram-v2
 | 数据库 | [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) + Alembic | 事务、持久化和迁移 |
 | 调度 | [APScheduler](https://github.com/agronholm/apscheduler) 3.11.x | 4.x 稳定前固定 3.x |
 | 大规模持久工作流 | [Temporal](https://github.com/temporalio/temporal)，可选 | 多进程或长时审批后再引入 |
-| Robinhood MCP 客户端 | [MCP Python SDK](https://github.com/modelcontextprotocol/python-sdk) | 连接官方托管 MCP |
+| Robinhood Read Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、OAuth、只读 allowlist/manifest 与 SDK-neutral 协议；ainvest 只使用固定版本 |
 | 日志与监控 | structlog、OpenTelemetry、Prometheus | 结构化日志、trace 和指标 |
 | 测试 | pytest、Hypothesis、HTTPX mock | 单元、性质和故障注入测试 |
 

@@ -93,7 +93,10 @@ External data
 - Telegram: python-telegram-bot; single-instance long polling and Paper-only bound approval in the first release.
 - Passkey: py_webauthn; deferred for Paper and mandatory before live trading.
 - Scheduling: APScheduler 3.11.x.
-- Robinhood: official Trading MCP and MCP Python SDK.
+- Robinhood: the official Trading MCP through the external default-deny
+  [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Read Gateway.
+  `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
+  ainvest consumes only its pinned, SDK-neutral read contract.
 - Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
 - Testing: pytest, Hypothesis, and HTTPX mocks.
 - Logging and monitoring: structlog, OpenTelemetry, and Prometheus.
@@ -183,9 +186,11 @@ Primary parallelization opportunities:
 - After schemas stabilize, persistence, the strategy protocol, the Paper Broker interface, and the workflow state machine can be assigned independently.
 - After Gate 1, the Research and Paper Approval tracks can run in parallel.
 - The Robinhood Read-only Preview may start as soon as its task dependencies
-  are merged: `P08-T7` → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2, Gate 3, and
-  complete observability remain prerequisites for `P06-T3` / Gate 4, not for
-  the preview.
+  are merged. Its serial cross-repository order is: reviewed `rh-mcp`
+  implementation/release → ainvest tracker records the immutable version and
+  expected full-manifest digest → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2,
+  Gate 3, and complete observability remain prerequisites for `P06-T3` / Gate
+  4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
 - Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
@@ -975,18 +980,46 @@ may run after their own dependencies without waiting for all of Batch E, Gate
 write capability. `P06-T3` remains the Gate 4 acceptance card and retains all
 of its research, Paper-approval, and observability dependencies.
 
-### P06-T0 — Connect to MCP and Expose a Read-Only Robinhood Client
+The external [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) project
+owns the default-deny Read Gateway: OAuth/DCR/PKCE/refresh, its credential-store
+protocol, private MCP SDK v2 transport, the reviewed read-tool manifest and
+schema digests, and a stable SDK-neutral result/error envelope. P06-T0 remains
+blocked and unclaimed until that implementation has an independently reviewed
+immutable release or commit and a committed full-manifest digest. A design-only
+commit is not a usable gateway release.
 
-- **Objective:** Connect to the official `https://agent.robinhood.com/mcp/trading` endpoint and expose only a fixed allowlist through the Robinhood Read Gateway.
-- **Dependencies:** P03-T13, P01-T4, P08-T7, and the authorization decision in P01-T0.
+### P06-T0 — Integrate the External Robinhood Read Gateway
+
+- **Objective:** Compose a thin ainvest adapter over a pinned `rh-mcp` release
+  without taking ownership of MCP transport, OAuth, tokens, or provider SDK
+  types.
+- **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
+  P01-T0, and an independently reviewed immutable `rh-mcp` implementation
+  release/commit with a committed reviewed read manifest and full-manifest
+  digest recorded in `docs/tasks/status.md`.
 - **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
 - **Implementation checklist:**
-  - Use the official MCP endpoint and Python SDK; obtain authentication only from the secret provider.
-  - Discover and validate tool schemas. The allowlist covers accepted quote, price book, historical, fundamental, financial, technical, earnings, index, account, portfolio, position, order, and tradability read tools.
-  - Default-deny all other tools. New or incompatible schemas never expand permission automatically.
-  - Research/Strategy receive gateway output only, never raw MCP session, OAuth token, or write tool.
-  - Add timeouts, stable errors, and tracing. Log tool name, duration, and result digest only.
-- **Acceptance criteria:** Fake-MCP contract tests pass; unknown/write tools cannot be called; auth failure, timeout, and schema drift fail closed.
+  - Pin an immutable `rh-mcp` release or commit and the expected digest of its
+    complete reviewed manifest; never follow a branch or mutable tag.
+  - Verify the gateway's version and full-manifest digest at startup and before
+    accepting results. Missing, unknown, or mismatched values fail closed.
+  - Consume only the stable SDK-neutral read result/error envelope. Never
+    import or expose `mcp.*` types, OAuth tokens, credentials, raw sessions,
+    arbitrary tool invocation, or `CallToolResult`.
+  - Keep OAuth/DCR/PKCE/refresh, credential persistence, MCP SDK v2 transport,
+    tool discovery, the default-deny read allowlist, and schema-drift
+    enforcement inside `rh-mcp`. Compose its credential-store protocol only in
+    the independently identified Read Broker deployment.
+  - Add cross-repository contract fixtures for version/digest verification,
+    sanitized errors, bounded results, timeouts, and no provider fallback. Log
+    only approved metadata such as capability name, duration, manifest/result
+    digest, and status.
+- **Acceptance criteria:** Offline cross-repository contract tests prove that
+  only the pinned SDK-neutral read envelope is accepted; version or manifest
+  drift, unknown capabilities, malformed/oversized results, authentication
+  failure, and timeout fail closed without exposing MCP/provider objects or
+  calling a fallback provider. Real authentication and schema evidence remain
+  unverified until owner-assisted external-browser authorization is completed.
 
 ### P06-T1 — Normalize Robinhood Market, Fundamental, and Portfolio Data
 
@@ -1008,10 +1041,14 @@ of its research, Paper-approval, and observability dependencies.
 - **Dependencies:** P06-T0, P06-T1, P03-T16, and P08-T0.
 - **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
 - **Implementation checklist:**
-  - Use the read protocol, read-only MCP tool allowlist, and an independent service identity.
+  - Use the normalized ainvest read protocol and an independent Read Broker
+    deployment identity; only that deployment composes the pinned `rh-mcp`
+    gateway and its credential-store adapter.
   - Provide an ainvest CLI surface for portfolio, positions, buying power,
     orders, and symbol quote queries through normalized Read Gateway responses;
-    never expose a raw MCP session or tool invocation.
+    keep the same normalized surface available to Paper workflows and a later
+    Telegram read-query adapter, and never expose a raw MCP session, provider
+    envelope, or tool invocation.
   - Inject Robinhood quotes, fundamentals, and real portfolio snapshots into Strategy/Sizer/Risk while fixing the broker to PaperBroker.
   - Startup logs and health state show `read_only=true` and `execution=paper`.
   - Reject a trade when an MCP quote fails; never construct an Alpaca/yfinance fallback.
@@ -1392,17 +1429,20 @@ line.
   P05-T8; dispatch is currently paused at P05-T4.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
-- Priority lane: after the already merged P04-T0, P05-T0, P08-T0, and
-  P08-T3, integrate `P08-T7` -> `P06-T0` -> `P06-T1` -> `P06-T2` serially
-  for the earliest safe Robinhood Read-only Preview. By owner instruction,
+- Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
+  and P08-T7, implement and independently review an immutable `rh-mcp`
+  release, record its immutable version and expected full-manifest digest in
+  the ainvest tracker, then integrate `P06-T0` -> `P06-T1` -> `P06-T2`
+  serially for the earliest safe Robinhood Read-only Preview. By owner instruction,
   `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
-1. Complete the priority lane `P08-T7` -> `P06-T0` -> `P06-T1` -> `P06-T2`
-   without waiting for every Batch E track. This is a Read-only Preview, not a
-   gate acceptance.
+1. Complete the priority lane: reviewed immutable `rh-mcp` implementation and
+   release -> ainvest tracker records the release/commit and expected
+   full-manifest digest -> `P06-T0` -> `P06-T1` -> `P06-T2`, without waiting
+   for every Batch E track. This is a Read-only Preview, not a gate acceptance.
 2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
    task-card/tracker change built on the Read Gateway and P05-T4/P05-T5. Do not
    combine queries with Telegram approval or broker writes.
