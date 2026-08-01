@@ -69,6 +69,29 @@ policy and must never contain configuration or credential values.
 - `not_ready`: the application liveness check failed or a required dependency
   is not ready.
 
+The composition root must declare a non-empty tuple of `DependencySpec`
+objects when constructing an aggregator. Every declaration begins as
+`not_ready` with reason `starting`, so startup cannot report ready before all
+required checks have produced an observation. A process that intentionally has
+no dependencies must pass both an empty tuple and
+`dependency_mode=DependencySetMode.NONE`; an accidental empty declaration is
+rejected. Unknown dependencies and observations that change a declared kind or
+requirement are rejected.
+
+Each dependency observation carries a per-dependency, monotonically increasing
+`sequence` allocated when the check starts. Sequence zero is reserved for the
+initial `starting` record. The aggregator compares sequences atomically under its
+lock: a late completion with a lower sequence is ignored, even if its wall
+clock is later. For equal sequences, exact duplicates are idempotent, an
+otherwise identical observation retains the later timestamp, and conflicting
+status or reason values produce `not_ready/observation_conflict`. This tie rule
+is commutative, so thread completion order cannot restore readiness. A later
+successful check recovers readiness only by carrying a greater sequence.
+
+`remove()` records a versioned `not_ready/unavailable` observation instead of
+erasing a declaration. Losing the final required dependency therefore remains
+not ready; it cannot turn an empty collection into ready.
+
 External dependency failures can change readiness to `degraded` or
 `not_ready`, but cannot change liveness. This prevents an upstream outage from
 causing a restart storm. Only a local application-level check may call
