@@ -148,12 +148,13 @@ scope, and integration order.
    Batch E task enables live broker writes.
 
 Tracker claim changes merge before their implementation PRs. The initial queue
-(`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) is merged. The next priority
-queue is the earliest safe **Robinhood Read-only Preview**:
-`P08-T7` → `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge
-queue only after their recorded dependencies are on `main`. The coordinator
-may reorder independent ready branches to reduce conflicts, but may not bypass
-the rebase, review, checks, or squash-merge rules above.
+(`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
+`P08-T7` are merged. `P06-T0` is the sole active implementation in the
+remaining earliest-safe **Robinhood Read-only Preview** queue:
+`P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue only
+after their recorded dependencies are on `main`. The coordinator may reorder
+independent ready branches to reduce conflicts, but may not bypass the rebase,
+review, checks, or squash-merge rules above.
 
 #### Initial claims
 
@@ -557,7 +558,7 @@ or enabling broker writes. Its serial merge order is:
   separate sub-agent reviews functionality, fail-closed security, tests,
   readability, and duplication directly on the PR; every actionable finding
   is fixed and re-reviewed before required checks pass and the PR is squash-
-  merged. Only then may `P06-T0` be claimed.
+  merged. P08-T7 satisfied that contract in #82, so `P06-T0` is now claimed.
 - **Handoff/blockers:** the provider-neutral boundary is merged. Production
   deployment artifacts and real credential validation remain intentionally
   blocked on owner decisions; they did not block this fail-closed
@@ -587,10 +588,13 @@ or enabling broker writes. Its serial merge order is:
   `1.28.1` by the `broker` extra (`mcp>=1.8,<2`); P06-T0 uses that API behind
   the injected transport and does not perform an SDK-major migration. The
   P08-T7 `ServiceRole.READ_BROKER`,
-  `SecretId.ROBINHOOD_READ_CREDENTIAL`, and injected `SecretAccessService`;
-  the P08-T3 structured/redacted observability boundary; and the accepted
-  live-data rule that Robinhood MCP failures never trigger an automatic
-  Alpaca, yfinance, or other provider fallback
+  `SecretId.ROBINHOOD_READ_CREDENTIAL`, and `SecretAccessService` policy
+  boundary are available to a future composition layer for static bootstrap
+  or reference material only; the P06-T0 read client receives an already-
+  authenticated injected MCP transport/session. The P08-T3
+  structured/redacted observability boundary and the accepted live-data rule
+  require Robinhood MCP failures never to trigger an automatic Alpaca,
+  yfinance, or other provider fallback.
 - **Allowed paths:** new
   `src/ainvest/execution/robinhood/{__init__,read_client}.py`;
   `tests/unit/execution/robinhood/test_read_client.py`;
@@ -601,19 +605,20 @@ or enabling broker writes. Its serial merge order is:
   coordinate and record that exact expansion before editing it. Do not edit
   package-wide exports or shared tracker/configuration surfaces.
 - **Required behavior:** define the official
-  `https://agent.robinhood.com/mcp/trading` endpoint as a constant; obtain
-  authentication only through an injected P08-T7 Read Broker access service;
-  keep the MCP transport/session behind an injected protocol; discover tool
-  schemas before any tool call; validate an exact pinned schema and digest;
-  and expose an explicit allowlist containing only independently verified read
-  tools. Reject unknown, write-capable, mutating, unpinned, or schema-drifted
-  tools before invoking the transport. Bound connection/call timeouts and map
-  authentication, transport, timeout, protocol, schema, and result failures to
-  stable sanitized errors without exception chaining or credential/session
-  data. Log only tool name, bounded duration, and result digest through the
-  existing observability boundary. Never return or expose a raw MCP session,
-  token, credential, or provider reference to Research or Strategy, and never
-  add an automatic data-provider fallback.
+  `https://agent.robinhood.com/mcp/trading` endpoint as a constant; require an
+  already-authenticated MCP transport/session behind an injected protocol;
+  discover tool schemas before any tool call; validate an exact pinned schema
+  and digest; and expose an explicit allowlist containing only independently
+  verified read tools. The core/read client neither performs OAuth nor reads,
+  refreshes, or persists credentials. Reject unknown, write-capable, mutating,
+  unpinned, or schema-drifted tools before invoking the transport. Bound
+  connection/call timeouts and map authentication, transport, timeout,
+  protocol, schema, and result failures to stable sanitized errors without
+  exception chaining or credential/session data. Log only tool name, bounded
+  duration, and result digest through the existing observability boundary.
+  Never return or expose a raw MCP session, token, credential, or provider
+  reference to Research or Strategy, and never add an automatic data-provider
+  fallback.
 - **Verified-name rule:** do not guess unstable Robinhood tool names or
   schemas. Offline fakes may cover the design-accepted
   `get_equity_quotes` and `get_equity_price_book` names. Every additional
@@ -627,14 +632,24 @@ or enabling broker writes. Its serial merge order is:
   submission/cancellation/replacement, or write credential; no unofficial
   Robinhood API; no credential, config, runtime-mode, dependency, lock-file,
   shared-schema, database/migration, deployment, CI, or broad logging changes
-  unless the coordinator first expands and records scope
+  unless the coordinator first expands and records scope. In particular, this
+  envelope does not implement MCP v1 OAuth redirect/callback handling, a
+  writable `TokenStorage` for access/refresh tokens or client information,
+  token refresh/persistence, desktop onboarding, authenticated transport
+  construction/composition, or a production token store.
 - **Owner-assisted verification:** implementation and deterministic tests may
-  proceed without owner values. Before claiming authenticated official schema
-  evidence, the owner must complete Robinhood authorization outside logs and
-  chat; the agent must never request or record the token, account number, or
-  password. If authorization or the official schema is unavailable, report
-  the exact blocked check and keep the client fail closed; do not invent a
-  schema or substitute another provider.
+  proceed without owner values. Real OAuth composition and creation of the
+  already-authenticated transport are an owner-assisted blocked verification
+  and explicit scope decision, not hidden read-client behavior. Before
+  claiming authenticated official schema evidence or accepting a real
+  connection, the owner must complete Robinhood's official desktop
+  authorization/onboarding outside logs and chat; the agent must never request
+  or record the token, account number, or password. Tokens and MCP client
+  information must not be stored in the repository, ainvest configuration, or
+  logs. If authorization, an approved secure token-storage composition, or the
+  official schema is unavailable, report the exact blocked check and keep the
+  client fail closed; do not invent a schema, obtain authentication from an
+  unofficial source, or substitute another provider.
 - **Verification contract:** run focused unit and fake-MCP contract tests for
   exact schema/digest pinning, allowlisted reads, pre-transport denial of
   unknown/write/mutating/unpinned/drifted tools, authentication failure,
@@ -741,15 +756,16 @@ task row is in the cross-cutting table below.
 | `P08-T4` | `not_started` | `P08-T3` | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
 | `P08-T6` | `not_started` | `P01-T1` | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
-| `P08-T7` | `in_progress` (`p08_t7_secrets_iam`) | `P01-T4`, `P01-T1` | claimed in the priority-lane execution envelope above |
+| `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0` and `P08-T3` are merged. `P08-T7` is the only claimed implementation;
-`P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but remain unclaimed.
+`P08-T0`, `P08-T3`, and `P08-T7` are merged. `P06-T0` is the sole active
+implementation; `P08-T6`, `P08-T8`, and `P08-T9` are dependency-ready but
+remain unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
