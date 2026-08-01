@@ -7,6 +7,9 @@ assumptions before approval or broker code is written.
 |---|---|
 | [`threat-model.md`](threat-model.md) | Assets, trust domains, threats (`T-###`), controls mapped to task IDs and planned tests, residual risk |
 | [`data-flow.md`](data-flow.md) | End-to-end data flows, trust-boundary crossings, and where credentials may and may not travel |
+| [`secrets.md`](secrets.md) | Provider-neutral secret IDs, role grants, production fail-closed behavior, and rotation boundary |
+| [`control-matrix.md`](control-matrix.md) | Current preventive/detective controls, accountable owners, automated evidence state, and release-blocking gaps |
+| [`control-evidence.json`](control-evidence.json) | Authoritative machine-readable threat, control, owner, applicability, and executable-evidence manifest |
 
 ## Authority
 

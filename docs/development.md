@@ -46,21 +46,25 @@ fails CI.
 
 `verify` is the canonical local merge gate. GitHub Actions CI calls this wrapper (see
 `.github/workflows/ci.yml`) rather than duplicating tool-specific arguments. CI also runs a
-Gitleaks secret scan and `./scripts/dev audit` after `./scripts/dev setup`. The audit exports and
-checks the complete lock across every optional extra and dependency group, not only the default
-development environment. Workflows must not inject real OpenAI, broker, or Telegram credentials,
-must keep `LIVE_TRADING_ENABLED=false`, and must not upload `.env`, tokens, or account data as
-artifacts.
+Gitleaks secret scan, GitHub CodeQL SAST, and `./scripts/dev audit` after `./scripts/dev setup`.
+The audit exports and checks the complete lock across every optional extra and dependency group,
+not only the default development environment. Workflows must not inject real OpenAI, broker, or
+Telegram credentials, must keep `LIVE_TRADING_ENABLED=false`, and must not upload `.env`, tokens,
+or account data as artifacts. The living threat-to-evidence register is
+[`docs/security/control-matrix.md`](security/control-matrix.md); incomplete rows remain
+release-blocking and are not made complete merely because general CI is green.
 
 CI actions are pinned to immutable commit SHAs. The workflow grants only read access to repository
 contents and pull requests; pull-request read access is required for the Gitleaks action to inspect
 PR metadata. Version comments beside action SHAs may be updated only after reviewing the upstream
 release and replacing the SHA.
 
-GitHub ruleset `Protect main` requires the `Verify`, `Secret scan`, and `Dependency audit` checks
+GitHub ruleset `Protect main` (ruleset ID `19761285`) requires the `Verify`, `Secret scan`,
+`Dependency audit`, and `SAST` checks
 on the current default branch with strict up-to-date checking. It also requires pull requests,
 resolved review conversations, squash-only merges, and linear history, and blocks deletion and
-force pushes. The ruleset has no bypass actors.
+force pushes. The ruleset has no bypass actors. `SAST` is the workflow job context required by the
+ruleset; the separate CodeQL reporting context is not added as a second required check.
 
 ## Pre-commit
 
