@@ -161,3 +161,46 @@ capability. New adapters should add a recorded/no-network factory for each
 implemented capability, then add provider-specific response-normalization
 tests. Contract tests must never depend on public network availability or real
 credentials.
+
+## Yahoo development-only adapter
+
+`YahooDevelopmentAdapter` is an optional `yfinance` adapter for local
+development, offline research, and historical replay. Install it with the
+`offline-data` extra. The import is lazy, so core, production, and test
+profiles do not load `yfinance` merely by importing `ainvest.data`.
+
+The adapter is explicitly `development_only`, implements only the ordinary
+`QuotePort`, `OhlcvPort`, and `CorporateActionPort` shapes, and is not a
+`LiveQuotePort`. Construction in `TradingMode.LIVE` fails before optional
+dependency loading or transport access. It must never be configured as a
+Robinhood fallback or supply live risk and execution inputs.
+
+Canonical instrument identity and the IANA exchange timezone are injected by
+the caller; Yahoo symbols are never treated as broker instrument IDs. Every
+result is marked delayed and unverified and retains the exchange timezone and
+trading currency. Quotes retain the source bar timestamp as `observed_at`,
+including when yfinance serves a cached bar; `received_at` records this
+adapter's retrieval time. The adapter has no additional result cache.
+
+Historical requests make adjustment semantics explicit: `RAW` maps to
+unadjusted Yahoo prices, while `SPLIT_AND_DIVIDEND` maps to Yahoo's total
+adjustment. `SPLIT` is rejected because yfinance does not expose a trustworthy
+split-only price series without dividend-adjustment ambiguity. Supported
+intervals and lookback windows are bounded, pages contain at most 500 records,
+and the adapter rejects oversized responses, malformed values, naive,
+duplicate, or out-of-order timestamps instead of repairing them silently.
+One monotonic deadline covers the complete port request: sequential symbol
+calls receive only the remaining budget, and expiry discards all partial work.
+
+Yahoo action rows normalize only positive splits and cash dividends. Yahoo's
+history response does not provide authoritative declaration or payment dates,
+so those fields remain absent with `MISSING_FIELDS`; values are never guessed.
+Empty quote responses are errors. Empty historical and corporate-action
+windows remain valid, provenanced pages for an explicitly configured
+instrument. Tests use a checked-in recording behind an injected transport and
+make no public requests. Corporate-action requests reject windows over 3,660
+days and future effective-date windows, using the single configured exchange
+timezone's calendar date, before the first transport call, then
+apply an independent 10,000-row/result cap as defense in depth. The same
+recorded factory participates in the shared quote, OHLCV, and corporate-action
+provider contract suite.
