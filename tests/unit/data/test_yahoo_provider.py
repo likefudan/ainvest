@@ -5,7 +5,7 @@ from __future__ import annotations
 import importlib
 import json
 from collections.abc import Callable
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -44,9 +44,11 @@ from ainvest.data.providers.yahoo import (
 )
 from ainvest.schemas.common import InstrumentIdentity, QualityFlag
 
-NOW = datetime(2026, 7, 24, 20, 0, tzinfo=UTC)
+NOW = datetime(2026, 8, 1, 20, 0, tzinfo=UTC)
 FIXTURE = json.loads(
-    (Path(__file__).parent / "fixtures" / "yahoo_recording.json").read_text(encoding="utf-8")
+    (Path(__file__).parents[2] / "fixtures" / "data" / "yahoo_recording.json").read_text(
+        encoding="utf-8"
+    )
 )
 
 
@@ -55,6 +57,8 @@ class RecordingBoundary:
 
     def __init__(self) -> None:
         self.calls: list[str] = []
+        self.timeout_budgets: list[float] = []
+        self.on_call: Callable[[str], None] | None = None
         self.failure: Exception | None = None
         self.quote_value: yahoo_module._YahooQuote | None = yahoo_module._YahooQuote(
             observed_at=datetime.fromisoformat(FIXTURE["quote"]["observed_at"]),
@@ -80,8 +84,11 @@ class RecordingBoundary:
             for row in FIXTURE["actions"]
         )
 
-    def quote(self, symbol: str, *, timeout_seconds: int) -> yahoo_module._YahooQuote | None:
-        self.calls.append(f"quote:{symbol}:{timeout_seconds}")
+    def quote(self, symbol: str, *, timeout_seconds: float) -> yahoo_module._YahooQuote | None:
+        self.calls.append(f"quote:{symbol}:{timeout_seconds:g}")
+        self.timeout_budgets.append(timeout_seconds)
+        if self.on_call is not None:
+            self.on_call(symbol)
         self._raise_failure()
         return self.quote_value
 
@@ -93,12 +100,14 @@ class RecordingBoundary:
         end_at: datetime,
         interval: str,
         auto_adjust: bool,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[yahoo_module._YahooBar, ...]:
-        del start_at, end_at
-        self.calls.append(f"history:{symbol}:{interval}:{auto_adjust}:{timeout_seconds}")
+        self.calls.append(f"history:{symbol}:{interval}:{auto_adjust}:{timeout_seconds:g}")
+        self.timeout_budgets.append(timeout_seconds)
+        if self.on_call is not None:
+            self.on_call(symbol)
         self._raise_failure()
-        return self.bars
+        return tuple(bar for bar in self.bars if start_at <= bar.timestamp.astimezone(UTC) < end_at)
 
     def actions(
         self,
@@ -106,16 +115,38 @@ class RecordingBoundary:
         *,
         effective_from: date,
         effective_to: date,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[yahoo_module._YahooAction, ...]:
-        del effective_from, effective_to
-        self.calls.append(f"actions:{symbol}:{timeout_seconds}")
+        self.calls.append(f"actions:{symbol}:{timeout_seconds:g}")
+        self.timeout_budgets.append(timeout_seconds)
+        if self.on_call is not None:
+            self.on_call(symbol)
         self._raise_failure()
-        return self.action_rows
+        rows = self.action_rows
+        if symbol == "SPY":
+            rows = tuple(row for row in rows if Decimal(str(row.dividend)) > 0)
+        return tuple(
+            row
+            for row in rows
+            if effective_from
+            <= row.timestamp.astimezone(ZoneInfo("America/New_York")).date()
+            < effective_to
+        )
 
     def _raise_failure(self) -> None:
         if self.failure is not None:
             raise self.failure
+
+
+class ManualMonotonic:
+    def __init__(self) -> None:
+        self.value = 0.0
+
+    def __call__(self) -> float:
+        return self.value
+
+    def advance(self, seconds: float) -> None:
+        self.value += seconds
 
 
 class _Frame:
@@ -138,13 +169,15 @@ class _Ticker:
 
 
 def _instrument(
-    instrument_id: str = "rh_inst_aapl_xnas", symbol: str = "AAPL"
+    instrument_id: str = "rh_inst_aapl_xnas",
+    symbol: str = "AAPL",
+    exchange: str = "XNAS",
 ) -> YahooInstrumentConfig:
     identity = InstrumentIdentity.model_validate(
         {
             "instrument_id": instrument_id,
             "symbol": symbol,
-            "exchange": "XNAS",
+            "exchange": exchange,
             "currency": "USD",
             "asset_type": "EQUITY",
             "identity_as_of": "2026-07-24T18:30:00Z",
@@ -154,11 +187,17 @@ def _instrument(
     return YahooInstrumentConfig(instrument=identity, exchange_timezone="America/New_York")
 
 
-def _adapter(boundary: RecordingBoundary | None = None) -> YahooDevelopmentAdapter:
+def _adapter(
+    boundary: RecordingBoundary | None = None,
+    *,
+    instruments: tuple[YahooInstrumentConfig, ...] | None = None,
+    monotonic_clock: Callable[[], float] | None = None,
+) -> YahooDevelopmentAdapter:
     return YahooDevelopmentAdapter(
         mode=TradingMode.RESEARCH,
-        instruments=(_instrument(),),
+        instruments=instruments or (_instrument(),),
         clock=lambda: NOW,
+        monotonic_clock=monotonic_clock or (lambda: 0.0),
         boundary=boundary or RecordingBoundary(),
     )
 
@@ -421,6 +460,153 @@ def test_request_bounds_and_unknown_instrument_fail_before_transport() -> None:
         adapter.get_quotes(QuoteRequest(instrument_ids=("rh_inst_missing_xnas",)))
     assert caught.value.reason_code == "YAHOO_INSTRUMENT_NOT_FOUND"
     assert boundary.calls == []
+
+
+@pytest.mark.unit
+def test_multi_symbol_quote_uses_one_shared_deadline_and_remaining_budgets() -> None:
+    boundary = RecordingBoundary()
+    budget_clock = ManualMonotonic()
+    boundary.on_call = lambda symbol: budget_clock.advance(2 if symbol == "AAPL" else 0)
+    instruments = (
+        _instrument(),
+        _instrument("rh_inst_spy_arcx", "SPY", "ARCX"),
+    )
+
+    result = _adapter(
+        boundary,
+        instruments=instruments,
+        monotonic_clock=budget_clock,
+    ).get_quotes(
+        QuoteRequest(
+            instrument_ids=("rh_inst_aapl_xnas", "rh_inst_spy_arcx"),
+            timeout_seconds=5,
+        )
+    )
+
+    assert len(result.items) == 2
+    assert boundary.timeout_budgets == [5.0, 3.0]
+
+
+@pytest.mark.unit
+def test_multi_symbol_actions_fail_closed_before_call_after_deadline_expiry() -> None:
+    boundary = RecordingBoundary()
+    budget_clock = ManualMonotonic()
+    boundary.on_call = lambda symbol: budget_clock.advance(5 if symbol == "AAPL" else 0)
+    instruments = (
+        _instrument(),
+        _instrument("rh_inst_spy_arcx", "SPY", "ARCX"),
+    )
+
+    with pytest.raises(DataTimeoutError) as caught:
+        _adapter(
+            boundary,
+            instruments=instruments,
+            monotonic_clock=budget_clock,
+        ).get_corporate_actions(_actions_request(timeout_seconds=5))
+
+    assert caught.value.reason_code == "YAHOO_DEADLINE_EXHAUSTED"
+    assert boundary.calls == ["actions:AAPL:5"]
+    assert boundary.timeout_budgets == [5.0]
+
+
+@pytest.mark.unit
+def test_corporate_action_window_bounds_are_checked_before_transport() -> None:
+    boundary = RecordingBoundary()
+    adapter = _adapter(boundary)
+    exact_end = date(2026, 8, 2)
+    exact_start = exact_end - timedelta(days=3_660)
+
+    adapter.get_corporate_actions(
+        _actions_request(effective_from=exact_start, effective_to=exact_end)
+    )
+    assert len(boundary.calls) == 1
+
+    boundary.calls.clear()
+    with pytest.raises(DataInvalidRequestError) as too_wide:
+        adapter.get_corporate_actions(
+            _actions_request(
+                effective_from=exact_start - timedelta(days=1),
+                effective_to=exact_end,
+            )
+        )
+    assert too_wide.value.reason_code == "YAHOO_ACTION_WINDOW_INVALID"
+    assert boundary.calls == []
+
+    with pytest.raises(DataInvalidRequestError) as future:
+        adapter.get_corporate_actions(
+            _actions_request(effective_from="2026-08-02", effective_to="2026-08-03")
+        )
+    assert future.value.reason_code == "YAHOO_ACTION_FUTURE_WINDOW"
+    assert boundary.calls == []
+
+
+@pytest.mark.unit
+def test_corporate_action_result_limit_remains_fail_closed(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    boundary = RecordingBoundary()
+    monkeypatch.setattr(yahoo_module, "_MAX_PROVIDER_ROWS", 1)
+
+    with pytest.raises(DataSchemaError) as caught:
+        _adapter(boundary).get_corporate_actions(_actions_request())
+
+    assert caught.value.reason_code == "YAHOO_RESULT_TOO_LARGE"
+    assert boundary.calls == ["actions:AAPL:30"]
+
+
+@pytest.mark.unit
+def test_ohlcv_window_exact_boundary_is_allowed_and_one_microsecond_more_is_rejected() -> None:
+    boundary = RecordingBoundary()
+    adapter = _adapter(boundary)
+    start = datetime(2026, 7, 1, tzinfo=UTC)
+    exact_end = start + timedelta(days=7)
+
+    adapter.get_ohlcv(_ohlcv_request(interval="1m", start_at=start, end_at=exact_end, page_size=10))
+    assert len(boundary.calls) == 1
+
+    boundary.calls.clear()
+    with pytest.raises(DataInvalidRequestError) as caught:
+        adapter.get_ohlcv(
+            _ohlcv_request(
+                interval="1m",
+                start_at=start,
+                end_at=exact_end + timedelta(microseconds=1),
+            )
+        )
+    assert caught.value.reason_code == "YAHOO_OHLCV_WINDOW_INVALID"
+    assert boundary.calls == []
+
+
+@pytest.mark.unit
+def test_future_quote_and_bar_timestamps_fail_closed() -> None:
+    boundary = RecordingBoundary()
+    boundary.quote_value = yahoo_module._YahooQuote(
+        observed_at=NOW + timedelta(microseconds=1),
+        last_price="215.42",
+    )
+    with pytest.raises(DataSchemaError) as quote_error:
+        _adapter(boundary).get_quotes(QuoteRequest(instrument_ids=("rh_inst_aapl_xnas",)))
+    assert quote_error.value.reason_code == "YAHOO_QUOTE_FROM_FUTURE"
+
+    future_bar = yahoo_module._YahooBar(
+        timestamp=NOW + timedelta(hours=1),
+        open="210",
+        high="214",
+        low="209",
+        close="213",
+        volume="1000",
+    )
+    boundary = RecordingBoundary()
+    boundary.bars = (future_bar,)
+    with pytest.raises(DataSchemaError) as bar_error:
+        _adapter(boundary).get_ohlcv(
+            _ohlcv_request(
+                start_at=NOW,
+                end_at=NOW + timedelta(days=1),
+                page_size=10,
+            )
+        )
+    assert bar_error.value.reason_code == "YAHOO_NORMALIZATION_FAILED"
 
 
 @pytest.mark.unit

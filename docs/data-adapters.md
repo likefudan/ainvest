@@ -189,6 +189,8 @@ split-only price series without dividend-adjustment ambiguity. Supported
 intervals and lookback windows are bounded, pages contain at most 500 records,
 and the adapter rejects oversized responses, malformed values, naive,
 duplicate, or out-of-order timestamps instead of repairing them silently.
+One monotonic deadline covers the complete port request: sequential symbol
+calls receive only the remaining budget, and expiry discards all partial work.
 
 Yahoo action rows normalize only positive splits and cash dividends. Yahoo's
 history response does not provide authoritative declaration or payment dates,
@@ -196,4 +198,8 @@ so those fields remain absent with `MISSING_FIELDS`; values are never guessed.
 Empty quote responses are errors. Empty historical and corporate-action
 windows remain valid, provenanced pages for an explicitly configured
 instrument. Tests use a checked-in recording behind an injected transport and
-make no public requests.
+make no public requests. Corporate-action requests reject windows over 3,660
+days and future effective-date windows before the first transport call, then
+apply an independent 10,000-row/result cap as defense in depth. The same
+recorded factory participates in the shared quote, OHLCV, and corporate-action
+provider contract suite.

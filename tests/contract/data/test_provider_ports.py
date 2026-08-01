@@ -48,6 +48,8 @@ from ainvest.schemas.common import Provenance, QualityFlag
 from ainvest.schemas.market import MarketQuote
 from ainvest.schemas.research import EvidenceKind
 
+from .yahoo_recorded import recorded_yahoo_provider
+
 QuoteFactory = Callable[[], QuotePort]
 PriceBookFactory = Callable[[], PriceBookPort]
 OhlcvFactory = Callable[[], OhlcvPort]
@@ -58,16 +60,25 @@ CorporateActionFactory = Callable[[], CorporateActionPort]
 
 # Each capability owns its factory list. A partial adapter joins only the lists
 # for protocols it implements; no test requires one provider to expose all capabilities.
-QUOTE_FACTORIES: tuple[QuoteFactory, ...] = (DeterministicFakeDataProvider,)
+QUOTE_FACTORIES: tuple[QuoteFactory, ...] = (
+    DeterministicFakeDataProvider,
+    recorded_yahoo_provider,
+)
 PRICE_BOOK_FACTORIES: tuple[PriceBookFactory, ...] = (DeterministicFakeDataProvider,)
-OHLCV_FACTORIES: tuple[OhlcvFactory, ...] = (DeterministicFakeDataProvider,)
+OHLCV_FACTORIES: tuple[OhlcvFactory, ...] = (
+    DeterministicFakeDataProvider,
+    recorded_yahoo_provider,
+)
 FUNDAMENTALS_FACTORIES: tuple[FundamentalsFactory, ...] = (DeterministicFakeDataProvider,)
 NEWS_EVENT_FACTORIES: tuple[NewsEventFactory, ...] = (DeterministicFakeDataProvider,)
 METADATA_FACTORIES: tuple[MetadataFactory, ...] = (DeterministicFakeDataProvider,)
-CORPORATE_ACTION_FACTORIES: tuple[CorporateActionFactory, ...] = (DeterministicFakeDataProvider,)
+CORPORATE_ACTION_FACTORIES: tuple[CorporateActionFactory, ...] = (
+    DeterministicFakeDataProvider,
+    recorded_yahoo_provider,
+)
 
 
-@pytest.fixture(params=QUOTE_FACTORIES, ids=("deterministic-fake",))
+@pytest.fixture(params=QUOTE_FACTORIES, ids=("deterministic-fake", "yahoo-recorded"))
 def quote_port(request: pytest.FixtureRequest) -> QuotePort:
     return cast(QuoteFactory, request.param)()
 
@@ -77,7 +88,7 @@ def price_book_port(request: pytest.FixtureRequest) -> PriceBookPort:
     return cast(PriceBookFactory, request.param)()
 
 
-@pytest.fixture(params=OHLCV_FACTORIES, ids=("deterministic-fake",))
+@pytest.fixture(params=OHLCV_FACTORIES, ids=("deterministic-fake", "yahoo-recorded"))
 def ohlcv_port(request: pytest.FixtureRequest) -> OhlcvPort:
     return cast(OhlcvFactory, request.param)()
 
@@ -97,7 +108,10 @@ def metadata_port(request: pytest.FixtureRequest) -> InstrumentMetadataPort:
     return cast(MetadataFactory, request.param)()
 
 
-@pytest.fixture(params=CORPORATE_ACTION_FACTORIES, ids=("deterministic-fake",))
+@pytest.fixture(
+    params=CORPORATE_ACTION_FACTORIES,
+    ids=("deterministic-fake", "yahoo-recorded"),
+)
 def corporate_action_port(request: pytest.FixtureRequest) -> CorporateActionPort:
     return cast(CorporateActionFactory, request.param)()
 
@@ -354,9 +368,6 @@ def test_corporate_action_contract_normalizes_splits_dividends_and_pagination(
 
     assert len(first.items) == 1
     assert {action.instrument.instrument_id for action in first.items} == {"rh_inst_aapl_xnas"}
-    assert isinstance(first.items[0], SplitObservation)
-    assert first.items[0].action_type is CorporateActionType.SPLIT
-    assert str(first.items[0].split_ratio) == "4"
     assert first.next_cursor is not None
 
     second = corporate_action_port.get_corporate_actions(
@@ -368,11 +379,21 @@ def test_corporate_action_contract_normalizes_splits_dividends_and_pagination(
     )
     assert len(second.items) == 1
     assert {action.instrument.instrument_id for action in second.items} == {"rh_inst_aapl_xnas"}
-    assert isinstance(second.items[0], DividendObservation)
-    assert second.items[0].action_type is CorporateActionType.DIVIDEND
-    assert second.items[0].currency == "USD"
-    assert second.items[0].pay_date is not None
     assert second.next_cursor is None
+    actions = (*first.items, *second.items)
+    split = next(action for action in actions if isinstance(action, SplitObservation))
+    dividend = next(action for action in actions if isinstance(action, DividendObservation))
+    assert split.action_type is CorporateActionType.SPLIT
+    assert str(split.split_ratio) == "4"
+    assert dividend.action_type is CorporateActionType.DIVIDEND
+    assert dividend.currency == "USD"
+    if dividend.pay_date is None:
+        assert {
+            QualityFlag.PARTIAL,
+            QualityFlag.MISSING_FIELDS,
+        }.issubset(dividend.provenance.quality_flags)
+    else:
+        assert dividend.pay_date >= dividend.effective_date
     _assert_provenance(first, corporate_action_port.source_id)
     _assert_provenance(second, corporate_action_port.source_id)
 
@@ -423,7 +444,7 @@ def test_unknown_corporate_action_instrument_uses_stable_error(
         )
 
     assert caught.value.operation is DataOperation.CORPORATE_ACTIONS
-    assert caught.value.reason_code == "FAKE_INSTRUMENT_NOT_FOUND"
+    assert caught.value.reason_code.endswith("INSTRUMENT_NOT_FOUND")
 
 
 @pytest.mark.contract

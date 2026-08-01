@@ -13,9 +13,10 @@ import importlib
 import json
 from collections.abc import Callable, Iterator, Mapping
 from dataclasses import dataclass
-from datetime import UTC, date, datetime
+from datetime import UTC, date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 from functools import partial
+from time import monotonic
 from types import ModuleType
 from typing import Any, Final, Literal, NoReturn, Protocol, TypeVar, cast
 from zoneinfo import ZoneInfo, ZoneInfoNotFoundError
@@ -60,6 +61,7 @@ from ainvest.schemas.market import MarketQuote, OhlcvBar
 
 YAHOO_DEVELOPMENT_SOURCE: Final[SourceId] = "yahoo.development_only.v1"
 _MAX_PROVIDER_ROWS: Final = 10_000
+_MAX_ACTION_WINDOW_DAYS: Final = 3_660
 _ALLOWED_INTERVAL_DAYS: Final[Mapping[str, int]] = {
     "1m": 7,
     "2m": 60,
@@ -116,7 +118,7 @@ class _YahooAction:
 class _YahooBoundary(Protocol):
     """Narrow injectable seam around yfinance; never exposed above this module."""
 
-    def quote(self, symbol: str, *, timeout_seconds: int) -> _YahooQuote | None: ...
+    def quote(self, symbol: str, *, timeout_seconds: float) -> _YahooQuote | None: ...
 
     def history(
         self,
@@ -126,7 +128,7 @@ class _YahooBoundary(Protocol):
         end_at: datetime,
         interval: str,
         auto_adjust: bool,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[_YahooBar, ...]: ...
 
     def actions(
@@ -135,7 +137,7 @@ class _YahooBoundary(Protocol):
         *,
         effective_from: date,
         effective_to: date,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[_YahooAction, ...]: ...
 
 
@@ -162,7 +164,7 @@ class _YFinanceBoundary:
     def __init__(self, ticker_factory: TickerFactory | None = None) -> None:
         self._ticker_factory = ticker_factory
 
-    def quote(self, symbol: str, *, timeout_seconds: int) -> _YahooQuote | None:
+    def quote(self, symbol: str, *, timeout_seconds: float) -> _YahooQuote | None:
         rows = self._history_rows(
             symbol,
             period="1d",
@@ -184,7 +186,7 @@ class _YFinanceBoundary:
         end_at: datetime,
         interval: str,
         auto_adjust: bool,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[_YahooBar, ...]:
         rows = self._history_rows(
             symbol,
@@ -213,7 +215,7 @@ class _YFinanceBoundary:
         *,
         effective_from: date,
         effective_to: date,
-        timeout_seconds: int,
+        timeout_seconds: float,
     ) -> tuple[_YahooAction, ...]:
         rows = self._history_rows(
             symbol,
@@ -284,6 +286,7 @@ class YahooDevelopmentAdapter:
         mode: TradingMode,
         instruments: tuple[YahooInstrumentConfig, ...],
         clock: Callable[[], datetime] | None = None,
+        monotonic_clock: Callable[[], float] | None = None,
         boundary: _YahooBoundary | None = None,
     ) -> None:
         if mode is TradingMode.LIVE:
@@ -312,6 +315,7 @@ class YahooDevelopmentAdapter:
         self._mode_value = mode.value
         self._instruments = by_id
         self._clock = clock or (lambda: datetime.now(UTC))
+        self._monotonic = monotonic_clock or monotonic
         self._boundary = boundary or _YFinanceBoundary()
 
     @property
@@ -321,19 +325,22 @@ class YahooDevelopmentAdapter:
 
     def get_quotes(self, request: QuoteRequest) -> ObservationBatch[MarketQuote]:
         self._require_non_live(DataOperation.QUOTES)
+        deadline = self._deadline(request.timeout_seconds)
         configured = self._resolve_instruments(request.instrument_ids, DataOperation.QUOTES)
         timezone = self._single_timezone(configured, DataOperation.QUOTES)
         raw_items: list[tuple[YahooInstrumentConfig, _YahooQuote]] = []
         for item in configured:
             symbol = item.instrument.symbol
+            remaining = self._remaining(deadline, DataOperation.QUOTES)
             raw = self._call(
                 DataOperation.QUOTES,
                 partial(
                     self._boundary.quote,
                     symbol,
-                    timeout_seconds=request.timeout_seconds,
+                    timeout_seconds=remaining,
                 ),
             )
+            self._remaining(deadline, DataOperation.QUOTES)
             if raw is None:
                 raise DataIncompleteError(
                     "Yahoo returned no quote for a configured instrument",
@@ -348,6 +355,7 @@ class YahooDevelopmentAdapter:
 
     def get_ohlcv(self, request: OhlcvRequest) -> OhlcvPage:
         self._require_non_live(DataOperation.OHLCV)
+        deadline = self._deadline(request.timeout_seconds)
         item = self._resolve_instruments((request.instrument_id,), DataOperation.OHLCV)[0]
         provider_interval = self._validate_ohlcv_request(request)
         auto_adjust = request.adjustment is PriceAdjustment.SPLIT_AND_DIVIDEND
@@ -359,9 +367,10 @@ class YahooDevelopmentAdapter:
                 end_at=request.end_at,
                 interval=provider_interval,
                 auto_adjust=auto_adjust,
-                timeout_seconds=request.timeout_seconds,
+                timeout_seconds=self._remaining(deadline, DataOperation.OHLCV),
             ),
         )
+        self._remaining(deadline, DataOperation.OHLCV)
         self._validate_ordered_timestamps(
             tuple(bar.timestamp for bar in raw_bars), DataOperation.OHLCV
         )
@@ -392,6 +401,8 @@ class YahooDevelopmentAdapter:
         self, request: CorporateActionRequest
     ) -> ObservationPage[CorporateAction]:
         self._require_non_live(DataOperation.CORPORATE_ACTIONS)
+        deadline = self._deadline(request.timeout_seconds)
+        self._validate_corporate_action_request(request)
         configured = self._resolve_instruments(
             request.instrument_ids, DataOperation.CORPORATE_ACTIONS
         )
@@ -399,6 +410,7 @@ class YahooDevelopmentAdapter:
         raw_by_instrument: list[tuple[YahooInstrumentConfig, _YahooAction]] = []
         for item in configured:
             symbol = item.instrument.symbol
+            remaining = self._remaining(deadline, DataOperation.CORPORATE_ACTIONS)
             raw_actions = self._call(
                 DataOperation.CORPORATE_ACTIONS,
                 partial(
@@ -406,23 +418,30 @@ class YahooDevelopmentAdapter:
                     symbol,
                     effective_from=request.effective_from,
                     effective_to=request.effective_to,
-                    timeout_seconds=request.timeout_seconds,
+                    timeout_seconds=remaining,
                 ),
             )
+            self._remaining(deadline, DataOperation.CORPORATE_ACTIONS)
             self._validate_ordered_timestamps(
                 tuple(action.timestamp for action in raw_actions),
                 DataOperation.CORPORATE_ACTIONS,
             )
+            if len(raw_actions) > _MAX_PROVIDER_ROWS - len(raw_by_instrument):
+                self._schema_error(DataOperation.CORPORATE_ACTIONS, "YAHOO_RESULT_TOO_LARGE")
             raw_by_instrument.extend((item, action) for action in raw_actions)
-        if len(raw_by_instrument) * 2 > _MAX_PROVIDER_ROWS:
-            self._schema_error(DataOperation.CORPORATE_ACTIONS, "YAHOO_RESULT_TOO_LARGE")
         received_at = self._now(DataOperation.CORPORATE_ACTIONS)
-        actions = tuple(
-            action
-            for item, raw in raw_by_instrument
-            for action in self._actions(item, raw, received_at=received_at)
-            if request.effective_from <= action.effective_date < request.effective_to
-        )
+        normalized_actions: list[CorporateAction] = []
+        for item, raw in raw_by_instrument:
+            for action in self._actions(item, raw, received_at=received_at):
+                if not request.effective_from <= action.effective_date < request.effective_to:
+                    continue
+                if len(normalized_actions) >= _MAX_PROVIDER_ROWS:
+                    self._schema_error(
+                        DataOperation.CORPORATE_ACTIONS,
+                        "YAHOO_RESULT_TOO_LARGE",
+                    )
+                normalized_actions.append(action)
+        actions = tuple(normalized_actions)
         ordered = tuple(
             sorted(actions, key=lambda action: (action.effective_date, action.action_id))
         )
@@ -433,7 +452,7 @@ class YahooDevelopmentAdapter:
             observed_at=received_at,
             received_at=received_at,
             timezone=timezone,
-            extra_flags=(QualityFlag.MISSING_FIELDS,) if selected else (),
+            extra_flags=(QualityFlag.MISSING_FIELDS, QualityFlag.PARTIAL) if selected else (),
         )
         return self._build(
             ObservationPage[CorporateAction],
@@ -515,7 +534,7 @@ class YahooDevelopmentAdapter:
             observed_at=received_at,
             received_at=received_at,
             timezone=item.exchange_timezone,
-            extra_flags=(QualityFlag.MISSING_FIELDS,),
+            extra_flags=(QualityFlag.MISSING_FIELDS, QualityFlag.PARTIAL),
         )
         if split > 0:
             yield self._build(
@@ -550,7 +569,7 @@ class YahooDevelopmentAdapter:
                 source=self.source_id,
             )
         max_days = _ALLOWED_INTERVAL_DAYS.get(request.interval)
-        if max_days is None or (request.end_at - request.start_at).days > max_days:
+        if max_days is None or request.end_at - request.start_at > timedelta(days=max_days):
             raise DataInvalidRequestError(
                 "Yahoo interval or date window is outside development adapter bounds",
                 operation=DataOperation.OHLCV,
@@ -558,6 +577,23 @@ class YahooDevelopmentAdapter:
                 source=self.source_id,
             )
         return _YFINANCE_INTERVAL.get(request.interval, request.interval)
+
+    def _validate_corporate_action_request(self, request: CorporateActionRequest) -> None:
+        if (request.effective_to - request.effective_from).days > _MAX_ACTION_WINDOW_DAYS:
+            raise DataInvalidRequestError(
+                "Yahoo corporate-action window exceeds the development adapter bound",
+                operation=DataOperation.CORPORATE_ACTIONS,
+                reason_code="YAHOO_ACTION_WINDOW_INVALID",
+                source=self.source_id,
+            )
+        today = self._now(DataOperation.CORPORATE_ACTIONS).date()
+        if request.effective_from > today or request.effective_to > today + timedelta(days=1):
+            raise DataInvalidRequestError(
+                "Yahoo corporate-action request cannot include future effective dates",
+                operation=DataOperation.CORPORATE_ACTIONS,
+                reason_code="YAHOO_ACTION_FUTURE_WINDOW",
+                source=self.source_id,
+            )
 
     def _resolve_instruments(
         self, instrument_ids: tuple[str, ...], operation: DataOperation
@@ -634,6 +670,20 @@ class YahooDevelopmentAdapter:
                 reason_code="YAHOO_UPSTREAM_FAILURE",
                 source=self.source_id,
             ) from None
+
+    def _deadline(self, timeout_seconds: int) -> float:
+        return self._monotonic() + timeout_seconds
+
+    def _remaining(self, deadline: float, operation: DataOperation) -> float:
+        remaining = deadline - self._monotonic()
+        if remaining <= 0:
+            raise DataTimeoutError(
+                "Yahoo request exhausted its shared deadline",
+                operation=operation,
+                reason_code="YAHOO_DEADLINE_EXHAUSTED",
+                source=self.source_id,
+            )
+        return remaining
 
     def _now(self, operation: DataOperation) -> datetime:
         return self._aware_utc(self._clock(), operation)
