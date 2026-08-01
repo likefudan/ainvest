@@ -100,10 +100,10 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4a (D4a) | Batch D | `P03-T16` | complete (merged) |
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
-| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` merged; `P04-T1` claimed) |
+| Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` and `P04-T1` merged; remaining work unclaimed) |
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
-| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T7` merged; `P08-T4`, `P08-T6` claimed) |
+| Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Read-only Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
@@ -476,38 +476,41 @@ Robinhood implementation, or Research Agent behavior.
 - **Squash-merge commit:**
   `14467cdb9da999ff1f73697be9bc83c27371e7a1`
 
-#### Active three-task claim
+#### Completed three-task claim
 
-This coordinator claim assigns exactly `P08-T4`, `P04-T1`, and `P08-T6`.
-No other task is started or implicitly assigned. Their implementation work may
-run in parallel from immutable base
-`826ad84dafd3f2f875d3589b8fcfba6240f85d3d` after this tracker claim merges,
-but integration is strictly serial: **P08-T4 → P04-T1 → P08-T6**. The branches
-and worktrees are fixed as follows:
+This coordinator claim assigned exactly `P08-T4`, `P04-T1`, and `P08-T6`.
+No other task was started or implicitly assigned. Implementation ran from the
+immutable claim base
+`826ad84dafd3f2f875d3589b8fcfba6240f85d3d`; integration completed strictly
+serially: **P08-T4 → P04-T1 → P08-T6**. All three branches and worktrees were
+deleted after their squash merges.
 
 | Task | Status / owner | Branch / worktree | Satisfied dependency |
 |---|---|---|---|
-| `P08-T4` | `in_progress` — `p08_t4_observability` | `agent/p08-t4-observability` / `.worktrees/p08-t4` | `P08-T3` merged in #79 |
-| `P04-T1` | `in_progress` — `p04_t1_yahoo_dev_adapter` | `agent/p04-t1-yahoo-dev-adapter` / `.worktrees/p04-t1` | `P04-T0` merged in #76 |
-| `P08-T6` | `in_progress` — `p08_t6_security_controls` | `agent/p08-t6-security-controls` / `.worktrees/p08-t6` | `P01-T1` merged in Batch A |
+| `P08-T4` | `merged` — `p08_t4_observability` | deleted after merge | `P08-T3` merged in #79; [PR #86](https://github.com/likefudan/ainvest/pull/86); squash `528fc46` |
+| `P04-T1` | `merged` — `p04_t1_yahoo_dev_adapter` | deleted after merge | `P04-T0` merged in #76; [PR #87](https://github.com/likefudan/ainvest/pull/87); squash `e2eec6e` |
+| `P08-T6` | `merged` — `p08_t6_security_controls` | deleted after merge | `P01-T1` merged in Batch A; [PR #88](https://github.com/likefudan/ainvest/pull/88); squash `f1d9368` |
 
-The implementation agents commit and open PRs but do not merge. Immediately
-before each task's integration review, the coordinator rebases that branch
-onto the then-latest `main`, reruns its focused checks and
-`./scripts/dev verify`, and updates the PR. A different sub-agent, independent
-of the implementation, checks functionality, fail-closed behavior, tests,
-readability, duplication, dependency use, and the scoped diff from a separate
-internal review worktree, then posts findings directly on GitHub. Actionable
-findings must be fixed by the implementation owner and re-reviewed until none
-remain. Required checks must pass on the final rebased revision. Only then may
-the coordinator squash-merge the PR. Merges never run in parallel; the next
-branch does not enter integration review until the preceding squash commit is
-on `main`.
+Completion record: P08-T4 merged first at `528fc46`, P04-T1 was rebased onto
+that commit and merged at `e2eec6e`, and P08-T6 was rebased onto the latter and
+merged at `f1d9368`. Each PR received independent review, all findings were
+fixed before approval, and its final required checks passed. The repository
+was left with only `main` and no task worktrees or remote agent branches.
+
+The implementation agents committed and opened PRs but did not merge. Before
+each task's integration review, the coordinator rebased its branch onto the
+then-latest `main`, reran focused checks and `./scripts/dev verify`, and updated
+the PR. A different sub-agent, independent of the implementation, checked
+functionality, fail-closed behavior, tests, readability, duplication,
+dependency use, and the scoped diff from a separate internal review worktree,
+then posted findings directly on GitHub. Findings were fixed and re-reviewed
+until none remained. Required checks passed on each final rebased revision, and
+the coordinator squash-merged the PRs serially.
 
 Shared-surface ownership for this claim is exclusive:
 
-- `docs/tasks/status.md` remains coordinator-only while all three agents are
-  active. Task branches must not edit it.
+- `docs/tasks/status.md` remained coordinator-only while all three agents were
+  active. Task branches did not edit it.
 - `src/ainvest/observability/**` and the focused observability tests belong
   only to `P08-T4`.
 - `src/ainvest/data/providers/**`, Yahoo fixtures/tests, and the narrowly
@@ -524,15 +527,14 @@ Shared-surface ownership for this claim is exclusive:
 
 The owner pause on `P04-T2` and `P05-T4` remains in force. `P06-T0` remains
 blocked on the independently reviewed external `rh-mcp` release and recorded
-artifact/manifest evidence. No agent may start those tasks, their dependent
-chains, or any other task as part of this claim.
+artifact/manifest evidence. Those tasks, their dependent chains, and unrelated
+tasks were not started as part of this claim.
 
 ##### Execution envelope: P08-T4
 
 - **Title:** Add Metrics, Tracing, and Health Checks
-- **Status/owner:** `in_progress` — `p08_t4_observability`
-- **Branch/worktree/base:** `agent/p08-t4-observability` /
-  `.worktrees/p08-t4` from
+- **Status/owner:** `merged` — `p08_t4_observability`
+- **Branch/worktree/base:** deleted after merge; implementation started from
   `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
 - **Dependencies:** `P08-T3` is merged and satisfied.
 - **Design and task authority:** `design.md` section 13 and
@@ -577,9 +579,8 @@ chains, or any other task as part of this claim.
 ##### Execution envelope: P04-T1
 
 - **Title:** Add the Optional Development/Offline Market Adapter
-- **Status/owner:** `in_progress` — `p04_t1_yahoo_dev_adapter`
-- **Branch/worktree/base:** `agent/p04-t1-yahoo-dev-adapter` /
-  `.worktrees/p04-t1` from
+- **Status/owner:** `merged` — `p04_t1_yahoo_dev_adapter`
+- **Branch/worktree/base:** deleted after merge; implementation started from
   `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
 - **Dependencies:** `P04-T0` is merged and satisfied.
 - **Design and task authority:** `design.md` sections 5.2, 5.3, 10.1, and 11;
@@ -631,12 +632,11 @@ chains, or any other task as part of this claim.
 ##### Execution envelope: P08-T6
 
 - **Title:** Implement and Audit Security Controls
-- **Status/owner:** `in_progress` — `p08_t6_security_controls`
-- **Branch/worktree/base:** `agent/p08-t6-security-controls` /
-  `.worktrees/p08-t6` from
+- **Status/owner:** `merged` — `p08_t6_security_controls`
+- **Branch/worktree/base:** deleted after merge; implementation started from
   `826ad84dafd3f2f875d3589b8fcfba6240f85d3d`
-- **Dependencies:** `P01-T1` is merged and satisfied. P08-T6 rebases and
-  integrates last so its matrix and evidence include the merged P08-T4 and
+- **Dependencies:** `P01-T1` was merged and satisfied. P08-T6 rebased and
+  integrated last so its matrix and evidence include the merged P08-T4 and
   P04-T1 results.
 - **Design and task authority:** `design.md` sections 3, 5, 7–9, 11, 13, and
   15; `IMPLEMENTATION_TODO.md` sections 1, 11 (`P08-T6`), 12 (Batch E), and
@@ -925,7 +925,7 @@ can never become a live quote fallback.
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
-| `P04-T1` | `in_progress` (`p04_t1_yahoo_dev_adapter`) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
+| `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `not_started` (owner-paused/unclaimed) | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
@@ -982,9 +982,9 @@ task row is in the cross-cutting table below.
 |---|---|---|---|
 | `P08-T0` | `merged` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `merged` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
-| `P08-T4` | `in_progress` (`p08_t4_observability`) | `P08-T3` (satisfied) | `observability/{metrics,tracing,health}.py`; observability tests |
+| `P08-T4` | `merged` ([#86](https://github.com/likefudan/ainvest/pull/86)) | `P08-T3` (satisfied) | `observability/{metrics,tracing,health}.py`; observability tests |
 | `P08-T5` | `not_started` | `P08-T4`, `P02-T9` | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests |
-| `P08-T6` | `in_progress` (`p08_t6_security_controls`) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
+| `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
@@ -995,8 +995,8 @@ task row is in the cross-cutting table below.
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. No P06 implementation is active;
 `P06-T0` is blocked and unclaimed pending the reviewed tagged SemVer external
 gateway release artifact and recorded provenance, artifact, and full-manifest
-digests. `P08-T4`, `P04-T1`, and `P08-T6` are claimed in the three-task
-execution envelopes above. `P08-T8` and `P08-T9` are dependency-ready but
+digests. `P08-T4`, `P04-T1`, and `P08-T6` are merged and their three-task
+execution claim is closed. `P08-T8` and `P08-T9` are dependency-ready but
 remain unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
