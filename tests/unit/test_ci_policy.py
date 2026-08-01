@@ -34,6 +34,57 @@ def test_ci_secret_scan_has_pull_request_read_permission() -> None:
 
 
 @pytest.mark.unit
+def test_ci_uses_least_privilege_permissions() -> None:
+    """Only CodeQL receives the one write permission needed to upload findings."""
+    config = yaml.safe_load(CI_WORKFLOW.read_text(encoding="utf-8"))
+
+    assert config["permissions"] == {"contents": "read", "pull-requests": "read"}
+    assert "permissions" not in config["jobs"]["verify"]
+    assert "permissions" not in config["jobs"]["secret-scan"]
+    assert "permissions" not in config["jobs"]["dependency-audit"]
+    assert config["jobs"]["sast"]["permissions"] == {
+        "contents": "read",
+        "security-events": "write",
+    }
+
+
+@pytest.mark.unit
+def test_ci_runs_one_pinned_python_codeql_analysis() -> None:
+    """The SAST gate is present, immutable, and scoped to the Python codebase."""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+    config = yaml.safe_load(workflow)
+    steps = config["jobs"]["sast"]["steps"]
+    init_steps = [
+        step for step in steps if str(step.get("uses", "")).startswith("github/codeql-action/init@")
+    ]
+    analyze_steps = [
+        step
+        for step in steps
+        if str(step.get("uses", "")).startswith("github/codeql-action/analyze@")
+    ]
+
+    assert len(init_steps) == 1
+    assert len(analyze_steps) == 1
+    assert init_steps[0]["with"] == {"languages": "python"}
+    assert re.fullmatch(r"github/codeql-action/init@[0-9a-f]{40}", init_steps[0]["uses"])
+    assert re.fullmatch(r"github/codeql-action/analyze@[0-9a-f]{40}", analyze_steps[0]["uses"])
+    assert (
+        init_steps[0]["uses"].split("@", maxsplit=1)[1]
+        == analyze_steps[0]["uses"].split("@", maxsplit=1)[1]
+    )
+
+
+@pytest.mark.unit
+def test_ci_security_scanners_are_not_duplicated() -> None:
+    """One gate owns each scanner so duplicate findings do not obscure failures."""
+    workflow = CI_WORKFLOW.read_text(encoding="utf-8")
+
+    assert workflow.count("gitleaks/gitleaks-action@") == 1
+    assert workflow.count("github/codeql-action/init@") == 1
+    assert workflow.count("github/codeql-action/analyze@") == 1
+
+
+@pytest.mark.unit
 def test_ci_audits_all_dependency_profiles_through_wrapper() -> None:
     """CI uses the canonical all-profile dependency audit."""
     workflow = CI_WORKFLOW.read_text(encoding="utf-8")
