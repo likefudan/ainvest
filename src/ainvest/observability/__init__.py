@@ -1,5 +1,20 @@
-"""Structured, redacted observability primitives."""
+"""Structured, redacted, and low-cardinality observability primitives."""
 
+from ainvest.observability.health import (
+    DependencyHealth,
+    DependencyKind,
+    DependencyRequirement,
+    DependencySetMode,
+    DependencySpec,
+    DependencyStatus,
+    ExecutionPosture,
+    HealthAggregator,
+    HealthReason,
+    HealthStatus,
+    LivenessStatus,
+    ObservationResult,
+    RuntimePosture,
+)
 from ainvest.observability.logging import (
     FUNDS_SAFETY_EVENTS,
     bind_log_context,
@@ -10,9 +25,48 @@ from ainvest.observability.logging import (
     isolated_log_context,
     log_context,
 )
+from ainvest.observability.metrics import (
+    AinvestMetrics,
+    DataKind,
+    MetricRegistrationError,
+    ObservabilityDependencyError,
+    OrderState,
+    Outcome,
+    PnlThreshold,
+    ProviderOperation,
+    TokenDirection,
+    Workflow,
+)
+from ainvest.observability.tracing import SafeTracer, SpanName, TraceMetadata
 
 __all__ = [
     "FUNDS_SAFETY_EVENTS",
+    "AinvestMetrics",
+    "DataKind",
+    "DependencyHealth",
+    "DependencyKind",
+    "DependencyRequirement",
+    "DependencySetMode",
+    "DependencySpec",
+    "DependencyStatus",
+    "ExecutionPosture",
+    "HealthAggregator",
+    "HealthReason",
+    "HealthStatus",
+    "LivenessStatus",
+    "MetricRegistrationError",
+    "ObservabilityDependencyError",
+    "ObservationResult",
+    "OrderState",
+    "Outcome",
+    "PnlThreshold",
+    "ProviderOperation",
+    "RuntimePosture",
+    "SafeTracer",
+    "SpanName",
+    "TokenDirection",
+    "TraceMetadata",
+    "Workflow",
     "bind_log_context",
     "clear_log_context",
     "configure_logging",
