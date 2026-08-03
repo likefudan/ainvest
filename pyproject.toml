@@ -37,7 +37,8 @@ approval = [
     "webauthn>=2.6,<3",
 ]
 broker = [
-    "mcp>=1.8,<2",
+    # Reserved for the independently reviewed and artifact-pinned rh-mcp
+    # release. ainvest must not depend on or import the MCP SDK directly.
 ]
 observability = [
     "opentelemetry-api>=1.32,<2",
