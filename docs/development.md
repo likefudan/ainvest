@@ -100,8 +100,11 @@ Runtime capabilities are isolated as optional extras:
 Multiple deployment profiles may be combined by repeating `--extra`. In particular, the research
 profile does not install the offline-data, approval, or broker packages. `yfinance` is isolated in
 the offline-data profile and must never supply live quotes, pre-trade risk inputs, or broker
-fallback data. The broker profile contains the official MCP Python SDK and must never add a client
-that uses Robinhood usernames, passwords, or unofficial Robinhood APIs.
+fallback data. The broker profile is reserved for the independently reviewed and artifact-pinned
+`rh-mcp` release. It is intentionally empty until that release passes its external review and is
+recorded in the task tracker. `ainvest` must not depend on or import the MCP Python SDK directly,
+and the profile must never add a client that uses Robinhood usernames, passwords, or unofficial
+Robinhood APIs.
 
 Production images should install only their required extras with `--no-default-groups`; Ruff,
 mypy, pytest, and other development tools are intentionally absent from those environments.
