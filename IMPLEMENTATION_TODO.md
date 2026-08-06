@@ -2,7 +2,7 @@
 
 > Based on `design.md` in `likefudan/ainvest`, including the architecture merged in PR #1 on 2026-07-24 and the safety, model, approval, and data-source decisions accepted afterward.
 >
-> Purpose: move ainvest from an architecture-only repository to Paper Trading, research, human approval, read-only Robinhood integration, and eventually tightly controlled live execution. Every task card is written so that it can be assigned to an independent Codex sub-agent, Cursor Agent, or another AI coding tool.
+> Purpose: move ainvest from an architecture-only repository to Paper Trading, research, human approval, non-trading Robinhood integration, and eventually tightly controlled live execution. Every task card is written so that it can be assigned to an independent Codex sub-agent, Cursor Agent, or another AI coding tool.
 >
 > Safety baseline: unless a task explicitly belongs to Phase 07 and all live-trading gates have passed, every implementation must keep `TRADING_MODE=paper`, `LIVE_TRADING_ENABLED=false`, and `REQUIRE_HUMAN_APPROVAL=true`. The first release also fixes `REGULAR_TRADING_HOURS_ONLY=true` and `REQUIRE_COMPLETE_RISK_LIMITS=true`.
 
@@ -48,7 +48,7 @@ External data
 7. Missing or stale data, exceptions, timeouts, state conflicts, and uncertain submission outcomes must fail closed.
 8. Approval is bound to a canonical order hash. Any change to symbol, side, quantity, order type, limit, time in force, expiry, account scope, or strategy version invalidates the approval.
 9. Telegram may approve a first-release Paper proposal only. A successful event must use `approval_method=telegram` and `approval_scope=paper`; Telegram is never the final authorization boundary for live trading.
-10. The Execution Service is the only component allowed to receive broker write-tool access.
+10. The Execution Service is the only component allowed to receive trading/order write-tool access. The dedicated Robinhood Non-Trading Gateway may expose only the exact 11 owner-approved watchlist/saved-scan mutations, never a trading capability.
 11. A `SUBMIT_UNKNOWN` result must never cause an immediate resubmission. Reconcile the idempotency key, client order ID, and broker history first.
 12. Inputs, outputs, versions, and state transitions for Research, Strategy, Risk, Approval, and Execution must be replayable and auditable.
 13. Strategy plugins are arbitrary Python code and must run in separate processes with no credentials, no network by default, a read-only file system, and bounded CPU, memory, and wall time.
@@ -56,9 +56,9 @@ External data
 15. No agent may write real tokens, account numbers, Passkey private keys, or `.env` contents into source code, fixtures, snapshots, logs, or audit records.
 16. The first release may create or execute orders only during the US regular trading session. Pre-market, after-hours, overnight, holidays, and times after an early close are non-trading periods.
 17. If any required risk limit is missing, empty, malformed, out of range, or otherwise invalid, trading must be rejected. There are no implicit tradable limit defaults.
-18. When Robinhood MCP officially provides a read capability and it passes contract tests, that capability must be accessed through the Robinhood Read Gateway instead of introducing a duplicate default provider.
+18. When Robinhood MCP officially provides a read capability and it passes contract tests, that capability must be accessed through the read projection of the Robinhood Non-Trading Gateway instead of introducing a duplicate default provider.
 19. Live quotes must come only from Robinhood MCP `get_equity_quotes`; spread and book data must come from `get_equity_price_book`. If MCP fails, is stale, omits required fields, or conflicts internally, reject the trade. Do not fall back to Alpaca, yfinance, or another quote source.
-20. The Research Agent and Strategy Engine may consume only versioned schemas returned by read-only gateways. They must not receive a raw MCP session, OAuth token, or write tool.
+20. The Research Agent and Strategy Engine may consume only versioned schemas returned by read-only projections. They must not receive a raw MCP session, OAuth token, generic capability invocation, non-trading mutation, or trading tool.
 21. SEC EDGAR with EdgarTools supplies primary filing evidence. News and event discovery uses GDELT, SEC 8-K/Form 4 filings, and company Investor Relations sources. yfinance is an optional development/offline adapter only; Alpaca is not a default first-release dependency.
 22. The first-release AI model is OpenAI `gpt-5.6-sol`, called through Pydantic AI and the Responses API with `reasoning_effort=medium`, `store=false`, and strict structured output. Built-in web search and automatic cross-model fallback are disabled.
 23. An AI failure, timeout, refusal, invalid schema, or unsupported evidence must not produce a complete `ResearchPacket` usable by a strategy. Retry at most once and only for an explicitly transient error.
@@ -70,6 +70,7 @@ External data
 29. Kill-switch changes, manual-review resolution, cancellation requests, audit access, and live-start confirmation are privileged operations. They require an authenticated operator identity, explicit authorization, a reason, idempotency, and an audit event.
 30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
+32. The first `rh-mcp` manifest permits exactly 34 reads and 11 explicitly reviewed non-trading mutations, each with a pinned `mutates` flag, and denies exactly 8 trading capabilities. Its boundary is no trading, not no writes. Unknown capabilities and any manifest, schema, disposition, or mutation-classification drift fail closed.
 
 ### 1.3 First-Release Non-Goals
 
@@ -94,9 +95,11 @@ External data
 - Passkey: py_webauthn; deferred for Paper and mandatory before live trading.
 - Scheduling: APScheduler 3.11.x.
 - Robinhood: the official Trading MCP through the external default-deny
-  [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Read Gateway.
+  [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Non-Trading Gateway.
   `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
-  ainvest consumes only its pinned, SDK-neutral read contract.
+  ainvest consumes only its pinned, SDK-neutral capability/result contract.
+  The approved v0 surface is 34 reads plus 11 non-trading mutations; all 8
+  trading capabilities and every unknown capability are denied.
 - Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
 - Testing: pytest, Hypothesis, and HTTPX mocks.
 - Logging and monitoring: structlog, OpenTelemetry, and Prometheus.
@@ -170,7 +173,7 @@ flowchart TD
     P04 --> G2["Gate 2: Structured and traceable research"]
     P05 --> G3["Gate 3: Paper-only secure approval"]
     P01 --> S08["P08-T7: read-broker identity and secrets"]
-    G1 --> P06["P06-T0 through P06-T2: Robinhood Read-only Preview"]
+    G1 --> P06["P06-T0 through P06-T2: Robinhood Non-Trading Preview"]
     S08 --> P06
     P06 --> G4["P06-T3 / Gate 4: Real portfolio data with Paper execution"]
     G2 --> G4
@@ -185,7 +188,7 @@ Primary parallelization opportunities:
 - After Phase 01 foundations exist, domain schemas, CI, and the threat model can proceed in parallel.
 - After schemas stabilize, persistence, the strategy protocol, the Paper Broker interface, and the workflow state machine can be assigned independently.
 - After Gate 1, the Research and Paper Approval tracks can run in parallel.
-- The Robinhood Read-only Preview may start as soon as its task dependencies
+- The Robinhood Non-Trading Preview may start as soon as its task dependencies
   are merged. Its serial cross-repository order is: independently reviewed
   tagged SemVer `rh-mcp` release with an immutable artifact → ainvest tracker
   records the tag, artifact provenance/digest, and expected full-manifest
@@ -760,7 +763,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Dependencies:** P04-T0 through P04-T4 and P02-T1 through P02-T2.
 - **Primary path:** `src/ainvest/agents/tools/`.
 - **Implementation checklist:**
-  - Provide quote, price book, history, indicators, filings, news, portfolio concentration, and buying-power tools. Robinhood capabilities are accessible only through the Read Gateway.
+  - Provide quote, price book, history, indicators, filings, news, portfolio concentration, and buying-power tools. Robinhood capabilities are accessible only through the read projection of the Non-Trading Gateway.
   - Use Pydantic inputs/outputs, timeouts, and bounded result sizes.
   - Return evidence IDs; the model may cite only evidence that the tools returned.
   - Do not grant the tool layer broker-write capability.
@@ -775,7 +778,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Call OpenAI Responses through Pydantic AI with model `gpt-5.6-sol`, `reasoning_effort=medium`, `store=false`, and strict JSON Schema for the intermediate narrative.
   - Build independent context for each run; do not depend on `previous_response_id` or long-lived server conversation state.
   - The system prompt prohibits BUY/SELL directions, quantities, performance promises, and unsupported numeric claims.
-  - Disable built-in OpenAI web search. Expose only ainvest read-only deterministic tools and Read Gateway wrappers, never a raw MCP session.
+  - Disable built-in OpenAI web search. Expose only ainvest read-only deterministic tools and named read-projection wrappers, never a raw MCP session, a generic capability invocation, or a non-trading mutation.
   - Bound tool set, turns, tokens, duration, and concurrency. Retry once only for explicitly transient network/rate-limit failures; never switch models automatically.
   - Version the model, prompt, and tool schemas. Record model ID, OpenAI request ID, token usage, and input/output digests.
 - **Acceptance criteria:** Tests assert the fixed model/API/effort/store settings; invalid schema, trade instructions, unsupported claims, timeout, or exhausted retry fails closed without a complete `ResearchPacket`; fake-model tests run offline.
@@ -973,25 +976,42 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ---
 
-## 9. Phase 06 — Official Robinhood MCP Read-Only Integration
+## 9. Phase 06 — Official Robinhood MCP Non-Trading Integration
 
-`P06-T0` through `P06-T2` are an early **Robinhood Read-only Preview**. They
+`P06-T0` through `P06-T2` are an early **Robinhood Non-Trading Preview**. They
 may run after their own dependencies without waiting for all of Batch E, Gate
-2, or Gate 3. This preview does not accept Gate 4 and never enables a broker
-write capability. `P06-T3` remains the Gate 4 acceptance card and retains all
+2, or Gate 3. This preview does not accept Gate 4 and never enables a trading
+capability. `P06-T3` remains the Gate 4 acceptance card and retains all
 of its research, Paper-approval, and observability dependencies.
 
 The external [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) project
-owns the default-deny Read Gateway: OAuth/DCR/PKCE/refresh, its credential-store
-protocol, private MCP SDK v2 transport, the reviewed read-tool manifest and
-schema digests, and a stable SDK-neutral result/error envelope. P06-T0 remains
-blocked and unclaimed until that implementation has an independently reviewed
-tagged SemVer release, an immutable artifact with source provenance and an
-artifact digest/checksum, and a committed full-manifest digest. A source commit
-may be recorded as provenance evidence but cannot substitute for the consumable
-release artifact.
+owns the default-deny Non-Trading Gateway: OAuth/DCR/PKCE/refresh, its
+credential-store protocol, private MCP SDK v2 transport, the reviewed
+capability manifest and schema digests, and a stable SDK-neutral result/error
+envelope.
 
-### P06-T0 — Integrate the External Robinhood Read Gateway
+Its OAuth credential is itself trading-capable, so the real boundary is the
+reviewed, digest-pinned manifest — not a token scope, and not the word
+"read-only". That manifest allows exactly 34 `mutates=false` read capabilities
+and 11 reviewed `mutates=true` watchlist/saved-scan mutations, and permanently
+denies the 8 order-placement, cancellation, option-exercise, and order-review
+capabilities. Unknown capabilities and any manifest, schema, disposition, or
+`mutates` drift fail closed.
+
+The gateway ships **no read-only projection**: its `invoke()` accepts any
+allowed capability, including the 11 mutations. Narrowing what Research and
+Strategy can reach (rule 20) is therefore ainvest's own adapter
+responsibility, not something the gateway enforces on our behalf. Phase 06
+consumes the read capabilities only; using any of the 11 non-trading mutations
+requires its own explicitly named task card and tracker entry.
+
+P06-T0 remains blocked and unclaimed until that implementation has an
+independently reviewed tagged SemVer release, an immutable artifact with source
+provenance and an artifact digest/checksum, and a committed full-manifest
+digest. A source commit may be recorded as provenance evidence but cannot
+substitute for the consumable release artifact.
+
+### P06-T0 — Integrate the External Robinhood Non-Trading Gateway
 
 - **Objective:** Compose a thin ainvest adapter over a pinned `rh-mcp` release
   without taking ownership of MCP transport, OAuth, tokens, or provider SDK
@@ -999,8 +1019,8 @@ release artifact.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
-  digest/checksum, committed reviewed read manifest, and full-manifest digest
-  recorded in `docs/tasks/status.md`.
+  digest/checksum, committed reviewed capability manifest, and full-manifest
+  digest recorded in `docs/tasks/status.md`.
 - **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
 - **Implementation checklist:**
   - Pin an independently reviewed tagged SemVer `rh-mcp` release, immutable
@@ -1013,23 +1033,36 @@ release artifact.
     envelope, additionally verify its `envelope_version`. Missing, unsupported,
     or mismatched values fail closed; do not require a package-version field in
     the gateway readiness or result envelope.
-  - Consume only the stable SDK-neutral read result/error envelope. Never
+  - Consume only the stable SDK-neutral result/error envelope. Never
     import or expose `mcp.*` types, OAuth tokens, credentials, raw sessions,
     arbitrary tool invocation, or `CallToolResult`.
+  - Build the read projection here. The adapter exposes named read operations
+    over an allowlist that is the intersection of the manifest's 34
+    `mutates=false` capabilities and what ainvest actually needs; it must not
+    forward a caller-supplied capability name to the gateway. Assert at
+    startup that every capability in that allowlist is `allowed` **and**
+    `mutates=false` in the pinned manifest, and fail closed otherwise — this
+    is what keeps a manifest that later reclassifies a capability from
+    silently widening our surface.
   - Keep OAuth/DCR/PKCE/refresh, credential persistence, MCP SDK v2 transport,
-    tool discovery, the default-deny read allowlist, and schema-drift
+    tool discovery, the default-deny capability allowlist, and schema-drift
     enforcement inside `rh-mcp`. Compose its credential-store protocol only in
     the independently identified Read Broker deployment.
   - Add cross-repository contract fixtures for version/digest verification,
     sanitized errors, bounded results, timeouts, and no provider fallback. Log
     only approved metadata such as capability name, duration, manifest/result
-    digest, and status.
+    digest, and status. `rh-mcp` v0.2.0 pins the wire shape of the result
+    envelope but not of `GatewayError`, so the sanitized-error fixture is
+    ainvest's own contract until the gateway publishes one; assert on the
+    stable `code`/`retryable` fields rather than on message text.
 - **Acceptance criteria:** Offline cross-repository contract tests prove that
-  only the pinned SDK-neutral read envelope is accepted; version or manifest
+  only the pinned SDK-neutral envelope is accepted; version or manifest
   drift, unknown capabilities, malformed/oversized results, authentication
   failure, and timeout fail closed without exposing MCP/provider objects or
-  calling a fallback provider. Real authentication and schema evidence remain
-  unverified until owner-assisted external-browser authorization is completed.
+  calling a fallback provider. A test asserts that no adapter code path can
+  reach a `mutates=true` or denied capability. Real authentication and schema
+  evidence remain unverified until owner-assisted external-browser
+  authorization is completed.
 
 ### P06-T1 — Normalize Robinhood Market, Fundamental, and Portfolio Data
 
@@ -1056,27 +1089,32 @@ release artifact.
     deployment identity; only that deployment composes the pinned `rh-mcp`
     gateway and its credential-store adapter.
   - Provide an ainvest CLI surface for portfolio, positions, buying power,
-    orders, and symbol quote queries through normalized Read Gateway responses;
+    orders, and symbol quote queries through the normalized read projection;
     keep the same normalized surface available to Paper workflows and a later
     Telegram read-query adapter, and never expose a raw MCP session, provider
     envelope, or tool invocation.
   - Inject Robinhood quotes, fundamentals, and real portfolio snapshots into Strategy/Sizer/Risk while fixing the broker to PaperBroker.
   - Startup logs and health state show `read_only=true` and `execution=paper`.
+    Here `read_only` means this deployment reaches no Robinhood mutation of
+    any kind — neither a trading capability nor one of the 11 approved
+    non-trading mutations.
   - Reject a trade when an MCP quote fails; never construct an Alpaca/yfinance fallback.
   - Make submit attempts fail at two or more of client, configuration, and deployment-permission layers.
 - **Acceptance criteria:** The CLI returns normalized read-only account/market
   results, real data drives a Paper proposal, and no code path reaches a
-  Robinhood write tool.
+  Robinhood trading capability or a non-trading mutation.
 
-### P06-T3 — Gate 4: Accept Robinhood Read-Only Paper Trading
+### P06-T3 — Gate 4: Accept Robinhood Non-Trading Paper Trading
 
-- **Objective:** Prove real account state can drive Paper while no live write path exists.
+- **Objective:** Prove real account state can drive Paper while no trading path exists.
 - **Dependencies:** P06-T0 through P06-T2, P03-T17, P04-T12 (Gate 2), P05-T8 (Gate 3), P08-T3, and P08-T4.
 - **Primary file:** `docs/releases/phase-4-acceptance.md`.
 - **Implementation checklist:**
   - Read quotes, price book, historicals, fundamentals, account, positions, buying power, and orders into snapshots.
   - Run the full Paper workflow and approval from those snapshots.
-  - Audit permission/tool allowlists and execute negative write-call tests.
+  - Audit permission/capability allowlists and execute negative tests against
+    all 8 denied trading capabilities and all 11 approved non-trading
+    mutations; both classes must be unreachable from this deployment.
   - Compare MCP values to internal snapshots and validate freshness, bid/ask, and schema-drift behavior.
   - Inject quote timeout, missing fields, and conflicting results; assert no alternative provider is called and the order is rejected.
 - **Acceptance criteria:** The design Phase 4 criteria pass; `docs/releases/phase-4-acceptance.md` explicitly records no live-order capability and no live quote fallback.
@@ -1094,7 +1132,7 @@ release artifact.
   - Research, Strategy, and general API processes cannot install or import the write client.
   - Submit accepts only a validated internal broker command with client order/idempotency ID.
   - Reload and require `approval_method=webauthn`, `approval_scope=live`, and matching order hash before any MCP call. Reject Telegram/Paper/missing scope locally.
-  - Revalidate canonical instrument ID, symbol/exchange/currency/asset type, tradability, tick size, quantity increment, and minimum notional against the latest Read Gateway metadata.
+  - Revalidate canonical instrument ID, symbol/exchange/currency/asset type, tradability, tick size, quantity increment, and minimum notional against the latest read-projection metadata.
   - Preserve broker order ID, status, and time exactly. Distinguish confirmed failure from unknown outcome.
   - Initially support DAY LIMIT orders for allowlisted stocks/ETFs only.
 - **Acceptance criteria:** Architecture tests block unauthorized imports; non-Agentic accounts, ambiguous/mismatched instruments, invalid increments, non-LIMIT orders, and non-allowlisted symbols are rejected before MCP; mock-MCP contracts pass.
@@ -1106,7 +1144,7 @@ release artifact.
 - **Primary file:** `src/ainvest/execution/service.py`.
 - **Implementation checklist:**
   - Atomically claim the approval; validate unexpired/unconsumed state, matching hash, `approval_method=webauthn`, and `approval_scope=live`.
-  - Reload quote, price book, buying power, positions, and open orders through the Robinhood Read Gateway. Any market-data failure becomes `PRE_TRADE_REJECTED` with no provider switch.
+  - Reload quote, price book, buying power, positions, and open orders through the read projection of the Robinhood Non-Trading Gateway. Any market-data failure becomes `PRE_TRADE_REJECTED` with no provider switch.
   - Run the full pre-trade Risk Engine; reject price drift beyond limits.
   - Enter SUBMITTING and use a stable client order ID.
   - Save broker ID and SUBMITTED on success, REJECTED on confirmed rejection, and SUBMIT_UNKNOWN on timeout/disconnect.
@@ -1445,7 +1483,7 @@ line.
   release with an immutable artifact, record its tag, artifact
   provenance/digest, and expected full-manifest digest in the ainvest tracker,
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` serially for the earliest
-  safe Robinhood Read-only Preview. By owner instruction,
+  safe Robinhood Non-Trading Preview. By owner instruction,
   `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -1455,12 +1493,13 @@ line.
    release with an immutable artifact -> ainvest tracker records its tag,
    artifact provenance/digest, and expected full-manifest digest -> `P06-T0`
    -> `P06-T1` -> `P06-T2`, without waiting for every Batch E track. This is a
-   Read-only Preview, not a gate acceptance.
+   Non-Trading Preview, not a gate acceptance.
 2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
-   task-card/tracker change built on the Read Gateway and P05-T4/P05-T5. Do not
-   combine queries with Telegram approval or broker writes.
+   task-card/tracker change built on the read projection and P05-T4/P05-T5. Do
+   not combine queries with Telegram approval, non-trading mutations, or
+   trading capabilities.
 3. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
-   then perform the P06-T3 read-only permission audit and Gate 4 acceptance.
+   then perform the P06-T3 capability permission audit and Gate 4 acceptance.
 4. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
 5. P07-T0 through P07-T5.
 6. P08-T15 plus an independent security review.
@@ -1596,7 +1635,7 @@ The implementation is complete only when all of the following are true:
 13. The Safety Gate passes, and threat-model high/critical residual risks are zero or explicitly accepted by the user.
 14. Repository and deployment defaults remain Paper even after live code exists; each real order still requires explicit user approval.
 15. After Gate 5, the system returns to Paper and stores a redacted retrospective.
-16. Live market data comes only from the Robinhood Read Gateway. MCP failure rejects the trade, and no Alpaca/yfinance automatic fallback exists.
+16. Live market data comes only from the read projection of the Robinhood Non-Trading Gateway. MCP failure rejects the trade, and no Alpaca/yfinance automatic fallback exists.
 17. The Research Agent uses the accepted OpenAI Responses configuration. Invalid schema, model failure, or cost-limit breach never switches models or creates a complete `ResearchPacket`.
 
 ## 16. Decision Authority Boundary
@@ -1605,7 +1644,7 @@ The following safety decisions are accepted. Every agent must implement them dir
 
 - Create and execute new orders only during the US regular trading session.
 - Reject trading whenever a required risk limit is missing or invalid.
-- Prefer officially supported, contract-tested Robinhood MCP capabilities and isolate them behind the Read Gateway.
+- Prefer officially supported, contract-tested Robinhood MCP capabilities and isolate them behind the Non-Trading Gateway, whose reviewed manifest permanently denies every trading capability.
 - Use Robinhood MCP as the only live quote source; reject on failure with no Alpaca/yfinance fallback.
 - Use SEC EDGAR/EdgarTools for primary filing evidence; use GDELT, SEC, and company announcements for news/events; keep yfinance development/offline only.
 - Use OpenAI `gpt-5.6-sol` through Pydantic AI and Responses API with medium reasoning, `store=false`, strict structured output, built-in web search off, and no automatic model switch.

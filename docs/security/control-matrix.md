@@ -60,7 +60,7 @@ named required workflow check ran against the exact commit.
 | `T-013` | `critical` | `live_cancel` | Execution and Operator owner | `partial` | `partial` | `E-CANCEL-UNKNOWN`, `E-KILL-NO-AUTOCANCEL`, `P-BROKER-CANCEL` | Broker cancel and operator authorization evidence are required before Live. |
 | `T-014` | `high` | `all_sinks` | Observability and Security owner | `partial` | `partial` | `E-LOG-REDACT`, `E-TRACE-SANITIZE`, `E-METRIC-LABELS`, `E-CI-SECRET`, `P-EXPORTER-SINK` | Exporter, Telegram, and deployment sink evidence remains required before each is enabled. |
 | `T-015` | `high` | `paper_and_live` | Risk and Scheduling owner | `passing` | `implemented` | `E-TIME-CALENDAR`, `E-TIME-TTL`, `E-TIME-STALE`, `E-CI-VERIFY` | Production NTP monitoring remains a deployment responsibility; safe halt on bad time is accepted. |
-| `T-016` | `critical` | `robinhood_read_and_live` | Read Broker owner | `blocked` | `planned` | `E-SECRET-ROLES`, `E-YAHOO-LIVE-DENY`, `E-HEALTH-NOTREADY`, `P-MCP-ALLOWLIST` | Read-only Preview and Live remain blocked until a pinned independently reviewed rh-mcp release and concrete adapter evidence exist. |
+| `T-016` | `critical` | `robinhood_read_and_live` | Read Broker owner | `blocked` | `planned` | `E-SECRET-ROLES`, `E-YAHOO-LIVE-DENY`, `E-HEALTH-NOTREADY`, `P-MCP-ALLOWLIST` | Non-Trading Preview and Live remain blocked until a pinned independently reviewed rh-mcp release and concrete adapter evidence exist. The gateway manifest denies all 8 trading capabilities; the read projection excluding its 11 approved non-trading mutations is ainvest adapter code needing its own evidence. |
 <!-- control-matrix:end -->
 
 ## Cross-cutting release evidence

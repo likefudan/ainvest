@@ -55,7 +55,7 @@ capped at Medium unless they undermine those guards.
 | Asset ID | Asset | Confidentiality | Integrity | Availability | Primary domains |
 |---|---|---|---|---|---|
 | `A-FUNDS` | Cash and positions in the Robinhood Agentic Account (Live) and Paper ledger | High | Critical | High | Execution, Database, External (Robinhood) |
-| `A-BROKER` | Robinhood MCP OAuth / write and read sessions | Critical | Critical | High | Execution (write), Data/Read Gateway (read) |
+| `A-BROKER` | Robinhood MCP OAuth credential (trading-capable) and the sessions built from it | Critical | Critical | High | Execution (trading), Data/Non-Trading Gateway (reads) |
 | `A-OPENAI` | OpenAI API key and research budget | High | Medium | Medium | Research |
 | `A-TELEGRAM` | Telegram Bot token, webhook secret, numeric allowlists | High | High | Medium | Approval |
 | `A-WEBAUTHN` | Passkey public credentials, RP/server material; private key on device | Critical | Critical | High | Approval, User device |
@@ -203,7 +203,7 @@ Hard rules:
 | Domains | Research / Data / Approval → External or internal network |
 | Attacker | Prompt/tool argument injection; malicious evidence URL; forged webhook source |
 | Impact | High |
-| Controls | Deterministic tool allowlists; no model built-in web search; URL allowlists/blocks for link fetches; Read Gateway fixed tool schema; Approval/Execution least privilege egress; disable unsafe redirects |
+| Controls | Deterministic tool allowlists; no model built-in web search; URL allowlists/blocks for link fetches; Non-Trading Gateway fixed capability manifest and pinned schema digests; Approval/Execution least privilege egress; disable unsafe redirects |
 | Tasks | `P04-T5`, `P04-T6`, `P04-T8`, `P06-T0`, `P08-T7`, `DEC-004` |
 | Planned tests | Tool attempts to hit link-local/metadata URLs; disallowed MCP tools; research packet with malicious URL (`P04-T8`, `P08-T13`, `P08-T15`) |
 
