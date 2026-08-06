@@ -48,9 +48,13 @@ their absence keeps production secret access unavailable.
 | Write Broker | Robinhood write credential only | Robinhood read and every Research/Approval secret |
 
 The Read Broker does not lend its credential or raw MCP session to Research or
-Strategy. Research consumes versioned results from the future Read Gateway.
-The Write Broker remains unavailable to Paper and the Read-only Preview; this
-module alone cannot enable it.
+Strategy. Research consumes versioned results from the future Non-Trading
+Gateway's read projection. Robinhood issues no read-only OAuth scope, so the
+"Robinhood read credential" is one trading-capable credential restrained by the
+gateway's reviewed no-trading manifest, and role separation is a defence in
+depth on top of that manifest rather than a substitute for it. The Write Broker
+remains unavailable to Paper and the Non-Trading Preview; this module alone
+cannot enable it.
 
 ## Provider boundary
 

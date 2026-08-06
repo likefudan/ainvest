@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Read-only Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -150,7 +150,7 @@ scope, and integration order.
 Tracker claim changes merge before their implementation PRs. The initial queue
 (`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
 `P08-T7` are merged. No P06 implementation is active. The remaining
-earliest-safe **Robinhood Read-only Preview** queue is: independently reviewed
+earliest-safe **Robinhood Non-Trading Preview** queue is: independently reviewed
 tagged SemVer `likefudan/rh-mcp` release with an immutable artifact → tracker
 records its tag, artifact provenance/digest, and expected full-manifest digest
 → `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue
@@ -663,11 +663,11 @@ tasks were not started as part of this claim.
   practical.
 - **Required audits:** explicitly assess the existing strategy isolation,
   outbox/idempotency, secret-role separation, and currently implemented
-  approval controls. Record WebAuthn and external `rh-mcp` read-tool allowlist
+  approval controls. Record WebAuthn and external `rh-mcp` capability allowlist
   controls as blocked/planned until their owning tasks or externally reviewed
-  release exist. The lack of a Robinhood read-only OAuth scope requires a
-  default-deny external allowlist and separate identity as compensating
-  controls; it is not evidence that P06 is implemented.
+  release exist. Robinhood issues no read-only OAuth scope, so the reviewed
+  default-deny no-trading manifest and a separate identity are the
+  compensating controls; that is not evidence that P06 is implemented.
 - **Forbidden scope:** do not implement or modify `rh-mcp`/P06, WebAuthn,
   strategy sandboxing, outbox/domain behavior, secret providers, production
   deployment, runtime/observability, data providers, approval/execution/risk,
@@ -685,17 +685,21 @@ tasks were not started as part of this claim.
   for duplicate scanners, unpinned actions, excessive permissions, false
   completion claims, secret-like values, and applicability gaps.
 
-#### Priority lane — Robinhood Read-only Preview
+#### Priority lane — Robinhood Non-Trading Preview
 
 This lane provides an early, useful Robinhood result without claiming Gate 4
-or enabling broker writes. Its serial merge order is:
+or enabling any trading capability. The external gateway's OAuth credential is
+trading-capable; its reviewed manifest allows exactly 34 `mutates=false` read
+capabilities and 11 reviewed `mutates=true` watchlist/saved-scan mutations and
+permanently denies the 8 trading capabilities. This lane consumes the read
+capabilities only. Its serial merge order is:
 
 1. `P08-T7` establishes role-separated secret access and the read-broker
    identity boundary required by the preview. This step is merged.
 2. `likefudan/rh-mcp` implements and independently reviews the external
-   default-deny Read Gateway, then publishes a tagged SemVer release with an
-   immutable artifact, source provenance and artifact digest/checksum,
-   committed reviewed read manifest, and full-manifest digest.
+   default-deny Non-Trading Gateway, then publishes a tagged SemVer release
+   with an immutable artifact, source provenance and artifact digest/checksum,
+   committed reviewed capability manifest, and full-manifest digest.
 3. An ainvest tracker PR records that exact release tag, artifact identity,
    source provenance, artifact digest/checksum, and expected full-manifest
    digest. A source commit may be provenance evidence but cannot substitute for
@@ -709,8 +713,10 @@ or enabling broker writes. Its serial merge order is:
    ainvest schemas.
 6. `P06-T2` exposes those normalized reads through an ainvest CLI/read-only
    entry point, Paper workflows, and a later Telegram read-query adapter under
-   an independent Read Broker deployment identity; it cannot construct a
-   broker write client.
+   an independent Read Broker deployment identity. It cannot reach a trading
+   capability or any of the 11 approved non-trading mutations; the gateway
+   ships no read-only projection, so that narrowing is ainvest adapter code
+   and must be asserted by test.
 
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
@@ -794,7 +800,7 @@ or enabling broker writes. Its serial merge order is:
 
 ##### Execution envelope: P06-T0
 
-- **Title:** Integrate the External Robinhood Read Gateway
+- **Title:** Integrate the External Robinhood Non-Trading Gateway
 - **Status/owner:** `blocked` — unclaimed; implementation must not start before
   the external dependency conditions below are recorded
 - **Superseded claim:** the earlier `p06_t0_robinhood_read_gateway` claim and
@@ -812,7 +818,7 @@ or enabling broker writes. Its serial merge order is:
 - **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7` are merged. P06-T0 also
   requires an independently reviewed tagged SemVer `rh-mcp` release, an
   immutable consumable artifact with source provenance and artifact
-  digest/checksum, a committed reviewed read-tool manifest and full-manifest
+  digest/checksum, a committed reviewed capability manifest and full-manifest
   digest, and a subsequent ainvest tracker PR that records those exact values.
   The merged `rh-mcp` design correction
   `366e7556cc765a0742fed7d6e17e0b9ec8e20aec` defines direction but is not an
@@ -864,8 +870,9 @@ or enabling broker writes. Its serial merge order is:
   Paper, or Telegram, and never add an automatic data-provider fallback.
 - **Forbidden scope:** no P06-T1 mapping or normalized domain schemas; no
   P06-T2 CLI, service composition, or real-portfolio Paper integration; no
-  P06-T3/Gate 4 claim; no write client, mutating tool, live order, order
-  submission/cancellation/replacement, or write credential; no unofficial
+  P06-T3/Gate 4 claim; no trading client, no denied trading capability, no
+  use of the 11 approved non-trading mutations, no live order, no order
+  submission/cancellation/replacement, no trading credential; no unofficial
   Robinhood API; and no credential, config, runtime-mode, dependency,
   lock-file, shared-schema, database/migration, deployment, CI, or broad
   logging changes unless the coordinator first assigns and records them.
@@ -901,9 +908,9 @@ or enabling broker writes. Its serial merge order is:
   traceability but cannot be treated as a consumable release, runtime artifact,
   or schema evidence.
 
-`P06-T0` through `P06-T2` form the **Read-only Preview**, not Gate 4. Gate 4
+`P06-T0` through `P06-T2` form the **Non-Trading Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
-`P08-T4`, and every other dependency on its task card. No broker-write work may
+`P08-T4`, and every other dependency on its task card. No trading work may
 start before Gates 1–4 and the later live prerequisites pass. Robinhood MCP
 remains the only live quote source; failure never falls back to Alpaca,
 yfinance, or another provider.
@@ -912,9 +919,9 @@ Per owner instruction on 2026-07-29, `P04-T2` and `P05-T4` are
 `not_started`, unclaimed, and paused while the priority lane runs; no background
 worktree or implementation agent should be started for either task. After
 `P06-T2`, create a separate narrow
-scheduling/task-card PR for Telegram read-only queries built on the Read
-Gateway and the `P05-T4`/`P05-T5` transport; do not mix that read surface with
-Telegram approval or any broker-write capability.
+scheduling/task-card PR for Telegram read-only queries built on the read
+projection and the `P05-T4`/`P05-T5` transport; do not mix that read surface
+with Telegram approval, a non-trading mutation, or a trading capability.
 
 #### Research track — `P04-T0` through `P04-T12`
 

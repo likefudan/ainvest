@@ -18,7 +18,7 @@ or uncertain inputs always produce no trade.
 | Approval and Execution packages | Not loaded | Allowed | Allowed |
 | Telegram Paper approval | Not loaded | Allowed | Not an authorization capability |
 | WebAuthn Live approval | Not loaded | Not loaded | Allowed |
-| Robinhood account read port | Not loaded | Optional, read-only | Optional, read-only |
+| Robinhood account read port | Not loaded | Optional, read projection only | Optional, read projection only |
 | Broker write port | None | `PaperBroker` write-only view | Robinhood write-only port through `LiveGuard` |
 | Research scheduling | Allowed | Allowed | Allowed |
 | Strategy evaluation and signal expiry | Not loaded | Allowed | Allowed |
@@ -29,10 +29,13 @@ or uncertain inputs always produce no trade.
 The same matrix also limits secret classes:
 
 - Research: OpenAI and external read-only data-provider secrets.
-- Paper: Research secrets, Telegram Bot, and optional Robinhood read-only
-  authorization.
-- Live: Research secrets, Robinhood read authorization, WebAuthn server
-  material, and isolated Robinhood write authorization.
+- Paper: Research secrets, Telegram Bot, and the optional Robinhood
+  read-broker authorization. Robinhood issues no read-only scope; that
+  credential is trading-capable and is restrained by the Non-Trading Gateway's
+  reviewed manifest, which denies all 8 trading capabilities.
+- Live: Research secrets, the Robinhood read-broker authorization, WebAuthn
+  server material, and an isolated Robinhood trading authorization held only by
+  the Execution write client.
 
 Secret *values* are never part of the matrix or health output.
 

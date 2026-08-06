@@ -148,21 +148,28 @@ flowchart LR
 1. Robinhood 官方 Trading MCP 是其公开工具能够提供的数据的首选来源，包括实时股票报价、Level 2 price book、历史 OHLCV、标准化基本面、财务数据、技术指标、财报日历、指数，以及账户、购买力、仓位和订单。
 2. 实盘报价只使用 Robinhood MCP 的 `get_equity_quotes`，并在需要校验点差与深度时使用 `get_equity_price_book`。执行前必须重新获取；超时、缺字段、时间戳缺失、数据过期、工具 schema 不兼容或结果冲突时一律拒绝交易。
 3. 实盘流程不得自动回退到 Alpaca、yfinance 或其他免费行情源。辅助来源只能用于开发、离线研究或差异监控；来源差异超过阈值时应拒绝交易，而不是选择其中一个继续执行。
-4. Research Agent 和 Strategy Engine 不得直接持有具备写单能力的 MCP 会话或凭据。它们只能通过 Robinhood Read Gateway 调用经过白名单验证的只读工具，并接收 ainvest 版本化 schema。
+4. Research Agent 和 Strategy Engine 不得直接持有具备交易能力的 MCP 会话或凭据。它们只能通过 Robinhood Non-Trading Gateway 的只读投影调用经过白名单验证的读取能力，并接收 ainvest 版本化 schema；11 个已批准的非交易 mutation 不向这两个组件暴露。
 5. SEC EDGAR + EdgarTools 用于获取可引用的原始申报、XBRL、8-K 和 Form 4，作为基本面和公司事件的权威证据来源；Robinhood MCP 用于标准化基本面和快速查询。
 6. 新闻和外部事件使用 GDELT、SEC 8-K/Form 4 和公司 Investor Relations 公告。只有 Robinhood MCP 正式工具清单中存在并通过契约测试的能力，才可以替代对应外部适配器。
 7. yfinance 只作为无需 Robinhood 授权时的可选开发、回测或离线研究适配器。Alpaca 不作为首版默认依赖。
 
-Robinhood Read Gateway 由独立的
+Robinhood Non-Trading Gateway 由独立的
 [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) 项目实现；它私有持有
-MCP SDK v2 传输与 OAuth 生命周期，并固定经过审查的只读工具 manifest 和
-schema digest。ainvest 固定经过独立审查的 tagged SemVer release、不可变
+MCP SDK v2 传输与 OAuth 生命周期，并固定经过审查的完整 capability manifest
+和 schema digest。首版 manifest 精确允许 34 个 `mutates=false` 读取能力和
+11 个 `mutates=true` 的 watchlist/saved-scan 非交易 mutation，并永久拒绝 8 个
+下单、撤单、行权和订单模拟能力。OAuth credential 本身具备交易能力，因此真正
+的安全边界是经过审查和 digest 固定的 **no-trading manifest**，而不是 token scope
+或“只读”命名。ainvest 固定经过独立审查的 tagged SemVer release、不可变
 artifact 身份及其 provenance/digest，并在部署组合和启动时验证已安装的
 artifact；readiness 验证 `manifest_version` 与完整 `manifest_digest`，每个
 结果 envelope 还必须验证 `envelope_version`。ainvest 只接收 SDK-neutral
 结果/错误协议，不要求 readiness 或结果携带 package version，也不导入
 `mcp.*` 类型或接收原始 session/token。
-任何新增、删除或不兼容变更都需要重新通过契约测试，不能在运行时自动扩大工具权限。
+任何新增、删除、不兼容变更或 `mutates`/disposition 变化都需要重新通过独立审查
+和契约测试，不能在运行时自动扩大权限。未知能力一律拒绝；11 个非交易 mutation
+只能通过明确命名的 ainvest 操作暴露，不得向 Research、Strategy、Paper、Telegram
+或模型传递通用 `invoke(capability, arguments)` 接口。
 
 ### 5.2 Research Agent
 
@@ -179,7 +186,7 @@ Research Agent 负责：
 
 Research Agent 的输出是 `ResearchPacket`，而不是 `BUY` 或 `SELL` 指令。
 
-Research Agent 访问 Robinhood 数据时只能调用 Read Gateway，不能看到 MCP OAuth token、原始 MCP session 或任何创建/修改订单的工具。
+Research Agent 访问 Robinhood 数据时只能调用 Non-Trading Gateway 的版本化只读投影，不能看到 MCP OAuth token、原始 MCP session、11 个非交易 mutation 或任何创建/修改订单的工具。
 
 首版 AI 调用固定为：
 
@@ -188,7 +195,7 @@ Research Agent 访问 Robinhood 数据时只能调用 Read Gateway，不能看�
 - 推理强度：`medium`
 - 状态策略：每次研究任务独立调用并设置 `store=false`，不依赖服务端长对话状态
 - 输出方式：使用严格 JSON Schema 生成研究叙事，再由 Pydantic 验证并组装 `ResearchPacket`
-- 工具策略：只允许调用 ainvest 的只读确定性工具；关闭模型内置网页搜索，不向模型暴露原始 Robinhood MCP
+- 工具策略：只允许调用 ainvest 的只读确定性工具；关闭模型内置网页搜索，不向模型暴露原始 Robinhood MCP、通用 capability 调用或任何非交易 mutation
 - 降级策略：不自动切换到其他模型；只对明确的瞬时网络或限流错误最多重试一次
 
 模型超时、拒绝、输出不符合 schema、引用不存在的证据或达到重试上限时，本次研究运行失败，不产生可供策略使用的完整 `ResearchPacket`。每次调用必须记录模型 ID、请求 ID、prompt 版本、工具 schema 版本、token 用量和输入输出摘要；不得向模型发送账户号码、凭据或完成研究所不需要的个人信息。
@@ -477,9 +484,9 @@ Execution Service 是唯一拥有交易工具访问权的组件。
 7. 记录 Robinhood 返回的订单 ID。
 8. 持续查询直至进入终态或交给核对任务处理。
 
-步骤 2 的实盘报价必须来自 Robinhood Read Gateway。`get_equity_quotes` 和 `get_equity_price_book` 的响应只有在包含风控所需的标的、bid、ask、时间和来源信息并通过新鲜度检查后才可使用；否则本次执行进入 `PRE_TRADE_REJECTED`，不得切换到其他行情供应商重试。
+步骤 2 的实盘报价必须来自 Robinhood Non-Trading Gateway 的读取面。`get_equity_quotes` 和 `get_equity_price_book` 的响应只有在包含风控所需的标的、bid、ask、时间和来源信息并通过新鲜度检查后才可使用；否则本次执行进入 `PRE_TRADE_REJECTED`，不得切换到其他行情供应商重试。
 
-提交前还必须用 Robinhood Read Gateway 重新验证 canonical instrument ID、symbol、交易所、币种、资产类型、可交易状态、价格 tick 和数量 increment。任何映射歧义、symbol/instrument 不一致或价格/数量精度不合法都在调用写工具前拒绝。
+提交前还必须用 Robinhood Non-Trading Gateway 的读取面重新验证 canonical instrument ID、symbol、交易所、币种、资产类型、可交易状态、价格 tick 和数量 increment。任何映射歧义、symbol/instrument 不一致或价格/数量精度不合法都在调用交易写工具前拒绝。
 
 首版不提供原地改单。任何 replacement 必须先按独立取消流程处理旧订单，再从新的 Research/Strategy/Risk 状态创建新 proposal、新 `order_hash` 和新审批；旧订单的审批不能授权 replacement。
 
@@ -758,7 +765,7 @@ stateDiagram-v2
 | 数据库 | [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) + Alembic | 事务、持久化和迁移 |
 | 调度 | [APScheduler](https://github.com/agronholm/apscheduler) 3.11.x | 4.x 稳定前固定 3.x |
 | 大规模持久工作流 | [Temporal](https://github.com/temporalio/temporal)，可选 | 多进程或长时审批后再引入 |
-| Robinhood Read Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、OAuth、只读 allowlist/manifest 与 SDK-neutral 协议；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest |
+| Robinhood Non-Trading Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、具备交易能力的 OAuth credential、34 个读取能力 + 11 个非交易 mutation 的 allowlist/manifest 与 SDK-neutral 协议；永久拒绝 8 个交易能力；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest |
 | 日志与监控 | structlog、OpenTelemetry、Prometheus | 结构化日志、trace 和指标 |
 | 测试 | pytest、Hypothesis、HTTPX mock | 单元、性质和故障注入测试 |
 
@@ -947,7 +954,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ### Phase 2：研究能力
 
-- 建立 Robinhood Read Gateway 接口和只读工具 allowlist；在尚未授权 MCP 时使用 fake 或可选 yfinance 完成开发
+- 建立 Robinhood Non-Trading Gateway 接口和完整 capability manifest；固定 34 个读取能力、11 个非交易 mutation 与 8 个永久拒绝的交易能力；在尚未授权 MCP 时使用 fake 或可选 yfinance 完成开发
 - 接入 GDELT、SEC EDGAR 和公司 Investor Relations 新闻/事件数据
 - 接入 SEC 原始申报，并为 Robinhood MCP 标准化基本面预留统一适配器
 - 实现技术指标工具
@@ -966,14 +973,14 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 验收标准：Telegram 批准只能驱动 Paper Broker；没有任何公网域名或 Passkey 也能完成可审计的 Paper 闭环；重放和篡改测试全部失败关闭。
 
-### Phase 4：Robinhood 只读接入
+### Phase 4：Robinhood 非交易接入
 
 - 连接官方 Trading MCP
 - 读取实时报价、price book、历史行情、基本面、账户、持仓、购买力和订单历史
-- 通过 Robinhood Read Gateway 只暴露固定白名单工具和版本化数据
+- 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；读取面固定为 34 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation
 - 将真实组合快照用于 Paper Trading
 
-验收标准：系统无法调用任何实盘下单路径；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
+验收标准：系统可以调用精确批准的 34 个读取能力和 11 个非交易 mutation，但无法调用 8 个交易能力或任何未知能力；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
 
 ### Phase 5：受控实盘
 
@@ -1017,7 +1024,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 | AI 权限 | 研究和解释，不直接下单 |
 | 交易时段 | 仅在美股常规交易时段创建或执行订单 |
 | 风控配置缺失行为 | 任一必需风控额度未配置或无效时拒绝交易 |
-| 数据源总策略 | Robinhood MCP 正式提供的能力优先使用 MCP，并通过只读网关隔离写权限 |
+| 数据源总策略 | Robinhood MCP 正式提供的能力优先使用 MCP，并通过 Non-Trading Gateway 的审查 manifest 隔离交易权限 |
 | 实盘行情 | Robinhood MCP `get_equity_quotes`；点差与深度使用 `get_equity_price_book` |
 | 实盘行情失败行为 | 拒绝交易，不自动回退到 Alpaca、yfinance 或其他来源 |
 | 基本面 | Robinhood MCP 用于标准化查询；SEC EDGAR + EdgarTools 用于原始申报和证据 |

@@ -39,7 +39,7 @@ flowchart TB
   end
 
   subgraph DATA["TD-DATA"]
-    ADP["Data adapters + Read Gateway"]
+    ADP["Data adapters + Non-Trading Gateway read projection"]
   end
 
   subgraph RES["TD-RESEARCH"]
@@ -82,7 +82,7 @@ flowchart TB
   end
 
   MKT --> ADP
-  RH -->|"read-only tools"| ADP
+  RH -->|"34 reviewed read capabilities"| ADP
   ADP --> RA
   OAI --> RA
   RA --> RP
@@ -117,7 +117,7 @@ affect funds are marked **critical**.
 | Crossing | From → To | Payload | Controls | Threats |
 |---|---|---|---|---|
 | X1 | External → Data | Quotes, filings, news, calendar | Source tags, freshness, quality flags; no silent mix of as-of times | `T-016` |
-| X2 | Data → Research | Versioned read schemas only | Read Gateway tool allowlist; no write MCP tools | `T-007`, `T-016` |
+| X2 | Data → Research | Versioned read schemas only | Read projection over the gateway's 34 `mutates=false` capabilities; no generic capability invocation, no non-trading mutation, no trading capability | `T-007`, `T-016` |
 | X3 | Research → Strategy | Immutable `ResearchPacket` | Schema validation; incomplete packet cannot drive trading | `T-001` |
 | X4 | Strategy → Risk | `TradeSignal` only | Worker isolation; no broker/network; conformance suite | `T-001` |
 | X5 | Risk → Approval | Frozen `OrderProposal` + `order_hash` | Canonical hash; complete risk limits; session rules | `T-004`, `T-015` |
@@ -139,13 +139,13 @@ flowchart LR
   SM["Secret manager / uncommitted .env"] --> RID["Research identity<br/>OpenAI key"]
   SM --> AID["Approval identity<br/>Telegram Bot token<br/>webhook secret<br/>WebAuthn server material"]
   SM --> WID["Write broker identity<br/>Robinhood MCP OAuth"]
-  SM --> RDG["Read broker identity<br/>MCP read session"]
+  SM --> RDG["Read broker identity<br/>trading-capable OAuth credential<br/>restrained by no-trading manifest"]
   SM --> OID["Operator identity<br/>short-lived credentials"]
   SM --> DBID["Database credentials"]
 
   RID --> RES["TD-RESEARCH"]
   AID --> APR["TD-APPROVAL"]
-  RDG --> DATA["TD-DATA / Read Gateway"]
+  RDG --> DATA["TD-DATA / Non-Trading Gateway"]
   WID --> EXE["TD-EXECUTION live write only"]
   OID --> OPS["TD-OPERATOR"]
   DBID --> DB["TD-DATABASE clients"]
@@ -158,7 +158,7 @@ flowchart LR
 | OpenAI API key | Research | Strategy, Approval, Execution, Operator UI | `DEC-009`, `P04-T6`, `P08-T7` |
 | Telegram Bot token / webhook secret | Approval | Research, Strategy, Execution write path | `DEC-010`, `P05-T4`, `P05-T5`, `P08-T7` |
 | WebAuthn RP/server secrets + public credentials | Approval (+ DB for public credential metadata) | Strategy; Telegram bootstrap | `DEC-006`, `DEC-016`, `P05-T2`, `P05-T3` |
-| Robinhood MCP read token | Data / Read Gateway | Strategy, Research direct MCP write, Approval | `DEC-003`, `P06-T0`–`P06-T2`, `P08-T7` |
+| Robinhood MCP read-broker token (trading-capable; restrained by the reviewed no-trading manifest) | Data / Non-Trading Gateway | Strategy, Research direct MCP access, Approval | `DEC-003`, `P06-T0`–`P06-T2`, `P08-T7` |
 | Robinhood MCP write token | Execution live write client only | All other domains; Paper mode | `DEC-017`, `P07-T0`, `P07-T1`, `P08-T7` |
 | Approval nonce (raw) | In-memory Approval creation + user device briefly | Database (hash only), logs, audit | `P05-T0`, `P05-T1`, `P08-T3` |
 | Operator credentials | Operator Control Plane | Telegram identity, Research, Strategy | `DEC-018`, `P08-T14` |
