@@ -55,7 +55,7 @@ dev = [
     "types-pyyaml>=6.0.12,<7",
 ]
 test = [
-    "hypothesis>=6.130,<7",
+    "hypothesis>=6.165.0,<7",
     "httpx>=0.28,<1",
     "jsonschema[format]>=4.26,<5",
     "pytest>=8.3,<10",
