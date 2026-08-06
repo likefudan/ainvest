@@ -33,7 +33,7 @@ offline-data = [
 approval = [
     "fastapi>=0.141.1,<1",
     "python-telegram-bot>=22,<23",
-    "uvicorn[standard]>=0.34,<1",
+    "uvicorn[standard]>=0.52.1,<1",
     "webauthn>=2.6,<3",
 ]
 broker = [
