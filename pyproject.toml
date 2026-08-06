@@ -25,7 +25,7 @@ research = [
     "edgartools>=4,<6",
     "httpx>=0.28,<1",
     "pandas-market-calendars>=5,<6",
-    "pydantic-ai-slim[openai]>=1,<2",
+    "pydantic-ai-slim[openai]>=2.22.0,<3",
 ]
 offline-data = [
     "yfinance>=0.2.65,<1",
