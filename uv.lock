@@ -73,7 +73,7 @@ test = [
 requires-dist = [
     { name = "alembic", specifier = ">=1.15,<2" },
     { name = "apscheduler", specifier = ">=3.11,<3.12" },
-    { name = "edgartools", marker = "extra == 'research'", specifier = ">=4,<6" },
+    { name = "edgartools", marker = "extra == 'research'", specifier = ">=5.45.0,<6" },
     { name = "fastapi", marker = "extra == 'approval'", specifier = ">=0.115,<1" },
     { name = "httpx", marker = "extra == 'research'", specifier = ">=0.28,<1" },
     { name = "opentelemetry-api", marker = "extra == 'observability'", specifier = ">=1.32,<2" },
@@ -694,7 +694,7 @@ wheels = [
 
 [[package]]
 name = "edgartools"
-version = "5.43.0"
+version = "5.45.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -719,9 +719,9 @@ dependencies = [
     { name = "truststore" },
     { name = "unidecode" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a4/b2/7adf8bf58afb998d1be2e413ddd5a627a45ec56cfff2526d144d602185a9/edgartools-5.43.0.tar.gz", hash = "sha256:8d79d3b058862596cf36588a809d19c0f0c751aeb74b8b904a3c881affce1dad", size = 3069151, upload-time = "2026-07-19T18:50:34.975Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/94/00/41e76d0eb935a598b60838c240a1cb1b15c40e980c22aee03e4d8d73c46a/edgartools-5.45.0.tar.gz", hash = "sha256:7e9e89d8d1a944d86938475e55ee8a8955f833376705fcd1046c4ef5dbee09e8", size = 3070431, upload-time = "2026-08-03T01:20:40.851Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/2e/c2/5818bf412c495cb779c5b4d778dbb0ae1961c1a0bcb55faa2871c9180035/edgartools-5.43.0-py3-none-any.whl", hash = "sha256:59e7f1a98ddf11893fa107488cc43cfdfd4d168c9fab74f511253b1d22c00c1b", size = 3396924, upload-time = "2026-07-19T18:50:32.897Z" },
+    { url = "https://files.pythonhosted.org/packages/4e/b0/22d84699fa90b98f20349ea3bb1663b0cc04277f1ccea248c773f8b6fc10/edgartools-5.45.0-py3-none-any.whl", hash = "sha256:7b0d383f3f11f30f04c469eb2dfa2e549543108ea170f3a6bfc01fe48e770860", size = 3380137, upload-time = "2026-08-03T01:20:42.41Z" },
 ]
 
 [[package]]
