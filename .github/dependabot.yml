@@ -5,9 +5,27 @@ updates:
     schedule:
       interval: weekly
     open-pull-requests-limit: 5
-    # Routine automation is limited to compatible updates. Major upgrades are
-    # deliberate implementation work with migration-specific review and tests.
-    # Dependabot security updates are not restricted by update-types.
+    # Routine automation moves uv.lock within the constraints pyproject.toml
+    # already declares; it never rewrites a declared constraint. Under
+    # `lockfile-only` Dependabot returns the declared requirements unchanged,
+    # so a routine PR cannot do what PR #93 did -- retitle a major jump as a
+    # dependency bump by rewriting pydantic-ai-slim from `<2,>=1` to
+    # `>=2.22.0,<3`. Changing a declared bound is deliberate implementation
+    # work with migration-specific review and tests.
+    #
+    # Trade-off, deliberately accepted: unlike `update-types`, which affects
+    # version updates only, `versioning-strategy` also governs Dependabot
+    # SECURITY updates. A security fix published only outside a declared bound
+    # (e.g. a fix released as 2.x while we declare `<2`) will therefore not
+    # arrive as an automated PR. It still raises a Dependabot alert, which a
+    # human resolves by widening the bound deliberately. Fixes available
+    # inside the declared range are still delivered automatically.
+    versioning-strategy: lockfile-only
+    # Still load-bearing under lockfile-only. Several constraints span a major
+    # boundary (`pytest>=8.3,<10`, `pytest-cov>=6,<8`), so a major release can
+    # satisfy the declared range and land with no manifest edit at all.
+    # update-types keeps those out of routine automation, and does not
+    # restrict security updates.
     allow:
       - dependency-name: "*"
         update-types:
@@ -16,6 +34,10 @@ updates:
     labels:
       - dependencies
 
+  # No versioning-strategy here: GitHub documents the option as supported by
+  # bundler, cargo, composer, helm, mix, npm, pip, pub and uv only. Actions
+  # refs are pinned to commit SHAs and enforced by
+  # tests/unit/test_ci_policy.py::test_ci_actions_are_pinned_to_commit_shas.
   - package-ecosystem: github-actions
     directory: /
     schedule:
