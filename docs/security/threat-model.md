@@ -201,11 +201,11 @@ Hard rules:
 | Description | Research tools, data adapters, webhooks, or MCP/HTTP clients are induced to fetch internal URLs, cloud metadata, or arbitrary addresses, exfiltrating secrets or pivoting. |
 | Assets | `A-OPENAI`, `A-BROKER`, `A-CONFIG`, cloud credentials |
 | Domains | Research / Data / Approval → External or internal network |
-| Attacker | Prompt/tool argument injection; malicious evidence URL; forged webhook source |
+| Attacker | Prompt/tool argument injection; malicious evidence URL; forged webhook source; provider-controlled prose returned inside a gateway result envelope |
 | Impact | High |
-| Controls | Deterministic tool allowlists; no model built-in web search; URL allowlists/blocks for link fetches; Non-Trading Gateway fixed capability manifest and pinned schema digests; Approval/Execution least privilege egress; disable unsafe redirects |
-| Tasks | `P04-T5`, `P04-T6`, `P04-T8`, `P06-T0`, `P08-T7`, `DEC-004` |
-| Planned tests | Tool attempts to hit link-local/metadata URLs; disallowed MCP tools; research packet with malicious URL (`P04-T8`, `P08-T13`, `P08-T15`) |
+| Controls | Deterministic tool allowlists; no model built-in web search; URL allowlists/blocks for link fetches; Non-Trading Gateway fixed capability manifest and pinned schema digests; provider-controlled prose (`guide`, tool descriptions, schema descriptions) discarded during normalization before any model, Telegram, CLI, or log context; Approval/Execution least privilege egress; disable unsafe redirects |
+| Tasks | `P04-T5`, `P04-T6`, `P04-T8`, `P06-T0`, `P06-T2`, `P08-T7`, `DEC-004` |
+| Planned tests | Tool attempts to hit link-local/metadata URLs; disallowed MCP tools; research packet with malicious URL (`P04-T8`, `P08-T13`, `P08-T15`); a gateway envelope and a manifest entry whose provider prose carries injected instructions reach no prompt, message, CLI line, or log record (`P06-T0`, `P06-T2`) |
 
 ### T-008 — Webhook forgery
 
@@ -334,7 +334,7 @@ Hard rules:
 | `T-004` | Canonical `order_hash`; opaque tokens; server-owned fields | `P02-T4`, `P05-T0`–`P05-T3`, `P05-T6`, `P07-T1` | Tamper URL/payload; hash property tests |
 | `T-005` | Numeric allowlist; private chat; Paper-only Telegram | `P05-T1`, `P05-T4`, `P05-T5`, `P01-T4` | Wrong identity; group; plain text; scope |
 | `T-006` | Durable offset; update dedupe; single poller | `P05-T5`, `P08-T13` | Restart/dup/out-of-order/two-poller |
-| `T-007` | Tool/URL allowlists; no built-in browse; egress limits | `P04-T5`, `P04-T6`, `P06-T0`, `P08-T7` | SSRF fixtures; disallowed tools |
+| `T-007` | Tool/URL allowlists; no built-in browse; egress limits; provider prose discarded | `P04-T5`, `P04-T6`, `P06-T0`, `P06-T2`, `P08-T7` | SSRF fixtures; disallowed tools; injected provider prose reaches no sink |
 | `T-008` | Long-poll first; webhook secret + same auth rules | `P05-T5`, `P05-T7` | Forged webhook; dual-mode forbid |
 | `T-009` | method/scope schema; live multi-gate; Paper defaults | `P05-T0`, `P05-T6`, `P07-T1`, `P07-T4`, `P08-T0`, `P08-T15` | telegram→live blocked; gate matrix |
 | `T-010` | Idempotency; consume-once; no blind SUBMIT retry | `P03-T12`, `P05-T6`, `P07-T1`, `P07-T2` | Dup scheduler; timeout; outbox redo |
@@ -363,6 +363,7 @@ evidence to this model.
 | `SEC-TG-ID-*` | Telegram identity and Paper-only scope | `T-005`, `T-009` |
 | `SEC-TG-POLL-*` | Offset, dedupe, single poller | `T-006` |
 | `SEC-SSRF-*` | Tool/URL egress denials | `T-007` |
+| `SEC-PROSE-*` | Provider prose absent from every sink | `T-007`, `T-016` |
 | `SEC-HOOK-*` | Webhook secret and dual-mode forbid | `T-008` |
 | `SEC-SCOPE-*` | telegram+paper cannot reach live write | `T-009` |
 | `SEC-IDEMP-*` | Submit/approve/cancel idempotency | `T-010`, `T-013` |

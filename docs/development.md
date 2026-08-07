@@ -101,10 +101,11 @@ Multiple deployment profiles may be combined by repeating `--extra`. In particul
 profile does not install the offline-data, approval, or broker packages. `yfinance` is isolated in
 the offline-data profile and must never supply live quotes, pre-trade risk inputs, or broker
 fallback data. The broker profile is reserved for the independently reviewed and artifact-pinned
-`rh-mcp` release. It is intentionally empty until that release passes its external review and is
-recorded in the task tracker. `ainvest` must not depend on or import the MCP Python SDK directly,
-and the profile must never add a client that uses Robinhood usernames, passwords, or unofficial
-Robinhood APIs.
+`rh-mcp` release. That release now exists — `v0.2.0`, reviewed and pinned under "Recorded
+external dependency pin" in `docs/tasks/status.md` — but the profile stays empty until `P06-T0`
+adds the dependency against those pins. `ainvest` must not depend on or import the MCP Python
+SDK directly, and the profile must never add a client that uses Robinhood usernames, passwords,
+or unofficial Robinhood APIs.
 
 Production images should install only their required extras with `--no-default-groups`; Ruff,
 mypy, pytest, and other development tools are intentionally absent from those environments.

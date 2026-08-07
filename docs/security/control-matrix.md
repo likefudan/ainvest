@@ -2,7 +2,7 @@
 
 Status: living control register implemented by `P08-T6`
 
-Last reviewed: 2026-08-01
+Last reviewed: 2026-08-06
 
 Authority: [`threat-model.md`](threat-model.md), [`data-flow.md`](data-flow.md),
 [`secrets.md`](secrets.md), `design.md`, and `IMPLEMENTATION_TODO.md`
@@ -51,7 +51,7 @@ named required workflow check ran against the exact commit.
 | `T-004` | `critical` | `paper_and_live` | Approval and Execution owner | `partial` | `partial` | `E-ORDER-HASH`, `E-ORDER-TAMPER`, `P-LIVE-HASH` | Live blocked until UI and Execution pre-submit hash evidence exists. |
 | `T-005` | `conditional_critical` | `telegram_paper_with_live_escalation` | Approval owner | `partial` | `partial` | `E-APPROVAL-SCOPE`, `E-SECRET-ROLES`, `P-TELEGRAM-IDENTITY` | Telegram transport is absent and cannot authorize Live; transport evidence is required before enablement. |
 | `T-006` | `conditional_high` | `telegram_paper` | Approval Transport owner | `planned` | `planned` | `P-TELEGRAM-POLL` | Telegram transport remains disabled until polling evidence passes. |
-| `T-007` | `high` | `data_and_research` | Data and Research Security owner | `partial` | `partial` | `E-WORKER-ISOLATION`, `E-YAHOO-LIVE-DENY`, `P-RESEARCH-SSRF`, `P-MCP-ALLOWLIST` | Research URL policy, production egress, and external gateway allowlist evidence remain required. |
+| `T-007` | `high` | `data_and_research` | Data and Research Security owner | `partial` | `partial` | `E-WORKER-ISOLATION`, `E-YAHOO-LIVE-DENY`, `P-RESEARCH-SSRF`, `P-MCP-ALLOWLIST`, `P-GATEWAY-PROSE` | Research URL policy, production egress, and external gateway allowlist evidence remain required. The rh-mcp v0.2.0 review adds a fifth consumer requirement on this path: provider guide, tool description, and schema description prose rides inside result envelopes and inside the reviewed manifest, is not stripped by the gateway, and must be discarded before any model, Telegram, CLI, or log context. It is tracked by planned evidence P-GATEWAY-PROSE (SEC-PROSE-*), which is planned and not passing; P06-T0 and P06-T2 owe it. |
 | `T-008` | `conditional_critical` | `future_webhook` | Approval Transport owner | `not_applicable` | `not_applicable` | `A-WEBHOOK-ABSENT`, `P-WEBHOOK-SECURITY` | Adding a webhook route is blocked until this row gains passing security evidence. |
 | `T-009` | `critical` | `paper_and_live` | Execution Safety owner | `partial` | `partial` | `E-RUNTIME-MODES`, `E-APPROVAL-SCOPE`, `P-SAFE-LIVE` | Live remains blocked until handoff, broker guard, gate, and safety-suite evidence exists. |
 | `T-010` | `critical` | `paper_and_live` | Workflow and Execution owner | `partial` | `partial` | `E-WORKFLOW-IDEMPOTENCY`, `E-PRETRADE-DUPLICATE`, `E-RECONCILIATION-IDEMPOTENT`, `P-LIVE-DELIVERY` | Live blocked until concurrent broker delivery and submit-boundary evidence exists. |
@@ -60,7 +60,7 @@ named required workflow check ran against the exact commit.
 | `T-013` | `critical` | `live_cancel` | Execution and Operator owner | `partial` | `partial` | `E-CANCEL-UNKNOWN`, `E-KILL-NO-AUTOCANCEL`, `P-BROKER-CANCEL` | Broker cancel and operator authorization evidence are required before Live. |
 | `T-014` | `high` | `all_sinks` | Observability and Security owner | `partial` | `partial` | `E-LOG-REDACT`, `E-TRACE-SANITIZE`, `E-METRIC-LABELS`, `E-CI-SECRET`, `P-EXPORTER-SINK` | Exporter, Telegram, and deployment sink evidence remains required before each is enabled. |
 | `T-015` | `high` | `paper_and_live` | Risk and Scheduling owner | `passing` | `implemented` | `E-TIME-CALENDAR`, `E-TIME-TTL`, `E-TIME-STALE`, `E-CI-VERIFY` | Production NTP monitoring remains a deployment responsibility; safe halt on bad time is accepted. |
-| `T-016` | `critical` | `robinhood_read_and_live` | Read Broker owner | `blocked` | `planned` | `E-SECRET-ROLES`, `E-YAHOO-LIVE-DENY`, `E-HEALTH-NOTREADY`, `P-MCP-ALLOWLIST` | Non-Trading Preview and Live remain blocked until a pinned independently reviewed rh-mcp release and concrete adapter evidence exist. The gateway manifest denies all 8 trading capabilities; the read projection excluding its 11 approved non-trading mutations is ainvest adapter code needing its own evidence. |
+| `T-016` | `critical` | `robinhood_read_and_live` | Read Broker owner | `blocked` | `planned` | `E-SECRET-ROLES`, `E-YAHOO-LIVE-DENY`, `E-HEALTH-NOTREADY`, `P-MCP-ALLOWLIST`, `P-GATEWAY-PROSE` | The external dependency half is now satisfied: rh-mcp v0.2.0 is independently reviewed and its release tag, artifact digests, provenance, and expected full-manifest digest are pinned in docs/tasks/status.md. This row stays planned/blocked because no ainvest adapter evidence exists yet; a pinned external release is not adapter evidence. The gateway manifest denies all 8 trading capabilities; the read projection excluding its 11 approved non-trading mutations is ainvest adapter code needing its own evidence, as is importing only rh-mcp's published surface and discarding the provider-controlled prose that arrives inside envelopes and inside the reviewed manifest, whose register home is T-007. |
 <!-- control-matrix:end -->
 
 ## Cross-cutting release evidence
@@ -76,7 +76,7 @@ named required workflow check ran against the exact commit.
 | Container scan | not_applicable | No container artifact exists in the repository | Becomes mandatory when a container definition or image build is introduced. |
 | IaC scan | not_applicable | No deployment IaC exists in the repository | Becomes mandatory when deployable IaC is introduced. |
 | Independent Live review | blocked | No Live broker implementation or production deployment exists to review | `P08-T15` must require review by someone other than the implementing agent before Live. |
-| External `rh-mcp` evidence | blocked | No tagged, independently reviewed default-deny gateway release is pinned | A source commit alone is insufficient; require release provenance, artifact checksum, manifest version/digest, envelope version, and sanitized fixtures. |
+| External `rh-mcp` evidence | partial | `rh-mcp` `v0.2.0` is independently reviewed (`APPROVED_FOR_AINVEST_INTEGRATION`, 2026-08-04, bound to commit `46128a62`) and its tag, artifact SHA-256 digests, build provenance, manifest version, expected full-manifest digest, and envelope version are pinned in `docs/tasks/status.md` | It approves only that exact artifact — not a later tag, manifest digest, or provider surface — and it approves no ainvest code. The ainvest adapter, its read projection, and its sanitized-error fixtures remain unwritten and unreviewed, so this is not release evidence for `T-016`. |
 
 ## Release rule
 
