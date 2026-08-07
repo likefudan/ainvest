@@ -861,6 +861,47 @@ stopped being true the same day. `rh-mcp` `DESIGN.md` §12.2 is the current
 record. Cite the release notes for artifact digests and provenance, not for
 review status.
 
+**The approval is conditional: eight consumer requirements**
+
+The verdict is not unconditional. `security-review/v0.2.0/REPORT.md` §"Ainvest
+consumer requirements" says ainvest may pin this release **provided it** does
+eight named things. That section — not this table — is the authority; the table
+records where each requirement lands in ainvest so none is silently dropped.
+Two of the eight had no home in this repository before this record and are
+marked **new**.
+
+| # | Requirement (report's words, abridged) | Where ainvest carries it |
+|---|---|---|
+| 1 | Pins package version `0.2.0`, the wheel SHA-256, source commit `46128a62…`, full-manifest digest `sha256:70f88615…`, envelope version `1.0` | This subsection; `P06-T0` "Required behavior" enforces the pins at deployment/startup, readiness, and per result |
+| 2 | Optionally verifies provenance with `gh attestation verify` | "Source provenance" above; recorded as run, with its output described |
+| 3 | Uses only `GatewayConfig` + `open_gateway` / `RobinhoodGateway.invoke` (and the CLI); must not import `rh_mcp.transport._open_provider_session`, `_PrivateSession`, or `StoredTokenProvider`, or treat any underscore name as supported API | The P2 residual below; `P06-T0` Handoff/blockers item (a); assert by test |
+| 4 | Keeps `invoke` inside a dedicated broker adapter; exposes only normalized ainvest operations downstream | `P06-T0` "ainvest ownership" (thin adapter), `P06-T1` (normalization), `P06-T2` (normalized read surface only) |
+| 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — carried in the security register as a `T-007` preventive control with `P06-T2` added as an implementing task, and cross-referenced from `T-016`'s release disposition; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
+| 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
+| 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added to the `P06-T0` checklist beside the existing "no second conflicting public MCP SDK surface" rule |
+| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR) and `T-016`, which stays `planned`/`blocked` until ainvest adapter evidence exists |
+
+Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
+description, and schema prose travels inside result envelopes, is
+provider-controlled prompt-injection material, is not executed by the gateway,
+and "consumers must discard it during normalization". It is live for this lane
+specifically because `P06-T2` routes gateway-derived data to a CLI and a later
+Telegram adapter, and because the reviewed manifest itself carries provider
+`description` text and schema `description` fields. `T-007` already named
+prompt and tool-argument injection as its attacker; what it did not name was
+this delivery path, so the register now carries the discard as a `T-007`
+preventive control with no passing evidence. Recording a requirement is not
+satisfying it — `P06-T0` and `P06-T2` owe the tests.
+
+Three further residual risks in that report constrain ainvest rather than
+`rh-mcp`, and are recorded here rather than turned into requirements the report
+did not make: the OAuth credential remains write-capable, so the manifest on the
+gateway path is the only restraint; the bundled production credential store is
+macOS Keychain-only, so any non-macOS Read Broker deployment must inject its own
+secret-manager store (a `DEC-015` matter, not a `P06-T0` one); and
+`dataclasses.asdict`/`astuple` on `rh-mcp` credential objects can still expose
+secrets, so ainvest must not serialize them.
+
 **What the pin does and does not cover**
 
 The package version and the full-manifest digest answer different questions and
@@ -1081,13 +1122,23 @@ excludes the contents of a result envelope's `data`. It also records that
   committed full-manifest digest are recorded under **Recorded external
   dependency pin** above. The design correction commit is recorded for
   traceability but cannot be treated as a consumable release, runtime artifact,
-  or schema evidence. Two items carry forward into the implementation:
+  or schema evidence. The approval is conditional on the **eight** consumer
+  requirements in `security-review/v0.2.0/REPORT.md`; that section is the
+  authority and **Recorded external dependency pin** above maps all eight to
+  where ainvest carries them. Three of them are obligations on the adapter's
+  own code rather than on its configuration, so they are repeated here:
   (a) the review's accepted P2 residual makes "import only `rh-mcp`'s published
   surface" an ainvest obligation to assert by test, not something the gateway
-  enforces; and (b) `rh-mcp` ships no read-only projection — `invoke()` accepts
-  any allowed capability, including the 11 approved mutations — so the read
-  narrowing required by `IMPLEMENTATION_TODO.md` rules 20 and 32 is ainvest
-  adapter code and must also be asserted by test.
+  enforces (requirement 3); (b) `rh-mcp` ships no read-only projection —
+  `invoke()` accepts any allowed capability, including the 11 approved
+  mutations — so the read narrowing required by `IMPLEMENTATION_TODO.md`
+  rules 20 and 32 is ainvest adapter code and must also be asserted by test
+  (requirement 6); and (c) provider `guide`, tool descriptions, and schema
+  descriptions arrive inside result envelopes as provider-controlled
+  prompt-injection material, and must be discarded before any envelope content
+  reaches a model, Telegram, CLI output, or a log (requirement 5). `P06-T2`
+  makes (c) urgent: it is the card that routes this data to a CLI and a later
+  Telegram adapter.
 
 `P06-T0` through `P06-T2` form the **Non-Trading Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
