@@ -878,7 +878,7 @@ marked **new**.
 | 4 | Keeps `invoke` inside a dedicated broker adapter; exposes only normalized ainvest operations downstream | `P06-T0` "ainvest ownership" (thin adapter), `P06-T1` (normalization), `P06-T2` (normalized read surface only) |
 | 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — tracked in the security register by planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`) on both `T-007` and `T-016`, with a preventive control on each row and `P06-T2` added to `T-007`'s tasks; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
 | 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
-| 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in "Allowed paths" above, not in that checklist; the new bullet is where the two now sit together |
+| 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in `P06-T0`'s own **Allowed paths** further down this file, not in that checklist; the new bullet is where the two now sit together |
 | 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR) and `T-016`, which stays `planned`/`blocked` until ainvest adapter evidence exists |
 
 Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
@@ -894,16 +894,29 @@ and `T-016`.
 
 It is carried as **planned evidence**, `P-GATEWAY-PROSE` targeting
 `SEC-PROSE-*`, and not only as control prose. The distinction is structural
-rather than stylistic. `preventive_controls` and `detective_controls` are free
-text that `tests/unit/security/test_control_matrix.py` never reads: an entry
-can be deleted, or invented, and the suite stays green. `evidence_ids` is the
-list the validator walks — it must resolve to a declared evidence record, that
-record must name the threat back, and the manifest's no-orphan rule means the
-pair cannot be half-removed. Every other outstanding obligation on `T-007`
-already had such an ID; this one did not, which made it the only obligation on
-the row that could vanish silently. Its state is `planned`, so nothing here
-claims the control exists — recording a requirement is not satisfying it, and
-`P06-T0` and `P06-T2` owe the tests.
+rather than stylistic. Beyond a non-emptiness check on Critical rows,
+`preventive_controls` and `detective_controls` are free text that
+`tests/unit/security/test_control_matrix.py` does not otherwise read: an
+individual entry can be deleted, or invented, and the suite stays green.
+`evidence_ids` is the list the validator walks — a reference must resolve to a
+declared record, that record must name the threat back, an unreferenced record
+fails the no-orphan rule, and a planned record cannot claim `state: passing`.
+Every other outstanding obligation on `T-007` already had such an ID; this one
+did not, which made it the only obligation on the row that could be dropped
+without CI objecting. Its state is `planned`, so nothing here claims the
+control exists — recording a requirement is not satisfying it, and `P06-T0`
+and `P06-T2` owe the tests.
+
+Two gaps in that guarantee, stated rather than left for the next reader to
+discover. The validator checks each `evidence_ids` entry forward to its
+record, never the reverse, so an ID carried by two rows can be dropped from
+one of them silently — measured: removing `P-GATEWAY-PROSE` from `T-007`
+alone, or from `T-016` alone, leaves the suite green once the matrix is
+regenerated. And deleting a reference together with its record evades the
+no-orphan rule, which is a property of this register rather than of this
+entry — though not a uniform one, since a record that is a row's *only*
+evidence is caught. Neither gap is introduced here and neither is claimed
+fixed; a symmetric `supports`-side assertion would close the first.
 
 Three further residual risks in that report constrain ainvest rather than
 `rh-mcp`, and are recorded here rather than turned into requirements the report

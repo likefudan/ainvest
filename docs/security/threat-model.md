@@ -363,6 +363,7 @@ evidence to this model.
 | `SEC-TG-ID-*` | Telegram identity and Paper-only scope | `T-005`, `T-009` |
 | `SEC-TG-POLL-*` | Offset, dedupe, single poller | `T-006` |
 | `SEC-SSRF-*` | Tool/URL egress denials | `T-007` |
+| `SEC-PROSE-*` | Provider prose absent from every sink | `T-007`, `T-016` |
 | `SEC-HOOK-*` | Webhook secret and dual-mode forbid | `T-008` |
 | `SEC-SCOPE-*` | telegram+paper cannot reach live write | `T-009` |
 | `SEC-IDEMP-*` | Submit/approve/cancel idempotency | `T-010`, `T-013` |
@@ -372,7 +373,6 @@ evidence to this model.
 | `SEC-LOG-*` | Secret/token absence in sinks | `T-014` |
 | `SEC-TIME-*` | Server clock, session, TTL, freshness | `T-015` |
 | `SEC-MCP-*` | Schema pin, timeout, read/write split | `T-016` |
-| `SEC-PROSE-*` | Provider `guide`/description prose reaches no model, message, CLI line, or log | `T-007`, `T-016` |
 | `SAFE-LIVE-*` | `P08-T15` pre-live gate suite | `T-003`–`T-005`, `T-009`–`T-013`, `T-015`, `T-016` |
 
 ## 7. Residual risk register

@@ -1102,10 +1102,11 @@ substitute for the consumable release artifact.
     untrusted data, never as instructions, and never place it in prompt,
     approval, or log context. `docs/security/threat-model.md` `T-007` already
     models prompt and tool-argument injection as an attacker and names
-    `P06-T0` among its implementing tasks; this record adds the discard as a
-    named preventive control on that row, with `P06-T2` added beside `P06-T0`
-    as an implementing task, and with no passing evidence — writing the
-    evidence is this card's work, not this record's. It binds `P06-T1`'s
+    `P06-T0` among its implementing tasks; this record adds the discard to
+    `T-007` and `T-016` as planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`),
+    with `P06-T2` added beside `P06-T0` as an implementing task. Its state is
+    `planned` and no ainvest code implements it — writing the evidence the ID
+    stands for is this card's work, not this record's. It binds `P06-T1`'s
     normalization and `P06-T2`'s read surface as well.
   - The pinned release requires `mcp>=2,<3` and `httpx2>=2.5,<3`. Resolve that
     compatibility when the `broker` extra is populated, and do not install a
