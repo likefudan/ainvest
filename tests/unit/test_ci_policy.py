@@ -132,3 +132,27 @@ def test_dependabot_requires_deliberate_uv_major_upgrades() -> None:
             ],
         }
     ]
+
+
+@pytest.mark.unit
+def test_dependabot_never_rewrites_declared_uv_constraints() -> None:
+    """`update-types` alone let PR #93 rewrite `<2,>=1` into `>=2.22.0,<3`.
+
+    Only `versioning-strategy: lockfile-only` keeps Dependabot out of
+    `pyproject.toml`; the exact string is the wire contract with GitHub.
+    """
+    config = yaml.safe_load(DEPENDABOT_CONFIG.read_text(encoding="utf-8"))
+    uv_update = next(update for update in config["updates"] if update["package-ecosystem"] == "uv")
+
+    assert uv_update["versioning-strategy"] == "lockfile-only"
+
+
+@pytest.mark.unit
+def test_dependabot_omits_versioning_strategy_where_unsupported() -> None:
+    """GitHub does not support `versioning-strategy` for `github-actions`."""
+    config = yaml.safe_load(DEPENDABOT_CONFIG.read_text(encoding="utf-8"))
+    supported = {"bundler", "cargo", "composer", "helm", "mix", "npm", "pip", "pub", "uv"}
+
+    for update in config["updates"]:
+        if update["package-ecosystem"] not in supported:
+            assert "versioning-strategy" not in update
