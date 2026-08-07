@@ -874,11 +874,11 @@ marked **new**.
 |---|---|---|
 | 1 | Pins package version `0.2.0`, the wheel SHA-256, source commit `46128a62…`, full-manifest digest `sha256:70f88615…`, envelope version `1.0` | This subsection; `P06-T0` "Required behavior" enforces the pins at deployment/startup, readiness, and per result |
 | 2 | Optionally verifies provenance with `gh attestation verify` | "Source provenance" above; recorded as run, with its output described |
-| 3 | Uses only `GatewayConfig` + `open_gateway` / `RobinhoodGateway.invoke` (and the CLI); must not import `rh_mcp.transport._open_provider_session`, `_PrivateSession`, or `StoredTokenProvider`, or treat any underscore name as supported API | The P2 residual below; `P06-T0` Handoff/blockers item (a); assert by test |
+| 3 | Uses only `GatewayConfig` + `open_gateway` / `RobinhoodGateway.invoke` (and the CLI); must not import `rh_mcp.transport._open_provider_session`, `_PrivateSession`, or `StoredTokenProvider`, or treat any underscore name as supported API | The P2 residual recorded above under "Two non-blocking items remain"; `P06-T0` Handoff/blockers item (a); assert by test |
 | 4 | Keeps `invoke` inside a dedicated broker adapter; exposes only normalized ainvest operations downstream | `P06-T0` "ainvest ownership" (thin adapter), `P06-T1` (normalization), `P06-T2` (normalized read surface only) |
-| 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — carried in the security register as a `T-007` preventive control with `P06-T2` added as an implementing task, and cross-referenced from `T-016`'s release disposition; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
+| 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — tracked in the security register by planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`) on both `T-007` and `T-016`, with a preventive control on each row and `P06-T2` added to `T-007`'s tasks; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
 | 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
-| 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added to the `P06-T0` checklist beside the existing "no second conflicting public MCP SDK surface" rule |
+| 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in "Allowed paths" above, not in that checklist; the new bullet is where the two now sit together |
 | 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR) and `T-016`, which stays `planned`/`blocked` until ainvest adapter evidence exists |
 
 Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
@@ -889,9 +889,21 @@ specifically because `P06-T2` routes gateway-derived data to a CLI and a later
 Telegram adapter, and because the reviewed manifest itself carries provider
 `description` text and schema `description` fields. `T-007` already named
 prompt and tool-argument injection as its attacker; what it did not name was
-this delivery path, so the register now carries the discard as a `T-007`
-preventive control with no passing evidence. Recording a requirement is not
-satisfying it — `P06-T0` and `P06-T2` owe the tests.
+this delivery path, so the register now carries the discard on both `T-007`
+and `T-016`.
+
+It is carried as **planned evidence**, `P-GATEWAY-PROSE` targeting
+`SEC-PROSE-*`, and not only as control prose. The distinction is structural
+rather than stylistic. `preventive_controls` and `detective_controls` are free
+text that `tests/unit/security/test_control_matrix.py` never reads: an entry
+can be deleted, or invented, and the suite stays green. `evidence_ids` is the
+list the validator walks — it must resolve to a declared evidence record, that
+record must name the threat back, and the manifest's no-orphan rule means the
+pair cannot be half-removed. Every other outstanding obligation on `T-007`
+already had such an ID; this one did not, which made it the only obligation on
+the row that could vanish silently. Its state is `planned`, so nothing here
+claims the control exists — recording a requirement is not satisfying it, and
+`P06-T0` and `P06-T2` owe the tests.
 
 Three further residual risks in that report constrain ainvest rather than
 `rh-mcp`, and are recorded here rather than turned into requirements the report

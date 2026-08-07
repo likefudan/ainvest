@@ -372,6 +372,7 @@ evidence to this model.
 | `SEC-LOG-*` | Secret/token absence in sinks | `T-014` |
 | `SEC-TIME-*` | Server clock, session, TTL, freshness | `T-015` |
 | `SEC-MCP-*` | Schema pin, timeout, read/write split | `T-016` |
+| `SEC-PROSE-*` | Provider `guide`/description prose reaches no model, message, CLI line, or log | `T-007`, `T-016` |
 | `SAFE-LIVE-*` | `P08-T15` pre-live gate suite | `T-003`–`T-005`, `T-009`–`T-013`, `T-015`, `T-016` |
 
 ## 7. Residual risk register
