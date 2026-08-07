@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-08-01
+Last updated: 2026-08-06
 
 ## Status vocabulary
 
@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `blocked` (`P08-T7` merged; `P06-T0` unclaimed pending reviewed tagged SemVer `rh-mcp` release artifact/manifest); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` merged; `rh-mcp` `v0.2.0` reviewed, released, and pinned below; `P06-T0` `not_started`/unclaimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -149,11 +149,13 @@ scope, and integration order.
 
 Tracker claim changes merge before their implementation PRs. The initial queue
 (`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
-`P08-T7` are merged. No P06 implementation is active. The remaining
-earliest-safe **Robinhood Non-Trading Preview** queue is: independently reviewed
-tagged SemVer `likefudan/rh-mcp` release with an immutable artifact → tracker
-records its tag, artifact provenance/digest, and expected full-manifest digest
-→ `P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue
+`P08-T7` are merged. No P06 implementation is active. The first two steps of the
+**Robinhood Non-Trading Preview** queue are done: `likefudan/rh-mcp` published
+the independently reviewed tagged SemVer release `v0.2.0` with an immutable
+artifact, and this tracker records its tag, artifact provenance/digest, and
+expected full-manifest digest in the priority lane's **Recorded external
+dependency pin** subsection. The remaining earliest-safe queue is therefore
+`P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -525,9 +527,11 @@ Shared-surface ownership for this claim is exclusive:
   cannot finish without another shared or production path, its agent stops and
   obtains a coordinator-recorded scope expansion before editing it.
 
-The owner pause on `P04-T2` and `P05-T4` remains in force. `P06-T0` remains
-blocked on the independently reviewed external `rh-mcp` release and recorded
-artifact/manifest evidence. Those tasks, their dependent chains, and unrelated
+The owner pause on `P04-T2` and `P05-T4` remains in force. `P06-T0` was blocked
+on the independently reviewed external `rh-mcp` release and recorded
+artifact/manifest evidence while that claim ran; that blocker is cleared by the
+`v0.2.0` pin recorded in the priority lane below, and `P06-T0` is now
+`not_started` and unclaimed. Those tasks, their dependent chains, and unrelated
 tasks were not started as part of this claim.
 
 ##### Execution envelope: P08-T4
@@ -699,11 +703,13 @@ capabilities only. Its serial merge order is:
 2. `likefudan/rh-mcp` implements and independently reviews the external
    default-deny Non-Trading Gateway, then publishes a tagged SemVer release
    with an immutable artifact, source provenance and artifact digest/checksum,
-   committed reviewed capability manifest, and full-manifest digest.
+   committed reviewed capability manifest, and full-manifest digest. This step
+   is done: `v0.2.0`, approved on 2026-08-04.
 3. An ainvest tracker PR records that exact release tag, artifact identity,
    source provenance, artifact digest/checksum, and expected full-manifest
    digest. A source commit may be provenance evidence but cannot substitute for
-   the consumable release artifact.
+   the consumable release artifact. This step is this record; the values are in
+   **Recorded external dependency pin** below.
 4. `P06-T0` composes a thin adapter over the pinned SDK-neutral gateway
    contract. Deployment/startup verifies the installed release/artifact pins;
    readiness verifies manifest version and full-manifest digest, while every
@@ -721,10 +727,169 @@ capabilities only. Its serial merge order is:
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
-| external `rh-mcp` gateway | `blocked` (implementation/release pending) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest remain required | This is a cross-repository prerequisite, not an ainvest task completion claim; the source commit is traceability evidence only |
-| `P06-T0` | `blocked` (unclaimed) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; reviewed tagged SemVer `rh-mcp` release artifact and tracker-recorded provenance/artifact/full-manifest digests missing | Do not use the old implementation branch/worktree; coordinator recreates or rebases only after the external release is recorded |
+| external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
+| `P06-T0` | `not_started` (unclaimed) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; the reviewed tagged SemVer `rh-mcp` release artifact and its provenance/artifact/full-manifest digests are recorded below. Claimable once this record is on `main` | Do not use the old implementation branch/worktree; the coordinator issues a new immutable execution envelope and worktree whose base includes this record |
 | `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
 | `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
+
+##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
+
+This subsection is step 3 of the lane order and is the single place the pinned
+values live. `P06-T0` takes its pins from here, not from prose elsewhere in this
+file and not from the dependency's own changelog. Every value below was
+re-derived on 2026-08-06 from the release artifacts and the tagged tree.
+
+**Release identity**
+
+| Field | Value |
+|---|---|
+| Repository | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) |
+| Tag | `v0.2.0` (annotated tag object `2a5c0d1a8c8153b79d0059fbb2a3257f086b05bd`) |
+| Tagged commit | `46128a623c87f954c18d037870e4ac36b9e61e13` |
+| Release | <https://github.com/likefudan/rh-mcp/releases/tag/v0.2.0>, published `2026-08-04T00:09:43Z`, not a draft and not a prerelease |
+| Package version | `0.2.0` (`Version: 0.2.0` in the wheel's `METADATA`) |
+
+`v0.1.0` must not be used. It was published by hand from a dirty tree and its
+sdist shipped a file present in no commit; `v0.2.0` is the first release the
+workflow built.
+
+**Artifact identity and digests**
+
+| Artifact | SHA-256 | Size (bytes) |
+|---|---|---|
+| `rh_mcp-0.2.0-py3-none-any.whl` | `45bdfa7ef191a5dca834ddf52249fd92cfce0cf33456ec26839bdc8024e657b9` | `195380` |
+| `rh_mcp-0.2.0.tar.gz` | `da1d2231fd7be4129e035879eec4965727b968496c382bdaaa6f663bec11842c` | `381656` |
+
+Both artifacts were downloaded from the GitHub release and re-hashed locally;
+both match the release's own `SHA256SUMS` asset and the digests GitHub records
+for the assets.
+
+**Source provenance**
+
+Built by `.github/workflows/release.yml` from the tagged commit, with a signed
+SLSA build attestation. Verification command:
+
+```
+gh attestation verify rh_mcp-0.2.0-py3-none-any.whl --repo likefudan/rh-mcp
+```
+
+Run against the downloaded wheel on 2026-08-06: exit status `0`. The verified
+statement is `https://slsa.dev/provenance/v1`; its subject carries the wheel and
+sdist digests above; its build definition names workflow
+`.github/workflows/release.yml` at `refs/tags/v0.2.0` in
+`https://github.com/likefudan/rh-mcp`, resolved to git commit
+`46128a623c87f954c18d037870e4ac36b9e61e13`; and the signing certificate's
+subject alternative name is
+`https://github.com/likefudan/rh-mcp/.github/workflows/release.yml@refs/tags/v0.2.0`
+on a GitHub-hosted runner. A source commit alone would not satisfy this row —
+the consumable dependency is the artifact.
+
+**Reviewed capability manifest, and the digest `P06-T0` pins**
+
+| Field | Value |
+|---|---|
+| `manifest_format_version` | `1.2` |
+| `canonicalization_version` | `rh-canon-1` |
+| `digest_algorithm` | `sha256` |
+| `manifest_version` | `2026.08.03.1` |
+| `provider_surface_digest` | `sha256:a7b23c7bcf5b563a35f21331ece72a90d5df1be8149cd7b90303565d2f1b1e32` |
+| **`expected_manifest_digest`** | **`sha256:70f88615716b05b8f547bf21ba756643ba2ded140202395998d428f63d84c91b`** |
+| Result envelope version | `1.0` |
+
+The manifest is committed at `src/rh_mcp/manifests/read-manifest.json` and ships
+inside the wheel at `rh_mcp/manifests/read-manifest.json`. It holds 53 entries:
+**34 `allowed` with `mutates=false`, 11 `allowed` with `mutates=true`, and 8
+`denied`** — every denied entry is `mutates=true`. Those counts were recomputed
+from the manifest in the tag and match the 34/11/8 split already recorded in
+`IMPLEMENTATION_TODO.md` rule 32 and `DEC-003`.
+
+- The 11 allowed mutations are `add_option_to_watchlist`, `add_to_watchlist`,
+  `create_scan`, `create_watchlist`, `follow_watchlist`, `remove_from_watchlist`,
+  `remove_option_from_watchlist`, `unfollow_watchlist`, `update_scan_config`,
+  `update_scan_filters`, and `update_watchlist`.
+- The 8 denied are `cancel_equity_order`, `cancel_option_exercise`,
+  `cancel_option_order`, `exercise_option`, `place_equity_order`,
+  `place_option_order`, `review_equity_order`, and `review_option_order`.
+
+**The digest was taken from the artifact, not from the changelog.** `rh-mcp`'s
+`CHANGELOG.md` prints
+`sha256:49b7218278fc2aebb1a040c89b8c94f60750afe142d6b728e88771944a88093a`
+beside manifest version `2026.08.03.1` in both its `[0.1.0]` and `[0.2.0]`
+entries; those two values do not belong together. `49b7218…` is the digest of
+manifest `2026.08.05`, which `rh-mcp` `main` ships and `v0.2.0` does not. A
+consumer that pinned the `v0.2.0` artifact and took the digest from that
+changelog line would fail readiness at every startup. The pin above is the
+value the artifact itself carries and recomputes: loading the manifest shipped
+in the wheel and recomputing its digest with the wheel's own canonicalization
+code yields `sha256:70f88615…`. `rh-mcp` `DESIGN.md` §12.5 records the
+discrepancy and leaves both wrong changelog values in place with a bracketed
+correction. Whoever refreshes this pin next must take the digest from the
+artifact being pinned and must expect to meet the same hazard.
+
+**Independent review and its binding**
+
+`v0.2.0` was re-reviewed as a fresh artifact and returned
+**`APPROVED_FOR_AINVEST_INTEGRATION`** on 2026-08-04. The verdict is bound to
+commit `46128a62`, to the wheel and sdist digests above re-hashed from GitHub,
+to manifest `2026.08.03.1` with digest `sha256:70f88615…`, and to envelope
+version `1.0`; the report states it does not approve a future artifact, a
+changed tag, a changed manifest digest, or a changed provider surface. The
+report and the reviewer's own adversarial tests are committed at
+`security-review/v0.2.0/` in `rh-mcp` and summarized in its `DESIGN.md` §12.2.
+
+Two non-blocking items remain, one P2 and one P3, both consumer-facing rather
+than gateway defects:
+
+- **P2 — private names remain importable.** `_open_provider_session`,
+  `StoredTokenProvider`, and `open_credential_store` can still be assembled by
+  name into a manifest-free session. `rh-mcp` `DESIGN.md` §3 states that
+  importing the package into a broadly privileged process is not a security
+  boundary, and the reviewer accepted the finding on that basis and recorded it
+  as a requirement on the consumer: a consumer using only `open_gateway` /
+  `RobinhoodGateway.invoke` cannot bypass the manifest; a consumer importing
+  underscore-prefixed names can. **This is a `P06-T0` obligation:** the adapter
+  imports only the published surface, and that must be asserted by test.
+- **P3 — a reviewer-authored `v0.1.0` assertion is defeatable by renaming.**
+  One of the reviewer's own `v0.1.0` adversarial tests keys on a parameter name
+  rather than on a manifest check. It concerns `rh-mcp`'s test suite, not its
+  published surface, and imposes nothing on ainvest.
+
+The GitHub release notes for `v0.2.0` still close with a paragraph saying
+`v0.2.0` has not itself been independently reviewed and that a re-review is
+outstanding. That was true when the release was published on 2026-08-04 and
+stopped being true the same day. `rh-mcp` `DESIGN.md` §12.2 is the current
+record. Cite the release notes for artifact digests and provenance, not for
+review status.
+
+**What the pin does and does not cover**
+
+The package version and the full-manifest digest answer different questions and
+move independently: the version says which code, the digest says which
+permission set. Neither is inferred from the other, and a moved digest is a
+deliberate human decision, not an automatic upgrade.
+
+`rh-mcp` `DESIGN.md` §12.5 publishes a compatibility policy that enumerates what
+a consumer may rely on across versions: the nine result-envelope keys within
+`envelope_version` `1.x`, the nine `ErrorCode` wire strings, the `GatewayError`
+public field set (`code`, `message`, `retryable`, `correlation_id`), the five
+CLI exit integers, the three manifest version fields, and the `CredentialStore`
+protocol. Two qualifications matter for `P06-T0`:
+
+- §12.5 was merged on `rh-mcp` `main` in commit `52f307c` on 2026-08-06, after
+  `v0.2.0` was tagged. `git show v0.2.0:DESIGN.md` contains no §12.5, so the tag
+  does not itself carry the policy document.
+- `git diff --name-only v0.2.0..main -- 'src/**/*.py'` is empty: not one Python
+  file under `src/` changed between the tag and that commit. The only
+  non-documentation, non-test, non-CI changes in that range are
+  `src/rh_mcp/manifests/read-manifest.json` (manifest data, refreshed to
+  `2026.08.05` on `main`) and `scripts/refresh_manifest.py`. The surface §12.5
+  describes is therefore the surface `v0.2.0` ships; the document is newer than
+  the tag, the behaviour is not.
+
+§12.5 explicitly excludes `GatewayError.message` — human-facing text that may
+change in any release, including a patch, with no changelog entry — and
+excludes the contents of a result envelope's `data`. It also records that
+`correlation_id` is public but is never populated by any code in the package.
 
 ##### Execution envelope: P08-T7
 
@@ -786,10 +951,10 @@ capabilities only. Its serial merge order is:
   separate sub-agent reviews functionality, fail-closed security, tests,
   readability, and duplication directly on the PR; every actionable finding
   is fixed and re-reviewed before required checks pass and the PR is squash-
-  merged. P08-T7 satisfied that contract in #82; P06-T0 is now blocked and
-  unclaimed until the independently reviewed tagged SemVer external `rh-mcp`
-  release artifact, its provenance/artifact digest, and full-manifest digest
-  are recorded.
+  merged. P08-T7 satisfied that contract in #82. P06-T0 was blocked until the
+  independently reviewed tagged SemVer external `rh-mcp` release artifact, its
+  provenance/artifact digest, and full-manifest digest were recorded; they now
+  are, and P06-T0 is `not_started` and unclaimed.
 - **Handoff/blockers:** the provider-neutral boundary is merged. Production
   deployment artifacts and real credential validation remain intentionally
   blocked on owner decisions; they did not block this fail-closed
@@ -801,28 +966,34 @@ capabilities only. Its serial merge order is:
 ##### Execution envelope: P06-T0
 
 - **Title:** Integrate the External Robinhood Non-Trading Gateway
-- **Status/owner:** `blocked` — unclaimed; implementation must not start before
-  the external dependency conditions below are recorded
+- **Status/owner:** `not_started` — unclaimed and claimable. The external
+  dependency conditions are recorded under **Recorded external dependency pin**
+  in the priority lane above; implementation must not start before the
+  coordinator issues a new execution envelope with an immutable base.
 - **Superseded claim:** the earlier `p06_t0_robinhood_read_gateway` claim and
   `agent/p06-t0-robinhood-read-gateway` / `.worktrees/p06-t0` execution
   envelope assumed ainvest-owned MCP v1 transport with an injected
   authenticated session. That claim is superseded by the external
   `likefudan/rh-mcp` gateway boundary. The old branch/worktree is not an active
-  implementation surface and must not be reused. After the external release is
-  recorded, the coordinator must recreate the worktree or explicitly rebase
+  implementation surface and must not be reused. Now that the external release
+  is recorded, the coordinator must recreate the worktree or explicitly rebase
   and issue a new immutable execution envelope.
 - **Implementation base:** not assigned. The future immutable base must include
   this scope correction and the tracker commit that pins the reviewed `rh-mcp`
   release tag, artifact identity and provenance/digest, plus expected
-  full-manifest digest.
-- **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7` are merged. P06-T0 also
-  requires an independently reviewed tagged SemVer `rh-mcp` release, an
-  immutable consumable artifact with source provenance and artifact
+  full-manifest digest — that is, the squash commit of the tracker PR carrying
+  this section.
+- **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7` are merged. The external
+  dependency requirement — an independently reviewed tagged SemVer `rh-mcp`
+  release, an immutable consumable artifact with source provenance and artifact
   digest/checksum, a committed reviewed capability manifest and full-manifest
-  digest, and a subsequent ainvest tracker PR that records those exact values.
-  The merged `rh-mcp` design correction
-  `366e7556cc765a0742fed7d6e17e0b9ec8e20aec` defines direction but is not an
-  implementation release and does not unblock P06-T0.
+  digest, and an ainvest tracker record of those exact values — is satisfied by
+  `v0.2.0` and by **Recorded external dependency pin** above. That subsection is
+  the authority for every pinned value; do not re-derive a pin from `rh-mcp`'s
+  `CHANGELOG.md`, which prints a digest belonging to a different manifest
+  version. The merged `rh-mcp` design correction
+  `366e7556cc765a0742fed7d6e17e0b9ec8e20aec` defines direction, is not an
+  implementation release, and is not the consumable dependency.
 - **Design and task authority:** `design.md` sections 3.5, 5.1, 5.2, 5.6,
   10.1, and 11; `IMPLEMENTATION_TODO.md` sections 1, 9 (`P06-T0`), 12
   (Batch E/F priority lane), and 16; `docs/security/secrets.md` and
@@ -851,12 +1022,12 @@ capabilities only. Its serial merge order is:
   CLI/Paper-facing read surface, supports a later Telegram read-query adapter,
   and composes the gateway only under an independent Read Broker deployment
   identity.
-- **Allowed paths:** a future execution envelope may assign the thin adapter,
-  SDK-neutral cross-repository fixtures/tests, and narrow composition files
-  only after the dependency is pinned. No production path is assigned while
-  this task is blocked. Dependency or lock-file changes require their own
-  explicit reviewed scope and must not install a second conflicting public MCP
-  SDK surface in ainvest.
+- **Allowed paths:** the dependency is now pinned, so a new execution envelope
+  may assign the thin adapter, SDK-neutral cross-repository fixtures/tests, and
+  narrow composition files. No production path is assigned by this record; the
+  coordinator enumerates them in that envelope. Dependency or lock-file changes
+  require their own explicit reviewed scope and must not install a second
+  conflicting public MCP SDK surface in ainvest.
 - **Required behavior:** accept only the pinned gateway release/artifact and
   expected full-manifest digest. Reject a missing, mutable, or mismatched
   installed artifact during deployment/startup. Reject an unsupported or
@@ -886,14 +1057,17 @@ capabilities only. Its serial merge order is:
   issues/PRs, or chat. If owner authorization or secure credential composition
   is unavailable, keep the real check explicitly unverified and fail closed.
 - **Cross-repository completion conditions:** in order: (1) `rh-mcp`
-  implementation and tests pass independent review; (2) it publishes an
-  immutable artifact in a tagged SemVer release with source provenance and an
-  artifact digest/checksum, the reviewed manifest, and full-manifest digest;
+  implementation and tests pass independent review — **done**, verdict
+  `APPROVED_FOR_AINVEST_INTEGRATION` on 2026-08-04, bound to commit
+  `46128a62`; (2) it publishes an immutable artifact in a tagged SemVer release
+  with source provenance and an artifact digest/checksum, the reviewed manifest,
+  and full-manifest digest — **done**, `v0.2.0`, published 2026-08-04;
   (3) an ainvest tracker PR records the exact tag, artifact identity, source
-  provenance, artifact digest/checksum, and expected full-manifest digest;
-  (4) the coordinator creates a new P06-T0
-  execution envelope/worktree; (5) P06-T0 adapter and cross-repository contracts
-  merge; then and only then may P06-T1 be claimed, followed serially by P06-T2.
+  provenance, artifact digest/checksum, and expected full-manifest digest —
+  **done by this record**; (4) the coordinator creates a new P06-T0 execution
+  envelope/worktree — **next**; (5) P06-T0 adapter and cross-repository
+  contracts merge; then and only then may P06-T1 be claimed, followed serially
+  by P06-T2.
 - **Future verification contract:** focused offline contract tests must cover
   release/artifact provenance pinning; supported envelope/manifest versions;
   full-manifest pinning; SDK-neutral envelope validation; bounded results;
@@ -902,11 +1076,18 @@ capabilities only. Its serial merge order is:
   fallback; then run `git diff --check` and `./scripts/dev verify`. Independent
   PR review must cover functionality, fail-closed security, tests, readability,
   dependency direction, and duplication before squash merge.
-- **Handoff/blockers:** blocked only on the reviewed immutable external
-  tagged SemVer release artifact, its provenance/artifact digest, and committed
-  full-manifest digest. The design correction commit above is recorded for
+- **Handoff/blockers:** no blocker remains. The reviewed immutable external
+  tagged SemVer release artifact, its provenance/artifact digest, and its
+  committed full-manifest digest are recorded under **Recorded external
+  dependency pin** above. The design correction commit is recorded for
   traceability but cannot be treated as a consumable release, runtime artifact,
-  or schema evidence.
+  or schema evidence. Two items carry forward into the implementation:
+  (a) the review's accepted P2 residual makes "import only `rh-mcp`'s published
+  surface" an ainvest obligation to assert by test, not something the gateway
+  enforces; and (b) `rh-mcp` ships no read-only projection — `invoke()` accepts
+  any allowed capability, including the 11 approved mutations — so the read
+  narrowing required by `IMPLEMENTATION_TODO.md` rules 20 and 32 is ainvest
+  adapter code and must also be asserted by test.
 
 `P06-T0` through `P06-T2` form the **Non-Trading Preview**, not Gate 4. Gate 4
 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
@@ -1000,10 +1181,11 @@ task row is in the cross-cutting table below.
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. No P06 implementation is active;
-`P06-T0` is blocked and unclaimed pending the reviewed tagged SemVer external
-gateway release artifact and recorded provenance, artifact, and full-manifest
-digests. `P08-T4`, `P04-T1`, and `P08-T6` are merged and their three-task
-execution claim is closed. `P08-T8` and `P08-T9` are dependency-ready but
+`P06-T0` is `not_started` and unclaimed now that the reviewed tagged SemVer
+external gateway release artifact and its provenance, artifact, and
+full-manifest digests are recorded in the priority lane above. `P08-T4`,
+`P04-T1`, and `P08-T6` are merged and their three-task execution claim is
+closed. `P08-T8` and `P08-T9` are dependency-ready but
 remain unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it

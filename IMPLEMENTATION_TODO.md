@@ -192,9 +192,11 @@ Primary parallelization opportunities:
   are merged. Its serial cross-repository order is: independently reviewed
   tagged SemVer `rh-mcp` release with an immutable artifact → ainvest tracker
   records the tag, artifact provenance/digest, and expected full-manifest
-  digest → `P06-T0` → `P06-T1` → `P06-T2`. Gate 2, Gate 3, and complete
-  observability remain prerequisites for `P06-T3` / Gate 4, not for the
-  preview.
+  digest → `P06-T0` → `P06-T1` → `P06-T2`. The first two steps are done:
+  `rh-mcp` `v0.2.0` was approved on 2026-08-04 and its pins are recorded under
+  "Recorded external dependency pin" in `docs/tasks/status.md`. Gate 2, Gate 3,
+  and complete observability remain prerequisites for `P06-T3` / Gate 4, not
+  for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
 - Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
@@ -1005,11 +1007,16 @@ responsibility, not something the gateway enforces on our behalf. Phase 06
 consumes the read capabilities only; using any of the 11 non-trading mutations
 requires its own explicitly named task card and tracker entry.
 
-P06-T0 remains blocked and unclaimed until that implementation has an
-independently reviewed tagged SemVer release, an immutable artifact with source
-provenance and an artifact digest/checksum, and a committed full-manifest
-digest. A source commit may be recorded as provenance evidence but cannot
-substitute for the consumable release artifact.
+P06-T0 was blocked until that implementation had an independently reviewed
+tagged SemVer release, an immutable artifact with source provenance and an
+artifact digest/checksum, and a committed full-manifest digest. `rh-mcp`
+`v0.2.0` satisfies all of it, and the exact tag, tagged commit, artifact
+filenames and SHA-256 digests, provenance verification, manifest version,
+expected full-manifest digest, envelope version, and review verdict are
+recorded under "Recorded external dependency pin" in `docs/tasks/status.md`.
+That subsection is the sole authority for those values. A source commit may
+still be recorded as provenance evidence but cannot substitute for the
+consumable release artifact.
 
 ### P06-T0 — Integrate the External Robinhood Non-Trading Gateway
 
@@ -1020,7 +1027,14 @@ substitute for the consumable release artifact.
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
   digest/checksum, committed reviewed capability manifest, and full-manifest
-  digest recorded in `docs/tasks/status.md`.
+  digest recorded in `docs/tasks/status.md`. That dependency is satisfied:
+  `rh-mcp` `v0.2.0` (tagged commit `46128a62`) returned
+  `APPROVED_FOR_AINVEST_INTEGRATION` on 2026-08-04, and every pinned value is
+  recorded under "Recorded external dependency pin" in `docs/tasks/status.md`.
+  Take the pins from that subsection. Do not take the expected manifest digest
+  from `rh-mcp`'s `CHANGELOG.md`: its `[0.1.0]` and `[0.2.0]` entries print a
+  digest belonging to a later manifest version, and pinning it would make the
+  gateway fail readiness at every startup.
 - **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
 - **Implementation checklist:**
   - Pin an independently reviewed tagged SemVer `rh-mcp` release, immutable
@@ -1051,10 +1065,18 @@ substitute for the consumable release artifact.
   - Add cross-repository contract fixtures for version/digest verification,
     sanitized errors, bounded results, timeouts, and no provider fallback. Log
     only approved metadata such as capability name, duration, manifest/result
-    digest, and status. `rh-mcp` v0.2.0 pins the wire shape of the result
-    envelope but not of `GatewayError`, so the sanitized-error fixture is
-    ainvest's own contract until the gateway publishes one; assert on the
-    stable `code`/`retryable` fields rather than on message text.
+    digest, and status. `rh-mcp` now publishes a compatibility policy
+    (`DESIGN.md` §12.5) that pins the wire shape of the result envelope **and**
+    of `GatewayError`: the nine `ErrorCode` wire strings and the four public
+    fields `code`, `message`, `retryable`, `correlation_id`. It was merged on
+    `rh-mcp` `main` after `v0.2.0` was tagged, so the `v0.2.0` tag does not
+    carry the document — but no Python file under `rh-mcp/src/` changed between
+    the tag and that commit, so the surface it describes is the surface
+    `v0.2.0` ships. Still assert on `code` and `retryable`, never on message
+    text: §12.5 pins the error codes and the field set, and explicitly leaves
+    `message` free to change in any release, including a patch, with no
+    changelog entry. It also records that `correlation_id` is public but is
+    never populated by the package, so a fixture must not require it.
 - **Acceptance criteria:** Offline cross-repository contract tests prove that
   only the pinned SDK-neutral envelope is accepted; version or manifest
   drift, unknown capabilities, malformed/oversized results, authentication
@@ -1483,7 +1505,8 @@ line.
   release with an immutable artifact, record its tag, artifact
   provenance/digest, and expected full-manifest digest in the ainvest tracker,
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` serially for the earliest
-  safe Robinhood Non-Trading Preview. By owner instruction,
+  safe Robinhood Non-Trading Preview. The release and the tracker record are
+  done (`rh-mcp` `v0.2.0`); the lane resumes at `P06-T0`. By owner instruction,
   `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -1493,7 +1516,8 @@ line.
    release with an immutable artifact -> ainvest tracker records its tag,
    artifact provenance/digest, and expected full-manifest digest -> `P06-T0`
    -> `P06-T1` -> `P06-T2`, without waiting for every Batch E track. This is a
-   Non-Trading Preview, not a gate acceptance.
+   Non-Trading Preview, not a gate acceptance. The first two steps are complete
+   (`rh-mcp` `v0.2.0`, pinned in `docs/tasks/status.md`).
 2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
    task-card/tracker change built on the read projection and P05-T4/P05-T5. Do
    not combine queries with Telegram approval, non-trading mutations, or
