@@ -894,29 +894,39 @@ and `T-016`.
 
 It is carried as **planned evidence**, `P-GATEWAY-PROSE` targeting
 `SEC-PROSE-*`, and not only as control prose. The distinction is structural
-rather than stylistic. Beyond a non-emptiness check on Critical rows,
-`preventive_controls` and `detective_controls` are free text that
-`tests/unit/security/test_control_matrix.py` does not otherwise read: an
-individual entry can be deleted, or invented, and the suite stays green.
-`evidence_ids` is the list the validator walks — a reference must resolve to a
-declared record, that record must name the threat back, an unreferenced record
-fails the no-orphan rule, and a planned record cannot claim `state: passing`.
-Every other outstanding obligation on `T-007` already had such an ID; this one
-did not, which made it the only obligation on the row that could be dropped
-without CI objecting. Its state is `planned`, so nothing here claims the
-control exists — recording a requirement is not satisfying it, and `P06-T0`
-and `P06-T2` owe the tests.
+rather than stylistic. Both control lists must be non-empty — that is enforced
+on every row — but beyond non-emptiness `test_control_matrix.py` does not read
+them: an individual entry can be deleted, or invented, and the suite stays
+green. `evidence_ids` is walked. A reference must resolve to a declared
+record, that record must name the threat back, an unreferenced record fails
+the no-orphan rule, and a `planned` record cannot claim `state: passing`.
+Before this entry existed, the obligation was recorded only in a field with
+none of those checks behind it. Its state is `planned`, so nothing here claims
+the control exists — recording a requirement is not satisfying it, and
+`P06-T0` and `P06-T2` owe the tests.
 
-Two gaps in that guarantee, stated rather than left for the next reader to
-discover. The validator checks each `evidence_ids` entry forward to its
-record, never the reverse, so an ID carried by two rows can be dropped from
-one of them silently — measured: removing `P-GATEWAY-PROSE` from `T-007`
-alone, or from `T-016` alone, leaves the suite green once the matrix is
-regenerated. And deleting a reference together with its record evades the
-no-orphan rule, which is a property of this register rather than of this
-entry — though not a uniform one, since a record that is a row's *only*
-evidence is caught. Neither gap is introduced here and neither is claimed
-fixed; a symmetric `supports`-side assertion would close the first.
+**What that does not buy, stated rather than left for the next reader.** The
+three claims below are what was measured on this entry, not properties of the
+register; the surrounding rules are more varied than any one of them suggests.
+
+- Removing `P-GATEWAY-PROSE` from `T-007` alone, or from `T-016` alone, leaves
+  the suite green once the matrix is regenerated. The validator walks each
+  `evidence_ids` entry forward to its record and does not check the `supports`
+  side back. A symmetric assertion would close this, and it is the one worth
+  filing.
+- Deleting the reference **and** the record together evades the no-orphan
+  rule. Not universal: the same coordinated deletion is caught for
+  `P-TELEGRAM-POLL`, which is `T-006`'s only evidence and so empties a list
+  that may not be empty. Other rows are caught by other mechanisms — the
+  completion-evidence back-check catches dropping `E-CI-VERIFY` from `T-015`,
+  and absence evidence has its own rule. Do not read "only evidence" as the
+  general explanation for why a deletion is caught.
+- `P-GATEWAY-PROSE` is not uniquely fragile. `P-MCP-ALLOWLIST` has carried an
+  ID on this row since before this PR and drops from `T-007` just as silently.
+  The gain here is that the obligation is now inside the checked structure at
+  all, not that it became individually tamper-proof.
+
+None of this is introduced by this record and none of it is claimed fixed.
 
 Three further residual risks in that report constrain ainvest rather than
 `rh-mcp`, and are recorded here rather than turned into requirements the report
