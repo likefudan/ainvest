@@ -18,6 +18,8 @@ from ainvest.execution.robinhood.artifact import (
 from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErrorCode
 from ainvest.execution.robinhood.pins import (
     PINNED_PACKAGE_VERSION,
+    PINNED_RELEASE_TAG,
+    PINNED_WHEEL_FILENAME,
     PINNED_WHEEL_SHA256,
     RH_MCP_DISTRIBUTION,
 )
@@ -183,19 +185,115 @@ def test_a_verification_cannot_be_both_verified_and_rejected() -> None:
         ArtifactVerification(False, None)
 
 
-@pytest.mark.unit
-def test_the_real_probe_reports_absent_because_the_dependency_is_not_declared() -> None:
-    """Not a stub: this is the live fail-closed state of this repository.
+# ---------------------------------------------------------------------------
+# The real installed distribution
+#
+# Every test above injects a probe, so until the dependency envelope landed
+# they proved only that the checker agrees with documents this file wrote.
+# The tests below read `importlib.metadata` for real. They are the only place
+# the pin in `pins.py`, the URL and digest in `pyproject.toml`, the hash in
+# `uv.lock`, and the artifact the installer actually fetched are all required
+# to be the same thing.
+#
+# They need the `broker` profile installed — `./scripts/dev setup`, or
+# `./scripts/dev broker-install`, both of which `./scripts/dev verify` also
+# performs. They deliberately do not skip when it is absent: a pin whose only
+# unfaked check quietly skips is a pin that is not being checked.
+# ---------------------------------------------------------------------------
 
-    P06-T0 deliberately does not add `rh-mcp` to ``pyproject.toml``, populate
-    the ``broker`` extra, or move ``uv.lock`` — that is a separate reviewed
-    envelope. So the real probe finds nothing and the real verification
-    refuses. This test is what keeps that honest rather than assumed, and it
-    is expected to be rewritten by the envelope that installs the dependency.
+#: Rebuilt from the pins rather than pasted, so repointing the declaration at
+#: another release cannot agree with this file by accident.
+EXPECTED_WHEEL_URL = (
+    "https://github.com/likefudan/rh-mcp/releases/download/"
+    f"{PINNED_RELEASE_TAG}/{PINNED_WHEEL_FILENAME}"
+)
+
+
+@pytest.mark.unit
+def test_the_real_installed_distribution_is_the_pinned_release_artifact() -> None:
+    """What the installer recorded, field by field, before any verdict."""
+    installed = probe_installed_distribution()
+
+    assert installed is not None, (
+        "`rh-mcp` is not installed. Run `./scripts/dev setup` (or "
+        "`./scripts/dev broker-install`) to install the locked broker profile."
+    )
+    assert installed.version == PINNED_PACKAGE_VERSION
+
+    direct_url = installed.direct_url
+    assert direct_url is not None, (
+        "the installer recorded no PEP 610 direct_url.json; the broker profile "
+        "must be installed from the pinned URL, not from an index"
+    )
+    assert direct_url["url"] == EXPECTED_WHEEL_URL
+    assert "vcs_info" not in direct_url
+    assert "dir_info" not in direct_url
+    assert direct_url["archive_info"]["hashes"]["sha256"] == PINNED_WHEEL_SHA256
+
+
+@pytest.mark.unit
+def test_the_real_installed_distribution_satisfies_the_artifact_pins() -> None:
+    """The verdict itself, with no probe injected and nothing stubbed."""
+    assert verify_installed_artifact() == ArtifactVerification(True, None)
+    assert require_installed_artifact().verified is True
+
+
+@pytest.mark.unit
+def test_the_real_verification_would_still_refuse_a_different_digest() -> None:
+    """Vacuity guard for the two tests above.
+
+    The real record is fed back through the checker with one field changed. A
+    ``verify_installed_artifact`` that had degenerated into "return verified"
+    would satisfy both tests above; it cannot satisfy this one.
     """
-    assert probe_installed_distribution() is None
-    assert verify_installed_artifact().rejection is ArtifactRejection.DISTRIBUTION_ABSENT
+    installed = probe_installed_distribution()
+    assert installed is not None
+    assert installed.direct_url is not None
+
+    tampered = InstalledDistribution(
+        version=installed.version,
+        direct_url={**installed.direct_url, "archive_info": {"hashes": {"sha256": OTHER_SHA256}}},
+    )
+
+    assert verify_installed_artifact(_probe(tampered)).rejection is (
+        ArtifactRejection.ARTIFACT_DIGEST_MISMATCH
+    )
+
+
+@pytest.mark.unit
+def test_a_uv_shaped_install_of_the_very_same_wheel_is_still_refused() -> None:
+    """Why the broker profile is installed by pip and not by `uv sync`.
+
+    uv writes ``"archive_info": {}`` for every install shape it offers — URL,
+    local file, ``uv pip install --require-hashes``, ``uv sync`` — on uv
+    0.11.26 and 0.12.3 alike. The URL it records is the right one and the
+    digest it verified while downloading is in ``uv.lock``, but neither fact
+    survives into the installed metadata, so nothing at startup can check the
+    artifact. This has to stay a refusal: were an empty ``archive_info``
+    accepted, the pin would be satisfied by whatever that URL served.
+    """
+    uv_shaped = InstalledDistribution(
+        version=PINNED_PACKAGE_VERSION,
+        direct_url={"url": EXPECTED_WHEEL_URL, "archive_info": {}},
+    )
+
+    assert verify_installed_artifact(_probe(uv_shaped)).rejection is (
+        ArtifactRejection.ARTIFACT_DIGEST_ABSENT
+    )
+
+
+@pytest.mark.unit
+def test_an_absent_distribution_still_fails_closed() -> None:
+    """The other side of the same coin, which used to be this file's only side.
+
+    A deployment that installs no ``broker`` extra — every non-broker profile
+    in `docs/development.md` — reaches exactly this, and it must refuse rather
+    than proceed without a gateway.
+    """
+    assert verify_installed_artifact(_probe(None)).rejection is (
+        ArtifactRejection.DISTRIBUTION_ABSENT
+    )
 
     with pytest.raises(GatewayReadError) as caught:
-        require_installed_artifact()
+        require_installed_artifact(_probe(None))
     assert caught.value.code is GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE

@@ -18,6 +18,8 @@ probe and the published surface are both injected.
 
 from __future__ import annotations
 
+import inspect
+import sys
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, field
@@ -26,9 +28,17 @@ from typing import Any
 
 import pytest
 
+# The installed wheel, imported here so the assertions below compare against
+# `rh-mcp`'s own objects rather than against a description of them. `rh-mcp`
+# `v0.2.0` ships no `py.typed`, so mypy sees these as untyped; the adapter's
+# typed boundary is `PublishedSurface`, not these modules.
+import rh_mcp.config  # type: ignore[import-untyped]
+import rh_mcp.gateway  # type: ignore[import-untyped]
+
 from ainvest.execution.robinhood.artifact import InstalledDistribution
 from ainvest.execution.robinhood.composition import (
     ComposedReadGateway,
+    _RhMcpSurface,
     import_published_surface,
     open_read_gateway,
 )
@@ -241,16 +251,87 @@ def test_the_gateway_context_is_exited_on_the_happy_path() -> None:
 
 
 # ---------------------------------------------------------------------------
-# Fail-closed while the dependency is absent
+# The real published surface, now that the dependency is installed
+#
+# Everything above injects a fake surface, which is the only way to drive the
+# composition without a live authorization. These four exercise the import
+# itself, against the installed `rh-mcp` wheel. They stop at construction:
+# nothing here calls ``open_gateway``, which would open a provider session.
 # ---------------------------------------------------------------------------
 
 
-def test_importing_the_published_surface_fails_closed_today() -> None:
-    """The runtime dependency is a separate reviewed envelope.
+def test_importing_the_published_surface_returns_the_installed_rh_mcp_names() -> None:
+    """The deferred import resolves, and resolves to `rh-mcp`'s own objects.
 
-    This must be a real refusal, not a no-op that returns something usable
-    when the package is missing.
+    Object identity against the installed modules, not truthiness: a surface
+    built from anything else — a stub, a re-export, a shim this repository
+    wrote — would satisfy "it returned something". Reading the adapter's two
+    private fields is the point of the test rather than a shortcut around it;
+    what is being asserted is precisely which objects it is holding.
     """
+    surface = import_published_surface()
+
+    assert isinstance(surface, _RhMcpSurface)
+    assert surface._gateway_config is rh_mcp.config.GatewayConfig
+    assert surface._open_gateway is rh_mcp.gateway.open_gateway
+
+
+def test_the_installed_gateway_config_takes_the_digest_this_adapter_passes() -> None:
+    """`composition.py` calls ``GatewayConfig(expected_manifest_digest=...)``.
+
+    Until the wheel was installed, nothing checked that the published callable
+    accepts that keyword — the fake surface accepts whatever it is given. A
+    renamed or repositioned parameter upstream would have been found at the
+    first live startup instead of here.
+    """
+    parameters = inspect.signature(rh_mcp.config.GatewayConfig).parameters
+
+    assert "expected_manifest_digest" in parameters
+    assert parameters["expected_manifest_digest"].default is inspect.Parameter.empty
+    assert parameters["expected_manifest_digest"].kind is not inspect.Parameter.POSITIONAL_ONLY
+
+    configured = import_published_surface().gateway_config(
+        expected_manifest_digest=EXPECTED_MANIFEST_DIGEST
+    )
+    assert getattr(configured, "expected_manifest_digest", None) == EXPECTED_MANIFEST_DIGEST
+
+
+def test_the_installed_open_gateway_takes_the_config_as_its_only_argument() -> None:
+    """`composition.py` calls ``open_gateway(config)`` positionally.
+
+    ``store``, ``manifest`` and ``transport`` are `rh-mcp`'s injection points
+    and are keyword-only with defaults; the adapter passes none of them, and
+    a production caller must not. Checked as a signature fact rather than by
+    calling it, which would open a provider session.
+    """
+    parameters = inspect.signature(rh_mcp.gateway.open_gateway).parameters
+    positional = [
+        name
+        for name, parameter in parameters.items()
+        if parameter.kind
+        in {inspect.Parameter.POSITIONAL_ONLY, inspect.Parameter.POSITIONAL_OR_KEYWORD}
+    ]
+
+    assert positional == ["config"]
+    assert all(
+        parameter.default is not inspect.Parameter.empty
+        for name, parameter in parameters.items()
+        if name != "config"
+    )
+
+
+def test_the_published_surface_still_fails_closed_when_it_cannot_be_imported(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A non-broker deployment reaches this, and it must be a real refusal.
+
+    ``None`` in ``sys.modules`` is the documented way to make an import raise
+    ``ImportError`` without unloading a package, so the deferred import inside
+    :func:`import_published_surface` takes exactly the branch a missing wheel
+    would take.
+    """
+    monkeypatch.setitem(sys.modules, "rh_mcp.config", None)
+
     with pytest.raises(GatewayReadError) as caught:
         import_published_surface()
 
@@ -261,8 +342,11 @@ def test_importing_the_published_surface_fails_closed_today() -> None:
     assert caught.value.__context__ is None or caught.value.__suppress_context__
 
 
-def test_no_surface_and_no_dependency_refuses_rather_than_defaulting() -> None:
+def test_no_surface_and_no_dependency_refuses_rather_than_defaulting(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     """Omitting ``surface`` must reach the real import and fail, not fall back."""
+    monkeypatch.setitem(sys.modules, "rh_mcp.gateway", None)
 
     async def _run() -> None:
         async with open_read_gateway(probe=installed_probe):

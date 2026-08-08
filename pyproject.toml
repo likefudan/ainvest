@@ -37,8 +37,27 @@ approval = [
     "webauthn>=2.6,<3",
 ]
 broker = [
-    # Reserved for the independently reviewed and artifact-pinned rh-mcp
-    # release. ainvest must not depend on or import the MCP SDK directly.
+    # The independently reviewed, artifact-pinned rh-mcp release. A PEP 508
+    # direct reference rather than a version specifier, and both halves of it
+    # are security properties rather than packaging taste:
+    #
+    #  * `rh-mcp` is not published on PyPI. A `rh-mcp==0.2.0` specifier would
+    #    resolve against the public index, where that name is unregistered and
+    #    therefore claimable by anyone — textbook dependency confusion. Naming
+    #    the release asset takes the index out of the trust path entirely.
+    #  * pip enforces the `#sha256=` fragment and refuses a download that does
+    #    not hash to it. uv ignores the fragment, so `uv lock --check` cannot
+    #    catch a corrupted one; `tests/unit/test_dependency_boundary.py` binds
+    #    it to `pins.PINNED_WHEEL_SHA256` and to `uv.lock` instead.
+    #
+    # Both values come from the "Recorded external dependency pin" subsection
+    # of `docs/tasks/status.md` by way of
+    # `ainvest.execution.robinhood.pins`, which stays the single authority.
+    #
+    # ainvest still does not depend on or import the MCP SDK. `mcp` and
+    # `httpx2` arrive only as rh-mcp's own private transitive dependencies;
+    # no `ainvest.*` module imports either, which is asserted by test.
+    "rh-mcp @ https://github.com/likefudan/rh-mcp/releases/download/v0.2.0/rh_mcp-0.2.0-py3-none-any.whl#sha256=45bdfa7ef191a5dca834ddf52249fd92cfce0cf33456ec26839bdc8024e657b9",
 ]
 observability = [
     "opentelemetry-api>=1.32,<2",
@@ -73,6 +92,13 @@ ainvest-paper-flow = "ainvest.orchestrator.cli:main"
 
 [project.entry-points."ainvest.strategies"]
 moving_average = "ainvest.strategies.reference.moving_average.plugin:plugin"
+
+[tool.hatch.metadata]
+# Needed for the one direct reference in the `broker` extra. Hatchling refuses
+# direct references by default and that default is a good one, so
+# `tests/unit/test_dependency_boundary.py` re-imposes it as an allowlist of
+# exactly one URL: this switch cannot quietly admit a second.
+allow-direct-references = true
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/ainvest"]
