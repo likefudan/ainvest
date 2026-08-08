@@ -94,21 +94,52 @@ Runtime capabilities are isolated as optional extras:
 | Research | `uv sync --locked --no-default-groups --extra research` | Research/data workers |
 | Offline data | `uv sync --locked --no-default-groups --extra offline-data` | Development and offline research only |
 | Approval | `uv sync --locked --no-default-groups --extra approval` | Approval API and Telegram worker |
-| Broker | `uv sync --locked --no-default-groups --extra broker` | Official MCP broker gateways |
+| Broker | see [Broker profile](#broker-profile) — **not** `uv sync` | Official MCP broker gateways |
 | Observability | `uv sync --locked --no-default-groups --extra observability` | Metrics, tracing, and health telemetry |
 
 Multiple deployment profiles may be combined by repeating `--extra`. In particular, the research
 profile does not install the offline-data, approval, or broker packages. `yfinance` is isolated in
 the offline-data profile and must never supply live quotes, pre-trade risk inputs, or broker
-fallback data. The broker profile is reserved for the independently reviewed and artifact-pinned
-`rh-mcp` release. That release now exists — `v0.2.0`, reviewed and pinned under "Recorded
-external dependency pin" in `docs/tasks/status.md` — but the profile stays empty until `P06-T0`
-adds the dependency against those pins. `ainvest` must not depend on or import the MCP Python
-SDK directly, and the profile must never add a client that uses Robinhood usernames, passwords,
-or unofficial Robinhood APIs.
+fallback data.
 
 Production images should install only their required extras with `--no-default-groups`; Ruff,
 mypy, pytest, and other development tools are intentionally absent from those environments.
+
+### Broker profile
+
+The broker profile installs the independently reviewed, artifact-pinned `rh-mcp` release
+`v0.2.0`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
+wheel with a `#sha256=` fragment, not as a version specifier: `rh-mcp` is not published on
+PyPI, so a version specifier would resolve against an index where that name is unregistered
+and therefore claimable. Every pinned value comes from "Recorded external dependency pin" in
+`docs/tasks/status.md` by way of `src/ainvest/execution/robinhood/pins.py`.
+
+**The broker profile is installed with pip, not with `uv sync`, and that is a security
+requirement.** `ainvest.execution.robinhood.artifact` verifies the installed gateway at
+deployment/startup against the pinned wheel SHA-256, read from the PEP 610 `direct_url.json`
+the installer writes. pip records that digest under `archive_info.hashes`. uv writes
+`"archive_info": {}` for every install shape it offers — URL, local file,
+`uv pip install --require-hashes`, `uv sync` — on both uv 0.11.26 (pinned in CI) and 0.12.3,
+so a uv-installed gateway fails closed at startup with `artifact_digest_absent`. uv remains
+the lock authority; only the final install step changes hands:
+
+```bash
+uv export --locked --no-default-groups --extra broker --no-emit-project \
+  --format requirements.txt --output-file broker-requirements.txt
+python -m pip install --require-hashes --requirement broker-requirements.txt
+```
+
+`./scripts/dev broker-install` runs exactly that against the development environment, and both
+`./scripts/dev setup` and `./scripts/dev verify` perform it, because the merge gate asserts the
+artifact pin against the real installed distribution rather than against a fixture.
+
+`rh-mcp` requires `mcp>=2,<3`, so installing the broker profile installs the MCP Python SDK
+transitively. The standing rule means **no direct dependency and no `mcp.*` import**: `ainvest`
+never names `mcp` or `httpx2` in its own metadata, no module under `src/ainvest` imports either,
+and the SDK is unreachable from the default profile and from every extra except `broker`. All
+three are enforced by `tests/unit/test_dependency_boundary.py`, not by this paragraph. The
+profile must never add a client that uses Robinhood usernames, passwords, or unofficial
+Robinhood APIs.
 
 ## Dependency changes
 
@@ -117,8 +148,9 @@ Use compatible version ranges in `pyproject.toml`. APScheduler is deliberately c
 
 1. Run `./scripts/dev lock`.
 2. Review both `pyproject.toml` and `uv.lock`, including transitive package additions.
-3. Run `./scripts/dev verify`.
-4. Commit the metadata and lock file together.
+3. Run `./scripts/dev setup` so the working environment matches the new lock.
+4. Run `./scripts/dev verify`.
+5. Commit the metadata and lock file together.
 
 Never put credentials in dependency URLs, `.env` files committed to Git, tests, fixtures, logs, or
 lock-file configuration.

@@ -15,14 +15,16 @@ Note that ``rh_mcp/__init__.py`` is empty in `v0.2.0` — the published surface
 is reached at ``rh_mcp.gateway`` and ``rh_mcp.config``, not re-exported at the
 package root.
 
-**The runtime dependency is not declared by this task.** ``pyproject.toml``'s
-``broker`` extra stays empty and ``uv.lock`` is untouched; wiring it in is a
-separate reviewed envelope. So :func:`import_published_surface` fails closed
-today with :attr:`~ainvest.execution.robinhood.errors.GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE`,
-and that is the behaviour this repository's tests exercise for real. The
-composition itself is written for real and is driven end to end by a
-deterministic fake surface — no live authorization, no credential, and no
-network is involved anywhere in this package's tests.
+The runtime dependency is declared in ``pyproject.toml``'s ``broker`` extra as
+a hash-pinned direct reference to the reviewed release wheel, so
+:func:`import_published_surface` resolves for real in a broker deployment and
+in the merge gate. In every other deployment profile the wheel is absent and
+the import fails closed with
+:attr:`~ainvest.execution.robinhood.errors.GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE`;
+both directions are exercised by test. What is still never exercised is a live
+gateway: the composition is driven end to end by a deterministic fake surface,
+and no test in this package performs an authorization, holds a credential, or
+opens a socket.
 
 Ordering here is the security property, and it is the same ordering `rh-mcp`
 uses internally: verify the installed artifact, *then* build a config that
@@ -80,16 +82,22 @@ def import_published_surface() -> PublishedSurface:
     ``open_gateway``. Nothing private, nothing from ``rh_mcp.transport``,
     ``rh_mcp.auth``, or ``rh_mcp.credentials``, and no ``mcp.*`` type.
 
-    The ``type: ignore`` markers are load-bearing in the other direction too:
-    the distribution is deliberately not declared by this task, so mypy cannot
-    resolve these modules today. When the separate dependency envelope lands
-    and it can, ``warn_unused_ignores`` turns them into errors — which is the
-    signal to revisit this function with the real types available, rather than
-    letting an unchecked import quietly become a checked one.
+    The ``type: ignore`` code changed when the dependency envelope landed, and
+    the change is the finding rather than a formality. It used to be
+    ``import-not-found`` — mypy could not locate the modules because nothing
+    was installed. It is now ``import-untyped``: the modules resolve, and
+    `rh-mcp` `v0.2.0` ships **no** ``py.typed`` marker, so mypy still refuses
+    to read their annotations even though they are written and checked
+    upstream under ``strict``. There are no real types to substitute here; the
+    typed boundary is :class:`PublishedSurface` and the two adapter methods
+    below, which is why they exist. ``tests/unit/execution/robinhood/
+    test_composition.py`` checks both published signatures against the
+    *installed* wheel by introspection, which is the part a hand-written stub
+    could not have proved.
     """
     try:
-        from rh_mcp.config import GatewayConfig  # type: ignore[import-not-found]
-        from rh_mcp.gateway import open_gateway  # type: ignore[import-not-found]
+        from rh_mcp.config import GatewayConfig  # type: ignore[import-untyped]
+        from rh_mcp.gateway import open_gateway  # type: ignore[import-untyped]
     except ImportError:
         # Chained context is dropped: an import error names file system paths
         # and installed module locations, and this error is displayed.

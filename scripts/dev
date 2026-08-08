@@ -16,6 +16,7 @@ Usage: ./scripts/dev <command>
 
 Commands:
   setup          Create/update the Python 3.12 development environment
+  broker-install Install the locked broker profile with hash-verifying pip
   lock           Regenerate uv.lock after an intentional dependency change
   lock-check     Verify pyproject.toml and uv.lock are consistent
   format         Apply Ruff formatting and safe lint fixes
@@ -31,6 +32,43 @@ Commands:
   verify         Run every required local merge check
 EOF
 }
+
+# The `broker` extra is installed by pip and not by `uv sync`, and that is a
+# security requirement rather than a preference.
+#
+# `ainvest.execution.robinhood.artifact` verifies the installed `rh-mcp`
+# against a pinned wheel SHA-256 that it reads out of the PEP 610
+# `direct_url.json` the installer writes. pip records that digest under
+# `archive_info.hashes`. uv writes `"archive_info": {}` for every install shape
+# it offers — URL, local file, `uv pip install --require-hashes`, `uv sync` —
+# on both uv 0.11.26 (pinned in CI) and 0.12.3, so a uv-installed gateway fails
+# closed at startup with `artifact_digest_absent`. Rather than relax the check
+# to fit the installer, the installer changes.
+#
+# uv remains the lock authority: the requirement, its URL and its hash all come
+# out of `uv.lock` via `uv export`, and `--require-hashes` makes pip refuse any
+# artifact that does not match. Nothing here is a second source of truth.
+BROKER_PROFILE_EXPORT_ARGS=(
+  --locked
+  --no-default-groups
+  --extra broker
+  --no-emit-project
+)
+
+run_broker_install() (
+  local requirements
+  requirements="$(mktemp "${TMPDIR:-/tmp}/ainvest-broker.XXXXXX")"
+  trap 'rm -f -- "${requirements}"' EXIT
+  uv export \
+    --quiet \
+    "${BROKER_PROFILE_EXPORT_ARGS[@]}" \
+    --format requirements.txt \
+    --output-file "${requirements}"
+  uv run --locked python -m pip install \
+    --quiet \
+    --require-hashes \
+    --requirement "${requirements}"
+)
 
 run_format_check() {
   uv run --locked ruff format --check .
@@ -86,6 +124,10 @@ run_audit() (
 case "${1:-}" in
   setup)
     uv sync --locked
+    run_broker_install
+    ;;
+  broker-install)
+    run_broker_install
     ;;
   lock)
     uv lock
@@ -127,6 +169,11 @@ case "${1:-}" in
     ;;
   verify)
     uv lock --check
+    # Before the checks, not as one of them: the artifact pin is verified
+    # against the real installed distribution, so the gate has to be running
+    # against the profile it claims to gate. `uv run` syncs inexactly, so this
+    # survives every later step.
+    run_broker_install
     run_format_check
     run_lint
     run_type_check

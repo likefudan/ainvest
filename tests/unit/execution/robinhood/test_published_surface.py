@@ -21,9 +21,11 @@ Two properties are checked, and they are different:
    public surface directly and grow its own composition path, which is how the
    single audited chokepoint stops being single.
 
-Both are AST facts about the source, so neither needs the distribution
-installed — and it is not installed: the runtime dependency is a separate
-reviewed envelope.
+Both are AST facts about the source, so neither depends on whether the
+distribution is installed, and neither changed when the dependency envelope
+installed it. That is the point: these properties are about what this
+package's code is allowed to name, and a wheel appearing in ``site-packages``
+may not relax them.
 """
 
 from __future__ import annotations

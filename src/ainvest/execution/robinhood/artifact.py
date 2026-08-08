@@ -6,13 +6,15 @@ missing, mutable, or mismatched installed artifact at deployment/startup".
 This module is the artifact half; :mod:`ainvest.execution.robinhood.read_client`
 is the manifest half.
 
-**The runtime dependency is deliberately not declared by this task.** Adding
-`rh-mcp` to ``pyproject.toml``, populating the ``broker`` extra, and moving
-``uv.lock`` is a separate reviewed envelope. The consequence is handled rather
-than hidden: with the distribution absent, :func:`verify_installed_artifact`
-reports :attr:`ArtifactRejection.DISTRIBUTION_ABSENT` and
-:func:`require_installed_artifact` raises — that is the fail-closed outcome,
-and it is what runs in this repository today.
+`rh-mcp` is declared in ``pyproject.toml``'s ``broker`` extra as a hash-pinned
+direct reference to the reviewed release wheel, so a broker deployment — and
+the merge gate — verifies a real installed artifact rather than an injected
+probe. Every other deployment profile installs no ``broker`` extra, and there
+:func:`verify_installed_artifact` reports
+:attr:`ArtifactRejection.DISTRIBUTION_ABSENT` and
+:func:`require_installed_artifact` raises. Both outcomes are asserted against
+the live ``importlib.metadata`` record in
+``tests/unit/execution/robinhood/test_artifact.py``.
 
 Artifact identity is read from PEP 610 ``direct_url.json``, which is the only
 standard, offline record of *what was actually installed*. The three failure
@@ -31,6 +33,17 @@ strict, choice: the pin is on an artifact digest, and an installation that
 cannot evidence which artifact it came from has not satisfied the pin. The
 deployment therefore has to install from the pinned URL/file so the digest is
 recorded — which is what makes the pin load-bearing rather than decorative.
+
+Installing from the pinned URL is necessary but not sufficient, and that is
+what the dependency envelope discovered: ``uv`` records
+``"archive_info": {}`` for **every** install shape it offers, so a
+uv-installed gateway is refused here with
+:attr:`ArtifactRejection.ARTIFACT_DIGEST_ABSENT` even when uv verified the
+very same digest while downloading. pip records ``archive_info.hashes``, so
+the broker profile is installed by pip from the hash-pinned requirements
+``uv export`` derives from ``uv.lock`` — see ``scripts/dev`` and
+``docs/development.md``. The check is not relaxed to accommodate an installer
+that keeps no evidence.
 """
 
 from __future__ import annotations
