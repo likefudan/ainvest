@@ -728,7 +728,7 @@ capabilities only. Its serial merge order is:
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
-| `P06-T0` | `not_started` (unclaimed) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; the reviewed tagged SemVer `rh-mcp` release artifact and its provenance/artifact/full-manifest digests are recorded below. Claimable once this record is on `main` | Do not use the old implementation branch/worktree; the coordinator issues a new immutable execution envelope and worktree whose base includes this record |
+| `P06-T0` | `in_progress` (claimed by `agent/p06-t0-gateway-adapter`, base `cba88f0`) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; the reviewed tagged SemVer `rh-mcp` release artifact and its provenance/artifact/full-manifest digests are recorded below | Adapter and cross-repository contract only. The runtime dependency is **not** in this claim: `pyproject.toml`, the `broker` extra and `uv.lock` are untouched, and artifact verification fails closed while the package is absent. Installing it is a separate reviewed envelope and is the remaining gate before `P06-T1` |
 | `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
 | `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
 
@@ -1042,10 +1042,12 @@ excludes the contents of a result envelope's `data`. It also records that
 ##### Execution envelope: P06-T0
 
 - **Title:** Integrate the External Robinhood Non-Trading Gateway
-- **Status/owner:** `not_started` — unclaimed and claimable. The external
-  dependency conditions are recorded under **Recorded external dependency pin**
-  in the priority lane above; implementation must not start before the
-  coordinator issues a new execution envelope with an immutable base.
+- **Status/owner:** `in_progress` — claimed by `agent/p06-t0-gateway-adapter`.
+  The external dependency conditions are recorded under **Recorded external
+  dependency pin** in the priority lane above. The coordinator issued this
+  envelope with immutable base `cba88f0`, which contains the tracker record
+  (`a450a51`) that pins the reviewed release, and made two scope decisions
+  recorded under **Allowed paths** below.
 - **Superseded claim:** the earlier `p06_t0_robinhood_read_gateway` claim and
   `agent/p06-t0-robinhood-read-gateway` / `.worktrees/p06-t0` execution
   envelope assumed ainvest-owned MCP v1 transport with an injected
@@ -1098,12 +1100,18 @@ excludes the contents of a result envelope's `data`. It also records that
   CLI/Paper-facing read surface, supports a later Telegram read-query adapter,
   and composes the gateway only under an independent Read Broker deployment
   identity.
-- **Allowed paths:** the dependency is now pinned, so a new execution envelope
-  may assign the thin adapter, SDK-neutral cross-repository fixtures/tests, and
-  narrow composition files. No production path is assigned by this record; the
-  coordinator enumerates them in that envelope. Dependency or lock-file changes
-  require their own explicit reviewed scope and must not install a second
-  conflicting public MCP SDK surface in ainvest.
+- **Allowed paths:** assigned by the coordinator for this claim —
+  `src/ainvest/execution/robinhood/**`, `tests/unit/execution/robinhood/**`,
+  `tests/contract/execution/test_rh_mcp_manifest_contract.py`,
+  `tests/fixtures/rh_mcp/**`, and this file. **Two coordinator decisions.**
+  First, the runtime dependency is deliberately *out* of this claim:
+  `pyproject.toml`, the `broker` extra and `uv.lock` are untouched, so artifact
+  and installation verification is written for real but fails closed while the
+  package is absent, and its tests drive it through fixtures and fakes rather
+  than a live import. Second, no production composition path is wired: the
+  adapter exists and is tested, but nothing in ainvest constructs it yet.
+  Installing the dependency remains its own explicit reviewed scope and must
+  not install a second conflicting public MCP SDK surface in ainvest.
 - **Required behavior:** accept only the pinned gateway release/artifact and
   expected full-manifest digest. Reject a missing, mutable, or mismatched
   installed artifact during deployment/startup. Reject an unsupported or
