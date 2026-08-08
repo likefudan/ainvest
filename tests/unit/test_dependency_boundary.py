@@ -120,6 +120,21 @@ def _declared_requirements(pyproject: dict[str, Any]) -> dict[str, list[str]]:
     return declared
 
 
+def _requirement_name(requirement: str) -> str:
+    """The distribution name from a PEP 508 requirement string.
+
+    Split on every character that can terminate a name, not a hand-picked
+    few. The original listed space, ``[``, ``>`` and ``=`` but not ``<``, so
+    ``mcp<3`` parsed as the name ``"mcp<3"`` — which is in no forbidden set,
+    and a direct MCP SDK dependency passed every test here.
+    """
+    stripped = requirement.strip()
+    for index, char in enumerate(stripped):
+        if char in " \t[<>=!~;@(,":
+            return stripped[:index]
+    return stripped
+
+
 def _reachable(
     packages: dict[str, dict[str, Any]],
     roots: list[str],
@@ -348,10 +363,21 @@ def test_ainvest_never_names_the_mcp_sdk_in_its_own_metadata(
     """Metadata half of the rule: no direct dependency, declared anywhere."""
     for location, requirements in _declared_requirements(pyproject).items():
         for requirement in requirements:
-            name = requirement.split(" ")[0].split("[")[0].split(">")[0].split("=")[0]
+            name = _requirement_name(requirement)
             assert name not in FORBIDDEN_SDK_ROOTS, f"{location} names {name} directly"
 
-    declared = {entry["name"] for entry in locked_packages["ainvest"]["metadata"]["requires-dist"]}
+    # Both halves of the lock's own record. `requires-dist` carries
+    # `project.dependencies` and the extras; the dependency groups land in
+    # `requires-dev`. Reading only the first left `mcp<3` in the `test` group —
+    # the environment whose green result *is* the merge gate — passing all
+    # sixteen tests in this file.
+    metadata = locked_packages["ainvest"]["metadata"]
+    declared = {entry["name"] for entry in metadata.get("requires-dist", [])}
+    for group in metadata.get("requires-dev", {}).values():
+        declared |= {entry["name"] for entry in group}
+
+    assert declared, "no requirements were read, so this assertion proves nothing"
+    assert "pytest" in declared, "requires-dev was not read; the group half is unchecked"
     assert declared.isdisjoint(FORBIDDEN_SDK_ROOTS)
 
 
@@ -388,10 +414,25 @@ def test_no_profile_but_broker_can_reach_the_mcp_sdk(
     assert BROKER_EXTRA in extras
 
     default = _reachable(locked_packages, _ainvest_roots(ainvest, extra=None))
+
+    # Anchors, before the disjointness below is believed. Every `isdisjoint`
+    # in this test is satisfied by the empty set, so a walk narrowed to
+    # nothing — `_reachable(packages, [])` is the whole mutation — would report
+    # a clean profile with no profile examined. Five such narrowings each left
+    # all sixteen tests green. These name packages each profile must reach:
+    # one runtime dependency, one dev-group tool that proves `_ainvest_roots`
+    # really includes the groups its docstring claims, and one package two
+    # edges deep that proves the walk is transitive at all.
+    assert "pydantic" in default, "the walk missed project.dependencies"
+    assert "pytest" in default, "_ainvest_roots dropped the dev/test groups"
+    assert "pydantic-core" in default, "the walk did not follow a second edge"
+
     assert default.isdisjoint(BROKER_ONLY_PACKAGES), "the default profile reaches the MCP SDK"
 
     for extra in extras:
         reachable = _reachable(locked_packages, _ainvest_roots(ainvest, extra=extra))
+        assert default <= reachable, f"the {extra} profile lost the default packages"
+
         contaminated = reachable & BROKER_ONLY_PACKAGES
         if extra == BROKER_EXTRA:
             assert contaminated == BROKER_ONLY_PACKAGES, "the broker profile must reach it"
@@ -478,3 +519,111 @@ def test_the_forbidden_roots_are_the_two_rh_mcp_keeps_private() -> None:
     assert frozenset({"mcp", "httpx2"}) == FORBIDDEN_SDK_ROOTS
     assert frozenset({"mcp"}) == BROKER_ONLY_PACKAGES
     assert BROKER_ONLY_PACKAGES < FORBIDDEN_SDK_ROOTS
+
+
+# ---------------------------------------------------------------------------
+# The two helpers, pinned directly. Review showed five distinct narrowings of
+# them left all sixteen tests green, because every claim they support is a
+# negative one and a narrowed walk satisfies a negative claim vacuously.
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.unit
+def test_the_requirement_name_parser_handles_every_terminator() -> None:
+    """`mcp<3` parsed as the name `"mcp<3"` and passed the forbidden-set check."""
+    for requirement, expected in (
+        ("mcp<3", "mcp"),
+        ("mcp>=2,<3", "mcp"),
+        ("mcp==2.0.0", "mcp"),
+        ("mcp!=2.1", "mcp"),
+        ("mcp~=2.0", "mcp"),
+        ("mcp [cli] >=2", "mcp"),
+        ("mcp[cli]>=2", "mcp"),
+        ("mcp; python_version>='3.12'", "mcp"),
+        ("rh-mcp @ https://example.invalid/x.whl#sha256=00", "rh-mcp"),
+        ("mcp", "mcp"),
+        ("  mcp  ", "mcp"),
+    ):
+        assert _requirement_name(requirement) == expected, requirement
+
+    # And does not over-trim a name that legitimately contains a hyphen or dot.
+    assert _requirement_name("pandas-market-calendars>=5,<6") == "pandas-market-calendars"
+    assert _requirement_name("ruamel.yaml>=0.18") == "ruamel.yaml"
+
+
+@pytest.mark.unit
+def test_the_reachability_walk_is_transitive_and_follows_extras() -> None:
+    """Pinned against a synthetic graph, so a narrowing cannot hide in real data.
+
+    A walk that stopped at direct dependencies, or ignored
+    ``optional-dependencies`` edges, still reports every negative claim in this
+    file as satisfied.
+    """
+    packages: dict[str, dict[str, Any]] = {
+        "root": {
+            "dependencies": [{"name": "direct"}],
+            "optional-dependencies": {"extra": [{"name": "optional"}]},
+        },
+        "direct": {"dependencies": [{"name": "deep"}]},
+        "deep": {"dependencies": [{"name": "deeper"}]},
+        "deeper": {},
+        "optional": {"dependencies": [{"name": "optional-deep"}]},
+        "optional-deep": {},
+        "unrelated": {},
+    }
+
+    reached = _reachable(packages, ["root"])
+
+    assert reached == {
+        "root",
+        "direct",
+        "deep",
+        "deeper",
+        "optional",
+        "optional-deep",
+    }
+    assert "unrelated" not in reached
+
+
+@pytest.mark.unit
+def test_the_reachability_walk_terminates_on_a_cycle() -> None:
+    """A cycle must not hang the gate; the `seen` set is what prevents it."""
+    packages = {
+        "a": {"dependencies": [{"name": "b"}]},
+        "b": {"dependencies": [{"name": "a"}, {"name": "c"}]},
+        "c": {},
+    }
+    assert _reachable(packages, ["a"]) == {"a", "b", "c"}
+
+
+@pytest.mark.unit
+def test_empty_roots_reach_nothing_so_a_narrowed_walk_is_visible() -> None:
+    """The mutation that survived, named.
+
+    ``_reachable(packages, [])`` returning the empty set is correct behaviour —
+    the defect was that every caller's claim was satisfied by it. This states
+    the behaviour so the anchors above are the thing standing in its way.
+    """
+    assert _reachable({"a": {"dependencies": [{"name": "b"}]}, "b": {}}, []) == set()
+
+
+@pytest.mark.unit
+def test_ainvest_roots_include_the_dependency_groups(
+    locked_packages: dict[str, dict[str, Any]],
+) -> None:
+    """`_ainvest_roots`'s docstring claims the dev/test groups; this checks it.
+
+    Dropping the ``dev-dependencies`` loop falsified that sentence and left the
+    suite green, because the profile it silently stopped examining was the one
+    the merge gate runs in.
+    """
+    ainvest = locked_packages["ainvest"]
+    roots = _ainvest_roots(ainvest, extra=None)
+
+    assert "pydantic" in roots, "project.dependencies missing from the roots"
+    assert "pytest" in roots, "the dev/test groups are not roots"
+    assert RH_MCP_DISTRIBUTION not in roots, "the broker extra must not be a default root"
+
+    broker_roots = _ainvest_roots(ainvest, extra=BROKER_EXTRA)
+    assert RH_MCP_DISTRIBUTION in broker_roots
+    assert set(roots) < set(broker_roots), "the extra must add to the roots, not replace them"
