@@ -31,6 +31,7 @@ fragment, the URL, and ``uv.lock``'s recorded hash are each bound to
 from __future__ import annotations
 
 import ast
+import re
 import tomllib
 from pathlib import Path
 from typing import Any, Final
@@ -120,8 +121,22 @@ def _declared_requirements(pyproject: dict[str, Any]) -> dict[str, list[str]]:
     return declared
 
 
+def _normalize(name: str) -> str:
+    """PEP 503 normalization: the form two spellings of one package share.
+
+    Distribution names are case-insensitive and treat runs of ``-``, ``_`` and
+    ``.`` as equivalent, so ``MCP``, ``Mcp`` and ``mcp`` are the same package to
+    every installer. Comparing an unnormalized name against a lower-case
+    forbidden set is therefore not the check it appears to be: measured, ``MCP<3``
+    in the ``test`` dependency group passed all twenty-one tests here before a
+    relock, and only `uv.lock`'s own normalization caught it afterwards — so the
+    pyproject-side rule, which is the primary statement of the rule, was blind.
+    """
+    return re.sub(r"[-_.]+", "-", name).lower()
+
+
 def _requirement_name(requirement: str) -> str:
-    """The distribution name from a PEP 508 requirement string.
+    """The normalized distribution name from a PEP 508 requirement string.
 
     Split on every character that can terminate a name, not a hand-picked
     few. The original listed space, ``[``, ``>`` and ``=`` but not ``<``, so
@@ -131,8 +146,8 @@ def _requirement_name(requirement: str) -> str:
     stripped = requirement.strip()
     for index, char in enumerate(stripped):
         if char in " \t[<>=!~;@(,":
-            return stripped[:index]
-    return stripped
+            return _normalize(stripped[:index])
+    return _normalize(stripped)
 
 
 def _reachable(
@@ -181,9 +196,9 @@ def _imported_roots(source: str, *, filename: str) -> set[str]:
     roots: set[str] = set()
     for node in ast.walk(ast.parse(source, filename=filename)):
         if isinstance(node, ast.Import):
-            roots.update(alias.name.split(".")[0] for alias in node.names)
+            roots.update(_normalize(alias.name.split(".")[0]) for alias in node.names)
         elif isinstance(node, ast.ImportFrom) and not node.level:
-            roots.add((node.module or "").split(".")[0])
+            roots.add(_normalize((node.module or "").split(".")[0]))
     return roots
 
 
@@ -372,9 +387,9 @@ def test_ainvest_never_names_the_mcp_sdk_in_its_own_metadata(
     # the environment whose green result *is* the merge gate — passing all
     # sixteen tests in this file.
     metadata = locked_packages["ainvest"]["metadata"]
-    declared = {entry["name"] for entry in metadata.get("requires-dist", [])}
+    declared = {_normalize(entry["name"]) for entry in metadata.get("requires-dist", [])}
     for group in metadata.get("requires-dev", {}).values():
-        declared |= {entry["name"] for entry in group}
+        declared |= {_normalize(entry["name"]) for entry in group}
 
     assert declared, "no requirements were read, so this assertion proves nothing"
     assert "pytest" in declared, "requires-dev was not read; the group half is unchecked"
@@ -548,7 +563,37 @@ def test_the_requirement_name_parser_handles_every_terminator() -> None:
 
     # And does not over-trim a name that legitimately contains a hyphen or dot.
     assert _requirement_name("pandas-market-calendars>=5,<6") == "pandas-market-calendars"
-    assert _requirement_name("ruamel.yaml>=0.18") == "ruamel.yaml"
+
+
+@pytest.mark.unit
+def test_the_forbidden_set_is_compared_on_a_normalized_name() -> None:
+    """Distribution names are case- and separator-insensitive to installers.
+
+    Measured before this existed: `MCP<3` in the `test` dependency group passed
+    all twenty-one tests in this file, because the name reached the lower-case
+    forbidden set unnormalized. Only `uv.lock`'s own normalization caught it,
+    and only after a relock — so the pyproject-side rule, the primary statement
+    of the whole rule, was blind to a spelling every installer resolves to the
+    same package.
+    """
+    for spelling in ("MCP", "Mcp", "mCp", "MCP<3", "MCP >= 2", "MCP[cli]>=2"):
+        assert _requirement_name(spelling) in FORBIDDEN_SDK_ROOTS, spelling
+    for spelling in ("HTTPX2", "HttpX2>=2.5", "HTTPX2<3"):
+        assert _requirement_name(spelling) in FORBIDDEN_SDK_ROOTS, spelling
+
+    # Separator runs collapse, per PEP 503, and the dot form is the same package.
+    assert _requirement_name("ruamel.yaml>=0.18") == "ruamel-yaml"
+    assert _normalize("ruamel_yaml") == _normalize("ruamel.yaml") == "ruamel-yaml"
+    assert _normalize("pandas__market..calendars") == "pandas-market-calendars"
+
+    # And a genuinely different package is still different: `mcp_sdk` normalizes
+    # to `mcp-sdk`, which is not the SDK and must not be swept up.
+    assert _requirement_name("mcp_sdk>=1") == "mcp-sdk"
+    assert _requirement_name("mcp_sdk>=1") not in FORBIDDEN_SDK_ROOTS
+
+    # The forbidden set must itself be in normalized form, or none of the above
+    # comparisons mean anything.
+    assert all(_normalize(name) == name for name in FORBIDDEN_SDK_ROOTS)
 
 
 @pytest.mark.unit
