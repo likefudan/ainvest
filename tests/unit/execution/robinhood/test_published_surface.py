@@ -72,7 +72,15 @@ FORBIDDEN_ROOT_PACKAGES: Final[frozenset[str]] = frozenset({"mcp", "httpx2"})
 
 
 def _module_paths() -> list[Path]:
-    paths = sorted(PACKAGE_ROOT.glob("*.py"))
+    """Every module in the package, at any depth.
+
+    ``rglob`` rather than ``glob``: with a single-level scan, a plain module in
+    a subpackage — ``robinhood/session/helper.py`` importing
+    ``_open_provider_session`` — passed the entire gate. The docstrings claimed
+    "every module in this package" while the code covered one directory level,
+    which is the same adjacent-claim defect these tests exist to prevent.
+    """
+    paths = sorted(path for path in PACKAGE_ROOT.rglob("*.py") if "__pycache__" not in path.parts)
     assert paths, f"no modules found under {PACKAGE_ROOT}"
     return paths
 
@@ -93,11 +101,88 @@ def _imports(tree: ast.AST) -> list[tuple[str, str]]:
     return found
 
 
+def _dynamic_import_mechanisms(tree: ast.AST) -> list[str]:
+    """Any way of reaching a module by a runtime string, not a static name.
+
+    No static walk can follow ``importlib.import_module(f"{pkg}.transport")``,
+    and a name assembled as ``"_open" + "_provider_session"`` does not even
+    appear in the source. Rather than leave that as an unstated limit, the
+    mechanisms themselves are refused: this package has six modules and no
+    reason to import dynamically, so their absence is checkable where the
+    destination of a dynamic import is not.
+    """
+    # `importlib.metadata` is not one of them: it reads installation facts and
+    # is how `artifact.py` probes the installed distribution. What is refused
+    # is the machinery that turns a *string* into a module or an attribute.
+    permitted = {"importlib.metadata", "importlib.resources"}
+    found: list[str] = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found.extend(
+                alias.name
+                for alias in node.names
+                if alias.name == "importlib" or alias.name.startswith("importlib.")
+                if alias.name not in permitted
+            )
+        elif isinstance(node, ast.ImportFrom):
+            module = node.module or ""
+            if module == "importlib" or module.startswith("importlib."):
+                # `from importlib import metadata` names the same thing as
+                # `import importlib.metadata`, so resolve it the same way.
+                found.extend(
+                    qualified
+                    for alias in node.names
+                    if (qualified := f"{module}.{alias.name}") not in permitted
+                    and module not in permitted
+                )
+        elif isinstance(node, ast.Call):
+            found.extend(_dynamic_call(node))
+    return found
+
+
+def _dynamic_call(node: ast.Call) -> list[str]:
+    """Flag a call only when it can name its target at runtime.
+
+    ``getattr(view, "capability", None)`` with a **literal** attribute is duck
+    typing on an untrusted gateway object and is the safe way to read it; this
+    package does it five times deliberately. ``getattr(m, "_open" + "_provider_session")``
+    is the bypass. The difference is whether the name is a constant, so that is
+    what is tested rather than the function's identity.
+    """
+    func = node.func
+    name = func.id if isinstance(func, ast.Name) else getattr(func, "attr", "")
+
+    if name in {"__import__", "import_module"}:
+        return [name]
+    if name in {"getattr", "vars", "globals", "eval", "exec"}:
+        computed = name in {"vars", "globals", "eval", "exec"} or not (
+            len(node.args) >= 2
+            and isinstance(node.args[1], ast.Constant)
+            and isinstance(node.args[1].value, str)
+        )
+        return [f"{name}(computed name)"] if computed else []
+    return []
+
+
+def _relative_name(path: Path) -> str:
+    """Identify a module by its path within the package, not by basename.
+
+    Two subpackages may each hold a ``helper.py``; keying on the basename
+    would silently collapse them and check only one.
+    """
+    return path.relative_to(PACKAGE_ROOT).as_posix()
+
+
 @pytest.fixture(scope="module")
-def package_imports() -> dict[str, list[tuple[str, str]]]:
+def package_sources() -> dict[str, str]:
+    return {_relative_name(path): path.read_text(encoding="utf-8") for path in _module_paths()}
+
+
+@pytest.fixture(scope="module")
+def package_imports(package_sources: dict[str, str]) -> dict[str, list[tuple[str, str]]]:
     return {
-        path.name: _imports(ast.parse(path.read_text(encoding="utf-8"), filename=str(path)))
-        for path in _module_paths()
+        module_name: _imports(ast.parse(source, filename=module_name))
+        for module_name, source in package_sources.items()
     }
 
 
@@ -135,6 +220,39 @@ def test_no_module_imports_a_withdrawn_or_private_rh_mcp_name(
             assert not source.split(".")[-1].startswith("_"), (
                 f"{module_name} imports from private module {source}"
             )
+
+
+def test_the_mechanism_detector_sees_each_dynamic_import_form() -> None:
+    """Proven before it is trusted, same as the import walk."""
+    for source in (
+        "import importlib\n",
+        "from importlib import import_module\n",
+        "x = __import__('rh_mcp.transport')\n",
+        "y = importlib.import_module('rh_mcp.transport')\n",
+        "z = getattr(m, '_open' + '_provider_session')\n",
+        "w = getattr(m, name)\n",
+    ):
+        assert _dynamic_import_mechanisms(ast.parse(source)), source
+
+    # And is not a blanket ban on `getattr`: a literal attribute name cannot
+    # be assembled, and duck-typing an untrusted object is the safe idiom.
+    assert _dynamic_import_mechanisms(ast.parse('v = getattr(view, "capability", None)\n')) == []
+    assert _dynamic_import_mechanisms(ast.parse("from importlib import metadata\n")) == []
+
+
+def test_no_module_reaches_a_module_by_runtime_string(
+    package_sources: dict[str, str],
+) -> None:
+    """Closes the hole a static import walk cannot close by inspection.
+
+    ``importlib.import_module(f"{pkg}.transport")`` with ``pkg`` assembled at
+    runtime is invisible to :func:`_imports` — the string ``rh_mcp`` need never
+    appear. Refusing the mechanism is checkable where refusing the destination
+    is not.
+    """
+    for module_name, source in package_sources.items():
+        mechanisms = _dynamic_import_mechanisms(ast.parse(source, filename=module_name))
+        assert not mechanisms, f"{module_name} can reach a module dynamically via {mechanisms}"
 
 
 def test_no_module_imports_the_mcp_sdk_or_its_transport(

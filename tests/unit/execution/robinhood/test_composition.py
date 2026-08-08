@@ -181,13 +181,25 @@ async def _open_with_probe(surface: FakeSurface, probe: Any) -> ComposedReadGate
 
 
 def test_startup_verification_runs_before_the_caller_gets_the_client() -> None:
-    """Reads are refused until the projection and readiness have been proven."""
-    surface = FakeSurface()
-    composed, _ = run(_open(surface=surface))
+    """Reads are refused until the projection and readiness have been proven.
 
-    assert surface.gateway.readiness_calls == 1
-    assert composed.client.startup is not None
-    assert composed.artifact.verified is True
+    Asserted **inside** the ``async with`` body. Checking after the block does
+    not test this name: ``asynccontextmanager.__aexit__`` resumes the generator
+    on normal exit, so moving ``verify_startup()`` below the ``yield`` still
+    runs it — during teardown — and assertions evaluated afterwards see the
+    verified state either way. That mutation survived until this was moved.
+    """
+    surface = FakeSurface()
+
+    async def _observe_inside_the_block() -> None:
+        async with open_read_gateway(surface=surface, probe=installed_probe) as composed:
+            # The caller holds the client here; the guarantee is that startup
+            # has already happened at this instant, not by the time we return.
+            assert surface.gateway.readiness_calls == 1
+            assert composed.client.startup is not None
+            assert composed.artifact.verified is True
+
+    run(_observe_inside_the_block())
 
 
 def test_a_failed_readiness_check_propagates_and_yields_nothing() -> None:
@@ -268,13 +280,32 @@ def test_no_surface_and_no_dependency_refuses_rather_than_defaulting() -> None:
 
 
 def test_composition_logs_disclose_no_configuration_values() -> None:
-    """Config carries deployment settings; logs must not echo them back."""
-    sink = RecordingSink()
-    run(_open(config_options={"namespace": "ainvest-read-broker"}, log_sink=sink))
+    """Config carries deployment settings; logs must not echo them back.
 
+    A read is performed inside the block so the sink actually receives
+    something. Without it this test asserted a string was absent from
+    ``repr([])`` — true of every string, and true no matter what the adapter
+    logs. The emptiness guard below is what keeps it honest.
+    """
+    sink = RecordingSink()
+    surface = FakeSurface()
+
+    async def _read_under_composition() -> None:
+        async with open_read_gateway(
+            surface=surface,
+            probe=installed_probe,
+            config_options={"namespace": "ainvest-read-broker"},
+            log_sink=sink,
+        ) as composed:
+            await composed.client.read_accounts()
+
+    run(_read_under_composition())
+
+    assert sink.records, "nothing was logged, so this test would pass vacuously"
     emitted = repr(sink.records)
     assert "ainvest-read-broker" not in emitted
     assert PINNED_WHEEL_SHA256 not in emitted
+    assert EXPECTED_MANIFEST_DIGEST not in emitted or "manifest_digest" in emitted
 
 
 def test_the_composed_result_exposes_no_gateway_internals() -> None:
