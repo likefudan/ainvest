@@ -13,7 +13,16 @@ surface actually received rather than on the constant it was supposed to come
 from.
 
 No credential, token, account value, or network is involved: the artifact
-probe and the published surface are both injected.
+probe and the published surface are both injected for those tests.
+
+The last group of tests uses the **installed** `rh-mcp` wheel instead, to
+check that the two published callables really take the arguments this adapter
+passes them. That makes this file require the ``broker`` profile —
+``./scripts/dev setup``, ``./scripts/dev broker-install``, or
+``./scripts/dev verify``, which installs it — and without it the module fails
+to import rather than quietly skipping. Those tests still open nothing: they
+stop at ``GatewayConfig`` construction and at ``inspect.signature``, so no
+authorization, credential or socket is involved here either.
 """
 
 from __future__ import annotations
