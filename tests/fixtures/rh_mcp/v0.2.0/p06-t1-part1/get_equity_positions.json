@@ -1,0 +1,21 @@
+{
+  "data": {
+    "positions": [
+      {
+        "symbol": "AAPL",
+        "quantity": "4",
+        "intraday_quantity": "1",
+        "average_buy_price": "190.25",
+        "shares_available_for_sells": "3",
+        "shares_held_for_sells": "1",
+        "shares_held_for_stock_grants": "0",
+        "shares_held_for_options_events": "0",
+        "shares_held_for_asset_transfer": "0",
+        "shares_pending_from_options_events": "0",
+        "type": "long"
+      }
+    ],
+    "next": ""
+  },
+  "guide": "Provider-authored presentation instructions are discarded."
+}

@@ -1,0 +1,32 @@
+{
+  "data": {
+    "results": [
+      {
+        "quote": {
+          "symbol": "AAPL",
+          "last_trade_price": "210.10",
+          "venue_last_trade_time": "2026-08-08T15:00:00Z",
+          "last_non_reg_trade_price": null,
+          "venue_last_non_reg_trade_time": null,
+          "adjusted_previous_close": "208.50",
+          "previous_close": "208.50",
+          "previous_close_date": "2026-08-07",
+          "bid_price": "210.05",
+          "venue_bid_time": "2026-08-08T15:00:01Z",
+          "ask_price": "210.15",
+          "venue_ask_time": "2026-08-08T15:00:01Z",
+          "has_traded": true,
+          "state": "active"
+        },
+        "close": {
+          "symbol": "AAPL",
+          "date": "2026-08-07",
+          "price": "208.50",
+          "interpolated": false,
+          "source": "sip-close"
+        }
+      }
+    ]
+  },
+  "guide": "Provider-authored presentation instructions are discarded."
+}

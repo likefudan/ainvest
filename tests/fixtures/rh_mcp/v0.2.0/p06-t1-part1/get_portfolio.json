@@ -1,0 +1,23 @@
+{
+  "data": {
+    "total_value": "2000.00",
+    "equity_value": "1000.00",
+    "options_value": "200.00",
+    "futures_value": "0",
+    "event_contracts_value": "0",
+    "crypto_value": "100.00",
+    "cash": "700.00",
+    "pending_deposits": "50.00",
+    "mutual_funds_value": "0",
+    "fixed_income_value": "0",
+    "currency": "USD",
+    "buying_power": {
+      "buying_power": "500.00",
+      "unleveraged_buying_power": "450.00",
+      "intraday_buying_power": null,
+      "off_intraday_buying_power": "500.00",
+      "display_currency": "USD"
+    }
+  },
+  "guide": "Provider-authored presentation instructions are discarded."
+}
