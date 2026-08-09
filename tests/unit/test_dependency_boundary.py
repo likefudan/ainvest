@@ -218,6 +218,18 @@ def test_the_broker_extra_declares_exactly_the_pinned_wheel(
 
 
 @pytest.mark.unit
+def test_robinhood_display_console_script_is_narrow_and_additive(
+    pyproject: dict[str, Any],
+) -> None:
+    """The read CLI gets one entry point and does not replace existing tools."""
+    assert pyproject["project"]["scripts"] == {
+        "ainvest-strategy-conformance": "ainvest.strategy_conformance.cli:main",
+        "ainvest-paper-flow": "ainvest.orchestrator.cli:main",
+        "ainvest-robinhood-read": "ainvest.execution.robinhood.cli:main",
+    }
+
+
+@pytest.mark.unit
 def test_the_declared_url_carries_the_pinned_tag_and_wheel_filename(
     pyproject: dict[str, Any],
 ) -> None:
