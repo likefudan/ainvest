@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, and both `P06-T1` integration parts merged; `P06-T2` Part 1 is next, queued and unclaimed); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, and both `P06-T1` integration parts merged; `P06-T2` Part 1 display-only CLI is claimed on `agent/p06-t2-cli-part1`); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -163,8 +163,8 @@ merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 `P06-T0`; `P06-T1` integration Part 1 merged in
 [#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 merged in
 [#114](https://github.com/likefudan/ainvest/pull/114), completing the honest
-pinned-surface display normalization. `P06-T2` Part 1 display-only CLI is the
-next queued slice and remains unclaimed. Later candidates
+pinned-surface display normalization. `P06-T2` Part 1 display-only CLI is now
+claimed under the execution envelope below. Later candidates
 enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
@@ -540,8 +540,8 @@ Shared-surface ownership for this claim is exclusive:
 The owner pause on `P04-T2` and `P05-T4` remains in force. The complete
 `P06-T0` adapter, runtime-dependency, and hardening delivery is merged, and
 both integration parts of `P06-T1` are merged. `P06-T2` Part 1 display-only
-CLI is next, queued and unclaimed; the paused tasks and unrelated task chains
-are not part of that queue position.
+CLI is now claimed; the paused tasks and unrelated task chains are not part of
+that queue position.
 
 ##### Execution envelope: P08-T4
 
@@ -749,7 +749,7 @@ capabilities only. Its serial merge order is:
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
 | `P06-T1` | `merged` — complete for honest pinned-surface display normalization | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 merged via [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284` |
-| `P06-T2` | `not_started` (Part 1 queued and unclaimed; Part 2 blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` (satisfied); Part 2: plus canonical identity, verified Agentic-account binding, regular-session evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus the deliberate ainvest pin update | Claim only display-only CLI Part 1 from latest `main`; real provider readiness drift blocks real calls, not offline CLI implementation. Do not claim real-portfolio Paper Part 2 until all four named prerequisites are contract-tested |
+| `P06-T2` | `in_progress` — Part 1 display-only CLI claimed by `p06_t2_cli_part1`; Part 2 blocked on promotion evidence | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` (satisfied); Part 2: plus canonical identity, verified Agentic-account binding, regular-session evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus the deliberate ainvest pin update | Implement only the display-only CLI Part 1 from `main` `76e0240`; real provider readiness drift blocks real calls, not offline CLI implementation. Do not claim real-portfolio Paper Part 2 until all four named prerequisites are contract-tested |
 
 ##### Execution envelope: P06-T1 integration Part 1
 
@@ -817,9 +817,9 @@ capabilities only. Its serial merge order is:
   beyond the generic read model, historical OHLCV, and fundamental/financial
   mappings as integration Part 2 of `P06-T1`;
   Both normalization parts are now merged; `P06-T2` Part 1 display-only CLI
-  is next, queued and unclaimed. Canonical identity resolution
-  remains a later promotion prerequisite when the pinned contract cannot prove
-  it; it is not fabricated to close normalization.
+  is now claimed under its execution envelope below. Canonical identity
+  resolution remains a later promotion prerequisite when the pinned contract
+  cannot prove it; it is not fabricated to close normalization.
 - **Verification:** use only deterministic synthetic or sanitized recorded
   fixtures; no public network or user credential is a test prerequisite.
   Cover valid mappings plus Decimal/timezone/enum/account/symbol/order
@@ -1031,7 +1031,8 @@ capabilities only. Its serial merge order is:
   not part of this implementation.
 - **Completion/handoff:** this merge completes honest pinned-surface display
   normalization in `P06-T1` and unblocks only a separately claimable `P06-T2`
-  Part 1 display-only CLI, which is queued and unclaimed. The normalized
+  Part 1 display-only CLI, which is claimed in the execution envelope below.
+  The normalized
   surface deliberately retains partial
   identity references, account-unbound results, session-unverified market
   facts, non-comparable unspecified financial amounts, and bounded untrusted
@@ -1040,6 +1041,138 @@ capabilities only. Its serial merge order is:
   canonical identity, verified Agentic-account binding, regular-session
   evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
   the deliberate ainvest pin update.
+
+##### Execution envelope: P06-T2 Part 1 display-only CLI
+
+- **Title and task identity:** Expose the normalized Robinhood reads through a
+  display-only CLI. This is Part 1 of `P06-T2`, not a new task ID, and it does
+  not claim or complete Part 2 real-portfolio Paper promotion.
+- **Status/owner:** `in_progress` — `p06_t2_cli_part1`.
+- **Claim branch/worktree/base:** `agent/p06-t2-cli-part1-claim` /
+  `.worktrees/p06-t2-cli-part1-claim`, based on immutable `main`
+  `76e0240d2c5e1d5eac401338168abf88660c8b5d`. After this tracker claim is
+  reviewed and squash-merged, implementation uses
+  `agent/p06-t2-cli-part1` / `.worktrees/p06-t2-cli-part1` from that latest
+  `main`; the implementation envelope records the resulting base before code
+  changes begin.
+- **Dependencies:** `P06-T0`, `P06-T1`, `P03-T16`, and `P08-T0` are merged and
+  satisfied. The current real-provider readiness failure is not an
+  implementation dependency: deterministic fixture/fake service, mapper, and
+  CLI tests can finish without network access or Robinhood credentials.
+- **Design and task authority:** `design.md` sections 3.5, 5.1, 5.6, 10.1,
+  11, and 15 Phase 4; `IMPLEMENTATION_TODO.md` sections 1, 2, 9 (`P06-T2`),
+  12 (Robinhood Non-Trading Preview priority lane), and 16; `DEC-003`,
+  `DEC-009`, `DEC-015`, and `DEC-018`; the P06-T0 adapter/composition and
+  sanitized error contracts; and the P06-T1 normalized read models/mappers.
+- **Production entry point and commands:** add the console script
+  `ainvest-robinhood-read` with only these subcommands: `status`, `accounts`,
+  `portfolio`, `positions`, `orders`, `quotes`, `price-book`, `tradability`,
+  `historicals`, `fundamentals`, and `financials`. The data commands call only
+  the existing named `RobinhoodReadClient.read_*` methods and their matching
+  P06-T1 mapper. There is no generic capability argument, raw envelope output,
+  MCP/provider object, mutation command, order-submit command, or fallback
+  provider.
+- **Narrow argument contract:** `quotes`, `price-book`, `tradability`,
+  `historicals`, `fundamentals`, and `financials` accept exact ticker symbols
+  and enforce the pinned per-call limits (20, 4, 10, 10, 10, and 20
+  respectively). `historicals` requires RFC 3339 `--start-time` and may accept
+  `--end-time`, `--interval`, `--bounds`, and `--adjustment-type` only from the
+  pinned enums. `fundamentals` may accept pinned `--bounds`; `financials` may
+  accept `--period` and bounded `--limit`; `orders` requires
+  `--view open|closed` and may accept exact `--symbol`, `--order-id`,
+  `--state`, `--created-at-gte`, and `--placed-agent` filters. Keep the first
+  delivery to one bounded provider page and preserve normalized `has_more`
+  rather than parsing a provider `next` URL or inventing a pagination
+  protocol.
+- **Account-number input and redaction:** `portfolio`, `positions`, `orders`,
+  and `tradability` require an explicitly user-supplied account number because
+  the provider does not echo a trustworthy account binding and its reviewed
+  contract forbids silently selecting one from `get_accounts`. Obtain it by a
+  no-echo TTY prompt, or by an explicit `--account-number-stdin` mode for a
+  non-interactive caller. Do not add `--account-number VALUE`, infer a default,
+  persist it, include it in process arguments, or copy it into normalized
+  models, stdout, stderr, exceptions, logs, snapshots, or tests. `accounts`
+  continues to display only the non-identifying P06-T1 eligibility summary;
+  no command displays a raw or hashed account identifier by default.
+- **Service and output contract:** implement a narrow display service between
+  the CLI and the existing named read client so later Telegram read queries
+  can reuse normalized values without parsing CLI text. On success, stdout is
+  exactly one UTF-8 JSON document with `schema_version`, `command`,
+  `posture`, `limitations`, and `data`. `posture` is always
+  `{"read_only": true, "mode": "display_only", "execution": "disabled"}`;
+  every result states `usable_for_trading=false`. Applicable limitations also
+  state `identity=partial_or_unverified`, `account_binding=unverified`, and/or
+  `session_evidence=unverified`. The nested `data` is the matching P06-T1
+  provider-independent normalized model serialized in JSON mode, retaining
+  evidence digests, `identity_verified=false`, quote
+  `live_eligible=false`/`session_unverified`, `has_more`, unavailable symbols,
+  exact units/comparability, and `omitted_untrusted_fields`.
+- **Display-safety contract:** JSON rendering is the single escaping boundary;
+  do not use terminal markup, interpolation, or a second free-text template for
+  provider values. A bounded `UntrustedDisplayText` value may appear only as
+  JSON-escaped display data. Oversized/control-bearing/excluded values retain
+  the stable `[unavailable: untrusted text omitted]` marker and their exact
+  omission paths. Provider `guide`, tool/schema descriptions, manifest
+  rationale, and other instructional prose never appear in stdout, stderr,
+  prompts, logs, or exceptions. Financial/fundamental values whose unit is
+  `UNSPECIFIED` retain `comparable=false`; the service must not compare,
+  convert, total, rank, or label them as USD.
+- **Failure behavior:** exit `0` only after startup verification, the named
+  read, normalization, and rendering all succeed. CLI usage/input errors exit
+  `2`. A sanitized `GatewayReadError`, `RobinhoodMappingError`, or unexpected
+  internal failure exits `1`, writes no success payload to stdout, and writes
+  one bounded JSON error document to stderr containing the same fixed posture
+  plus only an ainvest-owned stable error code and retryability flag. Do not
+  include the account number, arguments, symbol-derived free text, provider
+  message, payload, traceback, chained exception, or untrusted display text.
+  Do not retry automatically and never call Alpaca, yfinance, or another
+  provider. The `status` command reports readiness plus the fixed display-only
+  posture and grants no authority.
+- **Allowed implementation paths:**
+  `src/ainvest/execution/robinhood/display.py`;
+  `src/ainvest/execution/robinhood/cli.py`; the one
+  `ainvest-robinhood-read` script entry in `pyproject.toml`;
+  `tests/unit/execution/robinhood/test_display.py`;
+  `tests/unit/execution/robinhood/test_cli.py`;
+  `tests/contract/execution/test_robinhood_display_contract.py`;
+  `tests/integration/execution/robinhood/test_display_cli.py`;
+  a narrowly scoped addition to `tests/unit/test_dependency_boundary.py`;
+  `docs/robinhood-read-cli.md`; and the matching P06-T2 Part 1 row in
+  `docs/testing.md`. No dependency or lock-file change is expected. Existing
+  P06-T0/P06-T1 code is read-only; if a real defect there prevents the CLI,
+  stop and request a separately reviewed scope expansion instead of silently
+  widening this PR.
+- **Required tests and evidence:** use only existing sanitized P06-T1 fixtures
+  and deterministic fake gateway/composition seams. Cover every command and
+  argument bound; success JSON; stable exit codes; no account identifier in
+  any output/log/error; quote `session_unverified` and
+  `live_eligible=false`; partial identity; account-unbound output;
+  `UNSPECIFIED` non-comparability; escaped bounded untrusted text and retained
+  omission markers; provider-instructional-prose exclusion; startup/auth/
+  timeout/contract/mapping/render failures; empty/unavailable results;
+  `has_more`; and proof that CLI/service modules cannot reach generic
+  `invoke`, any of the 11 non-trading mutations, any of the 8 denied trading
+  capabilities, PaperBroker, Strategy, Sizer, Risk, Telegram, or a fallback
+  provider. Run focused unit/contract/integration tests, `./scripts/dev unit`,
+  `./scripts/dev contract`, `./scripts/dev integration`, `git diff --check`,
+  and `./scripts/dev verify`.
+- **Real-provider state:** owner validation proves authentication is healthy,
+  but Robinhood's current surface has drifted from the pinned `rh-mcp`
+  `v0.2.0` manifest (unknown tool and changed account/order/option schema or
+  metadata). The gateway correctly fails readiness. Until `rh-mcp` publishes
+  a separately reviewed patch and ainvest deliberately updates its release,
+  artifact, manifest, and surface pins, real `status`/read commands must remain
+  not-ready. Do not weaken, bypass, or special-case that result in this task.
+- **Forbidden scope and Part 2 blockers:** do not implement Telegram, Paper
+  proposal generation, Strategy/Sizer/Risk inputs, live execution, a trading
+  capability, any approved non-trading mutation, OAuth/credential lifecycle,
+  provider-surface acceptance, release/dependency updates, broad runtime or
+  health redesign, or unrelated hardening. Part 2 remains blocked on all four
+  separately contract-tested prerequisites: (1) trustworthy canonical
+  instrument identity, (2) verified Agentic-account binding, (3) verified US
+  regular-session evidence, and (4) a newly independently reviewed `rh-mcp`
+  release/provider-surface update plus the deliberate ainvest pin update. No
+  Part 1 value may be promoted into Paper, Strategy, Sizer, or Risk.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1464,7 +1597,7 @@ excludes the contents of a result envelope's `data`. It also records that
   `b8ba082563928702dbd918ea8d478880a8a236cf`. `P06-T0` is complete;
   `P06-T1` integration Part 1 merged in #111, squash `65aa82a`, and Part 2
   merged in #114, squash `c6fb284`, completing `P06-T1`. `P06-T2` Part 1
-  display-only CLI is next, queued and unclaimed. Part 2 remains blocked on
+  display-only CLI is now claimed. Part 2 remains blocked on
   canonical identity, verified Agentic-account binding, regular-session
   evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
   the deliberate ainvest pin update.
@@ -1606,7 +1739,7 @@ task row is in the cross-cutting table below.
 runtime dependency, and hardening delivery is merged in #104/#105/#107;
 both `P06-T1` integration parts are merged in #111/#114, completing honest
 pinned-surface display normalization. `P06-T2` Part 1 display-only CLI is
-next, queued and unclaimed.
+claimed under the execution envelope above.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
 closed. `P08-T8` and `P08-T9` are dependency-ready but
