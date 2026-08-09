@@ -1061,9 +1061,11 @@ capabilities only. Its serial merge order is:
   CLI tests can finish without network access or Robinhood credentials.
 - **Design and task authority:** `design.md` sections 3.5, 5.1, 5.6, 10.1,
   11, and 15 Phase 4; `IMPLEMENTATION_TODO.md` sections 1, 2, 9 (`P06-T2`),
-  12 (Robinhood Non-Trading Preview priority lane), and 16; `DEC-003`,
-  `DEC-009`, `DEC-015`, and `DEC-018`; the P06-T0 adapter/composition and
-  sanitized error contracts; and the P06-T1 normalized read models/mappers.
+  12 (Robinhood Non-Trading Preview priority lane), and 16; `DEC-003`; the
+  P06-T0 adapter/composition and sanitized error contracts; and the P06-T1
+  normalized read models/mappers. No OpenAI, deployment-domain, Passkey, or
+  production Operator Control Plane decision is a dependency of this local,
+  no-model display CLI.
 - **Production entry point and commands:** add the console script
   `ainvest-robinhood-read` with only these subcommands: `status`, `accounts`,
   `portfolio`, `positions`, `orders`, `quotes`, `price-book`, `tradability`,
@@ -1077,36 +1079,79 @@ capabilities only. Its serial merge order is:
   and enforce the pinned per-call limits (20, 4, 10, 10, 10, and 20
   respectively). `historicals` requires RFC 3339 `--start-time` and may accept
   `--end-time`, `--interval`, `--bounds`, and `--adjustment-type` only from the
-  pinned enums. `fundamentals` may accept pinned `--bounds`; `financials` may
-  accept `--period` and bounded `--limit`; `orders` requires
-  `--view open|closed` and may accept exact `--symbol`, `--order-id`,
-  `--state`, `--created-at-gte`, and `--placed-agent` filters. Keep the first
-  delivery to one bounded provider page and preserve normalized `has_more`
-  rather than parsing a provider `next` URL or inventing a pagination
-  protocol.
+  pinned enums. `fundamentals` may accept pinned `--bounds`; `financials`
+  accepts `--period quarterly|annual` and an integer `--limit` in the closed
+  range 1 through 40 (default 4). `orders` requires `--view open|closed` and
+  may accept exact `--symbol`, `--order-id`, `--state`, `--created-at-gte`, and
+  `--placed-agent` filters. The only accepted state filters are `new`,
+  `queued`, `confirmed`, `unconfirmed`, `partially_filled`, `filled`,
+  `cancelled`, `rejected`, `failed`, and `voided`, matching the pinned input
+  schema. The first five belong to the `open` view and the final five to the
+  `closed` view; reject a contradictory view/state pair as
+  `invalid_cli_input` before opening the gateway. Keep the first delivery to
+  one bounded provider page and preserve normalized `has_more` rather than
+  parsing a provider `next` URL or inventing a pagination protocol.
+- **Display quote-age input:** no existing Settings field owns the required
+  P06-T1 mapper argument. Define the narrow constant
+  `DISPLAY_QUOTE_MAX_AGE_SECONDS = 15` in
+  `src/ainvest/execution/robinhood/display.py`, and always pass that exact value
+  to `map_equity_quotes`. It is not configurable in Part 1. Tests assert the
+  constant, the mapper call, the mapper's existing 1-through-86,400 bound, and
+  fresh-versus-stale display classification. This is a display-quality label
+  only: it is neither regular-session proof nor a trading risk limit, and even
+  a quote younger than 15 seconds remains `session_unverified`,
+  `live_eligible=false`, and unusable for Paper/Strategy/Sizer/Risk.
 - **Account-number input and redaction:** `portfolio`, `positions`, `orders`,
   and `tradability` require an explicitly user-supplied account number because
   the provider does not echo a trustworthy account binding and its reviewed
-  contract forbids silently selecting one from `get_accounts`. Obtain it by a
-  no-echo TTY prompt, or by an explicit `--account-number-stdin` mode for a
-  non-interactive caller. Do not add `--account-number VALUE`, infer a default,
-  persist it, include it in process arguments, or copy it into normalized
-  models, stdout, stderr, exceptions, logs, snapshots, or tests. `accounts`
-  continues to display only the non-identifying P06-T1 eligibility summary;
-  no command displays a raw or hashed account identifier by default.
+  contract forbids silently selecting one from `get_accounts`. With an
+  interactive controlling TTY and without `--account-number-stdin`, obtain one
+  value through `getpass.getpass()` so input is not echoed. With
+  `--account-number-stdin`, require non-TTY stdin and read exactly one opaque
+  value of 1 through 128 visible ASCII characters, excluding whitespace and
+  controls, terminated by LF or EOF; reject empty, oversized, CR-bearing,
+  whitespace-bearing, multi-line, or any additional input as
+  `invalid_cli_input`. Apply the same 1-through-128 visible-ASCII validation to
+  the no-echo TTY value. If stdin is not a TTY and the flag is absent, or stdin
+  is a TTY and the flag is present, fail immediately with exit 2 and do not
+  prompt, read stdin, or open the gateway. Thus neither supported path echoes
+  the value. Do not add `--account-number VALUE`, infer a default, persist it,
+  include it in process arguments, or copy it into normalized models, stdout,
+  stderr, exceptions, logs, snapshots, or tests.
+  Account-input failures never echo the value or report which character was
+  invalid. `accounts` continues to display only the non-identifying P06-T1
+  eligibility summary; no command displays a raw or hashed account identifier.
 - **Service and output contract:** implement a narrow display service between
   the CLI and the existing named read client so later Telegram read queries
-  can reuse normalized values without parsing CLI text. On success, stdout is
-  exactly one UTF-8 JSON document with `schema_version`, `command`,
-  `posture`, `limitations`, and `data`. `posture` is always
-  `{"read_only": true, "mode": "display_only", "execution": "disabled"}`;
-  every result states `usable_for_trading=false`. Applicable limitations also
-  state `identity=partial_or_unverified`, `account_binding=unverified`, and/or
-  `session_evidence=unverified`. The nested `data` is the matching P06-T1
-  provider-independent normalized model serialized in JSON mode, retaining
-  evidence digests, `identity_verified=false`, quote
-  `live_eligible=false`/`session_unverified`, `has_more`, unavailable symbols,
-  exact units/comparability, and `omitted_untrusted_fields`.
+  can reuse normalized values without parsing CLI text. Apart from conventional
+  `--help` text, a successful command writes exactly one UTF-8 JSON document
+  plus LF to stdout and no CLI-owned stderr. Its exact top-level keys are
+  `schema_version`, `command`, `ready`, `posture`, `limitations`, and `data`:
+  `schema_version` is `"1.0"`; `command` is the selected subcommand; `ready` is
+  `true`; and `posture` is exactly
+  `{"read_only": true, "mode": "display_only", "execution": "disabled"}`.
+  `limitations` has exactly four keys:
+  `{"usable_for_trading": false, "identity": <value>,
+  "account_binding": <value>, "session_evidence": <value>}`. The three
+  variable values are fixed by the matrix below, never inferred from provider
+  prose or user input.
+
+  | Commands | `identity` | `account_binding` | `session_evidence` |
+  |---|---|---|---|
+  | `status` | `not_applicable` | `not_applicable` | `not_applicable` |
+  | `accounts` | `not_applicable` | `unverified` | `not_applicable` |
+  | `portfolio` | `not_applicable` | `unverified` | `not_applicable` |
+  | `positions`, `orders` | `partial_or_unverified` | `unverified` | `not_applicable` |
+  | `quotes`, `price-book`, `historicals` | `partial_or_unverified` | `not_applicable` | `unverified` |
+  | `tradability` | `partial_or_unverified` | `unverified` | `unverified` |
+  | `fundamentals`, `financials` | `partial_or_unverified` | `not_applicable` | `not_applicable` |
+
+  For `status`, `data` is exactly `{"ready": true}`. For every data command,
+  `data` is the matching P06-T1 provider-independent normalized model
+  serialized in JSON mode, retaining evidence digests,
+  `identity_verified=false`, quote `live_eligible=false` and
+  `session_unverified`, `has_more`, unavailable symbols, exact
+  units/comparability, and `omitted_untrusted_fields`.
 - **Display-safety contract:** JSON rendering is the single escaping boundary;
   do not use terminal markup, interpolation, or a second free-text template for
   provider values. A bounded `UntrustedDisplayText` value may appear only as
@@ -1117,17 +1162,28 @@ capabilities only. Its serial merge order is:
   prompts, logs, or exceptions. Financial/fundamental values whose unit is
   `UNSPECIFIED` retain `comparable=false`; the service must not compare,
   convert, total, rank, or label them as USD.
-- **Failure behavior:** exit `0` only after startup verification, the named
-  read, normalization, and rendering all succeed. CLI usage/input errors exit
-  `2`. A sanitized `GatewayReadError`, `RobinhoodMappingError`, or unexpected
-  internal failure exits `1`, writes no success payload to stdout, and writes
-  one bounded JSON error document to stderr containing the same fixed posture
-  plus only an ainvest-owned stable error code and retryability flag. Do not
-  include the account number, arguments, symbol-derived free text, provider
-  message, payload, traceback, chained exception, or untrusted display text.
-  Do not retry automatically and never call Alpaca, yfinance, or another
-  provider. The `status` command reports readiness plus the fixed display-only
-  posture and grants no authority.
+- **Failure and readiness wire contract:** exit `0` only after startup
+  verification and, for a data command, the named read, normalization, and
+  rendering all succeed. Every failure writes nothing to stdout and writes
+  exactly one UTF-8 JSON document plus LF to stderr. Its exact top-level keys
+  are `schema_version`, `command`, `ready`, `posture`, `limitations`, and
+  `error`: `schema_version`, `command`, and `posture` have the success meanings;
+  `command` is `null` only when no valid subcommand was parsed; `ready` is
+  `false`, meaning the requested display operation did not complete;
+  `limitations` is exactly `{"usable_for_trading": false}`; and `error` is
+  exactly `{"code": <stable-code>, "retryable": <bool>}`. CLI usage/account/
+  filter errors use `invalid_cli_input`, `retryable=false`, and exit 2.
+  `GatewayReadError` uses its existing `code.value` and `retryable`; a
+  `RobinhoodMappingError` uses its existing `code.value` and
+  `retryable=false`; a sanitized unexpected failure uses `internal_error`,
+  `retryable=false`; all three exit 1. The CLI never retries automatically.
+  A ready `status` exits 0 with the exact success envelope and
+  `data.ready=true`. A gateway-not-ready `status` exits 1, has empty stdout,
+  and emits the exact failure envelope with `ready=false`,
+  `error.code="not_ready"`, and `error.retryable=false`. Do not include the
+  account number, arguments, symbol-derived free text, provider message,
+  payload, traceback, chained exception, or untrusted display text, and never
+  call Alpaca, yfinance, or another provider.
 - **Allowed implementation paths:**
   `src/ainvest/execution/robinhood/display.py`;
   `src/ainvest/execution/robinhood/cli.py`; the one
@@ -1137,15 +1193,19 @@ capabilities only. Its serial merge order is:
   `tests/contract/execution/test_robinhood_display_contract.py`;
   `tests/integration/execution/robinhood/test_display_cli.py`;
   a narrowly scoped addition to `tests/unit/test_dependency_boundary.py`;
-  `docs/robinhood-read-cli.md`; and the matching P06-T2 Part 1 row in
-  `docs/testing.md`. No dependency or lock-file change is expected. Existing
+  and `docs/robinhood-read-cli.md` as the sole task documentation. No
+  repository-wide testing document, dependency, or lock-file change is
+  expected. Existing
   P06-T0/P06-T1 code is read-only; if a real defect there prevents the CLI,
   stop and request a separately reviewed scope expansion instead of silently
   widening this PR.
 - **Required tests and evidence:** use only existing sanitized P06-T1 fixtures
   and deterministic fake gateway/composition seams. Cover every command and
-  argument bound; success JSON; stable exit codes; no account identifier in
-  any output/log/error; quote `session_unverified` and
+  argument bound; the exact success/error JSON envelopes and status readiness
+  behavior; noninteractive and adversarial account input; all orders
+  view/state combinations; financial limit 0/1/40/41; no account identifier in
+  any output/log/error; the fixed 15-second quote display-age input; quote
+  `session_unverified` and
   `live_eligible=false`; partial identity; account-unbound output;
   `UNSPECIFIED` non-comparability; escaped bounded untrusted text and retained
   omission markers; provider-instructional-prose exclusion; startup/auth/
