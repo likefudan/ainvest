@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, all `P06-T0` work, and `P06-T1` integration Part 1 merged; Part 2 is queued/unclaimed); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, all `P06-T0` work, and `P06-T1` integration Part 1 merged; Part 2 is claimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -161,8 +161,8 @@ expected full-manifest digest in the priority lane's **Recorded external
 dependency pin** subsection. The narrow `P06-T0` hardening follow-up also
 merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 `P06-T0`; `P06-T1` integration Part 1 merged in
-[#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 is the next
-queued, unclaimed slice before `P06-T2`. Later candidates enter the merge queue
+[#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 is now claimed
+as the next slice before `P06-T2`. Later candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -536,7 +536,7 @@ Shared-surface ownership for this claim is exclusive:
 
 The owner pause on `P04-T2` and `P05-T4` remains in force. The complete
 `P06-T0` adapter, runtime-dependency, and hardening delivery is merged, as is
-`P06-T1` integration Part 1. `P06-T1` integration Part 2 is queued/unclaimed;
+`P06-T1` integration Part 1. `P06-T1` integration Part 2 is claimed;
 the paused tasks and unrelated task chains are not part of that queue position.
 
 ##### Execution envelope: P08-T4
@@ -737,7 +737,7 @@ capabilities only. Its serial merge order is:
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
-| `P06-T1` | `in_progress` (integration Part 1 merged; Part 2 queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; claim Part 2 from latest `main` before `P06-T2` |
+| `P06-T1` | `in_progress` (integration Part 1 merged; Part 2 claimed by `p06_t1_part2`) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 starts from immutable base `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d` before `P06-T2` |
 | `P06-T2` | `not_started` (blocked on P06-T1 Part 2) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Do not claim until Part 2 merges; create from/rebase onto that latest `main`; Paper execution only |
 
 ##### Execution envelope: P06-T1 integration Part 1
@@ -799,8 +799,8 @@ capabilities only. Its serial merge order is:
   workflow, Telegram/model sink, OAuth/authentication, credential handling,
   real account call, or live behavior. Do not modify dependencies or pursue
   unrelated third-party version or speculative corner-case hardening.
-- **Part 2 / next:** Part 2 is queued/unclaimed. Its eventual owner must claim
-  it from the then-latest `main` and implement price books, tradability and
+- **Part 2 / next:** Part 2 is claimed by `p06_t1_part2` from base `f09321e`.
+  Its owner implements price books, tradability and
   canonical `InstrumentIdentity` resolution, closed-order history semantics
   beyond the generic read model, historical OHLCV, and fundamental/financial
   mappings as integration Part 2 of `P06-T1`;
@@ -845,6 +845,130 @@ capabilities only. Its serial merge order is:
   or live validation therefore requires a newly reviewed `rh-mcp` patch
   release that deliberately accepts the observed provider surface; no pin is
   changed by this record.
+
+##### Execution envelope: P06-T1 integration Part 2
+
+- **Title:** Normalize Robinhood Price Books, Tradability, Historicals,
+  Fundamentals, Financials, and Closed Orders
+- **Task identity:** this is integration Part 2 of `P06-T1`, not a new task ID.
+- **Status/owner:** `claimed` — `p06_t1_part2`.
+- **Implementation branch/worktree/base:** `agent/p06-t1-part2` /
+  `.worktrees/p06-t1-part2`; immutable starting base
+  `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d`. The implementation branch must
+  incorporate this tracker claim before review and rebase onto the latest
+  `main` immediately before independent review.
+- **Dependencies:** `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6`, and P06-T1
+  integration Part 1 are merged and satisfied.
+- **Pinned input contract:** normalize only validated `GatewayReadResult`
+  payloads from `get_equity_price_book`, `get_equity_tradability`,
+  `get_equity_historicals`, `get_equity_fundamentals`, `get_financials`, and
+  the closed rows plus execution details from `get_equity_orders`, using the
+  committed `rh-mcp` `v0.2.0` manifest schemas. `get_financials` is one of the
+  reviewed 34 `mutates=false` capabilities but is missing from ainvest's
+  narrower `ReadCapability` projection; adding exactly that enum member,
+  literal wire-name entry, and named `read_financials` method is required.
+  Do not add `search`: it is a natural-language lookup that returns only
+  instrument ID, symbol, and names, so it cannot prove the canonical identity
+  fields this task requires.
+- **Normalization scope:** add the smallest provider-independent, versioned
+  read models needed to preserve the pinned facts without reproducing an
+  `rh-mcp` envelope. Map price-book snapshot time and ordered levels;
+  symbol/account-unbound tradability and session/halt flags; symbol-keyed
+  historical series with provider interval, bounds, bar time, OHLCV, session,
+  and interpolation status; symbol fundamentals; dated quarterly/annual
+  financial periods; and complete external closed-order lifecycle/execution
+  records. Closed orders retain the provider order and execution IDs and may
+  reuse the Part 1 order enums/primitives, but must never fabricate an ainvest
+  proposal ID, client-order ID, or order hash merely to construct
+  `BrokerOrder`.
+- **Existing-schema honesty:** `FundamentalFact` and `FundamentalSnapshot` can
+  honestly represent symbol-keyed non-null fundamental facts when the mapper
+  assigns explicit units, a real knowledge cutoff no earlier than receipt,
+  and gateway provenance. The standalone `PriceLevel` value model can be
+  reused if its positive-quantity invariant holds. Do **not** construct
+  `InstrumentIdentity`, `PriceBook`, `OhlcvBar`, `OhlcvPage`,
+  `InstrumentMetadataObservation`, `FundamentalObservation`, or
+  `PortfolioSnapshot`: the pinned payloads do not supply or verify every
+  invariant those models require. Use minimal internal read models for the
+  price-book envelope, historical series/bars, account-unbound tradability,
+  financial periods, and external closed-order history rather than filling
+  absent fields with constants.
+- **Canonical identity boundary:** the pinned surface cannot verify a complete
+  canonical `InstrumentIdentity`. Order rows bind one provider instrument ID
+  to one symbol only within that accepted order result; the other five reads
+  are symbol-keyed. Neither `get_equity_tradability` nor `search` supplies an
+  exchange MIC, currency, asset type, identity timestamp, price tick, or
+  quantity increment, and tradability does not echo a provider instrument ID.
+  Preserve an order's instrument-ID/symbol pair as an explicitly partial,
+  unverified reference, reject inconsistent pairs within a result, and do not
+  join it to symbol-only reads as though it were canonical. Canonical identity
+  resolution remains unresolved for the pinned release and blocks promotion
+  to existing identity-bearing/live-trading schemas, but does not block these
+  display/read-only normalized outputs or `P06-T2` after Part 2 merges.
+- **Account/session boundary:** `get_equity_tradability` and
+  `get_equity_orders` require an account number as input but do not echo a
+  verifiable account identifier in their results; `GatewayReadResult` also
+  retains no invocation arguments. Their normalized outputs therefore remain
+  explicitly account-unbound and non-authoritative for trading. Do not default
+  an account from `get_accounts`, recover or store a raw account number, or
+  claim an Agentic-account binding. Price-book timestamps, historical session
+  tags, and tradability session flags are data fields, not exchange-calendar
+  proof; this part must not make the Part 1 quote live-eligible or claim the
+  regular trading session is verified.
+- **Fail-closed behavior:** reject malformed/non-canonical Decimal and time
+  values, unknown interval/bounds/period/order/tradability enums, duplicate or
+  mismatched symbols and IDs, unsorted/duplicated/crossed books, zero or
+  negative book quantity, inconsistent OHLC ranges or bar ordering, response
+  values that disagree with an explicit request expectation, impossible
+  fiscal year/quarter/date combinations, duplicate periods/orders/executions,
+  fill quantities or timestamps inconsistent with their parent order, and any
+  unsupported shape instead of guessing or silently dropping it. Preserve the
+  accepted manifest/schema/result digests and source observation/receipt
+  provenance on every normalized result. Never retain provider `guide`, tool
+  descriptions, schema descriptions, raw provider objects, or unbounded
+  provider prose.
+- **Allowed paths:**
+  `src/ainvest/execution/robinhood/read_models.py`;
+  `src/ainvest/execution/robinhood/mappers.py`;
+  `src/ainvest/execution/robinhood/pins.py` only for the exact
+  `GET_FINANCIALS` projection addition;
+  `src/ainvest/execution/robinhood/read_client.py` only for the named
+  `read_financials` method;
+  `tests/unit/execution/robinhood/test_read_models.py`;
+  `tests/unit/execution/robinhood/test_mappers.py`;
+  `tests/unit/execution/robinhood/test_read_client.py`;
+  `tests/contract/execution/test_rh_mcp_manifest_contract.py`;
+  `tests/contract/execution/test_rh_mcp_part2_mapping_contract.py`; and small,
+  sanitized deterministic fixtures under
+  `tests/fixtures/rh_mcp/v0.2.0/p06-t1-part2/**`. All other paths are read-only.
+  Package exports, shared-schema changes, and dependency/lock changes are not
+  approved; stop for a coordinator-recorded scope expansion if another shared
+  surface is genuinely required.
+- **Forbidden scope:** no CLI or `P06-T2`, Paper workflow, market calendar,
+  Telegram/model/log sink, live call, OAuth/credential work, account binding,
+  fallback provider, mutation, trading capability, dependency or release-pin
+  update, real-provider drift acceptance, or speculative third-party/corner
+  hardening. Do not edit `rh-mcp` from this repository.
+- **Verification:** use only deterministic synthetic or sanitized recorded
+  fixtures. Cover every valid mapping and the fail-closed cases above,
+  evidence/digest retention, provider-prose/raw-object exclusion, closed-order
+  pagination metadata, explicit account/session/identity limitations, the
+  exact one-capability projection expansion, and proof that no mutation or
+  denied capability becomes reachable. Run focused unit/contract tests,
+  `./scripts/dev unit`, `git diff --check`, and `./scripts/dev verify`. Real
+  owner-assisted validation is not a merge prerequisite.
+- **External validation blocker:** authentication is healthy, but current
+  Robinhood provider-surface drift makes pinned `rh-mcp` `v0.2.0` readiness
+  fail closed (unknown tool plus changed account/order/option metadata or
+  schemas). This blocks real calls and live evidence only. It does not block
+  the deterministic offline implementation. A separately reviewed `rh-mcp`
+  patch release and deliberate ainvest pin update are later coordination work,
+  not part of this implementation.
+- **Completion/handoff:** after an independent functional/readability review,
+  green required checks, and squash merge, record the PR, final main commit,
+  test counts, review evidence, and residual identity/account/session boundary
+  here. That merge completes `P06-T1` and unblocks a separately claimed
+  `P06-T2`; it does not satisfy `P06-T3` / Gate 4.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1265,7 +1389,7 @@ excludes the contents of a result envelope's `data`. It also records that
   remediations above merge — **done in #107**, squash
   `b8ba082563928702dbd918ea8d478880a8a236cf`. `P06-T0` is complete;
   `P06-T1` integration Part 1 merged in #111, squash `65aa82a`; Part 2 is
-  queued/unclaimed, with `P06-T2` still blocked behind it.
+  claimed by `p06_t1_part2`, with `P06-T2` still blocked behind it.
 - **Verification evidence:** the final branch passed 108 focused
   `test_read_client.py` tests, 1,071 unit tests, 145 contract tests, 19
   integration tests, and the 1,235-test full suite with 87.14% coverage, plus
@@ -1401,7 +1525,7 @@ task row is in the cross-cutting table below.
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. The complete `P06-T0` adapter,
 runtime dependency, and hardening delivery is merged in #104/#105/#107;
-`P06-T1` integration Part 1 is merged in #111 and Part 2 is queued/unclaimed.
+`P06-T1` integration Part 1 is merged in #111 and Part 2 is claimed.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
 closed. `P08-T8` and `P08-T9` are dependency-ready but
