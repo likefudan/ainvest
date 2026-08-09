@@ -740,9 +740,14 @@ class FinancialSeriesRead(DomainModel):
         dates = [item.period_end_date for item in self.financials]
         if dates != sorted(dates, reverse=True) or len(dates) != len(set(dates)):
             raise ValueError("financial periods must be unique and most-recent first")
+        identities = [(item.fiscal_year, item.fiscal_quarter) for item in self.financials]
+        if len(identities) != len(set(identities)):
+            raise ValueError("financial period identities must be unique")
         for item in self.financials:
             if (self.period is ReportingPeriod.QUARTERLY) != (item.fiscal_quarter is not None):
                 raise ValueError("fiscal quarter must agree with reporting period")
+            if abs(item.period_end_date.year - item.fiscal_year) > 1:
+                raise ValueError("fiscal year is inconsistent with period end date")
         return self
 
 
@@ -790,11 +795,14 @@ class ClosedOrderRead(_ExternalOrderFieldsRead):
             execution.timestamp > self.last_transaction_at for execution in self.executions
         ):
             raise ValueError("execution cannot follow the last transaction")
-        if (
-            self.executions
-            and sum((item.quantity for item in self.executions), start=0) != self.filled_quantity
-        ):
+        if sum((item.quantity for item in self.executions), start=0) != self.filled_quantity:
             raise ValueError("execution quantity must equal cumulative quantity")
+        if (
+            self.state is EquityOrderState.FILLED
+            and self.quantity is not None
+            and self.filled_quantity != self.quantity
+        ):
+            raise ValueError("filled share order must fill its requested quantity")
         ids = [item.execution_id for item in self.executions]
         if len(ids) != len(set(ids)):
             raise ValueError("execution IDs must be unique within an order")

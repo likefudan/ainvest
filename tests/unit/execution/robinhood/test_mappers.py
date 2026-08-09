@@ -405,6 +405,17 @@ def test_untrusted_text_is_bounded_or_replaced_with_a_visible_marker() -> None:
     assert "do this" not in rendered and "x" * 513 not in rendered
 
 
+def _duplicate_financial_identity(value: dict[str, Any]) -> None:
+    prior = value["data"]["results"][0]["financials"][1]
+    prior.update(fiscal_year=2026, fiscal_quarter=2)
+
+
+def _make_partially_filled_order_labeled_filled(value: dict[str, Any]) -> None:
+    order = value["data"]["orders"][0]
+    order["cumulative_quantity"] = "1"
+    order["executions"] = [order["executions"][0]]
+
+
 @pytest.mark.unit
 @pytest.mark.parametrize(
     ("capability", "mutate", "mapper", "kwargs"),
@@ -470,6 +481,18 @@ def test_untrusted_text_is_bounded_or_replaced_with_a_visible_marker() -> None:
             {"expected_symbols": ("AAPL", "MSFT")},
         ),
         (
+            "get_financials",
+            _duplicate_financial_identity,
+            map_financials,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_financials",
+            lambda value: value["data"]["results"][0]["financials"][0].update(fiscal_year=2020),
+            map_financials,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
             "get_equity_orders",
             lambda value: value["data"]["orders"][0]["executions"][0].update(
                 timestamp="2026-08-07T14:59:59Z"
@@ -486,6 +509,18 @@ def test_untrusted_text_is_bounded_or_replaced_with_a_visible_marker() -> None:
         (
             "get_equity_orders",
             lambda value: value["data"]["orders"][0].update(cumulative_quantity="1"),
+            map_closed_equity_orders,
+            {"expected_symbol": "AAPL"},
+        ),
+        (
+            "get_equity_orders",
+            lambda value: value["data"]["orders"][0].update(executions=None),
+            map_closed_equity_orders,
+            {"expected_symbol": "AAPL"},
+        ),
+        (
+            "get_equity_orders",
+            _make_partially_filled_order_labeled_filled,
             map_closed_equity_orders,
             {"expected_symbol": "AAPL"},
         ),
