@@ -656,6 +656,14 @@ def test_manifest_drift_in_a_result_is_caught_before_the_payload(
             {"observed_at": "2026-13-06T12:00:00Z"},
             ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
         ),
+        (
+            {"observed_at": "2026-08-06T12:00:00+00:60"},
+            ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
+        ),
+        (
+            {"observed_at": "2026-08-06T12:00:00+01:99"},
+            ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
+        ),
         ({"warnings": "a string"}, ReadRejection.ENVELOPE_WARNINGS_INVALID),
         ({"warnings": [1]}, ReadRejection.ENVELOPE_WARNINGS_INVALID),
         (
@@ -708,6 +716,7 @@ def test_an_envelope_reached_through_to_json_dict_validates() -> None:
         "2026-08-06T12:00:00Z",
         "2026-08-06T12:00:00.123456Z",
         "2026-08-06T12:00:00-07:00",
+        "2026-08-06T12:00:00+23:59",
     ],
 )
 def test_timezone_aware_rfc3339_observed_at_is_accepted(observed_at: str) -> None:

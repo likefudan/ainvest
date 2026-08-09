@@ -87,7 +87,7 @@ from ainvest.observability import get_logger
 DIGEST_PATTERN: Final = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
 RFC3339_DATETIME_PATTERN: Final = re.compile(
     r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
-    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})\Z"
+    r"(?:\.[0-9]+)?(?:Z|[+-](?:[01][0-9]|2[0-3]):[0-5][0-9])\Z"
 )
 
 #: The structured log event name. One event, two statuses.
