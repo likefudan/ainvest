@@ -1281,10 +1281,14 @@ excludes the contents of a result envelope's `data`. It also records that
   chain weaknesses in this remediation. They do not block `P06-T1`; record and
   prioritize them later only if deployment evidence or an actionable upstream
   advisory makes them material.
-- **Handoff/blockers:** no external blocker remains. The reviewed immutable
-  external tagged SemVer release artifact, its provenance/artifact digest, and
-  its committed full-manifest digest are recorded under **Recorded external
-  dependency pin** above. The design correction commit is recorded for
+- **Handoff/blockers:** no external blocker remains for the completed `P06-T0`
+  implementation and release-pin prerequisites. This does not override the
+  owner-assisted real-readiness blocker recorded above: the current Robinhood
+  provider-surface drift still requires a newly reviewed `rh-mcp` patch release
+  before real/live validation. The reviewed immutable external tagged SemVer
+  release artifact, its provenance/artifact digest, and its committed
+  full-manifest digest are recorded under **Recorded external dependency pin**
+  above. The design correction commit is recorded for
   traceability but cannot be treated as a consumable release, runtime artifact,
   or schema evidence. The approval is conditional on the **eight** consumer
   requirements in `security-review/v0.2.0/REPORT.md`; that section is the
