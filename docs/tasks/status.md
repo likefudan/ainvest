@@ -720,9 +720,11 @@ capabilities only. Its serial merge order is:
    readiness verifies manifest version and full-manifest digest, while every
    result additionally verifies envelope version.
 5. `P06-T1` normalizes accepted reads into versioned ainvest schemas. Its first
-   integration part covers the account/portfolio and current equity-query path;
-   historical and fundamental/financial mappings follow as Part 2 of the same
-   task, not as a new task ID.
+   integration part covers the smallest honest CLI inputs: accounts, portfolio,
+   equity positions, quotes, and equity-order/open-order reads. Price book,
+   tradability and canonical instrument resolution, richer closed-order
+   history, historicals, and fundamental/financial mappings follow as Part 2
+   of the same task, not as a new task ID.
 6. `P06-T2` exposes those normalized reads through an ainvest CLI/read-only
    entry point, Paper workflows, and a later Telegram read-query adapter under
    an independent Read Broker deployment identity. It cannot reach a trading
@@ -748,47 +750,65 @@ capabilities only. Its serial merge order is:
   `aa78cc964c61ae774ed1f0e6b2ff1641651c7233`.
 - **Dependencies:** `P06-T0`, `P02-T1`–`P02-T3`, and `P02-T6` are merged and
   satisfied.
-- **Scope:** normalize validated `GatewayReadResult` payloads for accounts and
-  buying power, portfolio totals, equity positions, equity orders including
-  the open-order view, equity quotes, equity price books, and equity
-  tradability/instrument identity. Reuse the existing versioned
-  `PortfolioSnapshot`, `PositionSnapshot`, `OpenOrderSnapshot`, `MarketQuote`,
-  `PriceBook`, `InstrumentMetadataObservation`, `InstrumentIdentity`, and
-  related primitives where their semantics match; do not create provider-shaped
-  duplicates.
+- **Scope:** normalize validated `GatewayReadResult` payloads from exactly
+  `get_accounts`, `get_portfolio`, `get_equity_positions`,
+  `get_equity_quotes`, and `get_equity_orders`, including an honest open-order
+  view. Add only the minimal provider-independent, versioned read-domain
+  models needed for the earliest portfolio/quote/order CLI inputs. A portfolio
+  summary may retain cash, buying power, total value, and separate asset-class
+  totals rather than pretending the upstream mixed-asset total satisfies the
+  long-only `PortfolioSnapshot` equation. Preserve the provider fields needed
+  for user-visible portfolio, quote, position, and order output, but do not
+  reproduce an `rh-mcp` envelope or its provider-specific guide/prose.
 - **Allowed paths:**
+  `src/ainvest/execution/robinhood/read_models.py`;
   `src/ainvest/execution/robinhood/mappers.py`;
+  `tests/unit/execution/robinhood/test_read_models.py`;
   `tests/unit/execution/robinhood/test_mappers.py`;
   `tests/contract/execution/test_rh_mcp_part1_mapping_contract.py`; and small,
   sanitized deterministic fixtures under
   `tests/fixtures/rh_mcp/v0.2.0/p06-t1-part1/**`. All other paths are read-only.
-  If an existing shared model cannot honestly represent a required result
-  (notably arbitrary external order history must not be fabricated as an
-  ainvest-created `BrokerOrder` with invented proposal/hash/client IDs), stop
-  and request a narrow coordinator-recorded shared-schema expansion before
-  editing any schema, export, package `__init__`, or snapshot file.
+  The new module is the narrowly approved read-schema expansion; package
+  exports and committed schema snapshots are unnecessary for this internal
+  integration boundary and remain out of scope. If implementation genuinely
+  needs another shared surface, stop and request a coordinator-recorded scope
+  expansion before editing it.
 - **Required behavior:** fail closed on malformed or non-canonical Decimal,
-  timezone, enum/status, account-scope, and instrument identity data. Require
-  consistent canonical instrument ID, symbol, exchange, currency, asset type,
-  tradability, price tick, and quantity increment; reject missing, ambiguous,
-  or conflicting identity rather than guessing. Preserve the accepted result
-  digest and source/observation/receipt provenance on normalized results. A
-  quote lacking coherent last/bid/ask time, source, or session evidence is not
-  live-eligible. Empty provider fields are never silently converted to zero.
+  timezone, enum/status, account-scope, and symbol/order data. Reject
+  unsupported mixed-portfolio arithmetic, negative/short/boxed positions,
+  symbol/order mismatches, and unknown states rather than guessing. Preserve
+  the accepted result digest and source/observation/receipt provenance on
+  normalized results. A quote lacking coherent last/bid/ask time or source
+  evidence is not live-eligible. Empty provider fields are never silently
+  converted to zero. Treat account identifiers as sensitive: never expose a
+  raw account number downstream; use `account_scope` or a redacted/stable
+  derived identifier only when an existing repository policy supports it,
+  otherwise record that as a blocker for the implementation coordinator.
+- **Model honesty:** reuse `PortfolioSnapshot`, `InstrumentIdentity`,
+  `MarketQuote`, and related existing models only when every one of their
+  invariants is actually available and verified. The pinned `rh-mcp` `v0.2.0`
+  results do not guarantee the MIC, currency, asset type, identity timestamp,
+  price/quantity increments, or long-only portfolio equation those models
+  require. Never invent those fields, and never fabricate proposal, order-hash,
+  or client-order IDs to coerce an external order into `BrokerOrder`.
 - **Forbidden scope:** no provider prose or raw MCP/provider object may cross
   the mapper; no fallback provider, mutation, trading capability, CLI, Paper
   workflow, Telegram/model sink, OAuth/authentication, credential handling,
   real account call, or live behavior. Do not modify dependencies or pursue
   unrelated third-party version or speculative corner-case hardening.
-- **Part 2 / next:** after Part 1 merges, claim historical OHLCV and
-  fundamental/financial mappings as integration Part 2 of `P06-T1` from the
-  then-latest `main`; `P06-T2` remains blocked until both parts merge. Part 1
-  must not implement Part 2 opportunistically.
+- **Part 2 / next:** after Part 1 merges, claim price books, tradability and
+  canonical `InstrumentIdentity` resolution, closed-order history semantics
+  beyond the generic read model, historical OHLCV, and fundamental/financial
+  mappings as integration Part 2 of `P06-T1` from the then-latest `main`;
+  `P06-T2` remains blocked until both parts merge. Part 1 must not implement
+  Part 2 opportunistically.
 - **Verification:** use only deterministic synthetic or sanitized recorded
   fixtures; no public network or user credential is a test prerequisite.
-  Cover valid mappings plus Decimal/timezone/enum/account/instrument mismatch,
-  missing bid/ask/time, unknown order state, digest/provenance retention, and
-  provider-prose/raw-object exclusion. Run focused unit/contract tests,
+  Cover valid mappings plus Decimal/timezone/enum/account/symbol/order
+  mismatch, unsupported mixed-asset math and short/boxed positions, missing
+  bid/ask/time, unknown order state, sensitive account-ID containment,
+  digest/provenance retention, and provider-prose/raw-object exclusion. Run
+  focused unit/contract tests,
   `./scripts/dev unit`, `git diff --check`, and `./scripts/dev verify`. Real
   owner-assisted `rh-mcp` authorization is later validation evidence, not a
   prerequisite for implementation or merge.
