@@ -736,8 +736,10 @@ capabilities only. Its serial merge order is:
    ainvest CLI under an independent Read Broker deployment identity; a later
    Telegram read-query adapter may reuse that display surface. Part 2 promotes
    verified data into Paper workflows only after canonical identity,
-   Agentic-account binding, and regular-session evidence are trustworthy. Both
-   parts cannot reach a trading capability or any of the 11 approved
+   verified Agentic-account binding, regular-session evidence, and a newly
+   reviewed `rh-mcp` release/provider-surface update plus the deliberate
+   ainvest pin update. Both parts cannot reach a trading capability or any of
+   the 11 approved
    non-trading mutations; the gateway ships no read-only projection, so that
    narrowing is ainvest adapter code and must be asserted by test.
 
@@ -747,7 +749,7 @@ capabilities only. Its serial merge order is:
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
 | `P06-T1` | `merged` — complete for honest pinned-surface display normalization | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 merged via [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284` |
-| `P06-T2` | `not_started` (Part 1 queued and unclaimed; Part 2 blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` (satisfied); Part 2: plus canonical identity, Agentic-account binding, regular-session evidence, and a reviewed `rh-mcp` update | Claim only display-only CLI Part 1 from latest `main`; real provider readiness drift blocks real calls, not offline CLI implementation. Do not claim real-portfolio Paper Part 2 until all four named prerequisites are contract-tested |
+| `P06-T2` | `not_started` (Part 1 queued and unclaimed; Part 2 blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` (satisfied); Part 2: plus canonical identity, verified Agentic-account binding, regular-session evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus the deliberate ainvest pin update | Claim only display-only CLI Part 1 from latest `main`; real provider readiness drift blocks real calls, not offline CLI implementation. Do not claim real-portfolio Paper Part 2 until all four named prerequisites are contract-tested |
 
 ##### Execution envelope: P06-T1 integration Part 1
 
@@ -1036,8 +1038,8 @@ capabilities only. Its serial merge order is:
   display text. It does not unblock `P06-T2` Part 2 real-portfolio Paper and
   does not satisfy `P06-T3` / Gate 4. Paper promotion remains blocked on
   canonical identity, verified Agentic-account binding, regular-session
-  evidence, and a separately reviewed `rh-mcp` update that accepts the current
-  provider surface.
+  evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
+  the deliberate ainvest pin update.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1406,8 +1408,10 @@ excludes the contents of a result envelope's `data`. It also records that
   session, discovers arbitrary tools, or exposes `CallToolResult`. P06-T1 owns
   Robinhood-to-ainvest domain normalization. P06-T2 Part 1 owns the normalized
   display-only ainvest CLI surface and supports a later Telegram read-query
-  adapter; P06-T2 Part 2 owns Paper-facing promotion after its three evidence
-  prerequisites. Both compose the gateway only under an independent Read
+  adapter; P06-T2 Part 2 owns Paper-facing promotion only after canonical
+  identity, verified Agentic-account binding, regular-session evidence, and a
+  newly reviewed `rh-mcp` release/provider-surface update plus the deliberate
+  ainvest pin update. Both compose the gateway only under an independent Read
   Broker deployment identity.
 - **Allowed paths:** implementation is limited to
   `src/ainvest/execution/robinhood/read_client.py` and the focused unit-test
@@ -1462,7 +1466,8 @@ excludes the contents of a result envelope's `data`. It also records that
   merged in #114, squash `c6fb284`, completing `P06-T1`. `P06-T2` Part 1
   display-only CLI is next, queued and unclaimed. Part 2 remains blocked on
   canonical identity, verified Agentic-account binding, regular-session
-  evidence, and a reviewed `rh-mcp` update.
+  evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
+  the deliberate ainvest pin update.
 - **Verification evidence:** the final branch passed 108 focused
   `test_read_client.py` tests, 1,071 unit tests, 145 contract tests, 19
   integration tests, and the 1,235-test full suite with 87.14% coverage, plus
