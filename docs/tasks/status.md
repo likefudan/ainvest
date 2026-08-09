@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-08-08
+Last updated: 2026-08-09
 
 ## Status vocabulary
 
@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` and all `P06-T0` work merged; `P06-T1` integration Part 1 is claimed); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, all `P06-T0` work, and `P06-T1` integration Part 1 merged; Part 2 is queued/unclaimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -160,8 +160,9 @@ artifact, and this tracker records its tag, artifact provenance/digest, and
 expected full-manifest digest in the priority lane's **Recorded external
 dependency pin** subsection. The narrow `P06-T0` hardening follow-up also
 merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
-`P06-T0`; `P06-T1` integration Part 1 is now claimed, with Part 2 and then
-`P06-T2` following serially. Later candidates enter the merge queue
+`P06-T0`; `P06-T1` integration Part 1 merged in
+[#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 is the next
+queued, unclaimed slice before `P06-T2`. Later candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -533,11 +534,10 @@ Shared-surface ownership for this claim is exclusive:
   cannot finish without another shared or production path, its agent stops and
   obtains a coordinator-recorded scope expansion before editing it.
 
-The owner pause on `P04-T2` and `P05-T4` remains in force. The external
-`rh-mcp` release blocker is cleared, and the complete `P06-T0` adapter,
-runtime-dependency, and hardening delivery is merged. `P06-T1` integration
-Part 1 is claimed; the paused tasks and unrelated task chains are not part of
-that queue position.
+The owner pause on `P04-T2` and `P05-T4` remains in force. The complete
+`P06-T0` adapter, runtime-dependency, and hardening delivery is merged, as is
+`P06-T1` integration Part 1. `P06-T1` integration Part 2 is queued/unclaimed;
+the paused tasks and unrelated task chains are not part of that queue position.
 
 ##### Execution envelope: P08-T4
 
@@ -737,17 +737,20 @@ capabilities only. Its serial merge order is:
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
-| `P06-T1` | `in_progress` (integration Part 1 claimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | `p06_t1_part1`; `agent/p06-t1-part1` / `.worktrees/p06-t1-part1`; immutable base `aa78cc964c61ae774ed1f0e6b2ff1641651c7233`; Part 2 follows before `P06-T2` |
-| `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
+| `P06-T1` | `in_progress` (integration Part 1 merged; Part 2 queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; claim Part 2 from latest `main` before `P06-T2` |
+| `P06-T2` | `not_started` (blocked on P06-T1 Part 2) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Do not claim until Part 2 merges; create from/rebase onto that latest `main`; Paper execution only |
 
 ##### Execution envelope: P06-T1 integration Part 1
 
 - **Title:** Normalize Core Robinhood Account, Portfolio, and Equity Reads
 - **Task identity:** this is integration Part 1 of `P06-T1`, not a new task ID.
-- **Status/owner:** `claimed` — `p06_t1_part1`
+- **Status/owner:** `merged` — `p06_t1_part1`; PR
+  [#111](https://github.com/likefudan/ainvest/pull/111), squash
+  `65aa82af07905ff06a09486b860d9e4be5e65e23`.
 - **Implementation branch/worktree/base:** `agent/p06-t1-part1` /
-  `.worktrees/p06-t1-part1`; immutable base
-  `aa78cc964c61ae774ed1f0e6b2ff1641651c7233`.
+  `.worktrees/p06-t1-part1`; immutable starting base
+  `aa78cc964c61ae774ed1f0e6b2ff1641651c7233`; final reviewed patches were
+  rebased onto `main` `084e6af` before merge.
 - **Dependencies:** `P06-T0`, `P02-T1`–`P02-T3`, and `P02-T6` are merged and
   satisfied.
 - **Scope:** normalize validated `GatewayReadResult` payloads from exactly
@@ -796,10 +799,11 @@ capabilities only. Its serial merge order is:
   workflow, Telegram/model sink, OAuth/authentication, credential handling,
   real account call, or live behavior. Do not modify dependencies or pursue
   unrelated third-party version or speculative corner-case hardening.
-- **Part 2 / next:** after Part 1 merges, claim price books, tradability and
+- **Part 2 / next:** Part 2 is queued/unclaimed. Its eventual owner must claim
+  it from the then-latest `main` and implement price books, tradability and
   canonical `InstrumentIdentity` resolution, closed-order history semantics
   beyond the generic read model, historical OHLCV, and fundamental/financial
-  mappings as integration Part 2 of `P06-T1` from the then-latest `main`;
+  mappings as integration Part 2 of `P06-T1`;
   `P06-T2` remains blocked until both parts merge. Part 1 must not implement
   Part 2 opportunistically.
 - **Verification:** use only deterministic synthetic or sanitized recorded
@@ -812,6 +816,35 @@ capabilities only. Its serial merge order is:
   `./scripts/dev unit`, `git diff --check`, and `./scripts/dev verify`. Real
   owner-assisted `rh-mcp` authorization is later validation evidence, not a
   prerequisite for implementation or merge.
+- **Completion and review evidence:** Part 1 merged after an independent review
+  found and the implementation remediated four functional gaps: unproven
+  regular-session quotes had been considered live-eligible, callers could
+  assert an unbound Agentic account scope, mixed-asset portfolio totals were
+  not reconciled, and mapper tests used an impossible manifest version. The
+  remediation keeps every quote display-only with `session_unverified`, keeps
+  normalized results explicitly unbound to account identity and fails closed
+  on ambiguous eligible accounts, reconciles portfolio totals, uses the pinned
+  manifest constants, and retains bounded `placed_agent` order provenance.
+  Review evidence is the
+  [initial finding](https://github.com/likefudan/ainvest/pull/111#issuecomment-5233490161),
+  [remediation approval](https://github.com/likefudan/ainvest/pull/111#issuecomment-5233526828),
+  and [final post-rebase approval](https://github.com/likefudan/ainvest/pull/111#issuecomment-5233542332).
+  The final branch passed 1,092 unit, 151 contract, and 19 integration tests;
+  the aggregate suite passed 1,262 tests with 87.21% coverage, `git diff
+  --check` was clean, and all required GitHub checks passed.
+- **Handoff safety boundary:** Part 1 output remains unbound to a verified
+  account identity, and its quotes remain display-only and
+  `session_unverified`. Part 2 and `P06-T2` must not promote either output to a
+  verified Agentic account or a live-eligible quote without trustworthy
+  account-binding and exchange-calendar/session evidence.
+- **Owner-assisted real validation:** Robinhood authentication is healthy and
+  the installed `rh-mcp` `v0.2.0` expected manifest pin matches. Readiness still
+  fails closed because Robinhood's current provider surface has drifted: it
+  contains an unknown tool, a changed `get_accounts` schema, changed
+  `get_equity_orders` metadata, and changed option-tool schema/metadata. Real
+  or live validation therefore requires a newly reviewed `rh-mcp` patch
+  release that deliberately accepts the observed provider surface; no pin is
+  changed by this record.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1231,8 +1264,8 @@ excludes the contents of a result envelope's `data`. It also records that
   verification path merge — **done in #105**; (6) the two narrow review
   remediations above merge — **done in #107**, squash
   `b8ba082563928702dbd918ea8d478880a8a236cf`. `P06-T0` is complete;
-  `P06-T1` integration Part 1 is claimed, with Part 2 and then `P06-T2`
-  following serially.
+  `P06-T1` integration Part 1 merged in #111, squash `65aa82a`; Part 2 is
+  queued/unclaimed, with `P06-T2` still blocked behind it.
 - **Verification evidence:** the final branch passed 108 focused
   `test_read_client.py` tests, 1,071 unit tests, 145 contract tests, 19
   integration tests, and the 1,235-test full suite with 87.14% coverage, plus
@@ -1364,7 +1397,8 @@ task row is in the cross-cutting table below.
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. The complete `P06-T0` adapter,
 runtime dependency, and hardening delivery is merged in #104/#105/#107;
-`P06-T1` integration Part 1 is claimed. `P08-T4`,
+`P06-T1` integration Part 1 is merged in #111 and Part 2 is queued/unclaimed.
+`P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
 closed. `P08-T8` and `P08-T9` are dependency-ready but
 remain unclaimed.
