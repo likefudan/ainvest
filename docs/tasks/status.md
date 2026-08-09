@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` merged; `rh-mcp` `v0.2.0` reviewed, released, and pinned below; `P06-T0` `not_started`/unclaimed); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7` and the `P06-T0` adapter/runtime dependency delivery merged; a narrow `P06-T0` hardening follow-up is claimed before `P06-T1`); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -149,13 +149,18 @@ scope, and integration order.
 
 Tracker claim changes merge before their implementation PRs. The initial queue
 (`P04-T0`, `P05-T0`, `P08-T0`, and `P08-T3`) and priority-lane prerequisite
-`P08-T7` are merged. No P06 implementation is active. The first two steps of the
-**Robinhood Non-Trading Preview** queue are done: `likefudan/rh-mcp` published
+`P08-T7` are merged. The `P06-T0` adapter and cross-repository contract merged
+in [#104](https://github.com/likefudan/ainvest/pull/104), and the pinned runtime
+dependency and real artifact verification path merged in
+[#105](https://github.com/likefudan/ainvest/pull/105). The first three steps of
+the **Robinhood Non-Trading Preview** queue are therefore done:
+`likefudan/rh-mcp` published
 the independently reviewed tagged SemVer release `v0.2.0` with an immutable
 artifact, and this tracker records its tag, artifact provenance/digest, and
 expected full-manifest digest in the priority lane's **Recorded external
-dependency pin** subsection. The remaining earliest-safe queue is therefore
-`P06-T0` → `P06-T1` → `P06-T2`. Later candidates enter the merge queue
+dependency pin** subsection. A narrow `P06-T0` hardening follow-up is active to
+close two review findings; `P06-T1` is next immediately after it, followed by
+`P06-T2`. Later candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -527,12 +532,11 @@ Shared-surface ownership for this claim is exclusive:
   cannot finish without another shared or production path, its agent stops and
   obtains a coordinator-recorded scope expansion before editing it.
 
-The owner pause on `P04-T2` and `P05-T4` remains in force. `P06-T0` was blocked
-on the independently reviewed external `rh-mcp` release and recorded
-artifact/manifest evidence while that claim ran; that blocker is cleared by the
-`v0.2.0` pin recorded in the priority lane below, and `P06-T0` is now
-`not_started` and unclaimed. Those tasks, their dependent chains, and unrelated
-tasks were not started as part of this claim.
+The owner pause on `P04-T2` and `P05-T4` remains in force. The external
+`rh-mcp` release blocker is cleared, and the `P06-T0` adapter and runtime
+dependency are merged. Only the narrow `P06-T0` hardening follow-up recorded
+below is active before `P06-T1`; the paused tasks and unrelated task chains are
+not part of that claim.
 
 ##### Execution envelope: P08-T4
 
@@ -728,8 +732,8 @@ capabilities only. Its serial merge order is:
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
-| `P06-T0` | `in_progress` (claimed by `agent/p06-t0-gateway-adapter`, base `cba88f0`) | `P03-T13`, `P01-T4`, `P08-T7` satisfied; the reviewed tagged SemVer `rh-mcp` release artifact and its provenance/artifact/full-manifest digests are recorded below | Adapter and cross-repository contract only. The runtime dependency is **not** in this claim: `pyproject.toml`, the `broker` extra and `uv.lock` are untouched, and artifact verification fails closed while the package is absent. Installing it is a separate reviewed envelope and is the remaining gate before `P06-T1` |
-| `P06-T1` | `not_started` (queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim only after `P06-T0` merges; create from/rebase onto that latest `main` |
+| `P06-T0` | `in_progress` — functional delivery merged; hardening claimed by `p06_t0_hardening` on `agent/p06-t0-hardening` | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`. Only the two review remediations in the execution envelope remain |
+| `P06-T1` | `not_started` (next; queued/unclaimed) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` | Claim immediately after the narrow `P06-T0` hardening PR merges; create from/rebase onto that latest `main` |
 | `P06-T2` | `not_started` (queued/unclaimed) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Claim only after `P06-T1` merges; create from/rebase onto that latest `main`; Paper execution only |
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
@@ -1027,10 +1031,9 @@ excludes the contents of a result envelope's `data`. It also records that
   separate sub-agent reviews functionality, fail-closed security, tests,
   readability, and duplication directly on the PR; every actionable finding
   is fixed and re-reviewed before required checks pass and the PR is squash-
-  merged. P08-T7 satisfied that contract in #82. P06-T0 was blocked until the
-  independently reviewed tagged SemVer external `rh-mcp` release artifact, its
-  provenance/artifact digest, and full-manifest digest were recorded; they now
-  are, and P06-T0 is `not_started` and unclaimed.
+  merged. P08-T7 satisfied that contract in #82. The external `rh-mcp` release
+  blocker was cleared and the functional `P06-T0` delivery subsequently merged
+  in #104 and #105; its narrow hardening follow-up is recorded below.
 - **Handoff/blockers:** the provider-neutral boundary is merged. Production
   deployment artifacts and real credential validation remain intentionally
   blocked on owner decisions; they did not block this fail-closed
@@ -1039,28 +1042,27 @@ excludes the contents of a result envelope's `data`. It also records that
 - **Squash-merge commit:**
   `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`
 
-##### Execution envelope: P06-T0
+##### Execution envelope: P06-T0 hardening follow-up
 
-- **Title:** Integrate the External Robinhood Non-Trading Gateway
-- **Status/owner:** `in_progress` — claimed by `agent/p06-t0-gateway-adapter`.
-  The external dependency conditions are recorded under **Recorded external
-  dependency pin** in the priority lane above. The coordinator issued this
-  envelope with immutable base `cba88f0`, which contains the tracker record
-  (`a450a51`) that pins the reviewed release, and made two scope decisions
-  recorded under **Allowed paths** below.
+- **Title:** Harden the Merged External Robinhood Non-Trading Gateway Adapter
+- **Status/owner:** `in_progress` — `p06_t0_hardening`
+- **Branch/worktree:** `agent/p06-t0-hardening` /
+  `.worktrees/p06-t0-hardening`
+- **Immutable base:**
+  `1a08d85607b2951f31f04b0634b2c5f0daaec1fe`
+- **Merged functional delivery:** the adapter and cross-repository contracts
+  merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash commit
+  `72fe61c`; the pinned `rh-mcp` runtime dependency and real artifact
+  verification path merged in
+  [#105](https://github.com/likefudan/ainvest/pull/105), squash commit
+  `473f2f2`. This follow-up does not reopen that completed implementation scope.
 - **Superseded claim:** the earlier `p06_t0_robinhood_read_gateway` claim and
   `agent/p06-t0-robinhood-read-gateway` / `.worktrees/p06-t0` execution
   envelope assumed ainvest-owned MCP v1 transport with an injected
   authenticated session. That claim is superseded by the external
   `likefudan/rh-mcp` gateway boundary. The old branch/worktree is not an active
-  implementation surface and must not be reused. Now that the external release
-  is recorded, the coordinator must recreate the worktree or explicitly rebase
-  and issue a new immutable execution envelope.
-- **Implementation base:** not assigned. The future immutable base must include
-  this scope correction and the tracker commit that pins the reviewed `rh-mcp`
-  release tag, artifact identity and provenance/digest, plus expected
-  full-manifest digest — that is, the squash commit of the tracker PR carrying
-  this section.
+  implementation surface and must not be reused; the active hardening
+  branch/worktree and immutable base are assigned above.
 - **Dependencies:** `P03-T13`, `P01-T4`, and `P08-T7` are merged. The external
   dependency requirement — an independently reviewed tagged SemVer `rh-mcp`
   release, an immutable consumable artifact with source provenance and artifact
@@ -1100,29 +1102,25 @@ excludes the contents of a result envelope's `data`. It also records that
   CLI/Paper-facing read surface, supports a later Telegram read-query adapter,
   and composes the gateway only under an independent Read Broker deployment
   identity.
-- **Allowed paths:** assigned by the coordinator for this claim —
-  `src/ainvest/execution/robinhood/**`, `tests/unit/execution/robinhood/**`,
-  `tests/contract/execution/test_rh_mcp_manifest_contract.py`,
-  `tests/fixtures/rh_mcp/**`, and this file. **Two coordinator decisions.**
-  First, the runtime dependency is deliberately *out* of this claim:
-  `pyproject.toml`, the `broker` extra and `uv.lock` are untouched, so artifact
-  and installation verification is written for real but fails closed while the
-  package is absent, and its tests drive it through fixtures and fakes rather
-  than a live import. Second, no production composition path is wired: the
-  adapter exists and is tested, but nothing in ainvest constructs it yet.
-  Installing the dependency remains its own explicit reviewed scope and must
-  not install a second conflicting public MCP SDK surface in ainvest.
-- **Required behavior:** accept only the pinned gateway release/artifact and
-  expected full-manifest digest. Reject a missing, mutable, or mismatched
-  installed artifact during deployment/startup. Reject an unsupported or
-  mismatched `envelope_version`, `manifest_version`, or full-manifest
-  `manifest_digest` at readiness/result validation before consuming its
-  payload. Validate bounded SDK-neutral result/error envelopes and produce
-  stable sanitized errors. Log only approved
-  metadata such as capability name, bounded duration, manifest/result digest,
-  and status. Never expose token, credential, MCP/provider type, raw session,
-  raw account payload, or arbitrary tool name to Research, Strategy, CLI,
-  Paper, or Telegram, and never add an automatic data-provider fallback.
+- **Allowed paths:** implementation is limited to
+  `src/ainvest/execution/robinhood/read_client.py` and the focused unit-test
+  files `tests/unit/execution/robinhood/test_read_client.py` and, only if a
+  focused fake must be extended,
+  `tests/unit/execution/robinhood/gateway_fakes.py`. This tracker file remains
+  coordinator-owned; only the coordinator may update it to record claim/merge
+  state. Every other path is read-only for this follow-up.
+- **Required behavior:** close exactly two review findings:
+  1. Treat the entire `verify_startup()` path as one sanitization boundary.
+     Translate every unexpected exception from `capabilities()`, `readiness()`,
+     readiness-document rendering/`to_json_dict()`, or subsequent validation
+     into a stable sanitized `GatewayReadError`; existing sanitized
+     `GatewayReadError` values remain safe to propagate. Provider prose, the
+     original exception message/arguments, and its chained cause must not
+     escape.
+  2. Enforce the SDK-neutral JSON boundary recursively: reject non-JSON values,
+     non-string mapping keys, and non-finite numbers; require `observed_at` to
+     be a valid timezone-aware RFC 3339 date-time rather than merely a non-empty
+     string.
 - **Forbidden scope:** no P06-T1 mapping or normalized domain schemas; no
   P06-T2 CLI, service composition, or real-portfolio Paper integration; no
   P06-T3/Gate 4 claim; no trading client, no denied trading capability, no
@@ -1140,7 +1138,7 @@ excludes the contents of a result envelope's `data`. It also records that
   raw account payloads must never enter either repository, fixtures, logs,
   issues/PRs, or chat. If owner authorization or secure credential composition
   is unavailable, keep the real check explicitly unverified and fail closed.
-- **Cross-repository completion conditions:** in order: (1) `rh-mcp`
+- **Cross-repository completion conditions:** (1) `rh-mcp`
   implementation and tests pass independent review — **done**, verdict
   `APPROVED_FOR_AINVEST_INTEGRATION` on 2026-08-04, bound to commit
   `46128a62`; (2) it publishes an immutable artifact in a tagged SemVer release
@@ -1148,21 +1146,27 @@ excludes the contents of a result envelope's `data`. It also records that
   and full-manifest digest — **done**, `v0.2.0`, published 2026-08-04;
   (3) an ainvest tracker PR records the exact tag, artifact identity, source
   provenance, artifact digest/checksum, and expected full-manifest digest —
-  **done by this record**; (4) the coordinator creates a new P06-T0 execution
-  envelope/worktree — **next**; (5) P06-T0 adapter and cross-repository
-  contracts merge; then and only then may P06-T1 be claimed, followed serially
-  by P06-T2.
-- **Future verification contract:** focused offline contract tests must cover
-  release/artifact provenance pinning; supported envelope/manifest versions;
-  full-manifest pinning; SDK-neutral envelope validation; bounded results;
-  authentication/timeout/sanitized error handling,
-  provider-object and secret non-disclosure, stable bounded logs, and no
-  fallback; then run `git diff --check` and `./scripts/dev verify`. Independent
-  PR review must cover functionality, fail-closed security, tests, readability,
-  dependency direction, and duplication before squash merge.
-- **Handoff/blockers:** no blocker remains. The reviewed immutable external
-  tagged SemVer release artifact, its provenance/artifact digest, and its
-  committed full-manifest digest are recorded under **Recorded external
+  **done by this record**; (4) the adapter and cross-repository contracts merge
+  — **done in #104**; (5) the pinned runtime dependency and real artifact
+  verification path merge — **done in #105**; (6) the two narrow review
+  remediations above merge — **active**. `P06-T1` is next immediately after
+  step 6, followed serially by `P06-T2`.
+- **Verification contract:** add focused positive and adversarial unit tests for
+  both findings, explicitly including failures from `capabilities()`,
+  `readiness()`, and readiness `to_json_dict()`/rendering/validation; run that
+  focused test module, `git diff --check`, and `./scripts/dev verify`. A
+  separate sub-agent reviews functionality, fail-closed sanitization, tests,
+  readability, and duplication before squash merge.
+- **Explicitly deferred, non-blocking follow-ups:** do not change the current
+  network-on-every-`verify` broker installation flow, pin or redesign the pip
+  bootstrap/version strategy, extend PEP 610 provenance into local installed-
+  file tamper proof, or pursue speculative low-probability third-party supply-
+  chain weaknesses in this remediation. They do not block `P06-T1`; record and
+  prioritize them later only if deployment evidence or an actionable upstream
+  advisory makes them material.
+- **Handoff/blockers:** no external blocker remains. The reviewed immutable
+  external tagged SemVer release artifact, its provenance/artifact digest, and
+  its committed full-manifest digest are recorded under **Recorded external
   dependency pin** above. The design correction commit is recorded for
   traceability but cannot be treated as a consumable release, runtime artifact,
   or schema evidence. The approval is conditional on the **eight** consumer
@@ -1274,10 +1278,9 @@ task row is in the cross-cutting table below.
 | `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
-`P08-T0`, `P08-T3`, and `P08-T7` are merged. No P06 implementation is active;
-`P06-T0` is `not_started` and unclaimed now that the reviewed tagged SemVer
-external gateway release artifact and its provenance, artifact, and
-full-manifest digests are recorded in the priority lane above. `P08-T4`,
+`P08-T0`, `P08-T3`, and `P08-T7` are merged. The functional `P06-T0` adapter
+and runtime dependency delivery is merged in #104/#105; only the narrow
+hardening follow-up is active, and `P06-T1` is next after it. `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
 closed. `P08-T8` and `P08-T9` are dependency-ready but
 remain unclaimed.
