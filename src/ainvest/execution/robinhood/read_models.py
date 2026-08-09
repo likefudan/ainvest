@@ -109,9 +109,11 @@ class AccountsRead(DomainModel):
     evidence: RobinhoodReadEvidence
 
     @model_validator(mode="after")
-    def _at_most_one_default(self) -> Self:
+    def _selection_is_unambiguous(self) -> Self:
         if sum(account.is_default for account in self.accounts) > 1:
             raise ValueError("at most one account may be default")
+        if sum(account.tradable for account in self.accounts) > 1:
+            raise ValueError("multiple eligible agentic accounts are ambiguous")
         return self
 
 
@@ -124,10 +126,9 @@ class BuyingPowerRead(DomainModel):
 
 
 class PortfolioRead(DomainModel):
-    """Account totals without pretending they satisfy a stock-only equation."""
+    """Unbound account totals without a caller-asserted account identity."""
 
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
-    account_scope: RobinhoodAccountScope
     currency: CurrencyCode
     total_value: Money
     cash: Money
@@ -143,9 +144,23 @@ class PortfolioRead(DomainModel):
     evidence: RobinhoodReadEvidence
 
     @model_validator(mode="after")
-    def _currencies_match(self) -> Self:
+    def _totals_are_coherent(self) -> Self:
         if self.buying_power.currency != self.currency:
             raise ValueError("buying-power currency must match portfolio currency")
+        component_total = sum(
+            (
+                self.cash,
+                self.equity_value,
+                self.options_value,
+                self.futures_value,
+                self.event_contracts_value,
+                self.crypto_value,
+                self.mutual_funds_value,
+                self.fixed_income_value,
+            )
+        )
+        if self.total_value != component_total:
+            raise ValueError("portfolio total must equal cash plus asset-class totals")
         return self
 
 
@@ -169,8 +184,9 @@ class EquityPositionRead(DomainModel):
 
 
 class PositionsRead(DomainModel):
+    """Unbound positions; account identity is not present in this provider payload."""
+
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
-    account_scope: RobinhoodAccountScope
     positions: tuple[EquityPositionRead, ...]
     has_more: StrictBool = False
     evidence: RobinhoodReadEvidence
@@ -188,6 +204,7 @@ class QuoteSession(StrEnum):
 
 
 class QuoteIneligibility(StrEnum):
+    SESSION_UNVERIFIED = "session_unverified"
     NO_TRADES = "no_trades"
     INACTIVE_INSTRUMENT = "inactive_instrument"
     MISSING_BID = "missing_bid"
@@ -309,6 +326,7 @@ class OpenOrderRead(DomainModel):
     fees: Money
     time_in_force: TimeInForce
     market_hours: MarketHours
+    placed_agent: MachineToken
     created_at: UtcDateTime
     last_transaction_at: UtcDateTime | None = None
 
@@ -338,8 +356,9 @@ class OpenOrderRead(DomainModel):
 
 
 class OpenOrdersRead(DomainModel):
+    """Unbound orders; account identity is not present in this provider payload."""
+
     schema_version: SchemaVersion = SCHEMA_VERSION_V1
-    account_scope: RobinhoodAccountScope
     open_orders: tuple[OpenOrderRead, ...]
     records_seen: Annotated[int, Field(ge=0)]
     has_more: StrictBool = False

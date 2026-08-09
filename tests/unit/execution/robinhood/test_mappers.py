@@ -18,17 +18,14 @@ from ainvest.execution.robinhood.mappers import (
     map_open_equity_orders,
     map_portfolio,
 )
+from ainvest.execution.robinhood.pins import EXPECTED_MANIFEST_DIGEST, PINNED_MANIFEST_VERSION
 from ainvest.execution.robinhood.prose import discard_provider_prose
 from ainvest.execution.robinhood.read_client import GatewayReadResult
-from ainvest.execution.robinhood.read_models import (
-    QuoteIneligibility,
-    RobinhoodAccountScope,
-)
+from ainvest.execution.robinhood.read_models import QuoteIneligibility
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.2.0" / "p06-t1-part1"
 OBSERVED_AT = "2026-08-08T15:00:02Z"
 RECEIVED_AT = "2026-08-08T15:00:03Z"
-DIGEST_A = f"sha256:{'a' * 64}"
 DIGEST_B = f"sha256:{'b' * 64}"
 DIGEST_C = f"sha256:{'c' * 64}"
 
@@ -45,8 +42,8 @@ def _result(capability: str, provider_result: dict[str, Any] | None = None) -> G
     assert isinstance(payload, dict)
     return GatewayReadResult(
         capability=capability,
-        manifest_version="2026.08.05",
-        manifest_digest=DIGEST_A,
+        manifest_version=PINNED_MANIFEST_VERSION,
+        manifest_digest=EXPECTED_MANIFEST_DIGEST,
         schema_digest=DIGEST_B,
         result_digest=DIGEST_C,
         observed_at=OBSERVED_AT,
@@ -60,12 +57,10 @@ def test_all_five_valid_reads_map_and_preserve_evidence() -> None:
     accounts = map_accounts(_result("get_accounts"), received_at=RECEIVED_AT)
     portfolio = map_portfolio(
         _result("get_portfolio"),
-        account_scope=RobinhoodAccountScope.AGENTIC,
         received_at=RECEIVED_AT,
     )
     positions = map_equity_positions(
         _result("get_equity_positions"),
-        account_scope=RobinhoodAccountScope.AGENTIC,
         received_at=RECEIVED_AT,
     )
     quotes = map_equity_quotes(
@@ -75,7 +70,6 @@ def test_all_five_valid_reads_map_and_preserve_evidence() -> None:
     )
     orders = map_open_equity_orders(
         _result("get_equity_orders"),
-        account_scope=RobinhoodAccountScope.AGENTIC,
         received_at=RECEIVED_AT,
         expected_symbol="AAPL",
     )
@@ -83,9 +77,13 @@ def test_all_five_valid_reads_map_and_preserve_evidence() -> None:
     assert accounts.accounts[0].tradable is True
     assert portfolio.options_value > 0 and portfolio.crypto_value > 0
     assert positions.positions[0].symbol == "AAPL"
-    assert quotes.quotes[0].live_eligible is True
+    assert quotes.quotes[0].live_eligible is False
+    assert QuoteIneligibility.SESSION_UNVERIFIED in quotes.quotes[0].ineligibility
     assert len(orders.open_orders) == 1
+    assert orders.open_orders[0].placed_agent == "user"
     assert orders.records_seen == 2
+    for unbound in (portfolio, positions, orders):
+        assert "account_scope" not in unbound.model_dump()
     for normalized in (accounts, portfolio, positions, quotes, orders):
         assert normalized.schema_version == "1.0"
         assert normalized.evidence.result_digest == DIGEST_C
@@ -112,6 +110,16 @@ def test_unknown_account_type_and_duplicate_default_fail_closed() -> None:
         map_accounts(_result("get_accounts", unknown), received_at=RECEIVED_AT)
     assert caught.value.code is MappingErrorCode.INVALID_VALUE
 
+    ambiguous = _provider_result("get_accounts")
+    second = deepcopy(ambiguous["data"]["accounts"][0])
+    second["is_default"] = False
+    second["account_number"] = "SENSITIVE-5678"
+    second["rhs_account_number"] = "11223344"
+    ambiguous["data"]["accounts"].append(second)
+    with pytest.raises(RobinhoodMappingError) as caught:
+        map_accounts(_result("get_accounts", ambiguous), received_at=RECEIVED_AT)
+    assert caught.value.code is MappingErrorCode.INVALID_VALUE
+
     duplicate = _provider_result("get_accounts")
     duplicate["data"]["accounts"].append(deepcopy(duplicate["data"]["accounts"][0]))
     with pytest.raises(RobinhoodMappingError) as caught:
@@ -127,7 +135,6 @@ def test_noncanonical_portfolio_decimals_fail_closed(bad: object) -> None:
     with pytest.raises(RobinhoodMappingError) as caught:
         map_portfolio(
             _result("get_portfolio", payload),
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
         )
     assert caught.value.code is MappingErrorCode.INVALID_VALUE
@@ -137,7 +144,6 @@ def test_noncanonical_portfolio_decimals_fail_closed(bad: object) -> None:
 def test_portfolio_preserves_mixed_assets_but_rejects_currency_mismatch() -> None:
     normalized = map_portfolio(
         _result("get_portfolio"),
-        account_scope=RobinhoodAccountScope.AGENTIC,
         received_at=RECEIVED_AT,
     )
     assert normalized.options_value == 200
@@ -148,9 +154,14 @@ def test_portfolio_preserves_mixed_assets_but_rejects_currency_mismatch() -> Non
     with pytest.raises(RobinhoodMappingError) as caught:
         map_portfolio(
             _result("get_portfolio", payload),
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
         )
+    assert caught.value.code is MappingErrorCode.INVALID_VALUE
+
+    mismatch = _provider_result("get_portfolio")
+    mismatch["data"]["total_value"] = "9999.00"
+    with pytest.raises(RobinhoodMappingError) as caught:
+        map_portfolio(_result("get_portfolio", mismatch), received_at=RECEIVED_AT)
     assert caught.value.code is MappingErrorCode.INVALID_VALUE
 
 
@@ -162,7 +173,6 @@ def test_non_long_positions_fail_closed(position_type: str) -> None:
     with pytest.raises(RobinhoodMappingError) as caught:
         map_equity_positions(
             _result("get_equity_positions", payload),
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
         )
     assert caught.value.code is MappingErrorCode.UNSUPPORTED_POSITION
@@ -222,7 +232,15 @@ def test_order_view_rejects_unknown_state_symbol_mismatch_and_amount_mismatch() 
     with pytest.raises(RobinhoodMappingError) as caught:
         map_open_equity_orders(
             _result("get_equity_orders", unknown),
-            account_scope=RobinhoodAccountScope.AGENTIC,
+            received_at=RECEIVED_AT,
+        )
+    assert caught.value.code is MappingErrorCode.INVALID_VALUE
+
+    unsafe_agent = _provider_result("get_equity_orders")
+    unsafe_agent["data"]["orders"][0]["placed_agent"] = "user\nprovider-prose"
+    with pytest.raises(RobinhoodMappingError) as caught:
+        map_open_equity_orders(
+            _result("get_equity_orders", unsafe_agent),
             received_at=RECEIVED_AT,
         )
     assert caught.value.code is MappingErrorCode.INVALID_VALUE
@@ -230,7 +248,6 @@ def test_order_view_rejects_unknown_state_symbol_mismatch_and_amount_mismatch() 
     with pytest.raises(RobinhoodMappingError) as caught:
         map_open_equity_orders(
             _result("get_equity_orders"),
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
             expected_symbol="MSFT",
         )
@@ -245,7 +262,6 @@ def test_order_view_rejects_unknown_state_symbol_mismatch_and_amount_mismatch() 
     with pytest.raises(RobinhoodMappingError) as caught:
         map_open_equity_orders(
             _result("get_equity_orders", amount),
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
         )
     assert caught.value.code is MappingErrorCode.INVALID_VALUE
@@ -257,7 +273,6 @@ def test_wrong_capability_and_invalid_errors_are_sanitized() -> None:
     with pytest.raises(RobinhoodMappingError) as caught:
         map_portfolio(
             result,
-            account_scope=RobinhoodAccountScope.AGENTIC,
             received_at=RECEIVED_AT,
         )
     assert caught.value.code is MappingErrorCode.WRONG_CAPABILITY

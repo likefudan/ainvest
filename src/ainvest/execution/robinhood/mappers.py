@@ -113,17 +113,15 @@ def map_accounts(
 def map_portfolio(
     result: GatewayReadResult,
     *,
-    account_scope: RobinhoodAccountScope,
     received_at: datetime | str,
 ) -> PortfolioRead:
-    """Map mixed-asset totals without coercing them to ``PortfolioSnapshot``."""
+    """Map unbound mixed-asset totals without asserting an account identity."""
 
     def build() -> PortfolioRead:
         data = _data(result, "get_portfolio")
         buying_power = _object(data["buying_power"])
         currency = _string(data, "currency")
         return PortfolioRead(
-            account_scope=account_scope,
             currency=currency,
             total_value=_decimal(data["total_value"]),
             cash=_decimal(data["cash"]),
@@ -153,10 +151,9 @@ def map_portfolio(
 def map_equity_positions(
     result: GatewayReadResult,
     *,
-    account_scope: RobinhoodAccountScope,
     received_at: datetime | str,
 ) -> PositionsRead:
-    """Map long equity positions; short, boxed, empty, and unknown types fail."""
+    """Map unbound long positions; unsupported position types fail closed."""
 
     def build() -> PositionsRead:
         data = _data(result, "get_equity_positions")
@@ -183,7 +180,6 @@ def map_equity_positions(
                 )
             )
         return PositionsRead(
-            account_scope=account_scope,
             positions=tuple(positions),
             has_more=_has_more(data),
             evidence=_evidence(result, received_at),
@@ -198,7 +194,7 @@ def map_equity_quotes(
     received_at: datetime | str,
     max_quote_age_seconds: int,
 ) -> QuotesRead:
-    """Map regular-session quotes and fail closed via ``live_eligible``."""
+    """Map display quotes; keep live use disabled until session proof exists."""
 
     def build() -> QuotesRead:
         if isinstance(max_quote_age_seconds, bool) or not 1 <= max_quote_age_seconds <= 86_400:
@@ -222,7 +218,10 @@ def map_equity_quotes(
             has_traded = _strict_bool(quote, "has_traded")
             listing_state = _string(quote, "state")
 
-            reasons: list[QuoteIneligibility] = []
+            # The provider says this is a regular-hours print, but it supplies
+            # no exchange-calendar proof for the receipt time. P06-T1 part 1
+            # therefore maps it for display while failing closed for live use.
+            reasons: list[QuoteIneligibility] = [QuoteIneligibility.SESSION_UNVERIFIED]
             if not has_traded:
                 reasons.append(QuoteIneligibility.NO_TRADES)
             if listing_state != "active":
@@ -267,7 +266,6 @@ def map_equity_quotes(
 def map_open_equity_orders(
     result: GatewayReadResult,
     *,
-    account_scope: RobinhoodAccountScope,
     received_at: datetime | str,
     expected_symbol: Symbol | None = None,
 ) -> OpenOrdersRead:
@@ -291,7 +289,6 @@ def map_open_equity_orders(
                 continue
             open_orders.append(_open_order(row, state=state, symbol=symbol))
         return OpenOrdersRead(
-            account_scope=account_scope,
             open_orders=tuple(open_orders),
             records_seen=len(rows),
             has_more=_has_more(data),
@@ -321,6 +318,7 @@ def _open_order(row: Mapping[str, Any], *, state: EquityOrderState, symbol: str)
         fees=_decimal(row["fees"]),
         time_in_force=TimeInForce(_string(row, "time_in_force")),
         market_hours=MarketHours(_string(row, "market_hours")),
+        placed_agent=_string(row, "placed_agent"),
         created_at=_required_time(row.get("created_at")),
         last_transaction_at=_optional_time(row.get("last_transaction_at")),
     )

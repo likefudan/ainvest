@@ -60,6 +60,7 @@ def test_external_open_order_has_no_ainvest_proposal_or_hash_fields() -> None:
             "fees": "0",
             "time_in_force": "gfd",
             "market_hours": "regular_hours",
+            "placed_agent": "user",
             "created_at": "2026-08-08T14:50:00Z",
         }
     )
@@ -83,6 +84,7 @@ def test_open_order_rejects_closed_state_and_incoherent_amounts() -> None:
         "fees": "0",
         "time_in_force": "gfd",
         "market_hours": "regular_hours",
+        "placed_agent": "user",
         "created_at": "2026-08-08T14:50:00Z",
     }
     with pytest.raises(ValidationError, match="either share quantity or dollar amount"):
