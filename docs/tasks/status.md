@@ -162,7 +162,8 @@ dependency pin** subsection. The narrow `P06-T0` hardening follow-up also
 merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 `P06-T0`; `P06-T1` integration Part 1 merged in
 [#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 is now claimed
-as the next slice before `P06-T2`. Later candidates enter the merge queue
+as the next slice before `P06-T2` Part 1 display-only CLI. Later candidates
+enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -722,15 +723,19 @@ capabilities only. Its serial merge order is:
 5. `P06-T1` normalizes accepted reads into versioned ainvest schemas. Its first
    integration part covers the smallest honest CLI inputs: accounts, portfolio,
    equity positions, quotes, and equity-order/open-order reads. Price book,
-   tradability and canonical instrument resolution, richer closed-order
-   history, historicals, and fundamental/financial mappings follow as Part 2
-   of the same task, not as a new task ID.
-6. `P06-T2` exposes those normalized reads through an ainvest CLI/read-only
-   entry point, Paper workflows, and a later Telegram read-query adapter under
-   an independent Read Broker deployment identity. It cannot reach a trading
-   capability or any of the 11 approved non-trading mutations; the gateway
-   ships no read-only projection, so that narrowing is ainvest adapter code
-   and must be asserted by test.
+   tradability, explicit partial/unverified instrument references, richer
+   closed-order history, historicals, and fundamental/financial mappings
+   follow as Part 2 of the same task, not as a new task ID. Pinned `v0.2.0`
+   normalization may complete without inventing canonical identity, account
+   binding, or session evidence that the surface does not provide.
+6. `P06-T2` Part 1 exposes those normalized reads through a display-only
+   ainvest CLI under an independent Read Broker deployment identity; a later
+   Telegram read-query adapter may reuse that display surface. Part 2 promotes
+   verified data into Paper workflows only after canonical identity,
+   Agentic-account binding, and regular-session evidence are trustworthy. Both
+   parts cannot reach a trading capability or any of the 11 approved
+   non-trading mutations; the gateway ships no read-only projection, so that
+   narrowing is ainvest adapter code and must be asserted by test.
 
 | Task | Status | Dependencies / unlock | Integration note |
 |---|---|---|---|
@@ -738,7 +743,7 @@ capabilities only. Its serial merge order is:
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
 | `P06-T1` | `in_progress` (integration Part 1 merged; Part 2 claimed by `p06_t1_part2`) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 starts from immutable base `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d` before `P06-T2` |
-| `P06-T2` | `not_started` (blocked on P06-T1 Part 2) | `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` | Do not claim until Part 2 merges; create from/rebase onto that latest `main`; Paper execution only |
+| `P06-T2` | `not_started` (Part 1 blocked on P06-T1 Part 2; Part 2 additionally blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0`; Part 2: plus canonical identity, Agentic-account binding, and regular-session evidence | After P06-T1 Part 2 merges, claim only display-only CLI Part 1 from latest `main`; do not claim real-portfolio Paper Part 2 until its three named prerequisites are contract-tested |
 
 ##### Execution envelope: P06-T1 integration Part 1
 
@@ -800,12 +805,14 @@ capabilities only. Its serial merge order is:
   real account call, or live behavior. Do not modify dependencies or pursue
   unrelated third-party version or speculative corner-case hardening.
 - **Part 2 / next:** Part 2 is claimed by `p06_t1_part2` from base `f09321e`.
-  Its owner implements price books, tradability and
-  canonical `InstrumentIdentity` resolution, closed-order history semantics
+  Its owner implements price books, tradability, explicit partial/unverified
+  instrument references, and closed-order history semantics
   beyond the generic read model, historical OHLCV, and fundamental/financial
   mappings as integration Part 2 of `P06-T1`;
-  `P06-T2` remains blocked until both parts merge. Part 1 must not implement
-  Part 2 opportunistically.
+  `P06-T2` Part 1 remains blocked until both normalization parts merge. Part 1
+  must not implement Part 2 opportunistically. Canonical identity resolution
+  remains a later promotion prerequisite when the pinned contract cannot prove
+  it; it is not fabricated to close normalization.
 - **Verification:** use only deterministic synthetic or sanitized recorded
   fixtures; no public network or user credential is a test prerequisite.
   Cover valid mappings plus Decimal/timezone/enum/account/symbol/order
@@ -883,8 +890,9 @@ capabilities only. Its serial merge order is:
   `BrokerOrder`.
 - **Existing-schema honesty:** `FundamentalFact` and `FundamentalSnapshot` can
   honestly represent symbol-keyed non-null fundamental facts when the mapper
-  assigns explicit units, a real knowledge cutoff no earlier than receipt,
-  and gateway provenance. The standalone `PriceLevel` value model can be
+  applies the field-specific unit policy below, a real knowledge cutoff no
+  earlier than receipt, and gateway provenance. The standalone `PriceLevel`
+  value model can be
   reused if its positive-quantity invariant holds. Do **not** construct
   `InstrumentIdentity`, `PriceBook`, `OhlcvBar`, `OhlcvPage`,
   `InstrumentMetadataObservation`, `FundamentalObservation`, or
@@ -893,6 +901,32 @@ capabilities only. Its serial merge order is:
   price-book envelope, historical series/bars, account-unbound tradability,
   financial periods, and external closed-order history rather than filling
   absent fields with constants.
+- **Unit/currency policy:** encode only units guaranteed by the pinned schema.
+  For `get_equity_fundamentals`, use `SHARES` for volume, overnight volume,
+  all named average-volume fields, float, and shares outstanding; `USD` for
+  market cap only; `RATIO` for price/book and price/earnings ratios; `PERCENT`
+  for dividend yield and 30-day SEC yield; `PEOPLE` for employee count; and
+  `YEAR` for year founded. `open`, `high`, `low`, 52-week high/low, and
+  `dividend_per_share` have no currency in the pinned output and must use an
+  explicit `UNSPECIFIED` unit with non-comparable display semantics. For
+  `get_financials`, net margin is `PERCENT`; revenue, gross profit, and net
+  income are `UNSPECIFIED` and non-comparable because no reporting currency is
+  supplied. Never infer USD, construct `Money` from an unspecified value,
+  compare or aggregate unspecified amounts, or silently drop a non-null value.
+  Deterministic fixtures must exercise manifest-backed and unspecified units.
+- **Untrusted result text:** keep structured machine fields and numeric/time
+  facts. Provider free text—including price-book `errors[].error`, tradability
+  names and `internal_halt_details`, fundamental/company descriptions and
+  names, and closed-order `reject_reason`—may survive only when needed for
+  display, inside a wrapper limited to 512 Unicode characters with no CR, LF,
+  C0, or C1 controls, explicitly typed as untrusted and forbidden to prompt/log
+  consumers. If a field is not needed, is oversized, or contains controls,
+  substitute `UNAVAILABLE_UNTRUSTED_TEXT` and record its exact field path in
+  normalized `omitted_untrusted_fields` partial-quality metadata. Never
+  silently drop it or let the raw value reach
+  output, exceptions, logs, or prompts. Provider `guide`, tool descriptions,
+  and schema descriptions remain unconditionally discarded and are never
+  eligible display fields.
 - **Canonical identity boundary:** the pinned surface cannot verify a complete
   canonical `InstrumentIdentity`. Order rows bind one provider instrument ID
   to one symbol only within that accepted order result; the other five reads
@@ -904,7 +938,8 @@ capabilities only. Its serial merge order is:
   join it to symbol-only reads as though it were canonical. Canonical identity
   resolution remains unresolved for the pinned release and blocks promotion
   to existing identity-bearing/live-trading schemas, but does not block these
-  display/read-only normalized outputs or `P06-T2` after Part 2 merges.
+  display/read-only normalized outputs. After Part 2 merges, only the
+  display-only CLI slice of `P06-T2` becomes claimable.
 - **Account/session boundary:** `get_equity_tradability` and
   `get_equity_orders` require an account number as input but do not echo a
   verifiable account identifier in their results; `GatewayReadResult` also
@@ -933,7 +968,8 @@ capabilities only. Its serial merge order is:
   `src/ainvest/execution/robinhood/pins.py` only for the exact
   `GET_FINANCIALS` projection addition;
   `src/ainvest/execution/robinhood/read_client.py` only for the named
-  `read_financials` method;
+  `read_financials` method and the honesty correction that removes the false
+  tick/increment promise from `read_equity_tradability`'s docstring;
   `tests/unit/execution/robinhood/test_read_models.py`;
   `tests/unit/execution/robinhood/test_mappers.py`;
   `tests/unit/execution/robinhood/test_read_client.py`;
@@ -953,8 +989,10 @@ capabilities only. Its serial merge order is:
   fixtures. Cover every valid mapping and the fail-closed cases above,
   evidence/digest retention, provider-prose/raw-object exclusion, closed-order
   pagination metadata, explicit account/session/identity limitations, the
-  exact one-capability projection expansion, and proof that no mutation or
-  denied capability becomes reachable. Run focused unit/contract tests,
+  exact one-capability projection expansion, manifest-backed versus
+  `UNSPECIFIED` unit behavior, bounded/omitted untrusted-text behavior, and
+  proof that no mutation or denied capability becomes reachable. Run focused
+  unit/contract tests,
   `./scripts/dev unit`, `git diff --check`, and `./scripts/dev verify`. Real
   owner-assisted validation is not a merge prerequisite.
 - **External validation blocker:** authentication is healthy, but current
@@ -967,8 +1005,11 @@ capabilities only. Its serial merge order is:
 - **Completion/handoff:** after an independent functional/readability review,
   green required checks, and squash merge, record the PR, final main commit,
   test counts, review evidence, and residual identity/account/session boundary
-  here. That merge completes `P06-T1` and unblocks a separately claimed
-  `P06-T2`; it does not satisfy `P06-T3` / Gate 4.
+  here. That merge completes honest pinned-surface normalization in `P06-T1`
+  and unblocks only a separately claimed `P06-T2` Part 1 display-only CLI. It
+  does not unblock `P06-T2` Part 2 real-portfolio Paper and does not satisfy
+  `P06-T3` / Gate 4; those remain blocked on canonical identity,
+  Agentic-account binding, and regular-session proof.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1335,10 +1376,11 @@ excludes the contents of a result envelope's `data`. It also records that
   P06-T1.
   It never imports `mcp.*`, obtains or refreshes OAuth tokens, accepts a raw
   session, discovers arbitrary tools, or exposes `CallToolResult`. P06-T1 owns
-  Robinhood-to-ainvest domain normalization. P06-T2 owns the normalized ainvest
-  CLI/Paper-facing read surface, supports a later Telegram read-query adapter,
-  and composes the gateway only under an independent Read Broker deployment
-  identity.
+  Robinhood-to-ainvest domain normalization. P06-T2 Part 1 owns the normalized
+  display-only ainvest CLI surface and supports a later Telegram read-query
+  adapter; P06-T2 Part 2 owns Paper-facing promotion after its three evidence
+  prerequisites. Both compose the gateway only under an independent Read
+  Broker deployment identity.
 - **Allowed paths:** implementation is limited to
   `src/ainvest/execution/robinhood/read_client.py` and the focused unit-test
   files `tests/unit/execution/robinhood/test_read_client.py` and, only if a
@@ -1389,7 +1431,9 @@ excludes the contents of a result envelope's `data`. It also records that
   remediations above merge — **done in #107**, squash
   `b8ba082563928702dbd918ea8d478880a8a236cf`. `P06-T0` is complete;
   `P06-T1` integration Part 1 merged in #111, squash `65aa82a`; Part 2 is
-  claimed by `p06_t1_part2`, with `P06-T2` still blocked behind it.
+  claimed by `p06_t1_part2`. `P06-T2` Part 1 remains blocked behind it, while
+  Part 2 is additionally blocked on identity/account/session promotion
+  evidence.
 - **Verification evidence:** the final branch passed 108 focused
   `test_read_client.py` tests, 1,071 unit tests, 145 contract tests, 19
   integration tests, and the 1,235-test full suite with 87.14% coverage, plus
@@ -1441,11 +1485,12 @@ yfinance, or another provider.
 
 Per owner instruction on 2026-07-29, `P04-T2` and `P05-T4` are
 `not_started`, unclaimed, and paused while the priority lane runs; no background
-worktree or implementation agent should be started for either task. After
-`P06-T2`, create a separate narrow
-scheduling/task-card PR for Telegram read-only queries built on the read
-projection and the `P05-T4`/`P05-T5` transport; do not mix that read surface
-with Telegram approval, a non-trading mutation, or a trading capability.
+worktree or implementation agent should be started for either task. After the
+`P06-T2` Part 1 display-only CLI path, create a separate narrow
+scheduling/task-card PR for Telegram read-only queries built on that display
+projection and the `P05-T4`/`P05-T5` transport; do not wait for Part 2 and do
+not mix that read surface with Paper promotion, Telegram approval, a
+non-trading mutation, or a trading capability.
 
 #### Research track — `P04-T0` through `P04-T12`
 
