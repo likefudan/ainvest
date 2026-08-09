@@ -1,0 +1,29 @@
+{
+  "data": {
+    "results": [
+      {
+        "symbol": "AAPL",
+        "name": "Apple Inc. - Common Stock",
+        "simple_name": "Apple",
+        "state": "active",
+        "country": "US",
+        "tradeable": true,
+        "fractional_tradability": "tradable",
+        "extended_hours_fractional_tradability": false,
+        "all_day_tradability": "all_day_tradability_tradable",
+        "twenty_four_seven_tradability": "twenty_four_seven_tradability_untradable",
+        "short_selling_tradability": "short_selling_tradability_tradable",
+        "internal_halt_reason": "none",
+        "internal_halt_details": "No active halt",
+        "internal_halt_sessions": [],
+        "internal_halt_start_time": "",
+        "internal_halt_end_time": "",
+        "account_type_tradabilities": [
+          {"account_type": "individual", "account_type_tradability": "tradable"}
+        ]
+      }
+    ],
+    "not_found": ["MSFT"]
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}

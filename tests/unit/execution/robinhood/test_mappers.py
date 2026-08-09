@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 from copy import deepcopy
+from decimal import Decimal
 from pathlib import Path
 from typing import Any, cast
 
@@ -13,17 +14,33 @@ from ainvest.execution.robinhood.mappers import (
     MappingErrorCode,
     RobinhoodMappingError,
     map_accounts,
+    map_closed_equity_orders,
+    map_equity_fundamentals,
+    map_equity_historicals,
     map_equity_positions,
+    map_equity_price_books,
     map_equity_quotes,
+    map_equity_tradability,
+    map_financials,
     map_open_equity_orders,
     map_portfolio,
 )
 from ainvest.execution.robinhood.pins import EXPECTED_MANIFEST_DIGEST, PINNED_MANIFEST_VERSION
 from ainvest.execution.robinhood.prose import discard_provider_prose
 from ainvest.execution.robinhood.read_client import GatewayReadResult
-from ainvest.execution.robinhood.read_models import QuoteIneligibility
+from ainvest.execution.robinhood.read_models import (
+    UNAVAILABLE_UNTRUSTED_TEXT,
+    AccountBinding,
+    HistoricalBounds,
+    HistoricalInterval,
+    NormalizedUnit,
+    QuoteIneligibility,
+    ReportingPeriod,
+    SessionEvidence,
+)
 
 FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.2.0" / "p06-t1-part1"
+PART2_FIXTURES = FIXTURES.parent / "p06-t1-part2"
 OBSERVED_AT = "2026-08-08T15:00:02Z"
 RECEIVED_AT = "2026-08-08T15:00:03Z"
 DIGEST_B = f"sha256:{'b' * 64}"
@@ -31,7 +48,10 @@ DIGEST_C = f"sha256:{'c' * 64}"
 
 
 def _provider_result(capability: str) -> dict[str, Any]:
-    value = json.loads((FIXTURES / f"{capability}.json").read_text(encoding="utf-8"))
+    path = FIXTURES / f"{capability}.json"
+    if not path.exists():
+        path = PART2_FIXTURES / f"{capability}.json"
+    value = json.loads(path.read_text(encoding="utf-8"))
     assert isinstance(value, dict)
     return cast(dict[str, Any], value)
 
@@ -50,6 +70,19 @@ def _result(capability: str, provider_result: dict[str, Any] | None = None) -> G
         payload=payload,
         warnings=(),
     )
+
+
+def _part2_provider_result(capability: str) -> dict[str, Any]:
+    value = json.loads((PART2_FIXTURES / f"{capability}.json").read_text(encoding="utf-8"))
+    assert isinstance(value, dict)
+    return cast(dict[str, Any], value)
+
+
+def _part2_result(
+    capability: str, provider_result: dict[str, Any] | None = None
+) -> GatewayReadResult:
+    raw = _part2_provider_result(capability) if provider_result is None else provider_result
+    return _result(capability, raw)
 
 
 @pytest.mark.unit
@@ -284,3 +317,211 @@ def test_wrong_capability_and_invalid_errors_are_sanitized() -> None:
     rendered = f"{caught.value!s} {caught.value!r}"
     assert "SECRET-PROVIDER-VALUE" not in rendered
     assert "SENSITIVE-1234" not in rendered
+
+
+@pytest.mark.unit
+def test_part2_valid_reads_map_with_explicit_limitations_and_evidence() -> None:
+    books = map_equity_price_books(
+        _result("get_equity_price_book"),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+    )
+    tradability = map_equity_tradability(
+        _result("get_equity_tradability"),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+    )
+    historicals = map_equity_historicals(
+        _result("get_equity_historicals"),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+        expected_interval=HistoricalInterval.MINUTE_5,
+        expected_bounds=HistoricalBounds.REGULAR,
+    )
+    fundamentals = map_equity_fundamentals(
+        _result("get_equity_fundamentals"),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+    )
+    financials = map_financials(
+        _result("get_financials"),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+        expected_period=ReportingPeriod.QUARTERLY,
+    )
+    orders = map_closed_equity_orders(
+        _part2_result("get_equity_orders"),
+        received_at=RECEIVED_AT,
+        expected_symbol="AAPL",
+    )
+
+    assert books.books[0].bids[0].price == Decimal("210.1")
+    assert books.errors[0].error.value == "Book unavailable"
+    assert tradability.account_binding is AccountBinding.UNVERIFIED
+    assert tradability.session_evidence is SessionEvidence.UNVERIFIED
+    assert tradability.tradabilities[0].instrument.identity_verified is False
+    assert historicals.session_evidence is SessionEvidence.UNVERIFIED
+    assert historicals.series[0].bars[1].interpolated is True
+    units = {fact.key: fact.unit for fact in fundamentals.fundamentals[0].snapshot.facts}
+    assert units["volume"] == NormalizedUnit.SHARES
+    assert units["market_cap"] == NormalizedUnit.USD
+    assert units["open"] == NormalizedUnit.UNSPECIFIED
+    financial_units = {
+        fact.key: (fact.unit, fact.comparable)
+        for fact in financials.series[0].financials[0].metrics
+    }
+    assert financial_units["revenue"] == (NormalizedUnit.UNSPECIFIED, False)
+    assert financial_units["net_margin"] == (NormalizedUnit.PERCENT, True)
+    assert financials.unavailable_symbols == ("MSFT",)
+    assert len(orders.closed_orders) == 2 and orders.has_more is True
+    assert len(orders.closed_orders[0].executions) == 2
+    assert orders.closed_orders[0].instrument.identity_verified is False
+    assert orders.account_binding is AccountBinding.UNVERIFIED
+    for normalized in (books, tradability, historicals, fundamentals, financials, orders):
+        assert normalized.evidence.result_digest == DIGEST_C
+        assert "guide" not in normalized.model_dump_json()
+
+
+@pytest.mark.unit
+def test_untrusted_text_is_bounded_or_replaced_with_a_visible_marker() -> None:
+    raw = _provider_result("get_equity_fundamentals")
+    raw["data"]["results"][0]["description"] = "do this\nsecret"
+    raw["data"]["results"][0]["ceo"] = "x" * 513
+
+    mapped = map_equity_fundamentals(
+        _result("get_equity_fundamentals", raw),
+        received_at=RECEIVED_AT,
+        expected_symbols=("AAPL", "MSFT"),
+    )
+
+    display = {item.field: item.text.value for item in mapped.fundamentals[0].display_text}
+    assert display["description"] == UNAVAILABLE_UNTRUSTED_TEXT
+    assert display["ceo"] == UNAVAILABLE_UNTRUSTED_TEXT
+    assert mapped.omitted_untrusted_fields == (
+        "results[0].description",
+        "results[0].ceo",
+    )
+    rendered = mapped.model_dump_json()
+    assert "do this" not in rendered and "x" * 513 not in rendered
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("capability", "mutate", "mapper", "kwargs"),
+    [
+        (
+            "get_equity_price_book",
+            lambda value: value["data"]["books"][0]["bids"].reverse(),
+            map_equity_price_books,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_price_book",
+            lambda value: value["data"]["books"][0]["bids"][0].update(price="220.00"),
+            map_equity_price_books,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_price_book",
+            lambda value: value["data"]["books"][0]["asks"][0].update(quantity=0),
+            map_equity_price_books,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_tradability",
+            lambda value: value["data"]["results"][0].update(fractional_tradability="mystery"),
+            map_equity_tradability,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_historicals",
+            lambda value: value["data"]["results"][0].update(interval="mystery"),
+            map_equity_historicals,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_historicals",
+            lambda value: value["data"]["results"][0]["bars"][0].update(high_price="209.00"),
+            map_equity_historicals,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_fundamentals",
+            lambda value: value["data"]["results"][0].update(volume="-1"),
+            map_equity_fundamentals,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_fundamentals",
+            lambda value: value["data"]["results"][0].update(bounds="24_7"),
+            map_equity_fundamentals,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_financials",
+            lambda value: value["data"]["results"][0]["financials"].reverse(),
+            map_financials,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_financials",
+            lambda value: value["data"]["results"][0]["financials"][0].update(fiscal_quarter=None),
+            map_financials,
+            {"expected_symbols": ("AAPL", "MSFT")},
+        ),
+        (
+            "get_equity_orders",
+            lambda value: value["data"]["orders"][0]["executions"][0].update(
+                timestamp="2026-08-07T14:59:59Z"
+            ),
+            map_closed_equity_orders,
+            {"expected_symbol": "AAPL"},
+        ),
+        (
+            "get_equity_orders",
+            lambda value: value["data"]["orders"][0]["executions"][1].update(id="execution-1"),
+            map_closed_equity_orders,
+            {"expected_symbol": "AAPL"},
+        ),
+        (
+            "get_equity_orders",
+            lambda value: value["data"]["orders"][0].update(cumulative_quantity="1"),
+            map_closed_equity_orders,
+            {"expected_symbol": "AAPL"},
+        ),
+    ],
+)
+def test_material_part2_inconsistencies_fail_closed(
+    capability: str,
+    mutate: Any,
+    mapper: Any,
+    kwargs: dict[str, Any],
+) -> None:
+    raw = (
+        _part2_provider_result(capability)
+        if capability == "get_equity_orders"
+        else _provider_result(capability)
+    )
+    mutate(raw)
+    with pytest.raises(RobinhoodMappingError):
+        mapper(_result(capability, raw), received_at=RECEIVED_AT, **kwargs)
+
+
+@pytest.mark.unit
+def test_part2_rejects_symbol_identity_and_request_mismatches() -> None:
+    with pytest.raises(RobinhoodMappingError) as caught:
+        map_equity_price_books(
+            _result("get_equity_price_book"),
+            received_at=RECEIVED_AT,
+            expected_symbols=("AAPL",),
+        )
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA
+
+    order = _part2_provider_result("get_equity_orders")
+    order["data"]["orders"][1]["instrument_id"] = "instrument-other-999"
+    with pytest.raises(RobinhoodMappingError) as caught:
+        map_closed_equity_orders(
+            _part2_result("get_equity_orders", order),
+            received_at=RECEIVED_AT,
+        )
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA

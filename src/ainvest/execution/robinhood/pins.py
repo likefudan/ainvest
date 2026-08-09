@@ -219,6 +219,7 @@ class ReadCapability(StrEnum):
     GET_EQUITY_PRICE_BOOK = "get_equity_price_book"
     GET_EQUITY_QUOTES = "get_equity_quotes"
     GET_EQUITY_TRADABILITY = "get_equity_tradability"
+    GET_FINANCIALS = "get_financials"
     GET_PORTFOLIO = "get_portfolio"
 
 
@@ -235,6 +236,7 @@ READ_CAPABILITY_WIRE_NAMES: Final[dict[str, str]] = {
     "GET_EQUITY_PRICE_BOOK": "get_equity_price_book",
     "GET_EQUITY_QUOTES": "get_equity_quotes",
     "GET_EQUITY_TRADABILITY": "get_equity_tradability",
+    "GET_FINANCIALS": "get_financials",
     "GET_PORTFOLIO": "get_portfolio",
 }
 

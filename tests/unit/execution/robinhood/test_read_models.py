@@ -9,8 +9,11 @@ from pydantic import ValidationError
 
 from ainvest.execution.robinhood.read_models import (
     EquityQuoteRead,
+    FinancialMetric,
+    HistoricalBarRead,
     OpenOrderRead,
     QuoteIneligibility,
+    UntrustedDisplayText,
 )
 
 
@@ -93,3 +96,31 @@ def test_open_order_rejects_closed_state_and_incoherent_amounts() -> None:
         OpenOrderRead.model_validate({**base, "state": "filled", "quantity": "1"})
     with pytest.raises(ValidationError, match="appear together"):
         OpenOrderRead.model_validate({**base, "dollar_amount": "25"})
+
+
+@pytest.mark.unit
+def test_untrusted_display_text_rejects_controls_and_oversize_values() -> None:
+    assert UntrustedDisplayText(value="safe display text").value == "safe display text"
+    with pytest.raises(ValidationError, match="control"):
+        UntrustedDisplayText(value="unsafe\ntext")
+    with pytest.raises(ValidationError):
+        UntrustedDisplayText(value="x" * 513)
+
+
+@pytest.mark.unit
+def test_historical_bar_and_financial_unit_invariants_fail_closed() -> None:
+    with pytest.raises(ValidationError, match="inconsistent"):
+        HistoricalBarRead.model_validate(
+            {
+                "begins_at": "2026-08-08T14:30:00Z",
+                "open": "12",
+                "high": "11",
+                "low": "10",
+                "close": "10.5",
+                "volume": "1",
+            }
+        )
+    with pytest.raises(ValidationError, match="unit policy"):
+        FinancialMetric.model_validate(
+            {"key": "revenue", "value": "10", "unit": "USD", "comparable": True}
+        )

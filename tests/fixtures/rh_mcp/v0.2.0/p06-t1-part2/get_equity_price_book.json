@@ -1,0 +1,14 @@
+{
+  "data": {
+    "books": [
+      {
+        "symbol": "AAPL",
+        "updated_at": "2026-08-08T15:00:01Z",
+        "asks": [{"price": "210.20", "quantity": 20}, {"price": "210.30", "quantity": 40}],
+        "bids": [{"price": "210.10", "quantity": 30}, {"price": "210.00", "quantity": 50}]
+      }
+    ],
+    "errors": [{"symbol": "MSFT", "error": "Book unavailable"}]
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}
