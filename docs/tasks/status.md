@@ -1110,9 +1110,13 @@ excludes the contents of a result envelope's `data`. It also records that
   coordinator-owned; only the coordinator may update it to record claim/merge
   state. Every other path is read-only for this follow-up.
 - **Required behavior:** close exactly two review findings:
-  1. Translate exceptions raised by startup `capabilities()` or `readiness()`
-     into a stable sanitized `GatewayReadError`. Provider prose, the original
-     exception message/arguments, and its chained cause must not escape.
+  1. Treat the entire `verify_startup()` path as one sanitization boundary.
+     Translate every unexpected exception from `capabilities()`, `readiness()`,
+     readiness-document rendering/`to_json_dict()`, or subsequent validation
+     into a stable sanitized `GatewayReadError`; existing sanitized
+     `GatewayReadError` values remain safe to propagate. Provider prose, the
+     original exception message/arguments, and its chained cause must not
+     escape.
   2. Enforce the SDK-neutral JSON boundary recursively: reject non-JSON values,
      non-string mapping keys, and non-finite numbers; require `observed_at` to
      be a valid timezone-aware RFC 3339 date-time rather than merely a non-empty
@@ -1148,10 +1152,11 @@ excludes the contents of a result envelope's `data`. It also records that
   remediations above merge — **active**. `P06-T1` is next immediately after
   step 6, followed serially by `P06-T2`.
 - **Verification contract:** add focused positive and adversarial unit tests for
-  both findings, run that focused test module, `git diff --check`, and
-  `./scripts/dev verify`. A separate sub-agent reviews functionality,
-  fail-closed sanitization, tests, readability, and duplication before squash
-  merge.
+  both findings, explicitly including failures from `capabilities()`,
+  `readiness()`, and readiness `to_json_dict()`/rendering/validation; run that
+  focused test module, `git diff --check`, and `./scripts/dev verify`. A
+  separate sub-agent reviews functionality, fail-closed sanitization, tests,
+  readability, and duplication before squash merge.
 - **Explicitly deferred, non-blocking follow-ups:** do not change the current
   network-on-every-`verify` broker installation flow, pin or redesign the pip
   bootstrap/version strategy, extend PEP 610 provenance into local installed-
