@@ -104,7 +104,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, all `P06-T0` work, and `P06-T1` integration Part 1 merged; Part 2 is claimed); serial merge queue |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, and both `P06-T1` integration parts merged; `P06-T2` Part 1 is next, queued and unclaimed); serial merge queue |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -161,8 +161,10 @@ expected full-manifest digest in the priority lane's **Recorded external
 dependency pin** subsection. The narrow `P06-T0` hardening follow-up also
 merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 `P06-T0`; `P06-T1` integration Part 1 merged in
-[#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 is now claimed
-as the next slice before `P06-T2` Part 1 display-only CLI. Later candidates
+[#111](https://github.com/likefudan/ainvest/pull/111), and Part 2 merged in
+[#114](https://github.com/likefudan/ainvest/pull/114), completing the honest
+pinned-surface display normalization. `P06-T2` Part 1 display-only CLI is the
+next queued slice and remains unclaimed. Later candidates
 enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
@@ -536,9 +538,10 @@ Shared-surface ownership for this claim is exclusive:
   obtains a coordinator-recorded scope expansion before editing it.
 
 The owner pause on `P04-T2` and `P05-T4` remains in force. The complete
-`P06-T0` adapter, runtime-dependency, and hardening delivery is merged, as is
-`P06-T1` integration Part 1. `P06-T1` integration Part 2 is claimed;
-the paused tasks and unrelated task chains are not part of that queue position.
+`P06-T0` adapter, runtime-dependency, and hardening delivery is merged, and
+both integration parts of `P06-T1` are merged. `P06-T2` Part 1 display-only
+CLI is next, queued and unclaimed; the paused tasks and unrelated task chains
+are not part of that queue position.
 
 ##### Execution envelope: P08-T4
 
@@ -721,19 +724,22 @@ capabilities only. Its serial merge order is:
    readiness verifies manifest version and full-manifest digest, while every
    result additionally verifies envelope version.
 5. `P06-T1` normalizes accepted reads into versioned ainvest schemas. Its first
-   integration part covers the smallest honest CLI inputs: accounts, portfolio,
-   equity positions, quotes, and equity-order/open-order reads. Price book,
-   tradability, explicit partial/unverified instrument references, richer
-   closed-order history, historicals, and fundamental/financial mappings
-   follow as Part 2 of the same task, not as a new task ID. Pinned `v0.2.0`
-   normalization may complete without inventing canonical identity, account
-   binding, or session evidence that the surface does not provide.
+   integration part delivered the smallest honest CLI inputs: accounts,
+   portfolio, equity positions, quotes, and equity-order/open-order reads. Its
+   second integration part delivered price books, tradability, explicit
+   partial/unverified instrument references, richer closed-order history,
+   historicals, fundamentals, financials, and the exact `get_financials`
+   read projection. Both parts are merged without inventing canonical identity,
+   account binding, or session evidence that the pinned `v0.2.0` surface does
+   not provide.
 6. `P06-T2` Part 1 exposes those normalized reads through a display-only
    ainvest CLI under an independent Read Broker deployment identity; a later
    Telegram read-query adapter may reuse that display surface. Part 2 promotes
    verified data into Paper workflows only after canonical identity,
-   Agentic-account binding, and regular-session evidence are trustworthy. Both
-   parts cannot reach a trading capability or any of the 11 approved
+   verified Agentic-account binding, regular-session evidence, and a newly
+   reviewed `rh-mcp` release/provider-surface update plus the deliberate
+   ainvest pin update. Both parts cannot reach a trading capability or any of
+   the 11 approved
    non-trading mutations; the gateway ships no read-only projection, so that
    narrowing is ainvest adapter code and must be asserted by test.
 
@@ -742,8 +748,8 @@ capabilities only. Its serial merge order is:
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (released as `v0.2.0`, tagged commit `46128a623c87f954c18d037870e4ac36b9e61e13`) | Design correction merged at `366e7556cc765a0742fed7d6e17e0b9ec8e20aec`; implementation, independent review, tagged SemVer release, immutable artifact/provenance digest, and reviewed full-manifest digest are all satisfied and recorded below | This is a cross-repository prerequisite, not an ainvest task completion claim; the design-correction commit remains traceability evidence only, and the consumable dependency is the release artifact, never a source commit |
 | `P06-T0` | `merged` — complete | `P03-T13`, `P01-T4`, `P08-T7`, reviewed `rh-mcp` release, adapter, and runtime dependency are satisfied | Adapter/contract merged in [#104](https://github.com/likefudan/ainvest/pull/104), squash `72fe61c`; pinned runtime dependency and real artifact verification merged in [#105](https://github.com/likefudan/ainvest/pull/105), squash `473f2f2`; hardening merged in [#107](https://github.com/likefudan/ainvest/pull/107), squash `b8ba082` |
-| `P06-T1` | `in_progress` (integration Part 1 merged; Part 2 claimed by `p06_t1_part2`) | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 starts from immutable base `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d` before `P06-T2` |
-| `P06-T2` | `not_started` (Part 1 blocked on P06-T1 Part 2; Part 2 additionally blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0`; Part 2: plus canonical identity, Agentic-account binding, and regular-session evidence | After P06-T1 Part 2 merges, claim only display-only CLI Part 1 from latest `main`; do not claim real-portfolio Paper Part 2 until its three named prerequisites are contract-tested |
+| `P06-T1` | `merged` — complete for honest pinned-surface display normalization | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 merged via [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284` |
+| `P06-T2` | `not_started` (Part 1 queued and unclaimed; Part 2 blocked on promotion evidence) | Part 1: `P06-T0`, `P06-T1`, `P03-T16`, `P08-T0` (satisfied); Part 2: plus canonical identity, verified Agentic-account binding, regular-session evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus the deliberate ainvest pin update | Claim only display-only CLI Part 1 from latest `main`; real provider readiness drift blocks real calls, not offline CLI implementation. Do not claim real-portfolio Paper Part 2 until all four named prerequisites are contract-tested |
 
 ##### Execution envelope: P06-T1 integration Part 1
 
@@ -804,13 +810,14 @@ capabilities only. Its serial merge order is:
   workflow, Telegram/model sink, OAuth/authentication, credential handling,
   real account call, or live behavior. Do not modify dependencies or pursue
   unrelated third-party version or speculative corner-case hardening.
-- **Part 2 / next:** Part 2 is claimed by `p06_t1_part2` from base `f09321e`.
-  Its owner implements price books, tradability, explicit partial/unverified
+- **Part 2 / next:** Part 2 merged via
+  [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284`.
+  It implements price books, tradability, explicit partial/unverified
   instrument references, and closed-order history semantics
   beyond the generic read model, historical OHLCV, and fundamental/financial
   mappings as integration Part 2 of `P06-T1`;
-  `P06-T2` Part 1 remains blocked until both normalization parts merge. Part 1
-  must not implement Part 2 opportunistically. Canonical identity resolution
+  Both normalization parts are now merged; `P06-T2` Part 1 display-only CLI
+  is next, queued and unclaimed. Canonical identity resolution
   remains a later promotion prerequisite when the pinned contract cannot prove
   it; it is not fabricated to close normalization.
 - **Verification:** use only deterministic synthetic or sanitized recorded
@@ -858,12 +865,13 @@ capabilities only. Its serial merge order is:
 - **Title:** Normalize Robinhood Price Books, Tradability, Historicals,
   Fundamentals, Financials, and Closed Orders
 - **Task identity:** this is integration Part 2 of `P06-T1`, not a new task ID.
-- **Status/owner:** `claimed` — `p06_t1_part2`.
-- **Implementation branch/worktree/base:** `agent/p06-t1-part2` /
+- **Status/owner:** `merged` — `p06_t1_part2`; PR
+  [#114](https://github.com/likefudan/ainvest/pull/114), squash
+  `c6fb2849bb0f9e7fc40f710da06d0df6535d4771`.
+- **Implementation branch/worktree/base:** historical branch/worktree
+  `agent/p06-t1-part2` /
   `.worktrees/p06-t1-part2`; immutable starting base
-  `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d`. The implementation branch must
-  incorporate this tracker claim before review and rebase onto the latest
-  `main` immediately before independent review.
+  `f09321ed94a319b7f0c1924848c7b2a3ca7fc42d`.
 - **Dependencies:** `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6`, and P06-T1
   integration Part 1 are merged and satisfied.
 - **Pinned input contract:** normalize only validated `GatewayReadResult`
@@ -995,6 +1003,25 @@ capabilities only. Its serial merge order is:
   unit/contract tests,
   `./scripts/dev unit`, `git diff --check`, and `./scripts/dev verify`. Real
   owner-assisted validation is not a merge prerequisite.
+- **Delivered scope and review evidence:** the merged implementation normalizes
+  validated pinned-surface results from `get_equity_price_book`,
+  `get_equity_tradability`, `get_equity_historicals`,
+  `get_equity_fundamentals`, `get_financials`, and closed
+  `get_equity_orders` rows/executions. It adds the exact `get_financials`
+  read projection and named client method, preserves digest/provenance and
+  pagination facts, enforces the fail-closed mapping invariants above, and
+  retains bounded display-only untrusted text with explicit omission metadata.
+  Independent review first requested corrections to closed-order execution
+  invariants and fiscal-period handling in the
+  [initial CHANGES_REQUIRED review](https://github.com/likefudan/ainvest/pull/114#issuecomment-5233912690).
+  The implementation recorded its
+  [remediation](https://github.com/likefudan/ainvest/pull/114#issuecomment-5234006466),
+  and the independent reviewer then
+  [approved the corrected head](https://github.com/likefudan/ainvest/pull/114#issuecomment-5234010896).
+  Final verification passed 195 focused, 1,117 unit, 159 contract, and 19
+  integration tests; the aggregate suite passed 1,295 tests with 87.34%
+  coverage, `git diff --check` was clean, and all required GitHub checks were
+  green.
 - **External validation blocker:** authentication is healthy, but current
   Robinhood provider-surface drift makes pinned `rh-mcp` `v0.2.0` readiness
   fail closed (unknown tool plus changed account/order/option metadata or
@@ -1002,14 +1029,17 @@ capabilities only. Its serial merge order is:
   the deterministic offline implementation. A separately reviewed `rh-mcp`
   patch release and deliberate ainvest pin update are later coordination work,
   not part of this implementation.
-- **Completion/handoff:** after an independent functional/readability review,
-  green required checks, and squash merge, record the PR, final main commit,
-  test counts, review evidence, and residual identity/account/session boundary
-  here. That merge completes honest pinned-surface normalization in `P06-T1`
-  and unblocks only a separately claimed `P06-T2` Part 1 display-only CLI. It
-  does not unblock `P06-T2` Part 2 real-portfolio Paper and does not satisfy
-  `P06-T3` / Gate 4; those remain blocked on canonical identity,
-  Agentic-account binding, and regular-session proof.
+- **Completion/handoff:** this merge completes honest pinned-surface display
+  normalization in `P06-T1` and unblocks only a separately claimable `P06-T2`
+  Part 1 display-only CLI, which is queued and unclaimed. The normalized
+  surface deliberately retains partial
+  identity references, account-unbound results, session-unverified market
+  facts, non-comparable unspecified financial amounts, and bounded untrusted
+  display text. It does not unblock `P06-T2` Part 2 real-portfolio Paper and
+  does not satisfy `P06-T3` / Gate 4. Paper promotion remains blocked on
+  canonical identity, verified Agentic-account binding, regular-session
+  evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
+  the deliberate ainvest pin update.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1158,7 +1188,7 @@ marked **new**.
 | 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — tracked in the security register by planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`) on both `T-007` and `T-016`, with a preventive control on each row and `P06-T2` added to `T-007`'s tasks; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
 | 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
 | 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in `P06-T0`'s own **Allowed paths** further down this file, not in that checklist; the new bullet is where the two now sit together |
-| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, and #107. `T-016` is now `partial`/`partial` and remains incomplete pending P06-T1 normalization, P06-T2 sinks/deployment, real owner-assisted authorization, and end-to-end `P-GATEWAY-PROSE` evidence |
+| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, and #107, and P06-T1 normalization satisfied its review obligation in #111 and #114. `T-016` remains `partial`/`partial` pending P06-T2 sinks/deployment, real owner-assisted authorization, and end-to-end `P-GATEWAY-PROSE` evidence |
 
 Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
 description, and schema prose travels inside result envelopes, is
@@ -1378,8 +1408,10 @@ excludes the contents of a result envelope's `data`. It also records that
   session, discovers arbitrary tools, or exposes `CallToolResult`. P06-T1 owns
   Robinhood-to-ainvest domain normalization. P06-T2 Part 1 owns the normalized
   display-only ainvest CLI surface and supports a later Telegram read-query
-  adapter; P06-T2 Part 2 owns Paper-facing promotion after its three evidence
-  prerequisites. Both compose the gateway only under an independent Read
+  adapter; P06-T2 Part 2 owns Paper-facing promotion only after canonical
+  identity, verified Agentic-account binding, regular-session evidence, and a
+  newly reviewed `rh-mcp` release/provider-surface update plus the deliberate
+  ainvest pin update. Both compose the gateway only under an independent Read
   Broker deployment identity.
 - **Allowed paths:** implementation is limited to
   `src/ainvest/execution/robinhood/read_client.py` and the focused unit-test
@@ -1430,10 +1462,12 @@ excludes the contents of a result envelope's `data`. It also records that
   verification path merge — **done in #105**; (6) the two narrow review
   remediations above merge — **done in #107**, squash
   `b8ba082563928702dbd918ea8d478880a8a236cf`. `P06-T0` is complete;
-  `P06-T1` integration Part 1 merged in #111, squash `65aa82a`; Part 2 is
-  claimed by `p06_t1_part2`. `P06-T2` Part 1 remains blocked behind it, while
-  Part 2 is additionally blocked on identity/account/session promotion
-  evidence.
+  `P06-T1` integration Part 1 merged in #111, squash `65aa82a`, and Part 2
+  merged in #114, squash `c6fb284`, completing `P06-T1`. `P06-T2` Part 1
+  display-only CLI is next, queued and unclaimed. Part 2 remains blocked on
+  canonical identity, verified Agentic-account binding, regular-session
+  evidence, and a newly reviewed `rh-mcp` release/provider-surface update plus
+  the deliberate ainvest pin update.
 - **Verification evidence:** the final branch passed 108 focused
   `test_read_client.py` tests, 1,071 unit tests, 145 contract tests, 19
   integration tests, and the 1,235-test full suite with 87.14% coverage, plus
@@ -1570,7 +1604,9 @@ task row is in the cross-cutting table below.
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. The complete `P06-T0` adapter,
 runtime dependency, and hardening delivery is merged in #104/#105/#107;
-`P06-T1` integration Part 1 is merged in #111 and Part 2 is claimed.
+both `P06-T1` integration parts are merged in #111/#114, completing honest
+pinned-surface display normalization. `P06-T2` Part 1 display-only CLI is
+next, queued and unclaimed.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
 closed. `P08-T8` and `P08-T9` are dependency-ready but
