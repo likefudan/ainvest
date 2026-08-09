@@ -431,6 +431,7 @@ def test_read_returns_a_validated_result_and_sends_only_our_own_wire_name() -> N
         ("read_equity_historicals", ReadCapability.GET_EQUITY_HISTORICALS),
         ("read_equity_fundamentals", ReadCapability.GET_EQUITY_FUNDAMENTALS),
         ("read_equity_tradability", ReadCapability.GET_EQUITY_TRADABILITY),
+        ("read_financials", ReadCapability.GET_FINANCIALS),
     ],
 )
 def test_each_named_read_operation_sends_its_own_capability(
@@ -465,6 +466,7 @@ def test_adapter_exposes_named_reads_and_no_generic_invoke() -> None:
         "read_equity_price_book",
         "read_equity_quotes",
         "read_equity_tradability",
+        "read_financials",
         "read_portfolio",
         "startup",
         "verify_startup",

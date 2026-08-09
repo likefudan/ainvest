@@ -1,0 +1,47 @@
+{
+  "data": {
+    "results": [
+      {
+        "symbol": "AAPL",
+        "open": "209.90",
+        "high": "211.00",
+        "low": "209.50",
+        "volume": "1000000",
+        "overnight_volume": null,
+        "bounds": "regular",
+        "market_date": "2026-08-08",
+        "average_volume_2_weeks": "900000",
+        "average_volume": "800000",
+        "average_volume_30_days": "850000",
+        "high_52_weeks": "220.00",
+        "high_52_weeks_date": "2026-07-01",
+        "low_52_weeks": "160.00",
+        "low_52_weeks_date": "2025-09-01",
+        "float": "15000000000",
+        "market_cap": "3200000000000",
+        "pb_ratio": "45.5",
+        "pe_ratio": "32.1",
+        "shares_outstanding": "15100000000",
+        "dividend_yield": "0.50",
+        "dividend_per_share": "0.25",
+        "distribution_frequency": "quarterly",
+        "payable_date": "2026-08-20",
+        "ex_dividend_date": "2026-08-10",
+        "record_date": "2026-08-11",
+        "thirty_day_sec_yield": null,
+        "description": "Consumer technology company",
+        "ceo": "Sample Executive",
+        "headquarters_city": "Cupertino",
+        "headquarters_state": "California",
+        "sector": "Technology",
+        "industry": "Consumer Electronics",
+        "num_employees": 100000,
+        "year_founded": 1976,
+        "financial_status_indicator": "CC0",
+        "financial_status_description": "No deficiency"
+      }
+    ],
+    "not_found": ["MSFT"]
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}

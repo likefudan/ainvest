@@ -1,0 +1,35 @@
+{
+  "data": {
+    "results": [
+      {
+        "symbol": "AAPL",
+        "interval": "5minute",
+        "bounds": "regular",
+        "bars": [
+          {
+            "begins_at": "2026-08-08T14:30:00Z",
+            "open_price": "210.00",
+            "close_price": "210.10",
+            "high_price": "210.20",
+            "low_price": "209.90",
+            "volume": 1000,
+            "session": "reg",
+            "interpolated": false
+          },
+          {
+            "begins_at": "2026-08-08T14:35:00Z",
+            "open_price": "210.10",
+            "close_price": "210.10",
+            "high_price": "210.10",
+            "low_price": "210.10",
+            "volume": 0,
+            "session": "reg",
+            "interpolated": true
+          }
+        ]
+      }
+    ],
+    "not_found": ["MSFT"]
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}

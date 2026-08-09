@@ -511,8 +511,14 @@ class RobinhoodReadClient:
     async def read_equity_tradability(
         self, arguments: Mapping[str, Any] | None = None
     ) -> GatewayReadResult:
-        """Instrument tradability, tick and increment metadata."""
+        """Symbol-keyed tradability and session/halt flags."""
         return await self._read(ReadCapability.GET_EQUITY_TRADABILITY, arguments)
+
+    async def read_financials(
+        self, arguments: Mapping[str, Any] | None = None
+    ) -> GatewayReadResult:
+        """Quarterly or annual financial periods."""
+        return await self._read(ReadCapability.GET_FINANCIALS, arguments)
 
     # -- internals ---------------------------------------------------------
 

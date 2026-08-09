@@ -2,15 +2,24 @@
 
 from __future__ import annotations
 
+from datetime import date
 from decimal import Decimal
 
 import pytest
 from pydantic import ValidationError
 
 from ainvest.execution.robinhood.read_models import (
+    ClosedOrderRead,
     EquityQuoteRead,
+    FinancialMetric,
+    FinancialPeriodRead,
+    FinancialSeriesRead,
+    HistoricalBarRead,
     OpenOrderRead,
+    PartialInstrumentReference,
     QuoteIneligibility,
+    ReportingPeriod,
+    UntrustedDisplayText,
 )
 
 
@@ -93,3 +102,120 @@ def test_open_order_rejects_closed_state_and_incoherent_amounts() -> None:
         OpenOrderRead.model_validate({**base, "state": "filled", "quantity": "1"})
     with pytest.raises(ValidationError, match="appear together"):
         OpenOrderRead.model_validate({**base, "dollar_amount": "25"})
+
+
+@pytest.mark.unit
+def test_untrusted_display_text_rejects_controls_and_oversize_values() -> None:
+    assert UntrustedDisplayText(value="safe display text").value == "safe display text"
+    with pytest.raises(ValidationError, match="control"):
+        UntrustedDisplayText(value="unsafe\ntext")
+    with pytest.raises(ValidationError):
+        UntrustedDisplayText(value="x" * 513)
+
+
+@pytest.mark.unit
+def test_historical_bar_and_financial_unit_invariants_fail_closed() -> None:
+    with pytest.raises(ValidationError, match="inconsistent"):
+        HistoricalBarRead.model_validate(
+            {
+                "begins_at": "2026-08-08T14:30:00Z",
+                "open": "12",
+                "high": "11",
+                "low": "10",
+                "close": "10.5",
+                "volume": "1",
+            }
+        )
+    with pytest.raises(ValidationError, match="unit policy"):
+        FinancialMetric.model_validate(
+            {"key": "revenue", "value": "10", "unit": "USD", "comparable": True}
+        )
+
+
+def _closed_order(**overrides: object) -> ClosedOrderRead:
+    values: dict[str, object] = {
+        "order_id": "order-123",
+        "instrument": {"instrument_id": "instrument-123", "symbol": "AAPL"},
+        "side": "BUY",
+        "order_type": "market",
+        "state": "filled",
+        "quantity": "2",
+        "filled_quantity": "2",
+        "fees": "0",
+        "time_in_force": "gfd",
+        "market_hours": "regular_hours",
+        "placed_agent": "user",
+        "created_at": "2026-08-08T14:30:00Z",
+        "last_transaction_at": "2026-08-08T14:31:00Z",
+        "executions": [
+            {
+                "execution_id": "execution-123",
+                "price": "210",
+                "quantity": "2",
+                "timestamp": "2026-08-08T14:30:30Z",
+                "fees": "0",
+            }
+        ],
+    }
+    values.update(overrides)
+    return ClosedOrderRead.model_validate(values)
+
+
+@pytest.mark.unit
+def test_closed_filled_order_requires_complete_execution_detail() -> None:
+    with pytest.raises(ValidationError, match="execution quantity"):
+        _closed_order(executions=[])
+    with pytest.raises(ValidationError, match="requested quantity"):
+        _closed_order(
+            filled_quantity="1",
+            executions=[
+                {
+                    "execution_id": "execution-123",
+                    "price": "210",
+                    "quantity": "1",
+                    "timestamp": "2026-08-08T14:30:30Z",
+                    "fees": "0",
+                }
+            ],
+        )
+
+
+@pytest.mark.unit
+def test_financial_series_rejects_duplicate_identity_and_impossible_fiscal_year() -> None:
+    def series(*periods: FinancialPeriodRead) -> FinancialSeriesRead:
+        return FinancialSeriesRead(
+            instrument=PartialInstrumentReference(symbol="AAPL"),
+            period=ReportingPeriod.QUARTERLY,
+            financials=periods,
+        )
+
+    q2 = FinancialPeriodRead(
+        fiscal_year=2026,
+        fiscal_quarter=2,
+        period_end_date=date(2026, 6, 30),
+        metrics=(),
+    )
+    duplicate_q2 = FinancialPeriodRead(
+        fiscal_year=2026,
+        fiscal_quarter=2,
+        period_end_date=date(2026, 3, 31),
+        metrics=(),
+    )
+    impossible = FinancialPeriodRead(
+        fiscal_year=2020,
+        fiscal_quarter=1,
+        period_end_date=date(2026, 3, 31),
+        metrics=(),
+    )
+    adjacent = FinancialPeriodRead(
+        fiscal_year=2025,
+        fiscal_quarter=1,
+        period_end_date=date(2026, 3, 31),
+        metrics=(),
+    )
+
+    with pytest.raises(ValidationError, match="identities"):
+        series(q2, duplicate_q2)
+    with pytest.raises(ValidationError, match="fiscal year"):
+        series(impossible)
+    assert series(adjacent).financials == (adjacent,)

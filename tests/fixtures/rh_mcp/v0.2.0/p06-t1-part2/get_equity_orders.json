@@ -1,0 +1,56 @@
+{
+  "data": {
+    "orders": [
+      {
+        "id": "order-filled-456",
+        "instrument_id": "instrument-aapl-123",
+        "symbol": "AAPL",
+        "side": "buy",
+        "type": "market",
+        "state": "filled",
+        "quantity": "2",
+        "cumulative_quantity": "2",
+        "price": null,
+        "stop_price": null,
+        "average_price": "200.05",
+        "fees": "0.02",
+        "dollar_based_amount": null,
+        "time_in_force": "gfd",
+        "market_hours": "regular_hours",
+        "trigger": "immediate",
+        "placed_agent": "agentic",
+        "created_at": "2026-08-07T15:00:00Z",
+        "last_transaction_at": "2026-08-07T15:00:03Z",
+        "executions": [
+          {"id": "execution-1", "price": "200.00", "quantity": "1", "timestamp": "2026-08-07T15:00:01Z", "fees": "0.01"},
+          {"id": "execution-2", "price": "200.10", "quantity": "1", "timestamp": "2026-08-07T15:00:02Z", "fees": "0.01"}
+        ]
+      },
+      {
+        "id": "order-rejected-789",
+        "instrument_id": "instrument-aapl-123",
+        "symbol": "AAPL",
+        "side": "sell",
+        "type": "limit",
+        "state": "rejected",
+        "quantity": "1",
+        "cumulative_quantity": "0",
+        "price": "220.00",
+        "stop_price": null,
+        "average_price": null,
+        "fees": "0",
+        "dollar_based_amount": null,
+        "time_in_force": "gfd",
+        "market_hours": "regular_hours",
+        "trigger": "immediate",
+        "placed_agent": "user",
+        "created_at": "2026-08-06T15:00:00Z",
+        "last_transaction_at": "2026-08-06T15:00:01Z",
+        "executions": [],
+        "reject_reason": "Risk check rejected the order"
+      }
+    ],
+    "next": "next-page-token"
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}

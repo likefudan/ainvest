@@ -1,0 +1,32 @@
+{
+  "data": {
+    "results": [
+      {
+        "symbol": "AAPL",
+        "period": "quarterly",
+        "financials": [
+          {
+            "fiscal_year": 2026,
+            "fiscal_quarter": 2,
+            "period_end_date": "2026-06-30",
+            "revenue": "95000000000",
+            "gross_profit": "45000000000",
+            "net_income": "24000000000",
+            "net_margin": "25.26"
+          },
+          {
+            "fiscal_year": 2026,
+            "fiscal_quarter": 1,
+            "period_end_date": "2026-03-31",
+            "revenue": null,
+            "gross_profit": null,
+            "net_income": null,
+            "net_margin": null
+          }
+        ]
+      },
+      null
+    ]
+  },
+  "guide": "Discard this provider-authored presentation instruction."
+}
