@@ -192,7 +192,9 @@ Primary parallelization opportunities:
   are merged. Its serial cross-repository order is: independently reviewed
   tagged SemVer `rh-mcp` release with an immutable artifact → ainvest tracker
   records the tag, artifact provenance/digest, and expected full-manifest
-  digest → `P06-T0` → `P06-T1` → `P06-T2`. The first two steps are done:
+  digest → `P06-T0` → `P06-T1` → `P06-T2` Part 1 display CLI. `P06-T2` Part 2
+  is the later Paper-promotion step under the same task ID. The first two steps
+  are done:
   `rh-mcp` `v0.2.0` was approved on 2026-08-04 and its pins are recorded under
   "Recorded external dependency pin" in `docs/tasks/status.md`. Gate 2, Gate 3,
   and complete observability remain prerequisites for `P06-T3` / Gate 4, not
@@ -986,6 +988,18 @@ may run after their own dependencies without waiting for all of Batch E, Gate
 capability. `P06-T3` remains the Gate 4 acceptance card and retains all
 of its research, Paper-approval, and observability dependencies.
 
+The preview is delivered product-first without confusing displayable data with
+trade-grade evidence. `P06-T1` may complete normalization of the pinned
+`rh-mcp` surface using explicit partial/unverified instrument references and
+display-only, account-unbound, or session-unverified outputs. Missing canonical
+instrument identity, verified Agentic-account binding, or regular-session proof
+blocks promotion into identity-bearing schemas and Paper/Strategy/Sizer/Risk;
+it does not block honest normalized display models. `P06-T2` therefore has two
+parts under the same task ID: Part 1 exposes those normalized values in a
+display-only CLI, while Part 2 adds real-portfolio Paper integration only after
+the three promotion prerequisites are supplied by a separately reviewed
+contract and deliberately pinned dependency update.
+
 The external [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) project
 owns the default-deny Non-Trading Gateway: OAuth/DCR/PKCE/refresh, its
 credential-store protocol, private MCP SDK v2 transport, the reviewed
@@ -1007,10 +1021,10 @@ responsibility, not something the gateway enforces on our behalf. Phase 06
 consumes the read capabilities only; using any of the 11 non-trading mutations
 requires its own explicitly named task card and tracker entry.
 
-The gateway likewise does not strip **provider-controlled prose**. Provider
-`guide`, tool descriptions, and schema descriptions ride inside result
-envelopes and inside the reviewed manifest itself. `rh-mcp` never executes
-them, but it hands them to us verbatim, and the `v0.2.0` review records
+The gateway likewise does not strip **provider-controlled instructional
+prose**. Provider `guide`, tool descriptions, and schema descriptions ride
+inside result envelopes and inside the reviewed manifest itself. `rh-mcp`
+never executes them, but it hands them to us verbatim, and the `v0.2.0` review records
 discarding them as an ainvest consumer requirement. Treat that text as
 untrusted data across all of Phase 06: it must not reach a model prompt,
 Telegram, CLI output, or a log.
@@ -1092,10 +1106,10 @@ substitute for the consumable release artifact.
     including a patch, with no changelog entry. It also records that
     `correlation_id` is public but is never populated by the package, so a
     fixture must not require it.
-  - Discard provider-controlled prose before anything derived from an envelope
-    reaches a model, Telegram, CLI output, or a log. Provider `guide`, tool
-    descriptions, and schema descriptions travel inside result envelopes and
-    inside the reviewed manifest's own `description` and schema-`description`
+  - Discard provider-controlled instructional prose before anything derived
+    from an envelope reaches a model, Telegram, CLI output, or a log. Provider
+    `guide`, tool descriptions, and schema descriptions travel inside result
+    envelopes and inside the reviewed manifest's own `description` and schema-`description`
     fields. `rh-mcp` does not execute them and does not strip them; the
     `v0.2.0` review records discarding them as an ainvest consumer requirement
     (requirement 5) and as a standing residual risk. Treat that prose as
@@ -1124,50 +1138,111 @@ substitute for the consumable release artifact.
 ### P06-T1 — Normalize Robinhood Market, Fundamental, and Portfolio Data
 
 - **Objective:** Map validated payloads from SDK-neutral `rh-mcp` result
-  envelopes into versioned ainvest schemas.
+  envelopes into versioned ainvest schemas or narrowly scoped,
+  provider-independent read models that state every unresolved binding.
 - **Dependencies:** P06-T0, P02-T1 through P02-T3, and P02-T6.
 - **Primary file:** `src/ainvest/execution/robinhood/mappers.py`.
 - **Implementation checklist:**
   - Map quotes, price book, historicals, fundamentals, financials, account scope, cash/buying power, positions, open orders, and order history.
-  - Map the canonical Robinhood instrument ID and verify its symbol, exchange, currency, asset type, tradability, price tick, and quantity increment. Reject ambiguous or inconsistent identity mappings.
+  - Construct canonical `InstrumentIdentity` only when the provider contract
+    verifies instrument ID, symbol, exchange MIC, currency, asset type,
+    identity timestamp, tradability, price tick, and quantity increment.
+    Otherwise preserve only the available instrument ID/symbol facts as an
+    explicitly partial, unverified reference. Reject ambiguity or
+    inconsistency; never invent a missing identity field. Partial identity is
+    valid for display normalization and invalid for promotion into an
+    identity-bearing or trading model.
   - A live-eligible quote includes symbol, last/bid/ask, server or observation time, source, and session; otherwise mark it unusable for live.
-  - Confirm the expected Agentic Account. An unknown or non-Agentic scope is non-tradable.
+  - Bind the expected Agentic Account only when a trustworthy contract proves
+    it. An unknown, non-Agentic, or result-unbound scope remains display-only
+    and non-tradable; do not recover or default a raw account number.
+  - Preserve manifest-backed units exactly. Fundamentals map
+    volume/float/share counts as `SHARES`, `market_cap` as `USD`, valuation
+    ratios as `RATIO`, yields as `PERCENT`, employee count as `PEOPLE`, and
+    founding year as `YEAR`. Price-like fundamentals without a supplied
+    currency (`open`, `high`, `low`, 52-week high/low, and
+    `dividend_per_share`) use explicit `UNSPECIFIED` unit/non-comparable
+    semantics. Financial `net_margin` is `PERCENT`; financial revenue,
+    gross-profit, and net-income values are `UNSPECIFIED` and non-comparable
+    because the pinned schema supplies no reporting currency. Never infer USD,
+    coerce an unspecified amount to `Money`, or silently drop a non-null value.
+  - Treat result free text as untrusted display data. Needed values may cross
+    normalization only through a wrapper limited to 512 Unicode characters,
+    with no CR, LF, C0, or C1 control characters, that is marked untrusted and
+    forbidden to prompt/log consumers. Oversized, control-bearing, or
+    intentionally excluded values become the stable
+    `UNAVAILABLE_UNTRUSTED_TEXT` marker plus an entry in
+    `omitted_untrusted_fields`; no raw text is silently dropped.
+    Provider `guide`, tool descriptions, and schema descriptions are always
+    discarded and never become display data.
   - Never silently fall back on Decimal, symbol, timezone, or status mapping errors.
   - Store raw-response digests and normalized snapshots.
-- **Acceptance criteria:** Recorded/synthetic contracts cover unknown enum, missing account scope, amount mismatch, missing bid/ask/time, and stale quotes; all fail closed.
+- **Acceptance criteria:** Recorded/synthetic contracts cover unknown enum,
+  missing account scope, amount mismatch, missing bid/ask/time, stale quotes,
+  partial/ambiguous identity, unspecified unit/currency, and bounded-untrusted
+  text handling; all fail closed or retain an explicit non-comparable/omitted
+  marker as defined above. Completion means the pinned surface is honestly
+  normalized for display and unblocks only `P06-T2` Part 1. Canonical identity,
+  Agentic-account binding, and regular-session proof remain promotion
+  prerequisites for `P06-T2` Part 2 and Gate 4, not hidden completion claims.
 
-### P06-T2 — Expose Read-Only CLI and Real-Portfolio Paper Mode
+### P06-T2 — Expose Display-Only CLI, then Real-Portfolio Paper Mode
 
 - **Objective:** Make it technically impossible for a Phase 06 process to submit a live order.
-- **Dependencies:** P06-T0, P06-T1, P03-T16, and P08-T0.
+- **Dependencies:** Part 1 depends on P06-T0, completed P06-T1 normalization,
+  P03-T16, and P08-T0. Part 2 additionally requires trustworthy canonical
+  instrument identity, verified Agentic-account binding, and regular-session
+  evidence. The pinned `rh-mcp` `v0.2.0` contract does not supply those three
+  prerequisites; satisfying them likely requires a separately reviewed
+  `rh-mcp` patch/contract and a deliberate ainvest pin update.
 - **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
 - **Implementation checklist:**
+  - **Part 1 — display-only CLI:** expose only normalized, explicitly
+    partial/unverified, account-unbound, or session-unverified results. It may
+    show portfolio, positions, buying power, orders, quotes, price books,
+    historicals, fundamentals, and financials, but cannot feed a proposal,
+    sizing, risk, or execution decision. CLI output must preserve
+    non-comparable/omitted markers and escape any bounded
+    `UntrustedDisplayText`; that result text must not reach prompts or logs.
   - Use the normalized ainvest read protocol and an independent Read Broker
     deployment identity; only that deployment composes the pinned `rh-mcp`
     gateway and its credential-store adapter.
-  - Provide an ainvest CLI surface for portfolio, positions, buying power,
-    orders, and symbol quote queries through the normalized read projection;
-    keep the same normalized surface available to Paper workflows and a later
-    Telegram read-query adapter, and never expose a raw MCP session, provider
-    envelope, or tool invocation.
-  - Never render provider-controlled prose. Provider `guide`, tool
-    descriptions, and schema descriptions are prompt-injection material that
-    `rh-mcp` returns but does not strip, and this card is the one that routes
+  - Keep the Part 1 normalized display surface available to a later Telegram
+    read-query adapter, and never expose a raw MCP session, provider envelope,
+    or tool invocation. Telegram read queries may be scheduled after the CLI
+    display path; they do not wait for Part 2 and cannot promote display data.
+  - Never render provider-controlled instructional prose. Provider `guide`,
+    tool descriptions, and schema descriptions are prompt-injection material
+    that `rh-mcp` returns but does not strip, and this card is the one that routes
     gateway-derived data to a CLI, to Paper workflows, and to a later Telegram
-    adapter. `P06-T0` discards it at the adapter boundary; assert here that
-    none of it survives into CLI output, a Telegram message, a model prompt,
-    or a log. This is requirement 5 of the `rh-mcp` `v0.2.0` review, recorded
-    in `docs/tasks/status.md` under "Recorded external dependency pin".
-  - Inject Robinhood quotes, fundamentals, and real portfolio snapshots into Strategy/Sizer/Risk while fixing the broker to PaperBroker.
-  - Startup logs and health state show `read_only=true` and `execution=paper`.
-    Here `read_only` means this deployment reaches no Robinhood mutation of
-    any kind — neither a trading capability nor one of the 11 approved
-    non-trading mutations.
+    adapter. `P06-T0` discards that instructional prose at the adapter boundary;
+    assert here that none of it survives into CLI output, a Telegram message,
+    a model prompt, or a log. Bounded result-field text may reach only escaped
+    CLI or Telegram display through `UntrustedDisplayText`, with the stable
+    marker and `omitted_untrusted_fields` metadata defined in `P06-T1`; it must
+    never reach a model prompt or log. This is requirement 5 of the `rh-mcp`
+    `v0.2.0` review, recorded in `docs/tasks/status.md` under "Recorded external
+    dependency pin".
+  - **Part 2 — real-portfolio Paper:** only after canonical identity,
+    Agentic-account binding, and regular-session proof are verified, promote
+    eligible Robinhood quotes, fundamentals, and real portfolio snapshots into
+    Strategy/Sizer/Risk while fixing the broker to PaperBroker. No Part 1
+    partial/unbound/session-unverified value may enter this path.
+  - Part 1 startup logs and health state show `read_only=true`,
+    `mode=display_only`, and `execution=disabled`. Part 2 shows
+    `read_only=true` and `execution=paper`. Here `read_only` means either
+    deployment reaches no Robinhood mutation of any kind—neither a trading
+    capability nor one of the 11 approved non-trading mutations.
   - Reject a trade when an MCP quote fails; never construct an Alpaca/yfinance fallback.
   - Make submit attempts fail at two or more of client, configuration, and deployment-permission layers.
-- **Acceptance criteria:** The CLI returns normalized read-only account/market
-  results, real data drives a Paper proposal, and no code path reaches a
-  Robinhood trading capability or a non-trading mutation.
+- **Acceptance criteria:** Part 1 is accepted when the CLI returns only
+  normalized display-read account/market results with every partial identity,
+  unknown unit, omitted text, account binding, and session limitation visible,
+  and no code path reaches a Robinhood trading capability or non-trading
+  mutation. Part 2—and therefore full `P06-T2` completion—is accepted only when
+  the three promotion prerequisites are contract-tested, real data safely
+  drives a Paper proposal, failures call no fallback provider, and submit
+  remains unreachable at two or more layers.
 
 ### P06-T3 — Gate 4: Accept Robinhood Non-Trading Paper Trading
 
@@ -1547,8 +1622,9 @@ line.
   and P08-T7, implement and independently review a tagged SemVer `rh-mcp`
   release with an immutable artifact, record its tag, artifact
   provenance/digest, and expected full-manifest digest in the ainvest tracker,
-  then integrate `P06-T0` -> `P06-T1` -> `P06-T2` serially for the earliest
-  safe Robinhood Non-Trading Preview. The release and the tracker record are
+  then integrate `P06-T0` -> `P06-T1` -> `P06-T2` Part 1 serially for the
+  earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
+  separate promotion step under the same task ID. The release and tracker are
   done (`rh-mcp` `v0.2.0`); the lane resumes at `P06-T0`. By owner instruction,
   `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
@@ -1558,19 +1634,23 @@ line.
 1. Complete the priority lane: independently reviewed tagged SemVer `rh-mcp`
    release with an immutable artifact -> ainvest tracker records its tag,
    artifact provenance/digest, and expected full-manifest digest -> `P06-T0`
-   -> `P06-T1` -> `P06-T2`, without waiting for every Batch E track. This is a
-   Non-Trading Preview, not a gate acceptance. The first two steps are complete
+   -> `P06-T1` -> `P06-T2` Part 1, without waiting for every Batch E track. This
+   is a display-only Non-Trading Preview, not a gate acceptance. The first two
+   steps are complete
    (`rh-mcp` `v0.2.0`, pinned in `docs/tasks/status.md`).
-2. After `P06-T2`, schedule Telegram read-only queries as a separate narrow
-   task-card/tracker change built on the read projection and P05-T4/P05-T5. Do
-   not combine queries with Telegram approval, non-trading mutations, or
-   trading capabilities.
-3. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
+2. After the `P06-T2` Part 1 CLI display path, schedule Telegram read-only
+   queries as a separate narrow task-card/tracker change built on that display
+   projection and P05-T4/P05-T5. Do not combine queries with Telegram approval,
+   Paper promotion, non-trading mutations, or trading capabilities.
+3. Supply and independently review canonical identity, Agentic-account
+   binding, and regular-session evidence; deliberately update the pinned
+   contract if required; then complete `P06-T2` Part 2 real-portfolio Paper.
+4. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
    then perform the P06-T3 capability permission audit and Gate 4 acceptance.
-4. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
-5. P07-T0 through P07-T5.
-6. P08-T15 plus an independent security review.
-7. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
+5. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
+6. P07-T0 through P07-T5.
+7. P08-T15 plus an independent security review.
+8. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
 
 ### Parallel-Edit Warnings
 
