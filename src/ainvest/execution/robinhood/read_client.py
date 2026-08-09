@@ -53,7 +53,9 @@ import re
 import time
 from collections.abc import Callable, Mapping, Sequence
 from dataclasses import dataclass
+from datetime import datetime
 from enum import StrEnum
+from math import isfinite
 from typing import Any, Final, Protocol
 
 from ainvest.execution.robinhood.errors import (
@@ -83,6 +85,10 @@ from ainvest.execution.robinhood.prose import contains_provider_prose, discard_p
 from ainvest.observability import get_logger
 
 DIGEST_PATTERN: Final = re.compile(r"\Asha256:[0-9a-f]{64}\Z")
+RFC3339_DATETIME_PATTERN: Final = re.compile(
+    r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}T[0-9]{2}:[0-9]{2}:[0-9]{2}"
+    r"(?:\.[0-9]+)?(?:Z|[+-][0-9]{2}:[0-9]{2})\Z"
+)
 
 #: The structured log event name. One event, two statuses.
 READ_LOG_EVENT: Final = "robinhood_gateway_read"
@@ -138,6 +144,7 @@ class ReadRejection(StrEnum):
     PAYLOAD_TOO_DEEP = "payload_too_deep"
     PAYLOAD_TOO_MANY_NODES = "payload_too_many_nodes"
     PAYLOAD_STRING_TOO_LONG = "payload_string_too_long"
+    PAYLOAD_NOT_JSON = "payload_not_json"
     PROSE_NOT_DISCARDED = "prose_not_discarded"
 
 
@@ -172,6 +179,7 @@ READ_REJECTION_WIRE_NAMES: Final[dict[str, str]] = {
     "PAYLOAD_TOO_DEEP": "payload_too_deep",
     "PAYLOAD_TOO_MANY_NODES": "payload_too_many_nodes",
     "PAYLOAD_STRING_TOO_LONG": "payload_string_too_long",
+    "PAYLOAD_NOT_JSON": "payload_not_json",
     "PROSE_NOT_DISCARDED": "prose_not_discarded",
 }
 
@@ -437,11 +445,22 @@ class RobinhoodReadClient:
     async def verify_startup(self) -> StartupVerification:
         """Prove the read projection, then readiness. Reads are refused until
         this has succeeded."""
-        projection = verify_read_projection(self._gateway.capabilities())
-        readiness = verify_readiness(await self._gateway.readiness())
-        verification = StartupVerification(projection=projection, readiness=readiness)
-        self._startup = verification
-        return verification
+        self._startup = None
+        try:
+            projection = verify_read_projection(self._gateway.capabilities())
+            readiness = verify_readiness(await self._gateway.readiness())
+            verification = StartupVerification(projection=projection, readiness=readiness)
+        except GatewayReadError:
+            raise
+        except Exception as exc:
+            error = translate_gateway_failure(exc)
+        else:
+            self._startup = verification
+            return verification
+
+        # Raise outside the handler so the provider exception is not retained
+        # as context on the sanitized ainvest error.
+        raise error from None
 
     # -- named read operations ---------------------------------------------
 
@@ -609,7 +628,7 @@ class RobinhoodReadClient:
             raise fail(ReadRejection.ENVELOPE_DIGEST_MALFORMED)
 
         observed_at = document["observed_at"]
-        if not isinstance(observed_at, str) or not observed_at.strip():
+        if not _is_rfc3339_datetime(observed_at):
             raise fail(ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED)
 
         warnings = _validated_warnings(document["warnings"], fail)
@@ -697,6 +716,17 @@ def _is_digest(value: object) -> bool:
     return isinstance(value, str) and DIGEST_PATTERN.fullmatch(value) is not None
 
 
+def _is_rfc3339_datetime(value: object) -> bool:
+    if not isinstance(value, str) or RFC3339_DATETIME_PATTERN.fullmatch(value) is None:
+        return False
+    normalized = value[:-1] + "+00:00" if value.endswith("Z") else value
+    try:
+        parsed = datetime.fromisoformat(normalized)
+    except ValueError:
+        return False
+    return parsed.tzinfo is not None and parsed.utcoffset() is not None
+
+
 def _validated_warnings(
     value: object,
     fail: Callable[[ReadRejection], GatewayReadError],
@@ -723,27 +753,49 @@ def _enforce_payload_bounds(
     data: Mapping[str, Any],
     fail: Callable[[ReadRejection], GatewayReadError],
 ) -> None:
-    """Re-check depth, node count, and string length at this trust boundary."""
+    """Require bounded JSON-compatible data at this trust boundary."""
     nodes = 0
-    stack: list[tuple[Any, int]] = [(data, 0)]
-    while stack:
-        value, depth = stack.pop()
+
+    def walk(value: Any, depth: int, active_containers: set[int]) -> None:
+        nonlocal nodes
         nodes += 1
         if nodes > MAX_PAYLOAD_NODES:
             raise fail(ReadRejection.PAYLOAD_TOO_MANY_NODES)
         if depth > MAX_PAYLOAD_DEPTH:
             raise fail(ReadRejection.PAYLOAD_TOO_DEEP)
+
         if isinstance(value, str):
             if len(value) > MAX_PAYLOAD_STRING_LENGTH:
                 raise fail(ReadRejection.PAYLOAD_STRING_TOO_LONG)
-        elif isinstance(value, Mapping):
-            for key, item in value.items():
-                if isinstance(key, str) and len(key) > MAX_PAYLOAD_STRING_LENGTH:
-                    raise fail(ReadRejection.PAYLOAD_STRING_TOO_LONG)
-                stack.append((item, depth + 1))
-        elif isinstance(value, Sequence) and not isinstance(value, bytes):
-            for item in value:
-                stack.append((item, depth + 1))
+            return
+        if value is None or isinstance(value, (bool, int)):
+            return
+        if isinstance(value, float):
+            if not isfinite(value):
+                raise fail(ReadRejection.PAYLOAD_NOT_JSON)
+            return
+        if not isinstance(value, (Mapping, list, tuple)):
+            raise fail(ReadRejection.PAYLOAD_NOT_JSON)
+
+        identity = id(value)
+        if identity in active_containers:
+            raise fail(ReadRejection.PAYLOAD_NOT_JSON)
+        active_containers.add(identity)
+        try:
+            if isinstance(value, Mapping):
+                for key, item in value.items():
+                    if not isinstance(key, str):
+                        raise fail(ReadRejection.PAYLOAD_NOT_JSON)
+                    if len(key) > MAX_PAYLOAD_STRING_LENGTH:
+                        raise fail(ReadRejection.PAYLOAD_STRING_TOO_LONG)
+                    walk(item, depth + 1, active_containers)
+            else:
+                for item in value:
+                    walk(item, depth + 1, active_containers)
+        finally:
+            active_containers.remove(identity)
+
+    walk(data, 0, set())
 
 
 __all__ = [
