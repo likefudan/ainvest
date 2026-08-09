@@ -500,6 +500,72 @@ def test_startup_failure_leaves_reads_refused() -> None:
     assert gateway.invocations == []
 
 
+class _ExplodingDocument:
+    def to_json_dict(self) -> dict[str, Any]:
+        raise RuntimeError(INJECTED_PROSE)
+
+
+class _ExplodingReadiness(Mapping[str, Any]):
+    def __getitem__(self, key: str) -> Any:
+        raise RuntimeError(INJECTED_PROSE)
+
+    def __iter__(self) -> Any:
+        raise RuntimeError(INJECTED_PROSE)
+
+    def __len__(self) -> int:
+        raise RuntimeError(INJECTED_PROSE)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "gateway",
+    [
+        FakeGateway(capabilities_raises=RuntimeError(INJECTED_PROSE)),
+        FakeGateway(readiness_raises=RuntimeError(INJECTED_PROSE)),
+        FakeGateway(readiness_result=_ExplodingDocument()),
+        FakeGateway(readiness_result=_ExplodingReadiness()),
+    ],
+    ids=["capabilities", "readiness", "readiness-rendering", "readiness-validation"],
+)
+def test_unexpected_startup_exceptions_are_sanitized_and_leave_startup_unset(
+    gateway: FakeGateway,
+) -> None:
+    client = RobinhoodReadClient(gateway)
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(client.verify_startup())
+
+    assert INJECTED_PROSE not in f"{caught.value}{caught.value!r}{caught.value.args}"
+    assert caught.value.__cause__ is None
+    assert caught.value.__context__ is None
+    assert client.startup is None
+
+
+@pytest.mark.unit
+def test_existing_sanitized_startup_error_is_preserved() -> None:
+    expected = GatewayReadError(GatewayReadErrorCode.NOT_READY)
+    client = RobinhoodReadClient(FakeGateway(capabilities_raises=expected))
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(client.verify_startup())
+
+    assert caught.value is expected
+    assert client.startup is None
+
+
+@pytest.mark.unit
+def test_failed_reverification_clears_a_previous_startup_verification() -> None:
+    gateway = FakeGateway()
+    client = RobinhoodReadClient(gateway)
+    run(client.verify_startup())
+    gateway.readiness_raises = RuntimeError(INJECTED_PROSE)
+
+    with pytest.raises(GatewayReadError):
+        run(client.verify_startup())
+
+    assert client.startup is None
+
+
 @pytest.mark.unit
 def test_a_non_projection_capability_never_reaches_the_gateway() -> None:
     """`_read` refuses a raw string rather than forwarding it."""
@@ -584,6 +650,20 @@ def test_manifest_drift_in_a_result_is_caught_before_the_payload(
         ({"schema_digest": "sha256:nope"}, ReadRejection.ENVELOPE_DIGEST_MALFORMED),
         ({"result_digest": "not-a-digest"}, ReadRejection.ENVELOPE_DIGEST_MALFORMED),
         ({"observed_at": "  "}, ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED),
+        ({"observed_at": "not-a-timestamp"}, ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED),
+        ({"observed_at": "2026-08-06T12:00:00"}, ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED),
+        (
+            {"observed_at": "2026-13-06T12:00:00Z"},
+            ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
+        ),
+        (
+            {"observed_at": "2026-08-06T12:00:00+00:60"},
+            ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
+        ),
+        (
+            {"observed_at": "2026-08-06T12:00:00+01:99"},
+            ReadRejection.ENVELOPE_OBSERVED_AT_MALFORMED,
+        ),
         ({"warnings": "a string"}, ReadRejection.ENVELOPE_WARNINGS_INVALID),
         ({"warnings": [1]}, ReadRejection.ENVELOPE_WARNINGS_INVALID),
         (
@@ -627,6 +707,23 @@ def test_an_envelope_reached_through_to_json_dict_validates() -> None:
     client = _verified_client(gateway)
 
     assert run(client.read_portfolio()).capability == "get_portfolio"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "observed_at",
+    [
+        "2026-08-06T12:00:00Z",
+        "2026-08-06T12:00:00.123456Z",
+        "2026-08-06T12:00:00-07:00",
+        "2026-08-06T12:00:00+23:59",
+    ],
+)
+def test_timezone_aware_rfc3339_observed_at_is_accepted(observed_at: str) -> None:
+    gateway = FakeGateway(envelope=envelope_document("get_portfolio", observed_at=observed_at))
+    client = _verified_client(gateway)
+
+    assert run(client.read_portfolio()).observed_at == observed_at
 
 
 def _payload_nested(levels: int) -> dict[str, Any]:
@@ -677,6 +774,83 @@ def test_a_payload_at_the_depth_bound_is_accepted() -> None:
     client = _verified_client(gateway)
 
     assert run(client.read_portfolio()).capability == "get_portfolio"
+
+
+@pytest.mark.unit
+def test_json_compatible_payload_values_are_accepted_and_detached() -> None:
+    payload = {
+        "null": None,
+        "boolean": True,
+        "integer": 1,
+        "number": -1.25,
+        "string": "value",
+        "array": [None, False, 2, 3.5, "nested"],
+        "tuple": ({"key": "value"},),
+    }
+    gateway = FakeGateway(envelope=envelope_document("get_portfolio", data=payload))
+    client = _verified_client(gateway)
+
+    result = run(client.read_portfolio())
+
+    assert result.payload == {**payload, "tuple": [{"key": "value"}]}
+    assert result.payload is not payload
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "invalid_value",
+    [
+        b"bytes",
+        object(),
+        {"set-item"},
+        float("nan"),
+        float("inf"),
+        float("-inf"),
+    ],
+    ids=["bytes", "object", "set", "nan", "positive-infinity", "negative-infinity"],
+)
+def test_non_json_payload_values_fail_closed(invalid_value: object) -> None:
+    gateway = FakeGateway(
+        envelope=envelope_document("get_portfolio", data={"value": invalid_value})
+    )
+    client = _verified_client(gateway)
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(client.read_portfolio())
+
+    assert caught.value.code is GatewayReadErrorCode.ENVELOPE_INVALID
+    assert caught.value.rejection == ReadRejection.PAYLOAD_NOT_JSON.value
+
+
+@pytest.mark.unit
+def test_non_string_mapping_key_fails_closed() -> None:
+    gateway = FakeGateway(envelope=envelope_document("get_portfolio", data={1: "value"}))
+    client = _verified_client(gateway)
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(client.read_portfolio())
+
+    assert caught.value.rejection == ReadRejection.PAYLOAD_NOT_JSON.value
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("container_kind", ["mapping", "list"])
+def test_cyclic_payload_fails_closed(container_kind: str) -> None:
+    if container_kind == "mapping":
+        payload: Any = {}
+        payload["self"] = payload
+    else:
+        cyclic_list: list[Any] = []
+        cyclic_list.append(cyclic_list)
+        payload = {"value": cyclic_list}
+    gateway = FakeGateway(envelope=envelope_document("get_portfolio", data=payload))
+    client = _verified_client(gateway)
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(client.read_portfolio())
+
+    assert caught.value.code is GatewayReadErrorCode.ENVELOPE_INVALID
+    assert caught.value.rejection == ReadRejection.PAYLOAD_NOT_JSON.value
 
 
 # ---------------------------------------------------------------------------

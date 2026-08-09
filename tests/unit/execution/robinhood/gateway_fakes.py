@@ -188,14 +188,20 @@ class FakeGateway:
     readiness_result: Any = field(default_factory=readiness_document)
     envelope: Any = None
     raises: BaseException | None = None
+    capabilities_raises: BaseException | None = None
+    readiness_raises: BaseException | None = None
     invocations: list[tuple[object, Mapping[str, Any] | None]] = field(default_factory=list)
     readiness_calls: int = 0
 
     def capabilities(self) -> Sequence[FakeCapability]:
+        if self.capabilities_raises is not None:
+            raise self.capabilities_raises
         return self.listing
 
     async def readiness(self) -> Any:
         self.readiness_calls += 1
+        if self.readiness_raises is not None:
+            raise self.readiness_raises
         return self.readiness_result
 
     async def invoke(
