@@ -36,6 +36,7 @@ from ainvest.schemas.common import Symbol
 
 _SYMBOL = TypeAdapter(Symbol)
 _ACCOUNT_PATTERN: Final = re.compile(r"\A[\x21-\x7e]{1,128}\Z")
+_DATE_PATTERN: Final = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
 _MACHINE_FILTER_PATTERN: Final = re.compile(r"\A[a-z][a-z0-9_]{0,63}\Z")
 _ORDER_ID_PATTERN: Final = re.compile(r"\A[A-Za-z0-9_-]{3,128}\Z")
 
@@ -239,10 +240,13 @@ def _rfc3339_value(value: str) -> datetime:
 
 
 def _created_at(value: str) -> None:
+    if _DATE_PATTERN.fullmatch(value) is None:
+        _rfc3339(value)
+        return
     try:
         date.fromisoformat(value)
     except ValueError:
-        _rfc3339(value)
+        raise CliInputError from None
 
 
 def _read_account_number(namespace: argparse.Namespace, stdin: TextIO) -> str:

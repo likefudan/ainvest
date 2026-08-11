@@ -204,23 +204,30 @@ def test_tty_getpass_value_is_never_rendered(monkeypatch: pytest.MonkeyPatch) ->
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("limit", ["0", "41"])
-def test_financial_limit_is_closed_range(limit: str, monkeypatch: pytest.MonkeyPatch) -> None:
+@pytest.mark.parametrize(
+    ("limit", "valid"), [("0", False), ("1", True), ("40", True), ("41", False)]
+)
+def test_financial_limit_is_closed_range(
+    limit: str, valid: bool, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    called = False
+
     async def execute(*args: Any) -> DisplaySuccess:
-        raise AssertionError("gateway must not open")
+        nonlocal called
+        called = True
+        raise GatewayReadError(GatewayReadErrorCode.NOT_READY)
 
     monkeypatch.setattr(cli, "_execute", execute)
     stdin, stdout, stderr = _streams()
 
-    assert (
-        cli.main(
-            ["financials", "AAPL", "--limit", limit],
-            stdin=stdin,
-            stdout=stdout,
-            stderr=stderr,
-        )
-        == 2
+    exit_code = cli.main(
+        ["financials", "AAPL", "--limit", limit],
+        stdin=stdin,
+        stdout=stdout,
+        stderr=stderr,
     )
+    assert exit_code == (1 if valid else 2)
+    assert called is valid
     assert stdout.getvalue() == ""
 
 
@@ -228,7 +235,7 @@ def test_financial_limit_is_closed_range(limit: str, monkeypatch: pytest.MonkeyP
 @pytest.mark.parametrize(
     "argv",
     [
-        ["quotes", *(["AAPL"] * 21)],
+        ["quotes", *(f"A{index}" for index in range(21))],
         ["price-book", "AAPL", "MSFT", "NVDA", "TSLA", "AMD"],
         ["historicals", "AAPL", "--start-time", "2026-13-01T00:00:00Z"],
         ["historicals", "AAPL", "--start-time", "2026-08-01"],
@@ -241,6 +248,15 @@ def test_financial_limit_is_closed_range(limit: str, monkeypatch: pytest.MonkeyP
             "2026-08-01T00:00:00Z",
         ],
         ["orders", "--account-number-stdin", "--view", "open", "--placed-agent", "bad value"],
+        ["orders", "--account-number-stdin", "--view", "open", "--created-at-gte", "20260809"],
+        [
+            "orders",
+            "--account-number-stdin",
+            "--view",
+            "open",
+            "--created-at-gte",
+            "2026-W32-7",
+        ],
     ],
 )
 def test_argument_boundaries_fail_before_gateway(
@@ -267,6 +283,108 @@ def test_unexpected_error_is_sanitized(monkeypatch: pytest.MonkeyPatch) -> None:
     assert cli.main(["status"], stdin=stdin, stdout=stdout, stderr=stderr) == 1
     assert stdout.getvalue() == ""
     assert "provider prose" not in stderr.getvalue()
+    assert json.loads(stderr.getvalue())["error"] == {
+        "code": "internal_error",
+        "retryable": False,
+    }
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("command", "limit", "needs_account"),
+    [
+        ("quotes", 20, False),
+        ("price-book", 4, False),
+        ("tradability", 10, True),
+        ("historicals", 10, False),
+        ("fundamentals", 10, False),
+        ("financials", 20, False),
+    ],
+)
+def test_every_symbol_command_enforces_maximum_and_duplicate_rejection(
+    command: str,
+    limit: int,
+    needs_account: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = 0
+
+    async def execute(*args: Any) -> DisplaySuccess:
+        nonlocal calls
+        calls += 1
+        raise GatewayReadError(GatewayReadErrorCode.NOT_READY)
+
+    def argv(symbols: list[str]) -> list[str]:
+        values = [command]
+        if needs_account:
+            values.append("--account-number-stdin")
+        values.extend(symbols)
+        if command == "historicals":
+            values.extend(["--start-time", "2026-08-01T00:00:00Z"])
+        return values
+
+    monkeypatch.setattr(cli, "_execute", execute)
+    symbols = [f"A{index}" for index in range(limit + 1)]
+    for requested, expected_exit in (
+        (symbols[:limit], 1),
+        (symbols, 2),
+        (["AAPL", "AAPL"], 2),
+    ):
+        stdin, stdout, stderr = _streams(io.StringIO("opaque-account\n" if needs_account else ""))
+        assert cli.main(argv(requested), stdin=stdin, stdout=stdout, stderr=stderr) == expected_exit
+        assert stdout.getvalue() == ""
+    assert calls == 1
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "created_at",
+    ["2026-08-09", "2026-08-09T00:00:00Z", "2026-08-08T17:00:00-07:00"],
+)
+def test_orders_accept_only_canonical_date_or_rfc3339_filter(
+    created_at: str, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    async def execute(*args: Any) -> DisplaySuccess:
+        raise GatewayReadError(GatewayReadErrorCode.NOT_READY)
+
+    monkeypatch.setattr(cli, "_execute", execute)
+    stdin, stdout, stderr = _streams(io.StringIO("opaque-account\n"))
+    assert (
+        cli.main(
+            [
+                "orders",
+                "--account-number-stdin",
+                "--view",
+                "open",
+                "--created-at-gte",
+                created_at,
+            ],
+            stdin=stdin,
+            stdout=stdout,
+            stderr=stderr,
+        )
+        == 1
+    )
+    assert stdout.getvalue() == ""
+
+
+@pytest.mark.unit
+def test_render_failure_is_sanitized_and_leaves_stdout_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def execute(*args: Any) -> DisplaySuccess:
+        return _status()
+
+    def fail_render(self: DisplaySuccess, *, mode: str) -> dict[str, Any]:
+        del self, mode
+        raise ValueError("provider-like rendering detail")
+
+    monkeypatch.setattr(cli, "_execute", execute)
+    monkeypatch.setattr(DisplaySuccess, "model_dump", fail_render)
+    stdin, stdout, stderr = _streams()
+    assert cli.main(["status"], stdin=stdin, stdout=stdout, stderr=stderr) == 1
+    assert stdout.getvalue() == ""
+    assert "provider-like" not in stderr.getvalue()
     assert json.loads(stderr.getvalue())["error"] == {
         "code": "internal_error",
         "retryable": False,

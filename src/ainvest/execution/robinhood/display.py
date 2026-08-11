@@ -7,14 +7,17 @@ it has no generic capability dispatch and no path into Paper or execution.
 
 from __future__ import annotations
 
-from collections.abc import Callable, Mapping, Sequence
-from datetime import UTC, datetime
+import re
+from collections.abc import Callable, Iterable, Mapping, Sequence
+from datetime import UTC, date, datetime
 from enum import StrEnum
 from typing import Any, Final, Literal, Self
 
 from pydantic import model_validator
 
 from ainvest.execution.robinhood.mappers import (
+    MappingErrorCode,
+    RobinhoodMappingError,
     map_accounts,
     map_closed_equity_orders,
     map_equity_fundamentals,
@@ -27,7 +30,7 @@ from ainvest.execution.robinhood.mappers import (
     map_open_equity_orders,
     map_portfolio,
 )
-from ainvest.execution.robinhood.read_client import RobinhoodReadClient
+from ainvest.execution.robinhood.read_client import RFC3339_DATETIME_PATTERN, RobinhoodReadClient
 from ainvest.execution.robinhood.read_models import (
     AccountsRead,
     ClosedOrdersRead,
@@ -37,6 +40,7 @@ from ainvest.execution.robinhood.read_models import (
     HistoricalBounds,
     HistoricalInterval,
     HistoricalsRead,
+    OpenOrderRead,
     OpenOrdersRead,
     PortfolioRead,
     PositionsRead,
@@ -48,6 +52,7 @@ from ainvest.execution.robinhood.read_models import (
 from ainvest.schemas.common import DomainModel, Symbol
 
 DISPLAY_QUOTE_MAX_AGE_SECONDS: Final = 15
+_ORDER_DATE_PATTERN: Final = re.compile(r"\A[0-9]{4}-[0-9]{2}-[0-9]{2}\Z")
 
 
 class DisplayCommand(StrEnum):
@@ -266,17 +271,20 @@ class RobinhoodDisplayService:
                 expected_symbol=expected_symbol,
                 expected_order_id=filters.get("order_id"),
             )
+        _require_order_filters(data, filters)
         return self._success(DisplayCommand.ORDERS, data)
 
     async def quotes(self, symbols: Sequence[Symbol]) -> DisplaySuccess:
         result = await self._client.read_equity_quotes({"symbols": list(symbols)})
+        data = map_equity_quotes(
+            result,
+            received_at=self._received_at(),
+            max_quote_age_seconds=DISPLAY_QUOTE_MAX_AGE_SECONDS,
+        )
+        _require_exact_symbols((quote.symbol for quote in data.quotes), symbols)
         return self._success(
             DisplayCommand.QUOTES,
-            map_equity_quotes(
-                result,
-                received_at=self._received_at(),
-                max_quote_age_seconds=DISPLAY_QUOTE_MAX_AGE_SECONDS,
-            ),
+            data,
         )
 
     async def price_book(self, symbols: Sequence[Symbol]) -> DisplaySuccess:
@@ -343,14 +351,14 @@ class RobinhoodDisplayService:
         if bounds is not None:
             arguments["bounds"] = bounds.value
         result = await self._client.read_equity_fundamentals(arguments)
-        return self._success(
-            DisplayCommand.FUNDAMENTALS,
-            map_equity_fundamentals(
-                result,
-                received_at=self._received_at(),
-                expected_symbols=symbols,
-            ),
+        data = map_equity_fundamentals(
+            result,
+            received_at=self._received_at(),
+            expected_symbols=symbols,
         )
+        if bounds is not None and any(item.bounds is not bounds for item in data.fundamentals):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        return self._success(DisplayCommand.FUNDAMENTALS, data)
 
     async def financials(
         self,
@@ -359,18 +367,20 @@ class RobinhoodDisplayService:
         period: ReportingPeriod,
         limit: int,
     ) -> DisplaySuccess:
+        if isinstance(limit, bool) or not 1 <= limit <= 40:
+            raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE)
         result = await self._client.read_financials(
             {"symbols": list(symbols), "period": period.value, "limit": limit}
         )
-        return self._success(
-            DisplayCommand.FINANCIALS,
-            map_financials(
-                result,
-                received_at=self._received_at(),
-                expected_symbols=symbols,
-                expected_period=period,
-            ),
+        data = map_financials(
+            result,
+            received_at=self._received_at(),
+            expected_symbols=symbols,
+            expected_period=period,
         )
+        if any(len(series.financials) > limit for series in data.series):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        return self._success(DisplayCommand.FINANCIALS, data)
 
     def _received_at(self) -> datetime:
         value = self._clock()
@@ -381,6 +391,59 @@ class RobinhoodDisplayService:
     @staticmethod
     def _success(command: DisplayCommand, data: DisplayData) -> DisplaySuccess:
         return DisplaySuccess(command=command, limitations=_LIMITATIONS[command], data=data)
+
+
+def _require_exact_symbols(actual: Iterable[Symbol], expected: Sequence[Symbol]) -> None:
+    """Require one normalized row for every requested symbol and no others."""
+    actual_symbols = tuple(actual)
+    expected_symbols = tuple(expected)
+    if len(expected_symbols) != len(set(expected_symbols)):
+        raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE)
+    if len(actual_symbols) != len(expected_symbols) or set(actual_symbols) != set(expected_symbols):
+        raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+
+
+def _require_order_filters(
+    data: OpenOrdersRead | ClosedOrdersRead,
+    filters: Mapping[str, str],
+) -> None:
+    """Bind every provider-side order filter to the normalized rows displayed."""
+    allowed = {"symbol", "order_id", "state", "created_at_gte", "placed_agent"}
+    if not set(filters) <= allowed:
+        raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE)
+    orders = data.open_orders if isinstance(data, OpenOrdersRead) else data.closed_orders
+    created_at_gte = _order_filter_time(filters.get("created_at_gte"))
+    for order in orders:
+        symbol = order.symbol if isinstance(order, OpenOrderRead) else order.instrument.symbol
+        if filters.get("symbol") not in (None, symbol):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        if filters.get("order_id") not in (None, order.order_id):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        if filters.get("state") not in (None, order.state.value):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        if filters.get("placed_agent") not in (None, order.placed_agent):
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+        if created_at_gte is not None and order.created_at < created_at_gte:
+            raise RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA)
+
+
+def _order_filter_time(value: str | None) -> datetime | None:
+    if value is None:
+        return None
+    if _ORDER_DATE_PATTERN.fullmatch(value) is not None:
+        try:
+            return datetime.combine(date.fromisoformat(value), datetime.min.time(), tzinfo=UTC)
+        except ValueError:
+            raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE) from None
+    if RFC3339_DATETIME_PATTERN.fullmatch(value) is None:
+        raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE)
+    try:
+        parsed = datetime.fromisoformat(value.replace("Z", "+00:00"))
+    except ValueError:
+        raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE) from None
+    if parsed.tzinfo is None or parsed.utcoffset() is None:
+        raise RobinhoodMappingError(MappingErrorCode.INVALID_VALUE)
+    return parsed.astimezone(UTC)
 
 
 __all__ = [

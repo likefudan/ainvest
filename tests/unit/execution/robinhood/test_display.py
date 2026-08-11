@@ -5,6 +5,8 @@ from __future__ import annotations
 import asyncio
 import json
 from collections.abc import Mapping
+from copy import deepcopy
+from dataclasses import replace
 from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any, cast
@@ -18,6 +20,7 @@ from ainvest.execution.robinhood.display import (
     OrderView,
     RobinhoodDisplayService,
 )
+from ainvest.execution.robinhood.mappers import MappingErrorCode, RobinhoodMappingError
 from ainvest.execution.robinhood.pins import EXPECTED_MANIFEST_DIGEST, PINNED_MANIFEST_VERSION
 from ainvest.execution.robinhood.prose import discard_provider_prose
 from ainvest.execution.robinhood.read_client import GatewayReadResult, RobinhoodReadClient
@@ -35,8 +38,8 @@ RECEIVED_AT = datetime(2026, 8, 8, 15, 0, 3, tzinfo=UTC)
 DIGEST = f"sha256:{'d' * 64}"
 
 
-def _result(capability: str) -> GatewayReadResult:
-    part = (
+def _result(capability: str, *, fixture_part: str | None = None) -> GatewayReadResult:
+    part = fixture_part or (
         "p06-t1-part1"
         if capability
         in {
@@ -63,14 +66,22 @@ def _result(capability: str) -> GatewayReadResult:
 
 
 class _FakeClient:
-    def __init__(self) -> None:
+    def __init__(
+        self,
+        overrides: Mapping[str, GatewayReadResult | list[GatewayReadResult]] | None = None,
+    ) -> None:
         self.calls: list[tuple[str, Mapping[str, Any] | None]] = []
+        self.overrides = {
+            key: list(value) if isinstance(value, list) else [value]
+            for key, value in (overrides or {}).items()
+        }
 
     async def _read(
         self, capability: str, arguments: Mapping[str, Any] | None
     ) -> GatewayReadResult:
         self.calls.append((capability, arguments))
-        return _result(capability)
+        queued = self.overrides.get(capability)
+        return queued.pop(0) if queued else _result(capability)
 
     async def read_accounts(self, arguments: Mapping[str, Any] | None = None) -> GatewayReadResult:
         return await self._read("get_accounts", arguments)
@@ -146,7 +157,14 @@ def test_status_is_local_and_has_the_exact_safety_posture() -> None:
 
 @pytest.mark.unit
 def test_all_named_display_reads_normalize_without_a_generic_dispatch() -> None:
-    client = _FakeClient()
+    client = _FakeClient(
+        {
+            "get_equity_orders": [
+                _result("get_equity_orders", fixture_part="p06-t1-part1"),
+                _result("get_equity_orders", fixture_part="p06-t1-part2"),
+            ]
+        }
+    )
     service = _service(client)
 
     async def exercise() -> list[Any]:
@@ -157,14 +175,14 @@ def test_all_named_display_reads_normalize_without_a_generic_dispatch() -> None:
             await service.orders(
                 "opaque-account",
                 view=OrderView.OPEN,
-                filters={"symbol": "AAPL", "state": "new"},
+                filters={"symbol": "AAPL", "state": "queued"},
             ),
             await service.orders(
                 "opaque-account",
                 view=OrderView.CLOSED,
                 filters={"symbol": "AAPL"},
             ),
-            await service.quotes(("AAPL", "MSFT")),
+            await service.quotes(("AAPL",)),
             await service.price_book(("AAPL", "MSFT")),
             await service.tradability("opaque-account", ("AAPL", "MSFT")),
             await service.historicals(
@@ -201,10 +219,10 @@ def test_all_named_display_reads_normalize_without_a_generic_dispatch() -> None:
         ("get_equity_positions", {"account_number": "opaque-account"}),
         (
             "get_equity_orders",
-            {"account_number": "opaque-account", "symbol": "AAPL", "state": "new"},
+            {"account_number": "opaque-account", "symbol": "AAPL", "state": "queued"},
         ),
         ("get_equity_orders", {"account_number": "opaque-account", "symbol": "AAPL"}),
-        ("get_equity_quotes", {"symbols": ["AAPL", "MSFT"]}),
+        ("get_equity_quotes", {"symbols": ["AAPL"]}),
         ("get_equity_price_book", {"symbols": ["AAPL", "MSFT"]}),
         (
             "get_equity_tradability",
@@ -232,11 +250,9 @@ def test_all_named_display_reads_normalize_without_a_generic_dispatch() -> None:
 @pytest.mark.unit
 def test_quote_age_is_fixed_at_fifteen_seconds_and_never_trading_eligible() -> None:
     assert DISPLAY_QUOTE_MAX_AGE_SECONDS == 15
-    fresh = asyncio.run(_service(_FakeClient()).quotes(("AAPL", "MSFT")))
+    fresh = asyncio.run(_service(_FakeClient()).quotes(("AAPL",)))
     stale = asyncio.run(
-        _service(_FakeClient(), clock=datetime(2026, 8, 8, 15, 1, 0, tzinfo=UTC)).quotes(
-            ("AAPL", "MSFT")
-        )
+        _service(_FakeClient(), clock=datetime(2026, 8, 8, 15, 1, 0, tzinfo=UTC)).quotes(("AAPL",))
     )
 
     fresh_data = cast(Any, fresh.data)
@@ -252,3 +268,142 @@ def test_quote_age_is_fixed_at_fifteen_seconds_and_never_trading_eligible() -> N
 def test_display_clock_must_be_timezone_aware() -> None:
     with pytest.raises(ValueError, match="timezone-aware"):
         asyncio.run(_service(_FakeClient(), clock=datetime(2026, 8, 8, 15, 0, 3)).accounts())
+
+
+def _mutated_result(
+    capability: str, mutate: Any, *, fixture_part: str | None = None
+) -> GatewayReadResult:
+    original = _result(capability, fixture_part=fixture_part)
+    payload = deepcopy(dict(original.payload))
+    mutate(payload)
+    return replace(original, payload=payload)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("mutation", ["unexpected", "missing"])
+def test_quotes_require_every_requested_symbol_and_no_extra_symbol(mutation: str) -> None:
+    def mutate(payload: dict[str, Any]) -> None:
+        results = payload["data"]["results"]
+        if mutation == "missing":
+            return
+        results[0]["quote"]["symbol"] = "TSLA"
+        results[0]["close"]["symbol"] = "TSLA"
+
+    client = _FakeClient({"get_equity_quotes": _mutated_result("get_equity_quotes", mutate)})
+
+    with pytest.raises(RobinhoodMappingError) as caught:
+        requested = ("AAPL", "MSFT") if mutation == "missing" else ("AAPL",)
+        asyncio.run(_service(client).quotes(requested))
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("field", "unexpected"),
+    [
+        ("symbol", "MSFT"),
+        ("order_id", "different-order-id"),
+        ("state", "confirmed"),
+        ("placed_agent", "drip"),
+        ("created_at_gte", "2026-08-08T14:51:00Z"),
+    ],
+)
+def test_open_orders_bind_each_forwarded_filter_to_displayed_rows(
+    field: str, unexpected: str
+) -> None:
+    filters = {
+        "symbol": "AAPL",
+        "order_id": "order-open-123",
+        "state": "queued",
+        "placed_agent": "user",
+        "created_at_gte": "2026-08-08T14:49:00Z",
+    }
+    filters[field] = unexpected
+    client = _FakeClient(
+        {"get_equity_orders": _result("get_equity_orders", fixture_part="p06-t1-part1")}
+    )
+
+    with pytest.raises(RobinhoodMappingError) as caught:
+        asyncio.run(_service(client).orders("opaque-account", view=OrderView.OPEN, filters=filters))
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA
+
+
+@pytest.mark.unit
+def test_open_orders_accept_matching_filters_including_date_only_cutoff() -> None:
+    client = _FakeClient(
+        {"get_equity_orders": _result("get_equity_orders", fixture_part="p06-t1-part1")}
+    )
+    matched = asyncio.run(
+        _service(client).orders(
+            "opaque-account",
+            view=OrderView.OPEN,
+            filters={
+                "symbol": "AAPL",
+                "order_id": "order-open-123",
+                "state": "queued",
+                "placed_agent": "user",
+                "created_at_gte": "2026-08-08",
+            },
+        )
+    )
+
+    matched_data = cast(Any, matched.data)
+    assert [order.order_id for order in matched_data.open_orders] == ["order-open-123"]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "created_at_gte",
+    ["20260808", "2026-W32-5", "2026-08-08T14:49:00", "2026-13-01"],
+)
+def test_display_service_rejects_noncanonical_order_time_filters(created_at_gte: str) -> None:
+    client = _FakeClient(
+        {"get_equity_orders": _result("get_equity_orders", fixture_part="p06-t1-part1")}
+    )
+
+    with pytest.raises(RobinhoodMappingError) as caught:
+        asyncio.run(
+            _service(client).orders(
+                "opaque-account",
+                view=OrderView.OPEN,
+                filters={"created_at_gte": created_at_gte},
+            )
+        )
+    assert caught.value.code is MappingErrorCode.INVALID_VALUE
+
+
+@pytest.mark.unit
+def test_explicit_fundamental_bounds_are_bound_to_every_result() -> None:
+    with pytest.raises(RobinhoodMappingError) as caught:
+        asyncio.run(
+            _service(_FakeClient()).fundamentals(
+                ("AAPL", "MSFT"), bounds=FundamentalBounds.EXTENDED
+            )
+        )
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA
+
+
+@pytest.mark.unit
+def test_financial_period_count_is_bounded_by_requested_limit() -> None:
+    service = _service(_FakeClient())
+    with pytest.raises(RobinhoodMappingError) as caught:
+        asyncio.run(service.financials(("AAPL", "MSFT"), period=ReportingPeriod.QUARTERLY, limit=1))
+    assert caught.value.code is MappingErrorCode.INCONSISTENT_DATA
+
+    accepted = asyncio.run(
+        service.financials(("AAPL", "MSFT"), period=ReportingPeriod.QUARTERLY, limit=2)
+    )
+    accepted_data = cast(Any, accepted.data)
+    assert len(accepted_data.series[0].financials) == 2
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("limit", [0, 41])
+def test_display_service_rejects_out_of_contract_financial_limits(limit: int) -> None:
+    with pytest.raises(RobinhoodMappingError) as caught:
+        asyncio.run(
+            _service(_FakeClient()).financials(
+                ("AAPL", "MSFT"), period=ReportingPeriod.QUARTERLY, limit=limit
+            )
+        )
+    assert caught.value.code is MappingErrorCode.INVALID_VALUE

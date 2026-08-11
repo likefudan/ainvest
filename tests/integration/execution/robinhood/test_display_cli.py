@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import io
 import json
-from collections.abc import AsyncIterator, Mapping, Sequence
+from collections.abc import AsyncIterator, Callable, Mapping, Sequence
 from contextlib import asynccontextmanager
 from copy import deepcopy
 from dataclasses import dataclass
@@ -52,6 +52,8 @@ def _capabilities() -> list[_Capability]:
 @dataclass(slots=True)
 class _FixtureGateway:
     invocations: list[tuple[str, Mapping[str, Any] | None]]
+    orders_fixture_part: str = "p06-t1-part2"
+    payload_mutator: Callable[[str, dict[str, Any]], None] | None = None
 
     def capabilities(self) -> Sequence[_Capability]:
         return _capabilities()
@@ -71,19 +73,25 @@ class _FixtureGateway:
         name = str(capability)
         self.invocations.append((name, arguments))
         part = (
-            "p06-t1-part1"
-            if name
-            in {
-                "get_accounts",
-                "get_portfolio",
-                "get_equity_positions",
-                "get_equity_quotes",
-            }
-            else "p06-t1-part2"
+            self.orders_fixture_part
+            if name == "get_equity_orders"
+            else (
+                "p06-t1-part1"
+                if name
+                in {
+                    "get_accounts",
+                    "get_portfolio",
+                    "get_equity_positions",
+                    "get_equity_quotes",
+                }
+                else "p06-t1-part2"
+            )
         )
         payload = deepcopy(
             json.loads((FIXTURES / part / f"{name}.json").read_text(encoding="utf-8"))
         )
+        if self.payload_mutator is not None:
+            self.payload_mutator(name, payload)
         payload["guide"] = INSTRUCTIONAL_PROSE
         return {
             "envelope_version": PINNED_ENVELOPE_VERSION,
@@ -104,10 +112,11 @@ def test_all_display_commands_cross_cli_service_mapper_and_named_read(
 ) -> None:
     invocations: list[tuple[str, Mapping[str, Any] | None]] = []
     logs: list[Mapping[str, object]] = []
+    orders_fixture_part = "p06-t1-part2"
 
     @asynccontextmanager
     async def open_fake() -> AsyncIterator[SimpleNamespace]:
-        gateway = _FixtureGateway(invocations)
+        gateway = _FixtureGateway(invocations, orders_fixture_part=orders_fixture_part)
         client = RobinhoodReadClient(
             cast(GatewayPort, gateway), log_sink=lambda event, fields: logs.append(fields)
         )
@@ -122,7 +131,7 @@ def test_all_display_commands_cross_cli_service_mapper_and_named_read(
         (["positions", "--account-number-stdin"], True),
         (["orders", "--account-number-stdin", "--view", "open"], True),
         (["orders", "--account-number-stdin", "--view", "closed"], True),
-        (["quotes", "AAPL", "MSFT"], False),
+        (["quotes", "AAPL"], False),
         (["price-book", "AAPL", "MSFT"], False),
         (["tradability", "--account-number-stdin", "AAPL", "MSFT"], True),
         (
@@ -146,6 +155,10 @@ def test_all_display_commands_cross_cli_service_mapper_and_named_read(
     ]
     documents: list[dict[str, Any]] = []
     for argv, needs_account in commands:
+        if argv[0] == "orders":
+            orders_fixture_part = (
+                "p06-t1-part1" if argv[argv.index("--view") + 1] == "open" else "p06-t1-part2"
+            )
         stdin = io.StringIO(f"{ACCOUNT_VALUE}\n" if needs_account else "")
         stdout = io.StringIO()
         stderr = io.StringIO()
@@ -158,17 +171,47 @@ def test_all_display_commands_cross_cli_service_mapper_and_named_read(
     assert all(document["limitations"]["usable_for_trading"] is False for document in documents)
     posture = {"read_only": True, "mode": "display_only", "execution": "disabled"}
     assert all(document["posture"] == posture for document in documents)
+    status, accounts, portfolio, positions, open_orders, closed_orders = documents[:6]
+    quotes, price_book, tradability, historicals, fundamentals, financials = documents[6:]
+    assert status["data"] == {"ready": True}
+    assert len(accounts["data"]["accounts"]) == 1
+    assert portfolio["limitations"]["account_binding"] == "unverified"
+    assert positions["data"]["has_more"] is False
+    assert [order["order_id"] for order in open_orders["data"]["open_orders"]] == ["order-open-123"]
+    assert {order["order_id"] for order in closed_orders["data"]["closed_orders"]} == {
+        "order-filled-456",
+        "order-rejected-789",
+    }
+    assert closed_orders["data"]["has_more"] is True
+    assert [quote["symbol"] for quote in quotes["data"]["quotes"]] == ["AAPL"]
+    assert quotes["data"]["quotes"][0]["live_eligible"] is False
+    assert "session_unverified" in quotes["data"]["quotes"][0]["ineligibility"]
+    assert price_book["data"]["books"][0]["instrument"]["identity_verified"] is False
+    assert price_book["data"]["errors"] == [
+        {"symbol": "MSFT", "error": {"value": "Book unavailable"}}
+    ]
+    assert tradability["data"]["account_binding"] == "unverified"
+    assert tradability["data"]["session_evidence"] == "unverified"
+    assert historicals["data"]["session_evidence"] == "unverified"
+    assert historicals["data"]["unavailable_symbols"] == ["MSFT"]
+    fundamental = fundamentals["data"]["fundamentals"][0]
+    assert fundamental["instrument"]["identity_verified"] is False
+    assert fundamental["non_comparable_fact_keys"]
+    assert fundamentals["data"]["omitted_untrusted_fields"] == ["results[0].description"]
+    unspecified_facts = [
+        fact for fact in fundamental["snapshot"]["facts"] if fact["unit"] == "UNSPECIFIED"
+    ]
+    assert unspecified_facts
+    assert financials["data"]["unavailable_symbols"] == ["MSFT"]
+    assert all(
+        metric["comparable"] is False
+        for period in financials["data"]["series"][0]["financials"]
+        for metric in period["metrics"]
+        if metric["unit"] == "UNSPECIFIED"
+    )
     rendered = json.dumps(documents)
     assert ACCOUNT_VALUE not in rendered
     assert INSTRUCTIONAL_PROSE not in rendered
-    assert '"identity_verified": false' in rendered
-    assert '"session_evidence": "unverified"' in rendered
-    assert '"live_eligible": false' in rendered
-    assert '"unit": "UNSPECIFIED"' in rendered
-    assert '"comparable": false' in rendered
-    assert "omitted_untrusted_fields" in rendered
-    assert "unavailable_symbols" in rendered
-    assert "has_more" in rendered
     assert ACCOUNT_VALUE not in json.dumps(logs)
     assert INSTRUCTIONAL_PROSE not in json.dumps(logs)
     log_keys = {
@@ -215,3 +258,66 @@ def test_gateway_not_ready_status_emits_only_failure_document(
         "limitations": {"usable_for_trading": False},
         "error": {"code": "not_ready", "retryable": False},
     }
+
+
+@pytest.mark.integration
+@pytest.mark.parametrize(
+    ("case", "argv", "needs_account"),
+    [
+        ("quotes", ["quotes", "AAPL"], False),
+        (
+            "orders",
+            [
+                "orders",
+                "--account-number-stdin",
+                "--view",
+                "open",
+                "--order-id",
+                "different-order-id",
+            ],
+            True,
+        ),
+        ("fundamentals", ["fundamentals", "AAPL", "MSFT", "--bounds", "extended"], False),
+        (
+            "financials",
+            ["financials", "AAPL", "MSFT", "--period", "quarterly", "--limit", "1"],
+            False,
+        ),
+    ],
+)
+def test_cli_fails_closed_when_provider_result_does_not_answer_request(
+    case: str,
+    argv: list[str],
+    needs_account: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def mutate(capability: str, payload: dict[str, Any]) -> None:
+        if case != "quotes" or capability != "get_equity_quotes":
+            return
+        result = payload["data"]["results"][0]
+        result["quote"]["symbol"] = "TSLA"
+        result["close"]["symbol"] = "TSLA"
+
+    @asynccontextmanager
+    async def open_fake() -> AsyncIterator[SimpleNamespace]:
+        gateway = _FixtureGateway(
+            [],
+            orders_fixture_part="p06-t1-part1" if case == "orders" else "p06-t1-part2",
+            payload_mutator=mutate,
+        )
+        client = RobinhoodReadClient(cast(GatewayPort, gateway))
+        await client.verify_startup()
+        yield SimpleNamespace(client=client)
+
+    monkeypatch.setattr(cli, "open_read_gateway", open_fake)
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    stdin = io.StringIO(f"{ACCOUNT_VALUE}\n" if needs_account else "")
+
+    assert cli.main(argv, stdin=stdin, stdout=stdout, stderr=stderr) == 1
+    assert stdout.getvalue() == ""
+    failure = json.loads(stderr.getvalue())
+    assert failure["command"] == argv[0]
+    assert failure["ready"] is False
+    assert failure["error"] == {"code": "inconsistent_data", "retryable": False}
+    assert ACCOUNT_VALUE not in stderr.getvalue()

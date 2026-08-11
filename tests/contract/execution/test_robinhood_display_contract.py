@@ -6,7 +6,7 @@ import ast
 import io
 import json
 from pathlib import Path
-from typing import Final
+from typing import Any, Final
 
 import pytest
 
@@ -17,6 +17,8 @@ from ainvest.execution.robinhood.display import (
     DisplayStatusData,
     DisplaySuccess,
 )
+from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErrorCode
+from ainvest.execution.robinhood.mappers import MappingErrorCode, RobinhoodMappingError
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
     DENIED_TRADING_CAPABILITIES,
@@ -69,6 +71,39 @@ def test_success_and_failure_wire_envelopes_have_exact_top_level_keys() -> None:
     ]
     assert failure["limitations"] == {"usable_for_trading": False}
     assert set(failure["error"]) == {"code", "retryable"}
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    ("failure", "code", "retryable"),
+    [
+        (GatewayReadError(GatewayReadErrorCode.TIMEOUT), "timeout", True),
+        (
+            RobinhoodMappingError(MappingErrorCode.INCONSISTENT_DATA),
+            "inconsistent_data",
+            False,
+        ),
+    ],
+)
+def test_gateway_and_mapping_failures_translate_to_stable_wire_codes(
+    failure: Exception,
+    code: str,
+    retryable: bool,
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    async def execute(*args: Any) -> DisplaySuccess:
+        raise failure
+
+    monkeypatch.setattr(cli, "_execute", execute)
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    assert cli.main(["status"], stdin=io.StringIO(), stdout=stdout, stderr=stderr) == 1
+    assert stdout.getvalue() == ""
+    assert json.loads(stderr.getvalue())["error"] == {
+        "code": code,
+        "retryable": retryable,
+    }
 
 
 @pytest.mark.contract
