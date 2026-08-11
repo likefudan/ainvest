@@ -193,12 +193,15 @@ Primary parallelization opportunities:
   tagged SemVer `rh-mcp` release with an immutable artifact → ainvest tracker
   records the tag, artifact provenance/digest, and expected full-manifest
   digest → `P06-T0` → `P06-T1` → `P06-T2` Part 1 display CLI. `P06-T2` Part 2
-  is the later Paper-promotion step under the same task ID. The first two steps
-  are done:
-  `rh-mcp` `v0.2.0` was approved on 2026-08-04 and its pins are recorded under
-  "Recorded external dependency pin" in `docs/tasks/status.md`. Gate 2, Gate 3,
-  and complete observability remain prerequisites for `P06-T3` / Gate 4, not
-  for the preview.
+  is the later Paper-promotion step under the same task ID. The complete
+  display-only priority lane through `P06-T2` Part 1 is merged: `rh-mcp`
+  `v0.2.0` was approved on 2026-08-04, its pins are recorded under "Recorded
+  external dependency pin" in `docs/tasks/status.md`, and `P06-T0`, `P06-T1`,
+  and `P06-T2` Part 1 are on `main`. The next queued/unclaimed action is only a
+  narrow planning PR that assigns a task card for Telegram read-only queries;
+  it must not invent an ID in advance or lift the owner pause on `P05-T4`.
+  Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
+  / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
 - Phase 08 is a parallel assurance phase, not a final sequential phase. Its cards start and finish according to their own dependencies and the batch plan; no agent may treat all P08 cards as prerequisites for Phase 02 or postpone all of them until after Phase 07.
 
@@ -1624,10 +1627,13 @@ line.
   provenance/digest, and expected full-manifest digest in the ainvest tracker,
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` Part 1 serially for the
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
-  separate promotion step under the same task ID. The release and tracker are
-  done (`rh-mcp` `v0.2.0`); the lane resumes at `P06-T0`. By owner instruction,
-  `P04-T2`, `P05-T4`, and their dependent chains are paused and unclaimed;
-  they may not start until the owner/coordinator explicitly resumes them.
+  separate promotion step under the same task ID. The release, tracker pin,
+  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. The next
+  queued/unclaimed action is only the narrow Telegram read-only
+  scheduling/task-card PR described in Batch F; no Telegram task ID is yet
+  assigned. By owner instruction, `P04-T2`, `P05-T4`, and their dependent
+  chains are paused and unclaimed; they may not start until the
+  owner/coordinator explicitly resumes them.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
@@ -1635,13 +1641,15 @@ line.
    release with an immutable artifact -> ainvest tracker records its tag,
    artifact provenance/digest, and expected full-manifest digest -> `P06-T0`
    -> `P06-T1` -> `P06-T2` Part 1, without waiting for every Batch E track. This
-   is a display-only Non-Trading Preview, not a gate acceptance. The first two
-   steps are complete
-   (`rh-mcp` `v0.2.0`, pinned in `docs/tasks/status.md`).
-2. After the `P06-T2` Part 1 CLI display path, schedule Telegram read-only
-   queries as a separate narrow task-card/tracker change built on that display
-   projection and P05-T4/P05-T5. Do not combine queries with Telegram approval,
-   Paper promotion, non-trading mutations, or trading capabilities.
+   is a display-only Non-Trading Preview, not a gate acceptance. Every step in
+   this display-only lane is complete: `rh-mcp` `v0.2.0` is pinned in
+   `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
+   merged.
+2. Next, submit the queued/unclaimed narrow task-card/tracker change for
+   Telegram read-only queries built on that display projection and
+   P05-T4/P05-T5. This planning PR assigns the task ID; it does not lift the
+   `P05-T4` pause or start implementation. Do not combine queries with Telegram
+   approval, Paper promotion, non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
    contract if required; then complete `P06-T2` Part 2 real-portfolio Paper.
