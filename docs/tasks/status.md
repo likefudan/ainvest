@@ -1067,12 +1067,18 @@ capabilities only. Its serial merge order is:
   implementation used `agent/p06-t2-cli-part1` /
   `.worktrees/p06-t2-cli-part1` from the post-claim `main`; its final reviewed
   head was `0fbdc2eac2f4c4174c9ab148847efb81d8cd3cba`.
-- **Review and remediation evidence:** the independent first review requested
-  changes in [this review](https://github.com/likefudan/ainvest/pull/117#issuecomment-5234254211).
-  The implementation agent recorded the fixes in
+- **Review and remediation evidence:** the claim's independent review
+  [requested changes](https://github.com/likefudan/ainvest/pull/116#issuecomment-5234105369),
+  the claim owner recorded its
+  [remediation](https://github.com/likefudan/ainvest/pull/116#issuecomment-5234123836),
+  and the independent reviewer posted the claim's
+  [final approval](https://github.com/likefudan/ainvest/pull/116#issuecomment-5234134005).
+  The implementation's independent first review then
+  [requested changes](https://github.com/likefudan/ainvest/pull/117#issuecomment-5234254211),
+  the implementation agent recorded the fixes in
   [the remediation handoff](https://github.com/likefudan/ainvest/pull/117#issuecomment-5250619400),
-  and the independent reviewer approved the corrected head with no remaining
-  actionable finding in
+  and the independent reviewer approved the corrected implementation head with
+  no remaining actionable finding in
   [the final review](https://github.com/likefudan/ainvest/pull/117#issuecomment-5250665037).
 - **Verification:** 115 focused tests and the additional 25 targeted tests
   passed. The final merge gate passed 1,196 unit, 167 contract, 25 integration,
@@ -1742,20 +1748,22 @@ excludes the contents of a result envelope's `data`. It also records that
   makes (c) urgent: it is the card that routes this data to a CLI and a later
   Telegram adapter.
 
-`P06-T0` through `P06-T2` form the **Non-Trading Preview**, not Gate 4. Gate 4
-remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate 3 (`P05-T8`),
-`P08-T4`, and every other dependency on its task card. No trading work may
-start before Gates 1–4 and the later live prerequisites pass. Robinhood MCP
-remains the only live quote source; failure never falls back to Alpaca,
-yfinance, or another provider.
+The merged `P06-T0`, `P06-T1`, and `P06-T2` Part 1 form the display-only
+**Non-Trading Preview**, not Gate 4. `P06-T2` Part 2 remains a later Paper
+promotion. Gate 4 remains `P06-T3` and still requires Gate 2 (`P04-T12`), Gate
+3 (`P05-T8`), `P08-T4`, and every other dependency on its task card. No trading
+work may start before Gates 1–4 and the later live prerequisites pass.
+Robinhood MCP remains the only live quote source; failure never falls back to
+Alpaca, yfinance, or another provider.
 
 Per owner instruction on 2026-07-29, `P04-T2` and `P05-T4` are
-`not_started`, unclaimed, and paused while the priority lane runs; no background
-worktree or implementation agent should be started for either task. After the
-`P06-T2` Part 1 display-only CLI path, create a separate narrow
-scheduling/task-card PR for Telegram read-only queries built on that display
-projection and the `P05-T4`/`P05-T5` transport; do not wait for Part 2 and do
-not mix that read surface with Paper promotion, Telegram approval, a
+`not_started`, unclaimed, and paused until the owner/coordinator explicitly
+resumes them; no background worktree or implementation agent should be started
+for either task. Now that the `P06-T2` Part 1 display-only CLI is merged, the
+next queued/unclaimed action is a separate narrow scheduling/task-card PR for
+Telegram read-only queries built on that display projection and the
+`P05-T4`/`P05-T5` transport. It must not wait for Part 2, lift the `P05-T4`
+pause, or mix that read surface with Paper promotion, Telegram approval, a
 non-trading mutation, or a trading capability.
 
 #### Research track — `P04-T0` through `P04-T12`
