@@ -197,9 +197,10 @@ Primary parallelization opportunities:
   display-only priority lane through `P06-T2` Part 1 is merged: `rh-mcp`
   `v0.2.0` was approved on 2026-08-04, its pins are recorded under "Recorded
   external dependency pin" in `docs/tasks/status.md`, and `P06-T0`, `P06-T1`,
-  and `P06-T2` Part 1 are on `main`. The next queued/unclaimed action is only a
-  narrow planning PR that assigns a task card for Telegram read-only queries;
-  it must not invent an ID in advance or lift the owner pause on `P05-T4`.
+  and `P06-T2` Part 1 are on `main`. `P05-T9` is now the queued/unclaimed task
+  card for Telegram read-only queries. Its implementation remains blocked on
+  the owner-paused `P05-T4`, followed serially by `P05-T5`; assigning the card
+  does not lift that pause.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -213,7 +214,7 @@ Primary parallelization opportunities:
 | Phase 02 | Schemas, database, audit, and workflow state | P02-T0 through P02-T10 |
 | Phase 03 | Strategies, sizing, risk, deterministic Paper loop, Gate 1 | P03-T0 through P03-T17 |
 | Phase 04 | Data, Research Agent, backtesting, Gate 2 | P04-T0 through P04-T12 |
-| Phase 05 | Telegram Paper approval, deferred live approval preparation, Gate 3 | P05-T0 through P05-T8 |
+| Phase 05 | Telegram Paper approval, read-only queries, deferred live approval preparation, Gate 3 | P05-T0 through P05-T9 |
 | Phase 06 | Official Robinhood MCP read path and Gate 4 | P06-T0 through P06-T3 |
 | Phase 07 | Controlled live execution, cancellation, reconciliation, and Gate 5 | P07-T0 through P07-T6 |
 | Phase 08 | Parallel runtime, observability, security, documentation, and test assurance | P08-T0 through P08-T15 |
@@ -239,6 +240,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 | P04-T9 through P04-T11 | §14.2 |
 | P04-T12 | §15 Phase 2 |
 | P05-T0 through P05-T8 | §3.4–§3.5, §5.5, §7, §15 Phase 3 |
+| P05-T9 | §3.2–§3.5, §5.1, §5.5, §7, §11, §14.3, §16–§17 |
 | P06-T0 through P06-T3 | §5.1, §5.6, §10.1, §15 Phase 4 |
 | P07-T0 through P07-T6 | §3.3–§3.5, §5.6–§5.7, §8, §14.4, §15 Phase 5 |
 | P08-T0 through P08-T15 | §3.5–§3.6, §5.7, §9, §11–§14 |
@@ -981,6 +983,130 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Verify database/logs contain no raw nonce or Bot token and the Paper deployment contains no public approval route or Robinhood write client.
 - **Acceptance criteria:** The design Phase 3 criteria pass; no Telegram input can create live scope or call a write broker; `docs/releases/phase-3-acceptance.md` is produced.
 
+### P05-T9 — Expose Display-Only Robinhood Queries in Telegram
+
+- **Objective:** Let the allowlisted owner inspect the already normalized
+  Robinhood Non-Trading Preview from a private Telegram chat without granting
+  approval, mutation, model, Paper-promotion, or trading capability. This is a
+  transport adapter over the merged `P06-T2` Part 1 display service, not a new
+  data provider or a Gate 3 requirement.
+- **Status and scheduling:** `queued/unclaimed`, with implementation
+  `owner-paused-by-dependency`. The owner pause on `P05-T4` remains in force.
+  After the owner explicitly resumes that chain, merge `P05-T4`, then rebase,
+  implement, review, and merge `P05-T5`; only then may an agent claim this
+  card. Assigning `P05-T9` does not start or unblock either prerequisite.
+- **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService` and its
+  versioned success/error envelopes), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
+  `P08-T7`, accepted `DEC-005`, and environment integration under `DEC-010`.
+  Real-provider validation also requires a separately reviewed `rh-mcp`
+  release and deliberate ainvest pin update; until then readiness fails closed.
+- **Primary files:** new `src/ainvest/approval/telegram_queries.py`; narrow
+  query-dispatch additions to `src/ainvest/approval/telegram_updates.py` after
+  `P05-T5` owns that file; the minimum account-secret/config composition
+  addition under `src/ainvest/config/**`; matching
+  `tests/unit/approval/test_telegram_queries.py`, bounded additions to the
+  `P05-T5` Telegram update tests, one dependency-boundary test, and
+  `docs/telegram-read-queries.md`. Do not edit the display models or broaden
+  `RobinhoodReadClient` unless a separately reviewed defect/scope expansion is
+  approved.
+- **Exact first-release command grammar:** accept only one private-chat text
+  message containing ASCII tokens separated by single spaces. Commands are
+  case-sensitive and symbols remain exact uppercase `Symbol` values. Reject
+  quoting, shell-style flags, free text, Bot mentions, extra fields, callbacks,
+  edited/forwarded messages, and every command not listed here.
+
+  | Telegram command | Display-service operation and bounds |
+  |---|---|
+  | `/help` | Static command list only; no gateway call |
+  | `/rh_status` | `status` |
+  | `/accounts` | `accounts`; retain only the non-identifying eligibility view |
+  | `/portfolio` | `portfolio` for the server-side secret account reference |
+  | `/positions` | `positions` for that reference |
+  | `/orders open [SYMBOL]` or `/orders closed [SYMBOL]` | `orders`; no order ID, state, date, or placed-agent filter in v1 |
+  | `/quotes SYMBOL [SYMBOL ...]` | `quotes`; one through five unique symbols |
+  | `/pricebook SYMBOL [SYMBOL]` | `price-book`; one or two unique symbols |
+  | `/tradability SYMBOL [SYMBOL ...]` | `tradability`; one through five unique symbols for the secret account reference |
+  | `/history SYMBOL 1d\|5d\|1m\|3m\|1y` | `historicals` for one symbol; map the fixed window to server-clock-derived RFC 3339 bounds and pinned interval/bounds values |
+  | `/fundamentals SYMBOL [regular\|trading\|extended\|24_5]` | `fundamentals` for one symbol; omitted bounds use the display service default |
+  | `/financials SYMBOL [quarterly\|annual] [1\|2\|3\|4]` | `financials` for one symbol; defaults are `quarterly 4` |
+
+- **Identity and authorization boundary:** process text only after `P05-T5`
+  has deduplicated the update and verified the environment-specific Bot,
+  numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
+  the configured user/chat allowlists. Username is display-only. Query access
+  creates no `ApprovalEvent`, consumes no approval challenge or callback nonce,
+  and cannot be interpreted as `approve`, `reject`, operator authentication,
+  WebAuthn registration/reset, or live authorization. Telegram identity is
+  never an Operator Control Plane identity.
+- **Account handling:** account-bound commands receive exactly one account
+  number from a server-side secret/config provider wired through the existing
+  file-secret precedence. The chat can neither supply nor select it. Missing,
+  empty, or invalid secret configuration fails closed before opening the
+  gateway. Never persist, hash for display, interpolate, log, snapshot, audit,
+  or send the account number; output retains
+  `account_binding="unverified"` and contains no account identifier.
+- **Display and message contract:** call only a named
+  `RobinhoodDisplayService` method and reuse its versioned normalized data,
+  posture, limitations, and stable error mapping; never parse CLI output. Every
+  successful reply starts with the static line
+  `[READ ONLY - NOT FOR TRADING]`, uses Telegram `parse_mode=None`, and carries
+  the compact display envelope with `usable_for_trading=false`. Preserve
+  partial identity, unverified account/session evidence, exact units,
+  `UNSPECIFIED`/`comparable=false`, `has_more`, unavailable symbols, and
+  `omitted_untrusted_fields`. Never total, rank, convert, or label an
+  unspecified value as USD.
+- **Untrusted text and output bounds:** provider-controlled `guide`, manifest
+  rationale, tool/schema descriptions, and other instructional prose remain
+  discarded. Only existing bounded `UntrustedDisplayText` may reach the reply,
+  after JSON escaping, with the stable omission marker and path metadata.
+  Send plain UTF-8 text in at most four messages of at most 3,500 Unicode code
+  points each, labelled with deterministic part numbers. Split only the
+  already-rendered envelope; do not introduce Markdown/HTML interpretation. If
+  it cannot fit, send one sanitized `result_too_large` error and no partial
+  result.
+- **Errors, readiness, and provider calls:** readiness/auth/schema/artifact
+  mismatch, timeout, mapping failure, missing account secret, render failure,
+  or Telegram delivery failure fails closed. Emit only a stable error code and
+  retryable boolean plus static help text where applicable; never include raw
+  arguments, provider messages, payloads, tracebacks, account identifiers, or
+  untrusted text. Perform at most one gateway/display call for each accepted
+  update and never retry automatically or fall back to Alpaca, yfinance, or
+  another provider.
+- **Idempotency, deduplication, and rate limit:** use the `P05-T5` persisted
+  `update_id`/message identity and confirmed offset as the dispatch key;
+  duplicates are rejected before query execution. A crash may cause a harmless
+  read replay, but can never create state, approval, mutation, or trading
+  action. Permit one in-flight query per authorized chat and at most six
+  accepted commands in a fixed 60-second window per environment/user/chat;
+  reject excess work with `rate_limited` before opening the gateway. Do not add
+  a distributed rate-limit service in v1.
+- **Forbidden scope:** no webhook deployment, browser/UI, group/channel use,
+  LLM or natural-language routing, arbitrary capability/tool name, generic
+  `invoke`, prompt construction, callback button, approval/rejection command,
+  any of the 11 non-trading mutations, any of the 8 trading capabilities,
+  Paper/Strategy/Sizer/Risk input, live execution, account switching,
+  pagination URLs, automatic retry, fallback provider, or persistence of
+  provider result data.
+- **Required tests:** cover every exact command and bound; invalid casing,
+  spacing, symbols, options, extra text, commands and callbacks; wrong
+  Bot/environment/user/chat/type; group, edited and forwarded messages;
+  missing account secret; readiness/auth/timeout/contract/mapping/render and
+  send failures; persisted update deduplication and restart; one-in-flight and
+  six-per-minute limits; deterministic history-window mapping with an injected
+  clock; exact message/part limits and oversize failure; stable sanitized
+  errors; no account ID in replies/logs/errors/snapshots; omission markers and
+  JSON escaping; non-comparable units; and structural proof that the adapter
+  cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
+  Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway
+  transports only; no real credential or public network is required in CI.
+- **Acceptance criteria:** an authorized private chat can run each fixed query
+  and receive the same honest display posture as the CLI; unauthorized,
+  malformed, duplicate, excessive, not-ready, or failed requests produce no
+  provider mutation, approval, trading action, account disclosure, or
+  unsanitized output; all focused tests plus `./scripts/dev unit`,
+  `./scripts/dev contract`, `./scripts/dev integration`, `git diff --check`,
+  and `./scripts/dev verify` pass.
+
 ---
 
 ## 9. Phase 06 — Official Robinhood MCP Non-Trading Integration
@@ -1628,10 +1754,10 @@ line.
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` Part 1 serially for the
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
-  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. The next
-  queued/unclaimed action is only the narrow Telegram read-only
-  scheduling/task-card PR described in Batch F; no Telegram task ID is yet
-  assigned. By owner instruction, `P04-T2`, `P05-T4`, and their dependent
+  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
+  queued/unclaimed Telegram read-only task. Its implementation is
+  owner-paused-by-dependency until `P05-T4` is explicitly resumed and merged,
+  followed serially by `P05-T5`. By owner instruction, `P04-T2`, `P05-T4`, and their dependent
   chains are paused and unclaimed; they may not start until the
   owner/coordinator explicitly resumes them.
 
@@ -1645,11 +1771,12 @@ line.
    this display-only lane is complete: `rh-mcp` `v0.2.0` is pinned in
    `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
    merged.
-2. Next, submit the queued/unclaimed narrow task-card/tracker change for
-   Telegram read-only queries built on that display projection and
-   P05-T4/P05-T5. This planning PR assigns the task ID; it does not lift the
-   `P05-T4` pause or start implementation. Do not combine queries with Telegram
-   approval, Paper promotion, non-trading mutations, or trading capabilities.
+2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
+   on that display projection and `P05-T4`/`P05-T5`. This scheduling decision
+   does not lift the `P05-T4` pause or start implementation. After an explicit
+   owner resume, complete `P05-T4` -> `P05-T5` serially before claiming
+   `P05-T9`. Do not combine queries with Telegram approval, Paper promotion,
+   non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
    contract if required; then complete `P06-T2` Part 2 real-portfolio Paper.
