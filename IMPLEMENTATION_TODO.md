@@ -1005,7 +1005,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   query-dispatch additions to `src/ainvest/approval/telegram_updates.py` after
   `P05-T5` owns that file; the minimum account-secret/config composition
   addition under `src/ainvest/config/settings.py` and the Paper runtime's
-  READ_BROKER read-query subcomposition; matching configuration/secret tests,
+  READ_BROKER read-query subcomposition; the field-only strict file source may
+  be a private class in `settings.py` or, if separation improves readability,
+  new `src/ainvest/config/file_secrets.py`; matching
+  `tests/unit/config/test_settings.py` plus optional narrowly named
+  `tests/unit/config/test_file_secrets.py`,
   `tests/unit/approval/test_telegram_queries.py`, bounded additions to the
   `P05-T5` Telegram update tests, one dependency-boundary test, and
   `docs/telegram-read-queries.md`. Do not edit the display models or broaden
@@ -1082,15 +1086,36 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   never receive the `SecretStr` or plaintext value. `P05-T4` continues to own
   only Bot identity/token/allowlist notification configuration, and `P05-T5`
   continues to own transport/deduplication; neither card defines this key. Do
-  not add a second secret parser, a new `SecretId`, or an external dependency.
+  not add a new `SecretId` or an external dependency.
+- **Strict file-secret source authorization:** Pydantic Settings' stock
+  `SecretsSettingsSource` calls `read_text().strip()`, so it cannot enforce the
+  grammar below. P05-T9 is explicitly authorized to replace only the
+  file-secret lookup for `robinhood_read_account_number` with one narrow custom
+  `PydanticBaseSettingsSource`/`SecretsSettingsSource` subclass, or an
+  equivalent field-specific extension inside the existing configuration
+  module. This is the implementation of the existing file-secret precedence
+  layer, not a second configuration system: it receives exactly the explicit
+  `secrets_dir`, performs no fallback or path search, exposes no generic public
+  parser, and returns a value for this one exact field only. The stock
+  file-secret source remains responsible for every other Settings field with
+  unchanged values, aliases, case behavior, errors, and precedence. Keep
+  `settings_customise_sources` ordered explicit/init > environment > dotenv >
+  file-secret > YAML; the narrow source occupies only that existing
+  file-secret position and a lower-precedence file can never override
+  init/environment/dotenv.
 - **Account-secret grammar and lifetime:** after source decoding, accept 1
   through 128 visible ASCII characters (`0x21` through `0x7e`) and reject empty,
   oversized, non-ASCII, whitespace/control-bearing, CR-bearing, or multi-line
   values. Environment/dotenv/YAML values are validated exactly and are never
-  trimmed. A file-secret may contain either the exact value or that value plus
-  one terminal LF; the file-secret source removes only that one LF before
-  validation. It rejects a terminal CRLF, more than one LF, leading/trailing
-  spaces, or any other newline. The authorized file-secret/secret-manager value
+  trimmed. For the strict file, open the exact resolved regular file, read at
+  most 130 bytes in binary mode, and reject a larger file before decoding.
+  Decode with strict UTF-8, then require every decoded code point to be ASCII.
+  Accept either the exact value or that value plus exactly one terminal byte
+  `0x0a`; remove only that one LF before field validation. Reject invalid
+  UTF-8/non-ASCII, a terminal CRLF, more than one LF, leading/trailing spaces,
+  tabs, any embedded newline, control/non-visible bytes, an empty post-LF
+  value, or more than 128 value bytes. Do not use `strip`, `rstrip`, universal-
+  newline translation, or lossy/replacement decoding. The authorized file-secret/secret-manager value
   is the approved at-rest persistence and must remain outside Git; “do not
   persist” means no database, cache, audit event, query record, snapshot, log,
   metric, trace, exception, Telegram message, or provider-result copy. The
@@ -1201,9 +1226,13 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   key/code/retryability mapping, render fallback, and unsendable `send_failed`
   terminal outcome; missing/invalid account secret; all source precedence and
   exact account grammar cases including optional single file LF, rejected CRLF,
-  whitespace/newline/length boundaries, explicit `secrets_dir` with no implicit
-  path search, redacted representations, READ_BROKER-only composition access,
-  and no plaintext crossing the narrow query port;
+  invalid UTF-8/non-ASCII, whitespace/newline/control/0/1/128/129-byte
+  boundaries, explicit `secrets_dir` with no implicit path search, no
+  `strip`/universal-newline behavior, redacted representations, READ_BROKER-only
+  composition access, and no plaintext crossing the narrow query port. Add
+  regression tests proving init/env/dotenv still override the strict file,
+  strict file still overrides YAML, every unrelated file-secret field retains
+  stock Pydantic behavior, and absent/unrelated files do not change settings;
   readiness/auth/timeout/contract/mapping/render and send failures; persisted
   update deduplication and restart; one-in-flight and six-per-minute limits;
   all five exact history argument dictionaries at a fixed injected UTC clock,

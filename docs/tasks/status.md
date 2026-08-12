@@ -1847,7 +1847,16 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   1–128 visible-ASCII grammar, optional single file-secret LF, rejected
   CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper
   lifetime, per-call reveal, and no application-data persistence/logging/message
-  rule. It introduces no second parser, `SecretId`, or dependency.
+  rule. Because stock Pydantic file secrets call `strip`, P05-T9 explicitly
+  owns a private field-only settings source that reads at most 130 raw bytes,
+  decodes strict UTF-8/ASCII, removes at most one terminal LF, and rejects the
+  rest before validation. It occupies the existing file-secret precedence
+  layer and preserves stock behavior for every other Settings field; it is not
+  a second searched configuration system or general parser and introduces no
+  `SecretId` or dependency. Its allowed paths are
+  `src/ainvest/config/settings.py`, optional private
+  `src/ainvest/config/file_secrets.py`, and the narrow config unit tests named
+  in the task card.
 - **Review remediation:** the first independent review correctly rejected the
   earlier ambiguous error, history-window, and account-secret contracts. Those
   three contracts are now pinned in the task card; no production code,
