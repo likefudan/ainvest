@@ -104,7 +104,8 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` merged) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
-| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, both `P06-T1` integration parts, and `P06-T2` Part 1 display-only CLI merged; Part 2 remains blocked); the next queued/unclaimed step is a narrow Telegram read-only task-card/tracker change |
+| Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, both `P06-T1` integration parts, and `P06-T2` Part 1 display-only CLI merged; Part 2 remains blocked) |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after `P05-T4` → `P05-T5` and merged `P06-T2` Part 1 | `queued/unclaimed`; implementation is `owner-paused-by-dependency` and this scheduling record does not lift the `P05-T4` pause |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -166,9 +167,10 @@ merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 pinned-surface display normalization. The `P06-T2` Part 1 claim merged in
 [#116](https://github.com/likefudan/ainvest/pull/116), and its display-only CLI
 implementation merged in [#117](https://github.com/likefudan/ainvest/pull/117).
-The next queued/unclaimed step is a narrow planning PR that assigns an exact
-task card for Telegram read-only queries built on the display projection and
-the `P05-T4`/`P05-T5` transport. Later candidates enter the merge queue
+The next queued/unclaimed implementation is `P05-T9`, the narrow Telegram
+read-only display adapter built on the display projection and the
+`P05-T4`/`P05-T5` transport. It remains owner-paused-by-dependency. Later
+candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -543,11 +545,11 @@ Shared-surface ownership for this claim is exclusive:
 The owner pause on `P04-T2` and `P05-T4` remains in force. The complete
 `P06-T0` adapter, runtime-dependency, and hardening delivery is merged, and
 both integration parts of `P06-T1` are merged. `P06-T2` Part 1 display-only
-CLI is merged. The next queued/unclaimed work is only the narrow Telegram
-read-only scheduling/task-card change; its eventual implementation depends on
-the display projection plus `P05-T4` and `P05-T5`. Because the owner pause on
-`P05-T4` remains in force, this record does not claim or start that transport
-work or any unrelated task chain.
+CLI is merged. `P05-T9` now names the queued/unclaimed Telegram read-only
+display adapter; its implementation depends on the display projection plus
+`P05-T4` and `P05-T5`. Because the owner pause on `P05-T4` remains in force,
+`P05-T9` is owner-paused-by-dependency and this record does not claim or start
+that transport work or any unrelated task chain.
 
 ##### Execution envelope: P08-T4
 
@@ -1270,14 +1272,13 @@ capabilities only. Its serial merge order is:
   regular-session evidence, and (4) a newly independently reviewed `rh-mcp`
   release/provider-surface update plus the deliberate ainvest pin update. No
   Part 1 value may be promoted into Paper, Strategy, Sizer, or Risk.
-- **Next queued work:** a separate narrow scheduling/task-card PR for Telegram
-  read-only queries is queued and unclaimed; no exact task ID exists in the
-  current implementation plan, so this tracker does not invent one. That plan
-  change must build on the reusable display service and name `P05-T4` and
-  `P05-T5` as transport prerequisites. The owner pause on `P05-T4` still
-  prevents implementation from starting. The future slice must remain
-  display-only and separate from Telegram approval, Paper promotion, all 11
-  non-trading mutations, and all 8 trading capabilities.
+- **Next queued work:** `P05-T9` is queued and unclaimed for Telegram read-only
+  queries. It builds on the reusable display service and names `P05-T4` and
+  `P05-T5` as serial transport prerequisites. The owner pause on `P05-T4`
+  still prevents implementation from starting, so the task is
+  owner-paused-by-dependency. The slice remains display-only and separate from
+  Telegram approval, Paper promotion, all 11 non-trading mutations, and all 8
+  trading capabilities.
 
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0`
 
@@ -1759,12 +1760,11 @@ Alpaca, yfinance, or another provider.
 Per owner instruction on 2026-07-29, `P04-T2` and `P05-T4` are
 `not_started`, unclaimed, and paused until the owner/coordinator explicitly
 resumes them; no background worktree or implementation agent should be started
-for either task. Now that the `P06-T2` Part 1 display-only CLI is merged, the
-next queued/unclaimed action is a separate narrow scheduling/task-card PR for
-Telegram read-only queries built on that display projection and the
-`P05-T4`/`P05-T5` transport. It must not wait for Part 2, lift the `P05-T4`
-pause, or mix that read surface with Paper promotion, Telegram approval, a
-non-trading mutation, or a trading capability.
+for either task. Now that the `P06-T2` Part 1 display-only CLI is merged,
+`P05-T9` is queued/unclaimed for Telegram read-only queries built on that
+display projection and the `P05-T4`/`P05-T5` transport. It must not wait for
+Part 2, lift the `P05-T4` pause, or mix that read surface with Paper promotion,
+Telegram approval, a non-trading mutation, or a trading capability.
 
 #### Research track — `P04-T0` through `P04-T12`
 
@@ -1806,11 +1806,61 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T5` | `not_started` | `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
+| `P05-T9` | `queued/unclaimed` (`owner-paused-by-dependency`) | merged `P06-T2` Part 1, then owner-resumed/merged `P05-T4` → `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition; focused tests and `docs/telegram-read-queries.md` |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is
 owner-paused/unclaimed and may not start until the owner/coordinator explicitly
 resumes it; only after that task merges may `P05-T5` start. `P05-T6` follows
-`P05-T1`. The completed Paper approval path unlocks `P08-T13`, then `P05-T8`.
+`P05-T1`. `P05-T9` is a display-only add-on, not a Gate 3 dependency and not
+an approval path; after the owner resumes the transport chain, it may be
+claimed only after `P05-T4` and `P05-T5` merge serially. The completed Paper
+approval path unlocks `P08-T13`, then `P05-T8`.
+
+##### Scheduling envelope: P05-T9
+
+- **Planning PR/status:** [#119](https://github.com/likefudan/ainvest/pull/119)
+  assigns the unique task ID only. Implementation is unclaimed and
+  owner-paused-by-dependency; this record neither resumes `P05-T4` nor creates
+  an implementation worktree.
+- **Serial unlock:** merged `P06-T2` Part 1 is satisfied. The owner must first
+  resume `P05-T4`; merge `P05-T4`, then rebase/review/merge `P05-T5`, and only
+  then claim `P05-T9`. It is a display-only add-on and is not required by Gate
+  3 or `P06-T2` Part 2.
+- **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
+  `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
+  error envelope. P05-T9 owns its exact `TelegramQueryError` wire and
+  deterministic renderer, must not import/copy the CLI's private JSON helpers,
+  and follows the task card's silent-ignore versus authorized-reply matrix.
+  `/help` is private/allowlisted/rate-limited but deliberately opens neither
+  the gateway nor account secret and returns no display envelope.
+- **Pinned history behavior:** `1d`, `5d`, `1m`, `3m`, and `1y` mean fixed
+  rolling UTC durations of 24, 120, 720, 2,160, and 8,760 hours. Their intervals
+  are `5minute`, `30minute`, `hour`, `day`, and `day`; every request uses
+  `regular` bounds and `split` adjustment. No exchange-calendar dependency or
+  trade-grade session claim is allowed.
+- **Account-secret ownership:** the exact setting/environment/file-secret key
+  is `ROBINHOOD_READ_ACCOUNT_NUMBER`, on the Settings field
+  `robinhood_read_account_number`. Only the Paper runtime's READ_BROKER
+  read-query subcomposition reads it; P05-T4/P05-T5 do not own or receive it,
+  and the poller gets only a narrow query port. `load_settings(secrets_dir=...)`
+  is explicit and never searches implicitly. The task card fixes the value's
+  1–128 visible-ASCII grammar, optional single file-secret LF, rejected
+  CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper
+  lifetime, per-call reveal, and no application-data persistence/logging/message
+  rule. Because stock Pydantic file secrets call `strip`, P05-T9 explicitly
+  owns a private field-only settings source that reads at most 130 raw bytes,
+  decodes strict UTF-8/ASCII, removes at most one terminal LF, and rejects the
+  rest before validation. It occupies the existing file-secret precedence
+  layer and preserves stock behavior for every other Settings field; it is not
+  a second searched configuration system or general parser and introduces no
+  `SecretId` or dependency. Its allowed paths are
+  `src/ainvest/config/settings.py`, optional private
+  `src/ainvest/config/file_secrets.py`, and the narrow config unit tests named
+  in the task card.
+- **Review remediation:** the first independent review correctly rejected the
+  earlier ambiguous error, history-window, and account-secret contracts. Those
+  three contracts are now pinned in the task card; no production code,
+  dependency, credential, Bot value, claim, or pause state changes in #119.
 
 #### Deferred live approval track
 
