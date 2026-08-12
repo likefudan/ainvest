@@ -1838,7 +1838,8 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   `P05-T9`), 12 (Batch E/F ordering), and 16; `DEC-005`; and the existing
   fail-closed `Settings`, `TelegramBotSettings`, `ApprovalService`, and opaque
   approval-token contracts. `DEC-010` remains `proposed`: no real Bot token,
-  `user_id`, `chat_id`, username, or environment value is invented here.
+  expected Bot ID, `user_id`, `private_chat_id`, username, or environment value
+  is invented here.
 - **Objective and product boundary:** implement only the environment-selected
   staging/production Telegram Bot configuration and a private-message sender
   for bounded PAPER and LIVE notification summaries. The sender accepts a
@@ -1866,11 +1867,30 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   signed-64-bit numeric `user_id` to one positive signed-64-bit numeric
   `private_chat_id`. Username is display-only. Authorization requires exact
   membership of the pair; independent membership never authorizes a
-  cross-product. Validate the selected Bot with bounded `getMe` startup I/O
-  and validate the bound target as a private chat before sending. A
-  wrong/ambiguous environment, Bot identity, crossed pair, unknown pair member,
-  non-private chat, group/channel, disabled configuration, duplicate recipient
-  record, or shared staging/production Bot fails closed before delivery.
+  cross-product. The nested field is exactly `allowed_recipients`, exposed as
+  `TELEGRAM_STAGING__ALLOWED_RECIPIENTS` and
+  `TELEGRAM_PRODUCTION__ALLOWED_RECIPIENTS`; each value is a JSON array of
+  `{\"user_id\": <positive-int64>, \"private_chat_id\": <positive-int64>}`
+  records. The old independent `allowed_user_ids` / `allowed_chat_ids` fields
+  are removed and rejected as extra configuration.
+- **Bot identity contract:** each enabled environment has exactly one positive
+  signed-64-bit numeric `expected_bot_id` (optional only while disabled),
+  exposed as
+  `TELEGRAM_STAGING__EXPECTED_BOT_ID` or
+  `TELEGRAM_PRODUCTION__EXPECTED_BOT_ID`. An enabled environment requires its
+  token, expected Bot ID, and at least one bound recipient record. For the
+  selected environment only, bounded `getMe` must return a numeric `id` exactly
+  equal to configured `expected_bot_id` before any private-chat validation or
+  send; absent, malformed, or mismatched identity returns
+  `bot_identity_mismatch`, `retryable=false`, and invokes no `sendMessage`.
+  The Telegram username is never an identity check. If both expected Bot ID
+  values are present, they must differ; swapping staging/production tokens or
+  expected IDs therefore fails closed rather than silently selecting the other
+  Bot. Validate the bound target as a
+  private chat only after identity succeeds. A wrong/ambiguous environment,
+  crossed pair, unknown pair member, non-private chat, group/channel, disabled
+  configuration, duplicate recipient record, or staging/production fallback
+  fails closed before delivery.
 - **Configuration and file-secret ownership:** `P05-T4` owns the minimum public
   configuration extension needed by this and later Telegram tasks: add
   `load_settings(secrets_dir: Path | str | None = None)` and pass only that
@@ -1888,6 +1908,19 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   The sender never reads an environment variable or file. `P05-T9` must reuse
   this public loader and may later add only its own account-field-specific
   source at the same layer; it cannot replace or redefine the entry point.
+- **Canonical configuration example:** P05-T4 owns the required `.env.example`
+  migration. Keep both Bot environments explicitly disabled. Replace the old
+  independent-list keys with the exact `EXPECTED_BOT_ID` and
+  `ALLOWED_RECIPIENTS` nested keys above, using clearly labeled positive
+  synthetic numeric values only. Leave each environment's Bot-token setting as
+  a commented empty value, and name its exact file-secret filename
+  (`TELEGRAM_STAGING__BOT_TOKEN` or
+  `TELEGRAM_PRODUCTION__BOT_TOKEN`) plus the requirement for an explicitly
+  supplied secrets directory in adjacent comments. Do not include a real ID,
+  token, token-shaped example, or usable credential. Loading
+  the canonical example with no secret directory must succeed only in the
+  disabled state; changing either environment to enabled without a token,
+  expected Bot ID, or bound recipient must fail validation.
 - **Secret and message requirements:** configuration continues through
   `ainvest.config`; use `SecretStr` and the source precedence above. Reveal a
   Bot token, callback nonce, or full Live link only inside the narrow outbound
@@ -1934,7 +1967,7 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   | Outcome code | `retryable` | Meaning |
   |---|---:|---|
   | `config_invalid` | `false` | selected environment/config/secret is absent, unsafe, or ambiguous |
-  | `bot_identity_mismatch` | `false` | `getMe` does not match the selected environment's distinct Bot |
+  | `bot_identity_mismatch` | `false` | selected `getMe.id` is absent/malformed or does not exactly equal that environment's configured `expected_bot_id` |
   | `recipient_not_allowed` | `false` | exact bound recipient pair is absent, crossed, or invalid |
   | `chat_not_private` | `false` | validated target is not the configured private chat |
   | `message_invalid` | `false` | required summary/action/length/origin contract fails before send |
@@ -1949,8 +1982,9 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   `src/ainvest/approval/telegram.py`;
   `src/ainvest/approval/__init__.py` for narrow re-exports;
   `src/ainvest/config/settings.py` and `src/ainvest/config/__init__.py` only for
-  the bound recipient model, explicit `secrets_dir` loader entry, and
-  Telegram-token file-secret source described above;
+  the expected Bot ID/bound recipient models, explicit `secrets_dir` loader
+  entry, and Telegram-token file-secret source described above;
+  `.env.example` for the disabled non-secret canonical shape described above;
   `tests/unit/approval/test_telegram.py`;
   narrow additions to `tests/unit/config/test_settings.py`;
   deterministic sanitized snapshots/fakes under `tests/fixtures/telegram/**`;
@@ -1960,15 +1994,21 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   configuration path requires a coordinator-recorded scope expansion first.
 - **Required tests:** use synthetic numeric IDs, fake tokens, injected clocks,
   and a deterministic fake Telegram transport only. Cover both environments,
-  disabled/missing/swapped configuration, Bot identity validation, numeric
-  recipient-pair bounds/uniqueness, crossed pairs, individually unknown IDs,
+  disabled/missing configuration, numeric expected-Bot-ID bounds, exact
+  `getMe.id` matching, swapped token/expected-ID mappings, duplicate expected
+  IDs across environments, proof that identity failure never invokes private-
+  chat validation or send, numeric recipient-pair bounds/uniqueness, crossed
+  pairs, individually unknown IDs, deprecated independent-list rejection,
   group/channel/non-private rejection, startup/chat validation retry bounds,
   exactly one send invocation, send timeout/disconnect unknown outcomes, exact
   outcome/retryable mapping, successful message ID/status, no blind retry,
   exact PAPER and LIVE snapshots, every required order field/currency/time in
   force plus missing-field failures, fixed Live origin, plain-text/control/
   length bounds, callback/link binding without raw-action snapshots, and
-  secret/account/token/link absence from repr/errors/logs/results/snapshots.
+  secret/account/token/link absence from repr/errors/logs/results/snapshots,
+  and safe parsing of the disabled synthetic `.env.example` without secrets.
+  Configuration documentation and snapshots use only synthetic identities and
+  never expose a real/fixture token or imply that username is authoritative.
   Structurally prove this card cannot poll or receive updates, consume approval
   callbacks, dispatch read queries, create/verify WebAuthn approvals, call a
   model, mutate proposal state, or reach Paper/live broker writes.
@@ -1994,9 +2034,12 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   Telegram response can approve, change state, or trade.
 - **Owner-assisted validation prerequisite, not offline blocker:** after the
   implementation is reviewed, the owner must create/provide separate real
-  staging and production Bots plus each environment's numeric private
-  `user_id` and `chat_id`, with tokens supplied only through approved secret
-  storage, before environment integration can be accepted under `DEC-010`.
+  staging and production Bots plus each environment's positive numeric expected
+  Bot ID and bound numeric private `(user_id, private_chat_id)` recipient
+  records, with tokens supplied only through approved secret storage, before
+  environment integration can be accepted under proposed `DEC-010`. These
+  real values are not an offline implementation input and are never added to
+  `.env.example`, snapshots, fixtures, or Git.
   Until then the real adapter stays disabled and real `getMe`/private-message
   validation is unverified. This does not block deterministic offline
   implementation, review, or merge.

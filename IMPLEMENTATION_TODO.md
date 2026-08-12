@@ -925,15 +925,26 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 ### P05-T4 — Configure Telegram Bots and Send Private Notifications
 
 - **Objective:** Use separate staging/production Bots to show order/risk summaries and provide either a Paper callback or a Live HTTPS link.
-- **Dependencies:** P05-T0 and the accepted identity policy in P01-T0. Offline implementation and review use synthetic IDs, fake tokens, and fake transport; account-owner supplied Bot/user/chat values are required only for owner-assisted environment validation under `DEC-010`, not for the offline implementation merge.
+- **Dependencies:** P05-T0 and the accepted identity policy in P01-T0. Offline implementation and review use synthetic IDs, fake tokens, and fake transport; account-owner supplied Bot token, expected Bot ID, and bound user/private-chat values are required only for owner-assisted environment validation under proposed `DEC-010`, not for the offline implementation merge.
 - **Primary files:** `src/ainvest/approval/telegram.py` and the minimum
-  Telegram-recipient/file-secret additions to `src/ainvest/config/settings.py`.
+  Telegram-identity/recipient/file-secret additions to
+  `src/ainvest/config/settings.py`; `.env.example` for disabled, non-secret
+  examples of the exact configuration shape.
 - **Implementation checklist:**
   - Use separate Bot tokens and environment-scoped, bound numeric
     `(user_id, private_chat_id)` recipient records. Independent user/chat
     allowlists are not an authorization relation and must never create a
-    cross-product. Call `getMe` at startup to validate environment and distinct
-    Bot identity; never fall back across staging/production.
+    cross-product. Each enabled environment also requires a positive
+    signed-64-bit numeric `expected_bot_id` (optional only while disabled),
+    configured as
+    `TELEGRAM_STAGING__EXPECTED_BOT_ID` or
+    `TELEGRAM_PRODUCTION__EXPECTED_BOT_ID`. Call `getMe` for the selected
+    environment and require its numeric `id` to equal that environment's
+    configured value exactly. A missing/malformed/mismatched ID is
+    `bot_identity_mismatch` and fails before private-chat validation or
+    `sendMessage`. Usernames are display-only. Staging and production cannot
+    exchange tokens or expected IDs, and the two expected IDs must differ
+    whenever both values are present; never fall back across environments.
   - Disable groups; send only to one configured bound private recipient. A
     username is display-only. Reject an individually known user paired with a
     different known chat, as well as an unknown member of either pair.
@@ -961,18 +972,30 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
     `TELEGRAM_PRODUCTION__BOT_TOKEN` into their nested `SecretStr` fields
     through a private Telegram-token-specific source while preserving stock
     behavior for every other file secret. The sender never reads files.
+  - Replace the two independent example allowlists with the exact nested keys
+    `TELEGRAM_STAGING__ALLOWED_RECIPIENTS` and
+    `TELEGRAM_PRODUCTION__ALLOWED_RECIPIENTS`, encoded as JSON arrays of
+    `{\"user_id\": <positive-int64>, \"private_chat_id\": <positive-int64>}`
+    objects. Update `.env.example` with `ENABLED=false`, clearly labeled
+    synthetic numeric Bot/recipient IDs, and commented empty Bot-token entries;
+    comments name the two exact token file-secret filenames and the requirement
+    to pass their directory explicitly. It must contain no real ID, token, or
+    token-shaped placeholder and must load safely while both Bots are disabled.
   - Read-only `getMe`/private-chat validation may make at most two bounded
     attempts before any send. Invoke `sendMessage` at most once per adapter
     call and never retry after transmission begins. A send timeout/disconnect
     is terminal `delivery_unknown`, never retryable; no caller correlation or
     intent key is represented as a Telegram idempotency key.
   - Record message ID/status but not the full link or raw token.
-- **Acceptance criteria:** Incorrect Bot/recipient-pair/chat/environment
-  configuration, crossed pairs, missing summary fields, and unsafe links fail
-  closed. Delivery has honest at-most-once send semantics; a failure or unknown
+- **Acceptance criteria:** Incorrect Bot/expected-ID/recipient-pair/chat/
+  environment configuration, swapped token/expected-ID mappings, crossed
+  recipient pairs, missing summary fields, and unsafe links fail closed before
+  send. Delivery has honest at-most-once send semantics; a failure or unknown
   outcome cannot approve or trade. PAPER/LIVE snapshots make category and full
-  units unambiguous and contain no sensitive values; Telegram responses alone
-  never alter state.
+  units unambiguous, use synthetic identity values, and contain no sensitive
+  values; Telegram responses alone never alter state. The canonical disabled
+  `.env.example` parses without any secret and documents the exact deployable
+  keys without containing real owner values.
 
 ### P05-T5 — Operate Idempotent Telegram Long Polling and Preserve a Webhook Boundary
 
