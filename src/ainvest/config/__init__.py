@@ -36,6 +36,7 @@ from ainvest.config.settings import (
     AISettings,
     Settings,
     TelegramBotSettings,
+    TelegramRecipient,
     WebAuthnSettings,
     load_settings,
 )
@@ -52,6 +53,7 @@ __all__ = [
     "Settings",
     "StrategiesDocument",
     "TelegramBotSettings",
+    "TelegramRecipient",
     "TelegramTransport",
     "TradingMode",
     "WebAuthnSettings",

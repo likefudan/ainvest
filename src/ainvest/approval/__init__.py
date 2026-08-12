@@ -21,6 +21,15 @@ from ainvest.approval.service import (
     ApprovalServiceError,
     IssuedApprovalChallenge,
 )
+from ainvest.approval.telegram import (
+    TelegramDeliveryCode,
+    TelegramEnvironment,
+    TelegramHttpsTransport,
+    TelegramNotificationCategory,
+    TelegramNotificationOutcome,
+    TelegramNotificationRequest,
+    TelegramNotificationSender,
+)
 from ainvest.approval.tokens import (
     APPROVAL_TOKEN_BYTES,
     APPROVAL_TOKEN_HASH_DOMAIN,
@@ -41,6 +50,13 @@ __all__ = [
     "ApprovalServiceError",
     "IssuedApprovalChallenge",
     "OpaqueApprovalToken",
+    "TelegramDeliveryCode",
+    "TelegramEnvironment",
+    "TelegramHttpsTransport",
+    "TelegramNotificationCategory",
+    "TelegramNotificationOutcome",
+    "TelegramNotificationRequest",
+    "TelegramNotificationSender",
     "attach_order_hash",
     "compute_cancel_hash",
     "compute_order_hash",

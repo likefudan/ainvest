@@ -22,7 +22,13 @@ from pydantic import (
     model_validator,
 )
 from pydantic.fields import FieldInfo
-from pydantic_settings import BaseSettings, PydanticBaseSettingsSource, SettingsConfigDict
+from pydantic_settings import (
+    BaseSettings,
+    PydanticBaseSettingsSource,
+    SecretsSettingsSource,
+    SettingsConfigDict,
+    SettingsError,
+)
 
 from ainvest.config.documents import RiskLimitsDocument, StrategiesDocument
 from ainvest.config.errors import (
@@ -38,6 +44,10 @@ from ainvest.config.yaml import _validation_error_message, load_yaml_mapping
 # Signed 64-bit bounds for Telegram numeric identities (DEC-005).
 _INT64_MIN: Final[int] = -(2**63)
 _INT64_MAX: Final[int] = 2**63 - 1
+_MAX_TELEGRAM_TOKEN_FILE_BYTES: Final[int] = 256
+_TELEGRAM_BOT_TOKEN_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^[1-9][0-9]{5,19}:[A-Za-z0-9_-]{30,128}$"
+)
 
 _RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(?=.{1,253}$)"
@@ -88,6 +98,29 @@ class AISettings(BaseModel):
         return self
 
 
+class TelegramRecipient(BaseModel):
+    """One explicitly bound Telegram user/private-chat authorization pair."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+
+    user_id: int
+    private_chat_id: int
+
+    @field_validator("user_id", "private_chat_id", mode="before")
+    @classmethod
+    def _require_integer(cls, value: object) -> object:
+        if not isinstance(value, int) or isinstance(value, bool):
+            raise ValueError("Telegram recipient IDs must be integers")
+        return value
+
+    @field_validator("user_id", "private_chat_id")
+    @classmethod
+    def _validate_positive_int64(cls, value: int) -> int:
+        if not _is_int64(value) or value <= 0:
+            raise ValueError("Telegram recipient IDs must be positive signed 64-bit integers")
+        return value
+
+
 class TelegramBotSettings(BaseModel):
     """One Telegram Bot environment (staging or production). DEC-005 / DEC-010."""
 
@@ -95,34 +128,52 @@ class TelegramBotSettings(BaseModel):
 
     bot_token: SecretStr | None = Field(default=None, repr=False)
     webhook_secret: SecretStr | None = Field(default=None, repr=False)
-    allowed_user_ids: tuple[int, ...] = ()
-    allowed_chat_ids: tuple[int, ...] = ()
+    expected_bot_id: int | None = None
+    allowed_recipients: tuple[TelegramRecipient, ...] = ()
     transport: TelegramTransport = TelegramTransport.LONG_POLLING
     approval_method: ApprovalMethod = ApprovalMethod.TELEGRAM
     approval_scope: ApprovalScope = ApprovalScope.PAPER
     enabled: bool = False
 
-    @field_validator("allowed_user_ids", "allowed_chat_ids", mode="before")
+    @field_validator("allowed_recipients", mode="before")
     @classmethod
-    def _coerce_id_tuple(cls, value: object) -> object:
+    def _coerce_recipients(cls, value: object) -> object:
         if value is None:
             return ()
-        if isinstance(value, (str, bytes)):
-            raise ValueError("Telegram allowlists must be numeric IDs, not strings")
-        if isinstance(value, int):
-            return (value,)
+        if isinstance(value, (str, bytes, dict)):
+            raise ValueError("Telegram recipients must be an array of bound records")
         return value
 
-    @field_validator("allowed_user_ids", "allowed_chat_ids")
+    @field_validator("expected_bot_id", mode="before")
     @classmethod
-    def _validate_int64_ids(cls, value: tuple[int, ...]) -> tuple[int, ...]:
-        for item in value:
-            if not isinstance(item, int) or isinstance(item, bool):
-                raise ValueError("Telegram allowlist entries must be integers")
-            if not _is_int64(item):
-                raise ValueError("Telegram allowlist IDs must fit in signed 64-bit")
-            if item <= 0:
-                raise ValueError("Telegram allowlists accept only positive private user/chat IDs")
+    def _reject_non_numeric_bot_id(cls, value: object) -> object:
+        if value is None:
+            return None
+        if isinstance(value, bool):
+            raise ValueError("Telegram expected_bot_id must be an integer")
+        if isinstance(value, str) and value.isascii() and value.isdigit():
+            return value
+        if not isinstance(value, int):
+            raise ValueError("Telegram expected_bot_id must be an integer")
+        return value
+
+    @field_validator("expected_bot_id")
+    @classmethod
+    def _validate_expected_bot_id(cls, value: int | None) -> int | None:
+        if value is None:
+            return None
+        if not _is_int64(value) or value <= 0:
+            raise ValueError("Telegram expected_bot_id must be a positive signed 64-bit integer")
+        return value
+
+    @field_validator("allowed_recipients")
+    @classmethod
+    def _require_unique_recipients(
+        cls, value: tuple[TelegramRecipient, ...]
+    ) -> tuple[TelegramRecipient, ...]:
+        pairs = {(item.user_id, item.private_chat_id) for item in value}
+        if len(pairs) != len(value):
+            raise ValueError("Telegram recipient pairs must be unique")
         return value
 
     @model_validator(mode="after")
@@ -135,10 +186,10 @@ class TelegramBotSettings(BaseModel):
             raise ValueError("Telegram approval_scope must be paper (DEC-005)")
         if self.enabled and self.bot_token is None:
             raise ValueError("enabled Telegram bot requires bot_token")
-        if self.enabled and not self.allowed_user_ids:
-            raise ValueError("enabled Telegram bot requires allowed_user_ids")
-        if self.enabled and not self.allowed_chat_ids:
-            raise ValueError("enabled Telegram bot requires allowed_chat_ids")
+        if self.enabled and self.expected_bot_id is None:
+            raise ValueError("enabled Telegram bot requires expected_bot_id")
+        if self.enabled and not self.allowed_recipients:
+            raise ValueError("enabled Telegram bot requires allowed_recipients")
         return self
 
 
@@ -250,6 +301,78 @@ class _YamlSettingsSource(PydanticBaseSettingsSource):
         return dict(_YAML_SETTINGS_DATA.get() or {})
 
 
+class _TelegramTokenFileSecretSource(PydanticBaseSettingsSource):
+    """Load only the two nested Telegram tokens from explicit secret files."""
+
+    _FILENAMES: Final[Mapping[str, str]] = {
+        "telegram_staging": "TELEGRAM_STAGING__BOT_TOKEN",
+        "telegram_production": "TELEGRAM_PRODUCTION__BOT_TOKEN",
+    }
+
+    def __init__(self, settings_cls: type[BaseSettings], secrets_dir: object) -> None:
+        super().__init__(settings_cls)
+        self._secrets_dir = secrets_dir
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        del field
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        if self._secrets_dir is None or isinstance(self._secrets_dir, (list, tuple, set)):
+            return {}
+        directory = Path(self._secrets_dir)  # type: ignore[arg-type]
+        try:
+            if not directory.exists() or not directory.is_dir():
+                return {}
+            entries = {entry.name: entry for entry in directory.iterdir()}
+        except OSError:
+            raise SettingsError("Unable to read Telegram token file secrets") from None
+        values: dict[str, Any] = {}
+        for environment, filename in self._FILENAMES.items():
+            path = entries.get(filename)
+            if path is None:
+                continue
+            try:
+                if not path.is_file():
+                    raise SettingsError("Telegram token secret must be a regular file")
+                with path.open("rb") as handle:
+                    raw = handle.read(_MAX_TELEGRAM_TOKEN_FILE_BYTES + 1)
+            except (OSError, SettingsError):
+                raise SettingsError("Unable to read Telegram token file secret") from None
+            if not raw or len(raw) > _MAX_TELEGRAM_TOKEN_FILE_BYTES:
+                raise SettingsError("Invalid Telegram token file secret")
+            try:
+                token = raw.decode("utf-8")
+            except UnicodeDecodeError:
+                raise SettingsError("Invalid Telegram token file secret") from None
+            # Secret tooling commonly writes one POSIX terminal LF.  Permit
+            # exactly that normalization and leave every other byte subject to
+            # the token grammar; never hide whitespace/control corruption.
+            if token.endswith("\n"):
+                token = token[:-1]
+            if _TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(token) is None:
+                raise SettingsError("Invalid Telegram token file secret")
+            values[environment] = {"bot_token": token}
+        return values
+
+
+class _FilteredStockFileSecretSource(SecretsSettingsSource):
+    """Preserve stock file secrets while excluding Telegram top-level JSON."""
+
+    _TELEGRAM_FIELDS: Final[frozenset[str]] = frozenset({"telegram_staging", "telegram_production"})
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        if field_name in self._TELEGRAM_FIELDS:
+            return None, field_name, False
+        return super().get_field_value(field, field_name)
+
+    def __call__(self) -> dict[str, Any]:
+        try:
+            return super().__call__()
+        except (OSError, UnicodeError, SettingsError):
+            raise SettingsError("Unable to load file-secret configuration") from None
+
+
 class Settings(BaseSettings):
     """Application settings with paper-safe defaults (design.md §12)."""
 
@@ -318,7 +441,14 @@ class Settings(BaseSettings):
             init_settings,
             env_settings,
             dotenv_settings,
-            file_secret_settings,
+            _TelegramTokenFileSecretSource(
+                settings_cls,
+                getattr(file_secret_settings, "secrets_dir", None),
+            ),
+            _FilteredStockFileSecretSource(
+                settings_cls,
+                secrets_dir=getattr(file_secret_settings, "secrets_dir", None),
+            ),
             _YamlSettingsSource(settings_cls),
         )
 
@@ -362,6 +492,11 @@ class Settings(BaseSettings):
                 "closed bootstrap (DEC-006)"
             )
 
+        staging_bot_id = self.telegram_staging.expected_bot_id
+        production_bot_id = self.telegram_production.expected_bot_id
+        if staging_bot_id is not None and staging_bot_id == production_bot_id:
+            raise ValueError("staging and production Telegram expected_bot_id values must differ")
+
         return self
 
     @property
@@ -390,6 +525,7 @@ def _temporary_environ(environ: Mapping[str, str]) -> Iterator[None]:
 def load_settings(
     *,
     env_file: Path | str | None = None,
+    secrets_dir: Path | str | None = None,
     risk_yaml: Path | str | None = None,
     strategies_yaml: Path | str | None = None,
     environ: Mapping[str, str] | None = None,
@@ -402,6 +538,10 @@ def load_settings(
     env_file:
         Optional ``.env`` path. When ``environ`` is provided, dotenv loading is
         disabled unless ``env_file`` is set explicitly.
+    secrets_dir:
+        Optional explicit file-secret directory. No implicit directory search
+        is performed. The Telegram token source recognizes only the exact
+        environment-specific filenames documented by P05-T4.
     risk_yaml / strategies_yaml:
         Optional YAML paths merged under ``risk`` / ``strategies`` before env
         overrides.
@@ -439,11 +579,21 @@ def load_settings(
         yaml_token = _YAML_SETTINGS_DATA.set(yaml_data)
         try:
             if dotenv is not None:
-                return Settings(_env_file=dotenv, **init_data)  # type: ignore[call-arg]
-            return Settings(_env_file=None, **init_data)  # type: ignore[call-arg]
-        except ValidationError as exc:
+                return Settings(  # type: ignore[call-arg]
+                    _env_file=dotenv,
+                    _secrets_dir=secrets_dir,
+                    **init_data,
+                )
+            return Settings(  # type: ignore[call-arg]
+                _env_file=None,
+                _secrets_dir=secrets_dir,
+                **init_data,
+            )
+        except (ValidationError, SettingsError) as exc:
             raise ConfigError(
-                _validation_error_message(exc),
+                _validation_error_message(exc)
+                if isinstance(exc, ValidationError)
+                else "Unable to load file-secret configuration",
                 code="CONFIG_INVALID",
             ) from exc
         finally:
