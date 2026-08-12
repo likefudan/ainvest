@@ -25,6 +25,7 @@ from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
     PydanticBaseSettingsSource,
+    SecretsSettingsSource,
     SettingsConfigDict,
     SettingsError,
 )
@@ -43,6 +44,10 @@ from ainvest.config.yaml import _validation_error_message, load_yaml_mapping
 # Signed 64-bit bounds for Telegram numeric identities (DEC-005).
 _INT64_MIN: Final[int] = -(2**63)
 _INT64_MAX: Final[int] = 2**63 - 1
+_MAX_TELEGRAM_TOKEN_FILE_BYTES: Final[int] = 256
+_TELEGRAM_BOT_TOKEN_PATTERN: Final[re.Pattern[str]] = re.compile(
+    r"^[1-9][0-9]{5,19}:[A-Za-z0-9_-]{30,128}$"
+)
 
 _RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(?=.{1,253}$)"
@@ -316,18 +321,51 @@ class _TelegramTokenFileSecretSource(PydanticBaseSettingsSource):
         if self._secrets_dir is None or isinstance(self._secrets_dir, (list, tuple, set)):
             return {}
         directory = Path(self._secrets_dir)  # type: ignore[arg-type]
+        try:
+            if not directory.exists() or not directory.is_dir():
+                return {}
+            entries = {entry.name: entry for entry in directory.iterdir()}
+        except OSError:
+            raise SettingsError("Unable to read Telegram token file secrets") from None
         values: dict[str, Any] = {}
         for environment, filename in self._FILENAMES.items():
-            path = directory / filename
+            path = entries.get(filename)
+            if path is None:
+                continue
             try:
                 if not path.is_file():
-                    continue
-                token = path.read_text(encoding="utf-8").strip()
-            except OSError:
-                continue
-            if token:
-                values[environment] = {"bot_token": token}
+                    raise SettingsError("Telegram token secret must be a regular file")
+                with path.open("rb") as handle:
+                    raw = handle.read(_MAX_TELEGRAM_TOKEN_FILE_BYTES + 1)
+            except (OSError, SettingsError):
+                raise SettingsError("Unable to read Telegram token file secret") from None
+            if not raw or len(raw) > _MAX_TELEGRAM_TOKEN_FILE_BYTES:
+                raise SettingsError("Invalid Telegram token file secret")
+            try:
+                token = raw.decode("utf-8").strip()
+            except UnicodeDecodeError:
+                raise SettingsError("Invalid Telegram token file secret") from None
+            if _TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(token) is None:
+                raise SettingsError("Invalid Telegram token file secret")
+            values[environment] = {"bot_token": token}
         return values
+
+
+class _FilteredStockFileSecretSource(SecretsSettingsSource):
+    """Preserve stock file secrets while excluding Telegram top-level JSON."""
+
+    _TELEGRAM_FIELDS: Final[frozenset[str]] = frozenset({"telegram_staging", "telegram_production"})
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        if field_name in self._TELEGRAM_FIELDS:
+            return None, field_name, False
+        return super().get_field_value(field, field_name)
+
+    def __call__(self) -> dict[str, Any]:
+        try:
+            return super().__call__()
+        except (OSError, UnicodeError, SettingsError):
+            raise SettingsError("Unable to load file-secret configuration") from None
 
 
 class Settings(BaseSettings):
@@ -402,7 +440,10 @@ class Settings(BaseSettings):
                 settings_cls,
                 getattr(file_secret_settings, "secrets_dir", None),
             ),
-            file_secret_settings,
+            _FilteredStockFileSecretSource(
+                settings_cls,
+                secrets_dir=getattr(file_secret_settings, "secrets_dir", None),
+            ),
             _YamlSettingsSource(settings_cls),
         )
 

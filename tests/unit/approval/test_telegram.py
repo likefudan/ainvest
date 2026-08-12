@@ -6,7 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import UTC, datetime
 from types import SimpleNamespace
-from typing import Any
+from typing import Any, cast
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -43,7 +43,7 @@ class FakeTelegramTransport:
     bot_id: int = 900000001
     chat_id: int = 900000201
     chat_type: str = "private"
-    message_id: int = 77
+    message_id: object = 77
     bot_ids_by_token: dict[str, int] | None = None
     get_me_effects: list[BaseException] = field(default_factory=list)
     get_chat_effects: list[BaseException] = field(default_factory=list)
@@ -88,7 +88,49 @@ class FakeTelegramTransport:
         self.sent_action = action
         if self.send_effect is not None:
             raise self.send_effect
-        return self.message_id
+        return cast(int, self.message_id)
+
+
+class FakeProviderError:
+    class BadRequest(Exception):
+        pass
+
+    class Forbidden(Exception):
+        pass
+
+    class InvalidToken(Exception):
+        pass
+
+    class TimedOut(Exception):
+        pass
+
+    class NetworkError(Exception):
+        pass
+
+
+def _fake_adapter_modules(
+    *,
+    effect: BaseException | None = None,
+    message_id: object = 707,
+) -> tuple[SimpleNamespace, type[FakeProviderError], list[dict[str, Any]]]:
+    calls: list[dict[str, Any]] = []
+
+    class FakeBot:
+        def __init__(self, token: str) -> None:
+            assert token == "synthetic-token"
+
+        async def send_message(self, **kwargs: Any) -> SimpleNamespace:
+            calls.append(kwargs)
+            if effect is not None:
+                raise effect
+            return SimpleNamespace(message_id=message_id)
+
+    telegram = SimpleNamespace(
+        Bot=FakeBot,
+        InlineKeyboardButton=lambda **kwargs: kwargs,
+        InlineKeyboardMarkup=lambda rows: rows,
+    )
+    return telegram, FakeProviderError, calls
 
 
 def _proposal(**updates: Any) -> OrderProposal:
@@ -259,6 +301,7 @@ def test_live_notification_uses_only_fixed_origin_link() -> None:
         "https://approve.example.test.evil/live/challenge",
         "https://user@approve.example.test/live/challenge",
         "https://approve.example.test/live/challenge#secret",
+        "https://approve.example.test/live/\u202eevil",
     ],
 )
 def test_live_notification_rejects_unsafe_link_before_send(link: str) -> None:
@@ -376,11 +419,31 @@ def test_transient_validation_recovers_within_bound() -> None:
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("effect", [TelegramDeliveryUnknown(), asyncio.CancelledError()])
+@pytest.mark.parametrize(
+    "effect",
+    [
+        TelegramDeliveryUnknown(),
+        asyncio.CancelledError(),
+        RuntimeError("provider detail must remain hidden"),
+    ],
+)
 def test_ambiguous_send_is_unknown_nonretryable_and_never_retried(
     effect: BaseException,
 ) -> None:
     transport = FakeTelegramTransport(send_effect=effect)
+
+    outcome = _send(_request(), transport)
+
+    assert outcome.code is TelegramDeliveryCode.DELIVERY_UNKNOWN
+    assert outcome.retryable is False
+    assert transport.send_calls == 1
+    assert "provider detail" not in repr(outcome)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("message_id", [None, 0, -1, True, "77"])
+def test_unusable_post_send_result_is_unknown_and_never_retried(message_id: object) -> None:
+    transport = FakeTelegramTransport(message_id=message_id)
 
     outcome = _send(_request(), transport)
 
@@ -453,6 +516,43 @@ def test_unapproved_risk_and_control_text_fail_before_send() -> None:
 
 
 @pytest.mark.unit
+@pytest.mark.parametrize(
+    "unsafe_character",
+    ["\u202e", "\u2066", "\u0085", "\u2028", "\u2029", "\u200b"],
+    ids=(
+        "bidi_override",
+        "bidi_isolate",
+        "c1_control",
+        "line_separator",
+        "paragraph_separator",
+        "zero_width",
+    ),
+)
+def test_unicode_display_controls_fail_before_send(unsafe_character: str) -> None:
+    proposal = _proposal()
+    risk = _risk(proposal, reason=f"passed{unsafe_character}LIVE APPROVED")
+    transport = FakeTelegramTransport()
+
+    outcome = _send(_request(proposal=proposal, risk=risk), transport)
+
+    assert outcome.code is TelegramDeliveryCode.MESSAGE_INVALID
+    assert transport.send_calls == 0
+
+
+@pytest.mark.unit
+def test_legitimate_unicode_and_html_characters_remain_safe_plain_text() -> None:
+    proposal = _proposal()
+    risk = _risk(proposal, reason="Café 東京 <safe> & visible")
+    transport = FakeTelegramTransport()
+
+    outcome = _send(_request(proposal=proposal, risk=risk), transport)
+
+    assert outcome.code is TelegramDeliveryCode.SENT
+    assert transport.sent_text is not None
+    assert "Café 東京 <safe> & visible" in transport.sent_text
+
+
+@pytest.mark.unit
 def test_oversize_message_is_rejected_instead_of_truncating_fields() -> None:
     proposal = _proposal()
     violations = [
@@ -503,35 +603,11 @@ def test_request_requires_exactly_one_category_action_and_hides_it() -> None:
 
 @pytest.mark.unit
 def test_https_adapter_uses_plain_text_and_one_send_call(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls: list[dict[str, Any]] = []
-
-    class FakeProviderError:
-        class BadRequest(Exception):
-            pass
-
-        class TimedOut(Exception):
-            pass
-
-        class NetworkError(Exception):
-            pass
-
-    class FakeBot:
-        def __init__(self, token: str) -> None:
-            assert token == "synthetic-token"
-
-        async def send_message(self, **kwargs: Any) -> SimpleNamespace:
-            calls.append(kwargs)
-            return SimpleNamespace(message_id=707)
-
-    fake_telegram = SimpleNamespace(
-        Bot=FakeBot,
-        InlineKeyboardButton=lambda **kwargs: kwargs,
-        InlineKeyboardMarkup=lambda rows: rows,
-    )
+    fake_telegram, fake_error, calls = _fake_adapter_modules()
     monkeypatch.setattr(
         telegram_module,
         "_telegram_modules",
-        lambda: (fake_telegram, FakeProviderError),
+        lambda: (fake_telegram, fake_error),
     )
     action = TelegramOutboundAction(
         label="Approve PAPER",
@@ -554,3 +630,118 @@ def test_https_adapter_uses_plain_text_and_one_send_call(monkeypatch: pytest.Mon
     assert calls[0]["parse_mode"] is None
     assert calls[0]["chat_id"] == 900000201
     assert calls[0]["text"] == "PAPER ORDER NOTIFICATION"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "effect",
+    [
+        FakeProviderError.TimedOut("timeout"),
+        FakeProviderError.NetworkError("disconnect"),
+        asyncio.CancelledError(),
+        RuntimeError("unexpected provider detail"),
+    ],
+)
+def test_https_adapter_maps_every_ambiguous_post_start_exception_to_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    effect: BaseException,
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules(effect=effect)
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+    action = TelegramOutboundAction(
+        label="Approve PAPER",
+        callback_data=TOKEN_VALUE,
+        url=None,
+    )
+
+    with pytest.raises(TelegramDeliveryUnknown) as exc_info:
+        asyncio.run(
+            TelegramHttpsTransport().send_message(
+                "synthetic-token",
+                900000201,
+                "PAPER ORDER NOTIFICATION",
+                action,
+                timeout_seconds=3.0,
+            )
+        )
+
+    assert len(calls) == 1
+    assert str(exc_info.value) == ""
+    assert exc_info.value.__cause__ is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "effect",
+    [
+        FakeProviderError.BadRequest("rejected"),
+        FakeProviderError.Forbidden("forbidden"),
+        FakeProviderError.InvalidToken("invalid"),
+    ],
+)
+def test_https_adapter_reserves_rejected_for_definitive_provider_responses(
+    monkeypatch: pytest.MonkeyPatch,
+    effect: BaseException,
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules(effect=effect)
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+    action = TelegramOutboundAction(
+        label="Approve PAPER",
+        callback_data=TOKEN_VALUE,
+        url=None,
+    )
+
+    with pytest.raises(TelegramTransportRejected) as exc_info:
+        asyncio.run(
+            TelegramHttpsTransport().send_message(
+                "synthetic-token",
+                900000201,
+                "PAPER ORDER NOTIFICATION",
+                action,
+                timeout_seconds=3.0,
+            )
+        )
+
+    assert len(calls) == 1
+    assert str(exc_info.value) == ""
+    assert exc_info.value.__cause__ is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("message_id", [None, 0, -1, True, "707"])
+def test_https_adapter_maps_unusable_success_result_to_unknown(
+    monkeypatch: pytest.MonkeyPatch,
+    message_id: object,
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules(message_id=message_id)
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+    action = TelegramOutboundAction(
+        label="Approve PAPER",
+        callback_data=TOKEN_VALUE,
+        url=None,
+    )
+
+    with pytest.raises(TelegramDeliveryUnknown):
+        asyncio.run(
+            TelegramHttpsTransport().send_message(
+                "synthetic-token",
+                900000201,
+                "PAPER ORDER NOTIFICATION",
+                action,
+                timeout_seconds=3.0,
+            )
+        )
+
+    assert len(calls) == 1

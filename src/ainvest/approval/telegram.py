@@ -10,7 +10,7 @@ from __future__ import annotations
 
 import asyncio
 import importlib
-import re
+import unicodedata
 from collections.abc import Awaitable, Callable
 from enum import StrEnum
 from typing import Annotated, Any, Final, Protocol
@@ -36,7 +36,7 @@ from ainvest.schemas.risk import RiskDecision, RiskOutcome
 
 TELEGRAM_MESSAGE_LIMIT: Final[int] = 3_500
 TELEGRAM_VALIDATION_ATTEMPTS: Final[int] = 2
-_CONTROL_CHARACTER: Final[re.Pattern[str]] = re.compile(r"[\x00-\x1f\x7f]")
+_UNSAFE_DISPLAY_CATEGORIES: Final[frozenset[str]] = frozenset({"Cc", "Cf", "Zl", "Zp"})
 
 
 class TelegramEnvironment(StrEnum):
@@ -244,14 +244,18 @@ class TelegramHttpsTransport:
     ) -> int:
         telegram, error = _telegram_modules()
         callback_data, url = action.reveal()
-        button = telegram.InlineKeyboardButton(
-            text=action.label,
-            callback_data=callback_data,
-            url=url,
-        )
-        markup = telegram.InlineKeyboardMarkup(((button,),))
         try:
             bot = telegram.Bot(token=token)
+            button = telegram.InlineKeyboardButton(
+                text=action.label,
+                callback_data=callback_data,
+                url=url,
+            )
+            markup = telegram.InlineKeyboardMarkup(((button,),))
+        except Exception:
+            # Construction failed before send_message was invoked.
+            raise TelegramTransportRejected from None
+        try:
             result = await bot.send_message(
                 chat_id=chat_id,
                 text=text,
@@ -262,15 +266,16 @@ class TelegramHttpsTransport:
                 connect_timeout=timeout_seconds,
                 pool_timeout=timeout_seconds,
             )
-            return int(result.message_id)
         except asyncio.CancelledError:
             raise TelegramDeliveryUnknown from None
-        except error.BadRequest:
-            raise TelegramTransportRejected from None
-        except (error.TimedOut, TimeoutError, error.NetworkError):
+        except Exception as exc:
+            if _is_definitive_send_rejection(exc, error):
+                raise TelegramTransportRejected from None
             raise TelegramDeliveryUnknown from None
-        except Exception:
-            raise TelegramTransportRejected from None
+        message_id = getattr(result, "message_id", None)
+        if not isinstance(message_id, int) or isinstance(message_id, bool) or message_id <= 0:
+            raise TelegramDeliveryUnknown
+        return message_id
 
 
 class TelegramNotificationSender:
@@ -342,12 +347,14 @@ class TelegramNotificationSender:
                 action,
                 timeout_seconds=self._send_timeout_seconds,
             )
+        except TelegramTransportRejected:
+            return _failure(request, TelegramDeliveryCode.DELIVERY_FAILED)
         except (TelegramDeliveryUnknown, asyncio.CancelledError):
             return _failure(request, TelegramDeliveryCode.DELIVERY_UNKNOWN)
         except Exception:
-            return _failure(request, TelegramDeliveryCode.DELIVERY_FAILED)
+            return _failure(request, TelegramDeliveryCode.DELIVERY_UNKNOWN)
         if not isinstance(message_id, int) or isinstance(message_id, bool) or message_id <= 0:
-            return _failure(request, TelegramDeliveryCode.DELIVERY_FAILED)
+            return _failure(request, TelegramDeliveryCode.DELIVERY_UNKNOWN)
         return TelegramNotificationOutcome(
             code=TelegramDeliveryCode.SENT,
             retryable=False,
@@ -428,7 +435,7 @@ def _render_notification(
         *(item.rule_code for item in risk.violations),
         *(item.reason for item in risk.violations),
     )
-    if any(_CONTROL_CHARACTER.search(value) for value in dynamic_text):
+    if any(_has_unsafe_display_character(value) for value in dynamic_text):
         return None
 
     reasons = [f"{risk.reason_code}: {risk.reason}"]
@@ -465,7 +472,9 @@ def _render_notification(
         if request.live_approval_link is None or settings.webauthn.origin is None:
             return None
         link = request.live_approval_link.get_secret_value()
-        if not _has_fixed_origin(link, settings.webauthn.origin):
+        if _has_unsafe_display_character(link) or not _has_fixed_origin(
+            link, settings.webauthn.origin
+        ):
             return None
         action = TelegramOutboundAction(
             label="Review LIVE approval",
@@ -473,6 +482,10 @@ def _render_notification(
             url=link,
         )
     return text, action
+
+
+def _has_unsafe_display_character(value: str) -> bool:
+    return any(unicodedata.category(character) in _UNSAFE_DISPLAY_CATEGORIES for character in value)
 
 
 def _has_fixed_origin(link: str, origin: str) -> bool:
@@ -505,6 +518,17 @@ def _failure(
         environment=request.environment,
         intent_correlation_id=request.intent_correlation_id,
     )
+
+
+def _is_definitive_send_rejection(exc: Exception, error_module: Any) -> bool:
+    """True only for Telegram responses proving the send was rejected."""
+    types: list[type[Exception]] = []
+    for name in ("BadRequest", "Forbidden", "InvalidToken"):
+        candidate = getattr(error_module, name, None)
+        if isinstance(candidate, type) and issubclass(candidate, Exception):
+            types.append(candidate)
+    definitive_types = tuple(types)
+    return bool(definitive_types) and isinstance(exc, definitive_types)
 
 
 def _telegram_modules() -> tuple[Any, Any]:

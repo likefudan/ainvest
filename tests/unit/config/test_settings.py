@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 from pathlib import Path
+from typing import Any
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -25,6 +26,8 @@ from ainvest.config import (
 REPO_ROOT = Path(__file__).resolve().parents[3]
 EXAMPLE_RISK = REPO_ROOT / "config" / "risk.example.yaml"
 EXAMPLE_STRATEGIES = REPO_ROOT / "config" / "strategies.example.yaml"
+FAKE_STAGING_FILE_TOKEN = "900000001:" + ("A" * 35)
+FAKE_PRODUCTION_FILE_TOKEN = "900000002:" + ("B" * 35)
 
 
 def _complete_webauthn() -> WebAuthnSettings:
@@ -536,8 +539,8 @@ def test_settings_repr_hides_secret_fields_on_model() -> None:
 
 @pytest.mark.unit
 def test_explicit_telegram_token_file_secrets_load_and_remain_isolated(tmp_path: Path) -> None:
-    staging_token = "synthetic-staging-file-secret"
-    production_token = "synthetic-production-file-secret"
+    staging_token = FAKE_STAGING_FILE_TOKEN
+    production_token = FAKE_PRODUCTION_FILE_TOKEN
     (tmp_path / "TELEGRAM_STAGING__BOT_TOKEN").write_text(staging_token, encoding="utf-8")
     (tmp_path / "TELEGRAM_PRODUCTION__BOT_TOKEN").write_text(production_token, encoding="utf-8")
 
@@ -553,7 +556,7 @@ def test_explicit_telegram_token_file_secrets_load_and_remain_isolated(tmp_path:
 
 @pytest.mark.unit
 def test_environment_and_explicit_values_override_telegram_file_secret(tmp_path: Path) -> None:
-    (tmp_path / "TELEGRAM_STAGING__BOT_TOKEN").write_text("file-value", encoding="utf-8")
+    (tmp_path / "TELEGRAM_STAGING__BOT_TOKEN").write_text(FAKE_STAGING_FILE_TOKEN, encoding="utf-8")
     recipient = TelegramRecipient(user_id=1001, private_chat_id=2001)
 
     from_environment = load_settings(
@@ -582,7 +585,9 @@ def test_environment_and_explicit_values_override_telegram_file_secret(tmp_path:
 def test_dotenv_overrides_telegram_file_secret(tmp_path: Path) -> None:
     secrets_dir = tmp_path / "secrets"
     secrets_dir.mkdir()
-    (secrets_dir / "TELEGRAM_PRODUCTION__BOT_TOKEN").write_text("file-value", encoding="utf-8")
+    (secrets_dir / "TELEGRAM_PRODUCTION__BOT_TOKEN").write_text(
+        FAKE_PRODUCTION_FILE_TOKEN, encoding="utf-8"
+    )
     dotenv = tmp_path / ".env"
     dotenv.write_text("TELEGRAM_PRODUCTION__BOT_TOKEN=dotenv-value\n", encoding="utf-8")
 
@@ -629,6 +634,92 @@ def test_stock_file_secret_behavior_is_preserved(tmp_path: Path) -> None:
 
     assert settings.database_password is not None
     assert settings.database_password.get_secret_value() == "synthetic-database-secret"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "filename",
+    [
+        "TELEGRAM_STAGING",
+        "telegram_staging",
+        "TeLeGrAm_StAgInG",
+        "telegram_staging__bot_token",
+        "TELEGRAM_STAGING__BOT_TOKEN.txt",
+    ],
+)
+def test_unapproved_file_secret_names_cannot_inject_telegram_token(
+    tmp_path: Path, filename: str
+) -> None:
+    (tmp_path / filename).write_text(
+        '{"bot_token":"bypass-token","expected_bot_id":900000001}',
+        encoding="utf-8",
+    )
+
+    settings = load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert settings.telegram_staging.bot_token is None
+    assert settings.telegram_staging.expected_bot_id is None
+
+
+@pytest.mark.unit
+def test_exact_telegram_token_file_wins_without_stock_json_bypass(tmp_path: Path) -> None:
+    (tmp_path / "TELEGRAM_STAGING__BOT_TOKEN").write_text(FAKE_STAGING_FILE_TOKEN, encoding="utf-8")
+    (tmp_path / "TELEGRAM_STAGING").write_text(
+        '{"bot_token":"bypass-token","expected_bot_id":900000999}',
+        encoding="utf-8",
+    )
+
+    settings = load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert settings.telegram_staging.bot_token is not None
+    assert settings.telegram_staging.bot_token.get_secret_value() == FAKE_STAGING_FILE_TOKEN
+    assert settings.telegram_staging.expected_bot_id is None
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"\xff\xfe",
+        b"x" * 257,
+        b"not-a-telegram-token",
+        b"",
+    ],
+    ids=("invalid_utf8", "oversize", "invalid_grammar", "empty"),
+)
+def test_malformed_exact_telegram_token_file_is_stable_and_redacted(
+    tmp_path: Path, raw: bytes
+) -> None:
+    (tmp_path / "TELEGRAM_STAGING__BOT_TOKEN").write_bytes(raw)
+
+    with pytest.raises(ConfigError) as exc_info:
+        load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert exc_info.value.code == "CONFIG_INVALID"
+    assert str(exc_info.value) == "Unable to load file-secret configuration"
+    assert "not-a-telegram-token" not in str(exc_info.value)
+
+
+@pytest.mark.unit
+def test_unreadable_exact_telegram_token_file_is_stable_and_redacted(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    token_path = tmp_path / "TELEGRAM_STAGING__BOT_TOKEN"
+    token_path.write_text(FAKE_STAGING_FILE_TOKEN, encoding="utf-8")
+    original_open: Any = Path.open
+
+    def deny_token_read(path: Path, *args: object, **kwargs: object) -> Any:
+        if path == token_path:
+            raise PermissionError("provider detail containing a secret")
+        return original_open(path, *args, **kwargs)
+
+    monkeypatch.setattr(Path, "open", deny_token_read)
+
+    with pytest.raises(ConfigError) as exc_info:
+        load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert str(exc_info.value) == "Unable to load file-secret configuration"
+    assert "provider detail" not in str(exc_info.value)
 
 
 @pytest.mark.unit

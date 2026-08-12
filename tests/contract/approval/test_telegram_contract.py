@@ -65,6 +65,40 @@ def test_retryable_and_message_id_invariants_are_not_caller_selectable() -> None
 
 
 @pytest.mark.contract
+@pytest.mark.parametrize(
+    ("code", "retryable"),
+    [
+        (TelegramDeliveryCode.CONFIG_INVALID, False),
+        (TelegramDeliveryCode.BOT_IDENTITY_MISMATCH, False),
+        (TelegramDeliveryCode.RECIPIENT_NOT_ALLOWED, False),
+        (TelegramDeliveryCode.CHAT_NOT_PRIVATE, False),
+        (TelegramDeliveryCode.MESSAGE_INVALID, False),
+        (TelegramDeliveryCode.VALIDATION_TIMEOUT, True),
+        (TelegramDeliveryCode.DELIVERY_UNKNOWN, False),
+        (TelegramDeliveryCode.DELIVERY_FAILED, False),
+    ],
+)
+def test_failure_retryability_matrix_is_exact(code: TelegramDeliveryCode, retryable: bool) -> None:
+    outcome = TelegramNotificationOutcome(
+        code=code,
+        retryable=retryable,
+        environment=TelegramEnvironment.STAGING,
+        intent_correlation_id="notify_01HZYEXAMPLE0001",
+    )
+
+    assert outcome.telegram_message_id is None
+    assert outcome.retryable is retryable
+
+    with pytest.raises(ValidationError):
+        TelegramNotificationOutcome(
+            code=code,
+            retryable=not retryable,
+            environment=TelegramEnvironment.STAGING,
+            intent_correlation_id="notify_01HZYEXAMPLE0001",
+        )
+
+
+@pytest.mark.contract
 def test_transport_surface_is_outbound_only() -> None:
     methods = {
         name

@@ -19,13 +19,18 @@ change proposal state, or call a Paper or Live broker.
   timeout, or delivery result changes no application state.
 - `sendMessage` is attempted at most once per adapter call. A timeout,
   disconnect, or cancellation after the attempt begins returns
-  `delivery_unknown` with `retryable=false`.
+  `delivery_unknown` with `retryable=false`. Unexpected exceptions and an
+  unusable post-send response are equally unknown; `delivery_failed` is
+  reserved for a definitive Telegram API rejection.
 
 The message is deterministic plain text (`parse_mode=None`), limited to 3,500
 Unicode code points, and includes the complete server-owned order, currency,
 time-in-force, expiry, strategy version, and approved risk summary. Protected
 fields are never truncated or inferred. Invalid bindings, controls, unsafe
-links, or oversized messages fail before delivery.
+links, or oversized messages fail before delivery. Human-visible dynamic text
+and links reject Unicode control/format characters, including bidi controls,
+C0/C1 controls, and line/paragraph separators; ordinary international text and
+HTML-special characters remain literal plain text.
 
 ## Configuration
 
@@ -65,7 +70,10 @@ settings = load_settings(secrets_dir="/explicit/protected/directory")
 
 Source priority remains explicit overrides, environment, dotenv, file secrets,
 YAML, then fail-closed defaults. The notification sender receives validated
-`Settings`; it never reads a file or environment variable.
+`Settings`; it never reads a file or environment variable. At the file-secret
+layer, no top-level Telegram JSON file, case variant, or alternate nested
+filename may provide a Bot token. Malformed, oversized, non-UTF-8, or unreadable
+exact token files fail with a stable redacted configuration error.
 
 ## Offline and owner-assisted validation
 
