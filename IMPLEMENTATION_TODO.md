@@ -926,14 +926,53 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 - **Objective:** Use separate staging/production Bots to show order/risk summaries and provide either a Paper callback or a Live HTTPS link.
 - **Dependencies:** P05-T0 and the accepted identity policy in P01-T0. Offline implementation and review use synthetic IDs, fake tokens, and fake transport; account-owner supplied Bot/user/chat values are required only for owner-assisted environment validation under `DEC-010`, not for the offline implementation merge.
-- **Primary file:** `src/ainvest/approval/telegram.py`.
+- **Primary files:** `src/ainvest/approval/telegram.py` and the minimum
+  Telegram-recipient/file-secret additions to `src/ainvest/config/settings.py`.
 - **Implementation checklist:**
-  - Use separate Bot tokens and numeric user/chat allowlists. Call `getMe` at startup to validate environment and Bot identity.
-  - Disable groups; send only to configured numeric private user/chat IDs. A username is display-only.
-  - Show minimal account detail, full order summary, expiry, and a prominent PAPER or LIVE label; never include broker credentials.
-  - Paper notifications carry a callback button bound to the opaque nonce. Live notifications contain only a fixed-origin HTTPS approval link.
+  - Use separate Bot tokens and environment-scoped, bound numeric
+    `(user_id, private_chat_id)` recipient records. Independent user/chat
+    allowlists are not an authorization relation and must never create a
+    cross-product. Call `getMe` at startup to validate environment and distinct
+    Bot identity; never fall back across staging/production.
+  - Disable groups; send only to one configured bound private recipient. A
+    username is display-only. Reject an individually known user paired with a
+    different known chat, as well as an unknown member of either pair.
+  - Show minimal account detail, expiry, and a prominent PAPER or LIVE label.
+    The full server-owned order summary includes instrument/symbol, side,
+    quantity, order type, limit price with currency, maximum notional with
+    currency, time in force, strategy/version, and risk outcome/reasons. A
+    missing or malformed required field fails before `sendMessage`; never
+    guess a unit or substitute a placeholder in a protected field.
+  - Accept notification requests only from a trusted in-process port. Paper
+    requests carry a P05-T0-issued opaque nonce; Live requests carry an
+    already-created fixed-origin HTTPS approval link from the later trusted
+    Live approval service. Telegram input cannot construct or change either
+    request. Paper and Live are notification categories, not authorization
+    outcomes: a Telegram reply, button click, send result, or message ID never
+    changes proposal/approval/execution state in this card.
+  - Paper notifications carry a callback button bound to the opaque nonce.
+    Live notifications contain only the fixed-origin HTTPS approval link. This
+    card transports that link but does not build the page, verify WebAuthn,
+    create a Live approval, or call a broker.
+  - Add the public `load_settings(secrets_dir=...)` entry point and pass only
+    an explicitly supplied directory to Pydantic Settings; never search a
+    working-directory secret path. At the existing file-secret precedence
+    layer, load only `TELEGRAM_STAGING__BOT_TOKEN` and
+    `TELEGRAM_PRODUCTION__BOT_TOKEN` into their nested `SecretStr` fields
+    through a private Telegram-token-specific source while preserving stock
+    behavior for every other file secret. The sender never reads files.
+  - Read-only `getMe`/private-chat validation may make at most two bounded
+    attempts before any send. Invoke `sendMessage` at most once per adapter
+    call and never retry after transmission begins. A send timeout/disconnect
+    is terminal `delivery_unknown`, never retryable; no caller correlation or
+    intent key is represented as a Telegram idempotency key.
   - Record message ID/status but not the full link or raw token.
-- **Acceptance criteria:** Incorrect Bot/chat/user/environment configuration fails closed; delivery failure cannot trade; message snapshots make scope unmistakable and contain no sensitive values.
+- **Acceptance criteria:** Incorrect Bot/recipient-pair/chat/environment
+  configuration, crossed pairs, missing summary fields, and unsafe links fail
+  closed. Delivery has honest at-most-once send semantics; a failure or unknown
+  outcome cannot approve or trade. PAPER/LIVE snapshots make category and full
+  units unambiguous and contain no sensitive values; Telegram responses alone
+  never alter state.
 
 ### P05-T5 — Operate Idempotent Telegram Long Polling and Preserve a Webhook Boundary
 
@@ -942,7 +981,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Primary files:** `src/ainvest/approval/telegram_updates.py`, future `src/ainvest/api/routes/telegram.py`.
 - **Implementation checklist:**
   - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset.
-  - Enable only required `allowed_updates`; validate Bot identity, private chat, and user/chat allowlists before dispatch.
+  - Enable only required `allowed_updates`; validate Bot identity, private
+    chat, and the environment-scoped bound `(user_id, private_chat_id)`
+    recipient record before dispatch. Never authorize the cross-product of
+    separate user and chat lists.
   - Route Paper callbacks to P05-T1. Plain text may query/reject status only and never approve.
   - A future webhook validates HTTPS secret token, body/rate limits, and the same identity rules; configuration forbids simultaneous polling and webhook modes.
   - Fill/rejection/expiry message updates grant no new approval capability.
@@ -1068,7 +1110,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has deduplicated the update and verified the environment-specific Bot,
   numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
-  the configured user/chat allowlists. Username is display-only. Query access
+  exact membership of the configured bound `(user_id, private_chat_id)`
+  recipient record. Independent membership and crossed pairs fail closed.
+  Username is display-only. Query access
   creates no `ApprovalEvent`, consumes no approval challenge or callback nonce,
   and cannot be interpreted as `approve`, `reject`, operator authentication,
   WebAuthn registration/reset, or live authorization. Telegram identity is
@@ -1076,11 +1120,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Account-secret contract and ownership:** add exactly one optional
   `SecretStr` setting named `robinhood_read_account_number`, with the canonical
   environment alias and file-secret filename
-  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Extend `load_settings` with an explicit
-  optional `secrets_dir` argument that passes `_secrets_dir` to Pydantic
-  Settings; it must not search a working-directory secret path implicitly.
-  Load the field once through the existing explicit > environment > dotenv >
-  file-secret > YAML precedence. The Paper runtime's READ_BROKER read-query
+  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Reuse the public explicit
+  `load_settings(secrets_dir=...)` entry point delivered by `P05-T4`; do not
+  add, replace, or take ownership of that API and do not search a
+  working-directory secret path implicitly. Load the field once through the
+  existing explicit > environment > dotenv > file-secret > YAML precedence.
+  The Paper runtime's READ_BROKER read-query
   subcomposition is the sole owner/reader of this field. It injects into the
   Telegram dispatcher only a narrow callable/query port; Approval, Research,
   Strategy, the write broker, `telegram_updates.py`, `P05-T4`, and `P05-T5`
@@ -1090,12 +1135,14 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   not add a new `SecretId` or an external dependency.
 - **Strict file-secret source authorization:** Pydantic Settings' stock
   `SecretsSettingsSource` calls `read_text().strip()`, so it cannot enforce the
-  grammar below. P05-T9 is explicitly authorized to replace only the
-  file-secret lookup for `robinhood_read_account_number` with one narrow custom
+  grammar below. P05-T9 is explicitly authorized to add only the field-scoped
+  file-secret lookup for `robinhood_read_account_number` through one narrow custom
   `PydanticBaseSettingsSource`/`SecretsSettingsSource` subclass, or an
   equivalent field-specific extension inside the existing configuration
-  module. This is the implementation of the existing file-secret precedence
-  layer, not a second configuration system: it receives exactly the explicit
+  module. It must compose beside the Telegram-token source from `P05-T4` and
+  must not alter that source or the public loader entry. This is the
+  implementation of the existing file-secret precedence layer, not a second
+  configuration system: it receives exactly the explicit
   `secrets_dir`, performs no fallback or path search, exposes no generic public
   parser, and returns a value for this one exact field only. The stock
   file-secret source remains responsible for every other Settings field with

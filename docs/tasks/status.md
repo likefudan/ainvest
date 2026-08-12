@@ -1821,7 +1821,7 @@ approval path unlocks `P08-T13`, then `P05-T8`.
 
 ##### Execution envelope: P05-T4
 
-- **Title:** Configure Telegram Bots and Send Private Paper Notifications.
+- **Title:** Configure Telegram Bots and Send Private Notifications.
 - **Status/owner:** `in_progress` — `p05_t4_telegram_notifications`. The owner
   explicitly lifted the prior pause on 2026-08-12. This claim starts only
   `P05-T4`; it does not claim `P05-T5` or `P05-T9`.
@@ -1841,59 +1841,116 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   `user_id`, `chat_id`, username, or environment value is invented here.
 - **Objective and product boundary:** implement only the environment-selected
   staging/production Telegram Bot configuration and a private-message sender
-  for bounded Paper notification summaries. The sender may construct the
-  Paper callback button carrying the already-issued opaque nonce, but it does
-  not receive, validate, consume, or decide callbacks. It returns a typed,
-  sanitized delivery outcome that contains the Telegram `message_id` and
-  status on success, without adding notification persistence or changing an
-  approval state.
+  for bounded PAPER and LIVE notification summaries. The sender accepts a
+  frozen notification request only through a trusted in-process port. Common
+  input is the server-owned `OrderProposal`, its already-approved risk summary,
+  notification category, expiry, and a non-secret intent correlation ID.
+  PAPER input additionally contains only the P05-T0-issued opaque nonce; LIVE
+  input additionally contains only an already-created fixed-origin HTTPS link
+  from the trusted Live approval service. No Telegram update, chat field,
+  callback payload, username, or client-supplied order field may construct or
+  alter that request. The sender transports the action material but never
+  consumes it, decides an approval, mutates proposal state, emits an approval
+  event, or calls a broker.
+- **Notification is not authorization:** PAPER and LIVE are display/action
+  categories only. A send success/failure, Telegram message ID, response,
+  reply, or button/link interaction changes no application state in `P05-T4`.
+  `P05-T1` alone validates and decides Paper callbacks; `P05-T3` later owns the
+  fixed-origin page and WebAuthn Live assertion. P05-T4 may transmit a trusted
+  Live link but cannot build its page, authenticate it, turn it into a Live
+  approval, or make Live/Paper broker operations reachable.
 - **Identity and environment requirements:** staging and production are
-  explicit, isolated configurations and never fall back to each other. Use
-  only positive signed-64-bit numeric `user_id` and private `chat_id`
-  allowlists; username is display-only. Validate the selected Bot with
-  bounded `getMe` startup I/O and validate a target as the configured private
-  chat before sending. A wrong/ambiguous environment, Bot identity, user,
-  chat, non-private chat, group/channel, disabled configuration, or shared
-  staging/production Bot fails closed before notification delivery.
+  explicit, isolated configurations and never fall back to or share a Bot
+  identity/token with each other. Replace independent authorization lists with
+  immutable, environment-scoped recipient records binding exactly one positive
+  signed-64-bit numeric `user_id` to one positive signed-64-bit numeric
+  `private_chat_id`. Username is display-only. Authorization requires exact
+  membership of the pair; independent membership never authorizes a
+  cross-product. Validate the selected Bot with bounded `getMe` startup I/O
+  and validate the bound target as a private chat before sending. A
+  wrong/ambiguous environment, Bot identity, crossed pair, unknown pair member,
+  non-private chat, group/channel, disabled configuration, duplicate recipient
+  record, or shared staging/production Bot fails closed before delivery.
+- **Configuration and file-secret ownership:** `P05-T4` owns the minimum public
+  configuration extension needed by this and later Telegram tasks: add
+  `load_settings(secrets_dir: Path | str | None = None)` and pass only that
+  explicit directory as `_secrets_dir` to Pydantic Settings. It performs no
+  implicit current-directory search. Keep source order explicit/init >
+  environment > dotenv > file-secret > YAML. At that existing file-secret
+  layer, a private source handles exactly
+  `TELEGRAM_STAGING__BOT_TOKEN` and
+  `TELEGRAM_PRODUCTION__BOT_TOKEN`, returning raw values that Pydantic validates
+  into the nested `SecretStr` fields while the stock source and every unrelated
+  setting preserve current behavior.
+  Tests cover no directory, nonexistent/unreadable files, both exact token
+  filenames, init/env/dotenv precedence over file secrets, file secrets over
+  YAML/defaults, staging/production isolation, redaction, and no implicit path.
+  The sender never reads an environment variable or file. `P05-T9` must reuse
+  this public loader and may later add only its own account-field-specific
+  source at the same layer; it cannot replace or redefine the entry point.
 - **Secret and message requirements:** configuration continues through
-  `ainvest.config`; use `SecretStr` and the existing explicit > environment >
-  dotenv > file-secret > YAML precedence rather than reading process variables
-  or files in the sender. Reveal a Bot token or callback nonce only at the
-  narrow transport call. Neither may enter a repr, exception, log, metric,
-  trace, audit event, snapshot, message text, or delivery result. Render a
-  deterministic, single-message plain-text (`parse_mode=None`) summary of at
-  most 3,500 Unicode code points. It starts with an unmistakable `PAPER` label
-  and includes only server-owned proposal ID, symbol/instrument display,
-  side, quantity, order type, limit price, maximum notional, expiry,
-  strategy/version, risk outcome, and bounded reason codes/text. The sole
-  callback control is an `Approve PAPER` button whose `callback_data` is the
-  existing 43-byte URL-safe opaque nonce; there is no plain-text approval.
-  Escape or reject controls and unsafe dynamic text; reject oversize output
-  rather than truncating protected order/risk fields. Include no broker
-  credential, raw account identifier, full approval link, or unnecessary
-  account detail.
-- **Timeout, retry, and idempotency ownership:** `P05-T4` owns bounded startup,
-  chat-validation, and send timeouts plus stable sanitized delivery errors. It
-  does not automatically retry an unknown send outcome and does not create a
-  second delivery or persistence framework. Later outbox/workflow ownership
-  decides explicit retries; `P05-T5` owns long-poll offsets and update/callback
-  deduplication; `P05-T1` owns one-time callback authorization. Any delivery
-  failure or ambiguity creates no approval and cannot trade.
+  `ainvest.config`; use `SecretStr` and the source precedence above. Reveal a
+  Bot token, callback nonce, or full Live link only inside the narrow outbound
+  transport call. None may enter a repr, exception, log, metric, trace, audit
+  event, snapshot, persisted notification record, or delivery result; the
+  nonce and link appear only in the outgoing Telegram action payload that
+  requires them. Render one deterministic plain-text message
+  (`parse_mode=None`) of at most 3,500 Unicode code points. It starts with an
+  unmistakable `PAPER` or `LIVE` label and includes only server-owned proposal
+  ID, instrument/symbol display, side, quantity, order type, limit price plus
+  explicit currency, maximum notional plus explicit currency, time in force,
+  expiry, strategy/version, risk outcome, and bounded reason codes/text. Every
+  named field is required; missing/malformed values or absent currency fail as
+  `message_invalid` before `sendMessage`, never as an inferred unit or
+  placeholder. PAPER has only an `Approve PAPER` callback button whose
+  `callback_data` is the existing 43-byte URL-safe opaque nonce. LIVE has only
+  the trusted fixed-origin HTTPS link and no Telegram approval control. Escape
+  or reject controls and unsafe dynamic text; reject oversize output rather
+  than truncate protected fields. Include no broker credential, account
+  identifier, or unnecessary account detail.
+- **Timeout, retry, and deduplication ownership:** before any send, each
+  read-only `getMe` or private-chat validation operation has an injected
+  bounded timeout and at most two total attempts (one bounded retry). Once
+  `sendMessage` begins, invoke it exactly once for that adapter call and never
+  retry a timeout, disconnect, cancellation, or other unknown write outcome.
+  The adapter offers honest at-most-once attempt semantics, not exactly-once
+  delivery. The caller-supplied value is only an intent correlation ID; it is
+  not called or exposed as an idempotency key because Telegram does not consume
+  it and P05-T4 owns no persistence/deduplication store. A caller may retry
+  only a pre-send `validation_timeout`; it must never blindly reinvoke the same
+  intent after `delivery_unknown`. `P05-T5` owns only inbound update/callback
+  offset and deduplication, not outbound send deduplication. `P05-T1` owns
+  one-time callback authorization. Any failure/ambiguity creates no approval
+  and cannot trade.
 - **Stable delivery outcomes:** success returns only `sent`, the selected
   environment, Telegram message ID, and a non-secret
-  notification correlation/idempotency key supplied by the caller. Failures
-  expose one of the fixed sanitized codes `config_invalid`,
+  intent correlation ID supplied by the caller. Failures expose one of the
+  fixed sanitized codes `config_invalid`,
   `bot_identity_mismatch`, `recipient_not_allowed`, `chat_not_private`,
-  `message_invalid`, `timeout`, `delivery_unknown`, or `delivery_failed`, plus
-  a retryable flag; they contain no provider message or exception chain.
-  `timeout`/`delivery_unknown` are not retried inside this adapter. No result
-  object contains message text, token, nonce, proposal payload, or account
-  detail.
+  `message_invalid`, `validation_timeout`, `delivery_unknown`, or
+  `delivery_failed`, plus the exact retryable flag below; they contain no
+  provider message or exception chain.
+
+  | Outcome code | `retryable` | Meaning |
+  |---|---:|---|
+  | `config_invalid` | `false` | selected environment/config/secret is absent, unsafe, or ambiguous |
+  | `bot_identity_mismatch` | `false` | `getMe` does not match the selected environment's distinct Bot |
+  | `recipient_not_allowed` | `false` | exact bound recipient pair is absent, crossed, or invalid |
+  | `chat_not_private` | `false` | validated target is not the configured private chat |
+  | `message_invalid` | `false` | required summary/action/length/origin contract fails before send |
+  | `validation_timeout` | `true` | bounded read-only validation exhausted before `sendMessage`; a later fresh validation is safe |
+  | `delivery_unknown` | `false` | send began but timeout/disconnect/cancellation leaves delivery unknown; never blind-retry |
+  | `delivery_failed` | `false` | Telegram definitively rejected the single send attempt |
+
+  No result contains message text, token, nonce, full Live link, proposal
+  payload, recipient IDs, or account detail. `sent` is a delivery result only,
+  not an approval or state transition.
 - **Allowed implementation paths:**
   `src/ainvest/approval/telegram.py`;
   `src/ainvest/approval/__init__.py` for narrow re-exports;
   `src/ainvest/config/settings.py` and `src/ainvest/config/__init__.py` only for
-  Telegram-specific fail-closed configuration needed by this card;
+  the bound recipient model, explicit `secrets_dir` loader entry, and
+  Telegram-token file-secret source described above;
   `tests/unit/approval/test_telegram.py`;
   narrow additions to `tests/unit/config/test_settings.py`;
   deterministic sanitized snapshots/fakes under `tests/fixtures/telegram/**`;
@@ -1904,28 +1961,37 @@ approval path unlocks `P08-T13`, then `P05-T8`.
 - **Required tests:** use synthetic numeric IDs, fake tokens, injected clocks,
   and a deterministic fake Telegram transport only. Cover both environments,
   disabled/missing/swapped configuration, Bot identity validation, numeric
-  allowlist bounds, wrong user/chat, group/channel/non-private rejection,
-  startup/chat/send timeout and unknown outcomes, successful message ID/status,
-  no automatic retry, exact Paper snapshots, plain-text/control/length bounds,
-  callback-data binding without raw-token snapshots, and secret/account/token
-  absence from repr/errors/logs/results/messages. Structurally prove this card
-  cannot poll or receive updates, consume approval callbacks, dispatch read
-  queries, call a model, or reach Paper/live broker writes.
+  recipient-pair bounds/uniqueness, crossed pairs, individually unknown IDs,
+  group/channel/non-private rejection, startup/chat validation retry bounds,
+  exactly one send invocation, send timeout/disconnect unknown outcomes, exact
+  outcome/retryable mapping, successful message ID/status, no blind retry,
+  exact PAPER and LIVE snapshots, every required order field/currency/time in
+  force plus missing-field failures, fixed Live origin, plain-text/control/
+  length bounds, callback/link binding without raw-action snapshots, and
+  secret/account/token/link absence from repr/errors/logs/results/snapshots.
+  Structurally prove this card cannot poll or receive updates, consume approval
+  callbacks, dispatch read queries, create/verify WebAuthn approvals, call a
+  model, mutate proposal state, or reach Paper/live broker writes.
 - **Forbidden scope:** no long polling, update offset persistence, update or
   callback deduplication (`P05-T5`); no callback decision or approval event
-  (`P05-T1`); no Robinhood read command/query (`P05-T9`); no WebAuthn, live
-  approval link/page, live mode, public endpoint, webhook, LLM, natural-language
-  routing, database migration, broker operation, or real Telegram network call
-  in canonical tests.
+  (`P05-T1`); no Robinhood read command/query (`P05-T9`); no construction or
+  serving of the Live approval page/link, WebAuthn verification, Live approval
+  state, public endpoint, webhook, LLM, natural-language routing, database
+  migration, broker operation, or real Telegram network call in canonical
+  tests. Transmitting the already-created trusted fixed-origin link is the
+  required P05-T4 notification behavior and grants no authority.
 - **Verification and acceptance:** run the focused config/notification tests,
   `./scripts/dev unit`, `./scripts/dev contract`, `./scripts/dev integration`,
   `git diff --check`, and `./scripts/dev verify`. An independently assigned
   reviewer must inspect functionality, fail-closed behavior, tests,
   readability, duplication, optional-dependency use, and secret leakage; all
   actionable findings must be fixed and re-reviewed before squash merge.
-  Acceptance requires unmistakable bounded Paper messages sent only through
-  the selected private allowlisted Bot/chat, typed sanitized success/failure,
-  and proof that delivery failure can never approve or trade.
+  Acceptance retains the authoritative task card: unmistakable bounded PAPER
+  and LIVE messages are sent only through the selected Bot to an exact bound
+  private recipient pair; the order/risk summary and units are complete; the
+  action is respectively the opaque Paper callback or trusted fixed-origin
+  Live link; delivery outcomes are typed and sanitized; and no delivery or
+  Telegram response can approve, change state, or trade.
 - **Owner-assisted validation prerequisite, not offline blocker:** after the
   implementation is reviewed, the owner must create/provide separate real
   staging and production Bots plus each environment's numeric private
@@ -1965,8 +2031,11 @@ approval path unlocks `P08-T13`, then `P05-T8`.
   is `ROBINHOOD_READ_ACCOUNT_NUMBER`, on the Settings field
   `robinhood_read_account_number`. Only the Paper runtime's READ_BROKER
   read-query subcomposition reads it; P05-T4/P05-T5 do not own or receive it,
-  and the poller gets only a narrow query port. `load_settings(secrets_dir=...)`
-  is explicit and never searches implicitly. The task card fixes the value's
+  and the poller gets only a narrow query port. P05-T9 reuses P05-T4's public
+  explicit `load_settings(secrets_dir=...)` entry and adds only its own narrow
+  account-field source at the existing file-secret layer; it does not redefine
+  the entry or alter Telegram token loading. No source searches implicitly.
+  The task card fixes the value's
   1–128 visible-ASCII grammar, optional single file-secret LF, rejected
   CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper
   lifetime, per-call reveal, and no application-data persistence/logging/message
