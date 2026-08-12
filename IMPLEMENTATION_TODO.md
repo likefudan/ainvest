@@ -198,9 +198,10 @@ Primary parallelization opportunities:
   `v0.2.0` was approved on 2026-08-04, its pins are recorded under "Recorded
   external dependency pin" in `docs/tasks/status.md`, and `P06-T0`, `P06-T1`,
   and `P06-T2` Part 1 are on `main`. `P05-T9` is now the queued/unclaimed task
-  card for Telegram read-only queries. Its implementation remains blocked on
-  the owner-paused `P05-T4`, followed serially by `P05-T5`; assigning the card
-  does not lift that pause.
+  card for Telegram read-only queries. On 2026-08-12 the owner lifted the
+  `P05-T4` pause and that prerequisite was claimed. `P05-T5` and `P05-T9`
+  remain queued/unclaimed and must follow as separate serial claims after each
+  predecessor squash-merges.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -924,15 +925,77 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 ### P05-T4 — Configure Telegram Bots and Send Private Notifications
 
 - **Objective:** Use separate staging/production Bots to show order/risk summaries and provide either a Paper callback or a Live HTTPS link.
-- **Dependencies:** P05-T0, the accepted identity policy in P01-T0, and account-owner supplied Bot/user/chat values.
-- **Primary file:** `src/ainvest/approval/telegram.py`.
+- **Dependencies:** P05-T0 and the accepted identity policy in P01-T0. Offline implementation and review use synthetic IDs, fake tokens, and fake transport; account-owner supplied Bot token, expected Bot ID, and bound user/private-chat values are required only for owner-assisted environment validation under proposed `DEC-010`, not for the offline implementation merge.
+- **Primary files:** `src/ainvest/approval/telegram.py` and the minimum
+  Telegram-identity/recipient/file-secret additions to
+  `src/ainvest/config/settings.py`; `.env.example` for disabled, non-secret
+  examples of the exact configuration shape.
 - **Implementation checklist:**
-  - Use separate Bot tokens and numeric user/chat allowlists. Call `getMe` at startup to validate environment and Bot identity.
-  - Disable groups; send only to configured numeric private user/chat IDs. A username is display-only.
-  - Show minimal account detail, full order summary, expiry, and a prominent PAPER or LIVE label; never include broker credentials.
-  - Paper notifications carry a callback button bound to the opaque nonce. Live notifications contain only a fixed-origin HTTPS approval link.
+  - Use separate Bot tokens and environment-scoped, bound numeric
+    `(user_id, private_chat_id)` recipient records. Independent user/chat
+    allowlists are not an authorization relation and must never create a
+    cross-product. Each enabled environment also requires a positive
+    signed-64-bit numeric `expected_bot_id` (optional only while disabled),
+    configured as
+    `TELEGRAM_STAGING__EXPECTED_BOT_ID` or
+    `TELEGRAM_PRODUCTION__EXPECTED_BOT_ID`. Call `getMe` for the selected
+    environment and require its numeric `id` to equal that environment's
+    configured value exactly. A missing/malformed/mismatched ID is
+    `bot_identity_mismatch` and fails before private-chat validation or
+    `sendMessage`. Usernames are display-only. Staging and production cannot
+    exchange tokens or expected IDs, and the two expected IDs must differ
+    whenever both values are present; never fall back across environments.
+  - Disable groups; send only to one configured bound private recipient. A
+    username is display-only. Reject an individually known user paired with a
+    different known chat, as well as an unknown member of either pair.
+  - Show minimal account detail, expiry, and a prominent PAPER or LIVE label.
+    The full server-owned order summary includes instrument/symbol, side,
+    quantity, order type, limit price with currency, maximum notional with
+    currency, time in force, strategy/version, and risk outcome/reasons. A
+    missing or malformed required field fails before `sendMessage`; never
+    guess a unit or substitute a placeholder in a protected field.
+  - Accept notification requests only from a trusted in-process port. Paper
+    requests carry a P05-T0-issued opaque nonce; Live requests carry an
+    already-created fixed-origin HTTPS approval link from the later trusted
+    Live approval service. Telegram input cannot construct or change either
+    request. Paper and Live are notification categories, not authorization
+    outcomes: a Telegram reply, button click, send result, or message ID never
+    changes proposal/approval/execution state in this card.
+  - Paper notifications carry a callback button bound to the opaque nonce.
+    Live notifications contain only the fixed-origin HTTPS approval link. This
+    card transports that link but does not build the page, verify WebAuthn,
+    create a Live approval, or call a broker.
+  - Add the public `load_settings(secrets_dir=...)` entry point and pass only
+    an explicitly supplied directory to Pydantic Settings; never search a
+    working-directory secret path. At the existing file-secret precedence
+    layer, load only `TELEGRAM_STAGING__BOT_TOKEN` and
+    `TELEGRAM_PRODUCTION__BOT_TOKEN` into their nested `SecretStr` fields
+    through a private Telegram-token-specific source while preserving stock
+    behavior for every other file secret. The sender never reads files.
+  - Replace the two independent example allowlists with the exact nested keys
+    `TELEGRAM_STAGING__ALLOWED_RECIPIENTS` and
+    `TELEGRAM_PRODUCTION__ALLOWED_RECIPIENTS`, encoded as JSON arrays of
+    `{\"user_id\": <positive-int64>, \"private_chat_id\": <positive-int64>}`
+    objects. Update `.env.example` with `ENABLED=false`, clearly labeled
+    synthetic numeric Bot/recipient IDs, and commented empty Bot-token entries;
+    comments name the two exact token file-secret filenames and the requirement
+    to pass their directory explicitly. It must contain no real ID, token, or
+    token-shaped placeholder and must load safely while both Bots are disabled.
+  - Read-only `getMe`/private-chat validation may make at most two bounded
+    attempts before any send. Invoke `sendMessage` at most once per adapter
+    call and never retry after transmission begins. A send timeout/disconnect
+    is terminal `delivery_unknown`, never retryable; no caller correlation or
+    intent key is represented as a Telegram idempotency key.
   - Record message ID/status but not the full link or raw token.
-- **Acceptance criteria:** Incorrect Bot/chat/user/environment configuration fails closed; delivery failure cannot trade; message snapshots make scope unmistakable and contain no sensitive values.
+- **Acceptance criteria:** Incorrect Bot/expected-ID/recipient-pair/chat/
+  environment configuration, swapped token/expected-ID mappings, crossed
+  recipient pairs, missing summary fields, and unsafe links fail closed before
+  send. Delivery has honest at-most-once send semantics; a failure or unknown
+  outcome cannot approve or trade. PAPER/LIVE snapshots make category and full
+  units unambiguous, use synthetic identity values, and contain no sensitive
+  values; Telegram responses alone never alter state. The canonical disabled
+  `.env.example` parses without any secret and documents the exact deployable
+  keys without containing real owner values.
 
 ### P05-T5 — Operate Idempotent Telegram Long Polling and Preserve a Webhook Boundary
 
@@ -941,7 +1004,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Primary files:** `src/ainvest/approval/telegram_updates.py`, future `src/ainvest/api/routes/telegram.py`.
 - **Implementation checklist:**
   - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset.
-  - Enable only required `allowed_updates`; validate Bot identity, private chat, and user/chat allowlists before dispatch.
+  - Enable only required `allowed_updates`; validate Bot identity, private
+    chat, and the environment-scoped bound `(user_id, private_chat_id)`
+    recipient record before dispatch. Never authorize the cross-product of
+    separate user and chat lists.
   - Route Paper callbacks to P05-T1. Plain text may query/reject status only and never approve.
   - A future webhook validates HTTPS secret token, body/rate limits, and the same identity rules; configuration forbids simultaneous polling and webhook modes.
   - Fill/rejection/expiry message updates grant no new approval capability.
@@ -990,11 +1056,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   approval, mutation, model, Paper-promotion, or trading capability. This is a
   transport adapter over the merged `P06-T2` Part 1 display service, not a new
   data provider or a Gate 3 requirement.
-- **Status and scheduling:** `queued/unclaimed`, with implementation
-  `owner-paused-by-dependency`. The owner pause on `P05-T4` remains in force.
-  After the owner explicitly resumes that chain, merge `P05-T4`, then rebase,
-  implement, review, and merge `P05-T5`; only then may an agent claim this
-  card. Assigning `P05-T9` does not start or unblock either prerequisite.
+- **Status and scheduling:** `queued/unclaimed`, waiting on serial
+  prerequisites. The owner lifted the `P05-T4` pause and that task was claimed
+  on 2026-08-12. After `P05-T4` squash-merges, rebase latest `main`, claim,
+  implement, review, and squash-merge `P05-T5`; only then may an agent claim
+  this card. Assigning `P05-T9` does not start or claim either prerequisite.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1067,7 +1133,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has deduplicated the update and verified the environment-specific Bot,
   numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
-  the configured user/chat allowlists. Username is display-only. Query access
+  exact membership of the configured bound `(user_id, private_chat_id)`
+  recipient record. Independent membership and crossed pairs fail closed.
+  Username is display-only. Query access
   creates no `ApprovalEvent`, consumes no approval challenge or callback nonce,
   and cannot be interpreted as `approve`, `reject`, operator authentication,
   WebAuthn registration/reset, or live authorization. Telegram identity is
@@ -1075,11 +1143,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Account-secret contract and ownership:** add exactly one optional
   `SecretStr` setting named `robinhood_read_account_number`, with the canonical
   environment alias and file-secret filename
-  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Extend `load_settings` with an explicit
-  optional `secrets_dir` argument that passes `_secrets_dir` to Pydantic
-  Settings; it must not search a working-directory secret path implicitly.
-  Load the field once through the existing explicit > environment > dotenv >
-  file-secret > YAML precedence. The Paper runtime's READ_BROKER read-query
+  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Reuse the public explicit
+  `load_settings(secrets_dir=...)` entry point delivered by `P05-T4`; do not
+  add, replace, or take ownership of that API and do not search a
+  working-directory secret path implicitly. Load the field once through the
+  existing explicit > environment > dotenv > file-secret > YAML precedence.
+  The Paper runtime's READ_BROKER read-query
   subcomposition is the sole owner/reader of this field. It injects into the
   Telegram dispatcher only a narrow callable/query port; Approval, Research,
   Strategy, the write broker, `telegram_updates.py`, `P05-T4`, and `P05-T5`
@@ -1089,12 +1158,14 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   not add a new `SecretId` or an external dependency.
 - **Strict file-secret source authorization:** Pydantic Settings' stock
   `SecretsSettingsSource` calls `read_text().strip()`, so it cannot enforce the
-  grammar below. P05-T9 is explicitly authorized to replace only the
-  file-secret lookup for `robinhood_read_account_number` with one narrow custom
+  grammar below. P05-T9 is explicitly authorized to add only the field-scoped
+  file-secret lookup for `robinhood_read_account_number` through one narrow custom
   `PydanticBaseSettingsSource`/`SecretsSettingsSource` subclass, or an
   equivalent field-specific extension inside the existing configuration
-  module. This is the implementation of the existing file-secret precedence
-  layer, not a second configuration system: it receives exactly the explicit
+  module. It must compose beside the Telegram-token source from `P05-T4` and
+  must not alter that source or the public loader entry. This is the
+  implementation of the existing file-secret precedence layer, not a second
+  configuration system: it receives exactly the explicit
   `secrets_dir`, performs no fallback or path search, exposes no generic public
   parser, and returns a value for this one exact field only. The stock
   file-secret source remains responsible for every other Settings field with
@@ -1888,8 +1959,10 @@ line.
 
 - Research topology: P04-T0 through P04-T8 -> P04-T9 through P04-T11 ->
   P04-T12; dispatch is currently paused at P04-T2.
-- Paper approval topology: P05-T0 -> P05-T4 + P05-T5 -> P05-T1 -> P05-T6 ->
-  P05-T8; dispatch is currently paused at P05-T4.
+- Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
+  -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
+  lifted the P05-T4 pause on 2026-08-12 and P05-T4 is the only claimed task in
+  the transport branch.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -1900,11 +1973,11 @@ line.
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
-  queued/unclaimed Telegram read-only task. Its implementation is
-  owner-paused-by-dependency until `P05-T4` is explicitly resumed and merged,
-  followed serially by `P05-T5`. By owner instruction, `P04-T2`, `P05-T4`, and their dependent
-  chains are paused and unclaimed; they may not start until the
-  owner/coordinator explicitly resumes them.
+  queued/unclaimed Telegram read-only task. The owner resumed and claimed
+  `P05-T4` on 2026-08-12. After it squash-merges, `P05-T5` must be claimed,
+  rebased, reviewed, and squash-merged before `P05-T9` may be claimed. By owner
+  instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
+  they may not start until the owner/coordinator explicitly resumes them.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
@@ -1917,9 +1990,9 @@ line.
    `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
    merged.
 2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
-   on that display projection and `P05-T4`/`P05-T5`. This scheduling decision
-   does not lift the `P05-T4` pause or start implementation. After an explicit
-   owner resume, complete `P05-T4` -> `P05-T5` serially before claiming
+   on that display projection and `P05-T4`/`P05-T5`. The owner lifted the
+   `P05-T4` pause and claimed that task on 2026-08-12. Complete `P05-T4` ->
+   `P05-T5` as separate serial rebase/review/squash-merge steps before claiming
    `P05-T9`. Do not combine queries with Telegram approval, Paper promotion,
    non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account

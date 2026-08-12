@@ -965,7 +965,9 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ### Phase 3：Telegram Paper 审批
 
-- staging/production 独立 Telegram Bot 配置和数值型 user/chat allowlist
+- staging/production 独立 Telegram Bot 配置；每个环境固定正整数型 expected
+  Bot ID 和绑定的 `(user_id, private_chat_id)` 私聊收件人记录，禁止两个独立列表形成
+  cross-product
 - 使用单实例长轮询接收私聊 update，无需公网域名
 - 显示完整 Paper 订单摘要并提供绑定 proposal/order_hash 的一次性批准按钮
 - 将审批固定标记为 `approval_method=telegram`、`approval_scope=paper`
@@ -1040,7 +1042,9 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 首版 Paper Trading 开始前仍需由账户持有人提供或确定：
 
 - OpenAI API 项目凭据和月度预算上限
-- 创建 staging/production Telegram Bot，并提供对应的数值型 `user_id` 和私聊 `chat_id`；Bot token 只进入 secret 存储，不写入文档
+- 创建 staging/production Telegram Bot，并为每个环境提供正整数型 expected Bot ID
+  和绑定的数值型 `(user_id, private_chat_id)` 私聊收件人记录；Bot token 只进入
+  secret 存储，真实 token/ID 不写入文档或示例
 - 首版策略和具体参数
 - 单笔、单股、单日和最大回撤限制的具体数值
 - 数据和审计记录保留期限
