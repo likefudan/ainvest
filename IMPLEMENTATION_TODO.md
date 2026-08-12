@@ -995,15 +995,17 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   After the owner explicitly resumes that chain, merge `P05-T4`, then rebase,
   implement, review, and merge `P05-T5`; only then may an agent claim this
   card. Assigning `P05-T9` does not start or unblock either prerequisite.
-- **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService` and its
-  versioned success/error envelopes), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
+- **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
+  public `DisplaySuccess` envelope, normalized models, and typed
+  gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
   `P08-T7`, accepted `DEC-005`, and environment integration under `DEC-010`.
   Real-provider validation also requires a separately reviewed `rh-mcp`
   release and deliberate ainvest pin update; until then readiness fails closed.
 - **Primary files:** new `src/ainvest/approval/telegram_queries.py`; narrow
   query-dispatch additions to `src/ainvest/approval/telegram_updates.py` after
   `P05-T5` owns that file; the minimum account-secret/config composition
-  addition under `src/ainvest/config/**`; matching
+  addition under `src/ainvest/config/settings.py` and the Paper runtime's
+  READ_BROKER read-query subcomposition; matching configuration/secret tests,
   `tests/unit/approval/test_telegram_queries.py`, bounded additions to the
   `P05-T5` Telegram update tests, one dependency-boundary test, and
   `docs/telegram-read-queries.md`. Do not edit the display models or broaden
@@ -1030,6 +1032,34 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   | `/fundamentals SYMBOL [regular\|trading\|extended\|24_5]` | `fundamentals` for one symbol; omitted bounds use the display service default |
   | `/financials SYMBOL [quarterly\|annual] [1\|2\|3\|4]` | `financials` for one symbol; defaults are `quarterly 4` |
 
+- **Exact history-window mapping:** capture the injected, timezone-aware clock
+  exactly once, convert it to UTC, and discard microseconds to obtain
+  `end_time`; serialize it as `YYYY-MM-DDTHH:MM:SSZ`. A naive or otherwise
+  invalid clock is `internal_error`. Compute `start_time = end_time - duration`
+  using the fixed durations below and the same RFC 3339 form. These are rolling
+  UTC display windows, deliberately not exchange sessions, calendar-month or
+  calendar-year subtraction. Therefore month ends, leap days, local timezone,
+  and DST require no special case and must not introduce a market-calendar
+  dependency. Treat the requested range as half-open `[start_time, end_time)`
+  for deterministic input calculation, pass both values without further
+  rounding, and do not synthesize, drop, or claim provider boundary semantics
+  for returned bars. Every request uses `bounds="regular"` and
+  `adjustment_type="split"`.
+
+  | Token | Fixed duration | `HistoricalInterval` | `HistoricalBounds` | `AdjustmentType` |
+  |---|---:|---|---|---|
+  | `1d` | 24 hours | `5minute` | `regular` | `split` |
+  | `5d` | 120 hours | `30minute` | `regular` | `split` |
+  | `1m` | 30 × 24 hours | `hour` | `regular` | `split` |
+  | `3m` | 90 × 24 hours | `day` | `regular` | `split` |
+  | `1y` | 365 × 24 hours | `day` | `regular` | `split` |
+
+  The current `RobinhoodDisplayService.historicals` method and pinned read
+  schema support all five named interval values plus explicit `start_time`,
+  `end_time`, `bounds`, and `adjustment_type`; no mapper or provider-surface
+  expansion is scheduled by this card. Because session evidence remains
+  unverified, these windows are never usable for trading.
+
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has deduplicated the update and verified the environment-specific Bot,
   numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
@@ -1038,23 +1068,100 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   and cannot be interpreted as `approve`, `reject`, operator authentication,
   WebAuthn registration/reset, or live authorization. Telegram identity is
   never an Operator Control Plane identity.
-- **Account handling:** account-bound commands receive exactly one account
-  number from a server-side secret/config provider wired through the existing
-  file-secret precedence. The chat can neither supply nor select it. Missing,
-  empty, or invalid secret configuration fails closed before opening the
-  gateway. Never persist, hash for display, interpolate, log, snapshot, audit,
-  or send the account number; output retains
-  `account_binding="unverified"` and contains no account identifier.
+- **Account-secret contract and ownership:** add exactly one optional
+  `SecretStr` setting named `robinhood_read_account_number`, with the canonical
+  environment alias and file-secret filename
+  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Extend `load_settings` with an explicit
+  optional `secrets_dir` argument that passes `_secrets_dir` to Pydantic
+  Settings; it must not search a working-directory secret path implicitly.
+  Load the field once through the existing explicit > environment > dotenv >
+  file-secret > YAML precedence. The Paper runtime's READ_BROKER read-query
+  subcomposition is the sole owner/reader of this field. It injects into the
+  Telegram dispatcher only a narrow callable/query port; Approval, Research,
+  Strategy, the write broker, `telegram_updates.py`, `P05-T4`, and `P05-T5`
+  never receive the `SecretStr` or plaintext value. `P05-T4` continues to own
+  only Bot identity/token/allowlist notification configuration, and `P05-T5`
+  continues to own transport/deduplication; neither card defines this key. Do
+  not add a second secret parser, a new `SecretId`, or an external dependency.
+- **Account-secret grammar and lifetime:** after source decoding, accept 1
+  through 128 visible ASCII characters (`0x21` through `0x7e`) and reject empty,
+  oversized, non-ASCII, whitespace/control-bearing, CR-bearing, or multi-line
+  values. Environment/dotenv/YAML values are validated exactly and are never
+  trimmed. A file-secret may contain either the exact value or that value plus
+  one terminal LF; the file-secret source removes only that one LF before
+  validation. It rejects a terminal CRLF, more than one LF, leading/trailing
+  spaces, or any other newline. The authorized file-secret/secret-manager value
+  is the approved at-rest persistence and must remain outside Git; “do not
+  persist” means no database, cache, audit event, query record, snapshot, log,
+  metric, trace, exception, Telegram message, or provider-result copy. The
+  READ_BROKER subcomposition may retain only its redacted wrapper for its process
+  lifetime. Reveal plaintext inside the named account-bound display call only,
+  do not cache or return it, and release the local reference immediately after
+  that call (while acknowledging Python cannot guarantee memory zeroization).
+  The chat can neither supply nor select the value. Missing or invalid
+  configuration maps to `account_secret_unavailable` before the gateway opens;
+  output retains `account_binding="unverified"` and contains no account
+  identifier or secret reference.
 - **Display and message contract:** call only a named
   `RobinhoodDisplayService` method and reuse its versioned normalized data,
-  posture, limitations, and stable error mapping; never parse CLI output. Every
-  successful reply starts with the static line
+  `DisplaySuccess` posture, and limitations; never parse CLI output. Every
+  successful data/status reply starts with the static line
   `[READ ONLY - NOT FOR TRADING]`, uses Telegram `parse_mode=None`, and carries
   the compact display envelope with `usable_for_trading=false`. Preserve
   partial identity, unverified account/session evidence, exact units,
   `UNSPECIFIED`/`comparable=false`, `has_more`, unavailable symbols, and
   `omitted_untrusted_fields`. Never total, rank, convert, or label an
-  unspecified value as USD.
+  unspecified value as USD. `/help` is the sole success exception: after the
+  same private-chat numeric allowlist, deduplication, and rate-limit checks, it
+  returns only the static bounded command list and does not open the gateway,
+  resolve the account secret, or construct a `DisplaySuccess` envelope.
+- **Telegram-owned error wire and reusable boundary:** current main exposes no
+  display-service error envelope. Gateway/mapping failures are typed
+  exceptions, and CLI `_write_failure`/`_render_json` are private CLI details.
+  Do not import, copy, or parse those helpers. Reuse only public
+  `DisplaySuccess`, normalized models, `GatewayReadError.code/retryable`, and
+  `RobinhoodMappingError.code`; add a Telegram-specific frozen Pydantic
+  `TelegramQueryError` plus a narrow deterministic serializer in
+  `telegram_queries.py`. An error reply starts with
+  `[READ ONLY - NOT FOR TRADING]`, then exactly one compact JSON object with
+  these keys and no others:
+
+  ```json
+  {
+    "schema_version": "1.0",
+    "kind": "error",
+    "command": "quotes",
+    "error": {"code": "rate_limited", "retryable": false}
+  }
+  ```
+
+  `command` is the normalized Telegram command name without `/`, or `null`
+  when no allowed command was parsed. Fixed adapter mappings are
+  `invalid_command`/false, `account_secret_unavailable`/false,
+  `rate_limited`/true, `result_too_large`/false,
+  `render_failed`/false, `send_failed`/true, and `internal_error`/false.
+  `GatewayReadError` retains its existing `code.value` and `retryable` flag;
+  `RobinhoodMappingError` retains `code.value` with `retryable=false`. Error
+  replies contain no static help beyond the code; the user may send `/help`.
+  A serialization failure uses a small pre-serialized constant
+  `render_failed` document. `send_failed` is the stable terminal outcome for
+  sanitized log/metric accounting when Telegram delivery itself failed; no
+  second send is attempted, so that code is not falsely claimed to reach the
+  user.
+- **Silent-ignore versus reply matrix:** `P05-T5` silently ignores an update
+  at the query boundary, performs no query/account/gateway work, and sends no
+  P05-T9 reply for a wrong Bot or environment, non-allowlisted numeric user or
+  chat, non-private chat/group/channel, missing or wrong `chat.type`, edited or
+  forwarded message, callback query, or duplicate `update_id`/message. A valid
+  approval callback may still be routed by `P05-T5` to `P05-T1`; it is merely
+  invisible to P05-T9. After all identity/private-message/dedup checks pass,
+  malformed text, unknown commands, bad spacing/case/arguments, and plain
+  `approve`/`reject` receive `invalid_command`; rate excess receives
+  `rate_limited`; missing/invalid account secret receives
+  `account_secret_unavailable`; and authorized gateway/mapping/render/internal
+  failures receive the mapped error when delivery is available. `/help` obeys
+  the allowlist and rate limit but is independent of gateway readiness and the
+  account secret.
 - **Untrusted text and output bounds:** provider-controlled `guide`, manifest
   rationale, tool/schema descriptions, and other instructional prose remain
   discarded. Only existing bounded `UntrustedDisplayText` may reach the reply,
@@ -1066,8 +1173,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   result.
 - **Errors, readiness, and provider calls:** readiness/auth/schema/artifact
   mismatch, timeout, mapping failure, missing account secret, render failure,
-  or Telegram delivery failure fails closed. Emit only a stable error code and
-  retryable boolean plus static help text where applicable; never include raw
+  or Telegram delivery failure fails closed. Emit only the error wire above;
+  never include raw
   arguments, provider messages, payloads, tracebacks, account identifiers, or
   untrusted text. Perform at most one gateway/display call for each accepted
   update and never retry automatically or fall back to Alpaca, yfinance, or
@@ -1090,11 +1197,20 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Required tests:** cover every exact command and bound; invalid casing,
   spacing, symbols, options, extra text, commands and callbacks; wrong
   Bot/environment/user/chat/type; group, edited and forwarded messages;
-  missing account secret; readiness/auth/timeout/contract/mapping/render and
-  send failures; persisted update deduplication and restart; one-in-flight and
-  six-per-minute limits; deterministic history-window mapping with an injected
-  clock; exact message/part limits and oversize failure; stable sanitized
-  errors; no account ID in replies/logs/errors/snapshots; omission markers and
+  the exact silent-ignore/reply matrix and `/help` exception; every exact error
+  key/code/retryability mapping, render fallback, and unsendable `send_failed`
+  terminal outcome; missing/invalid account secret; all source precedence and
+  exact account grammar cases including optional single file LF, rejected CRLF,
+  whitespace/newline/length boundaries, explicit `secrets_dir` with no implicit
+  path search, redacted representations, READ_BROKER-only composition access,
+  and no plaintext crossing the narrow query port;
+  readiness/auth/timeout/contract/mapping/render and send failures; persisted
+  update deduplication and restart; one-in-flight and six-per-minute limits;
+  all five exact history argument dictionaries at a fixed injected UTC clock,
+  microsecond truncation, timezone conversion, month/leap/DST independence,
+  naive-clock failure, and proof no market-calendar call occurs; exact
+  message/part limits and oversize failure; stable sanitized errors; no account
+  ID or secret reference in replies/logs/errors/snapshots; omission markers and
   JSON escaping; non-comparable units; and structural proof that the adapter
   cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
   Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway

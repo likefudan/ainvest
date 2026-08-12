@@ -1806,7 +1806,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T5` | `not_started` | `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `queued/unclaimed` (`owner-paused-by-dependency`) | merged `P06-T2` Part 1, then owner-resumed/merged `P05-T4` → `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; minimum protected account-secret composition; focused tests and `docs/telegram-read-queries.md` |
+| `P05-T9` | `queued/unclaimed` (`owner-paused-by-dependency`) | merged `P06-T2` Part 1, then owner-resumed/merged `P05-T4` → `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition; focused tests and `docs/telegram-read-queries.md` |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is
 owner-paused/unclaimed and may not start until the owner/coordinator explicitly
@@ -1815,6 +1815,43 @@ resumes it; only after that task merges may `P05-T5` start. `P05-T6` follows
 an approval path; after the owner resumes the transport chain, it may be
 claimed only after `P05-T4` and `P05-T5` merge serially. The completed Paper
 approval path unlocks `P08-T13`, then `P05-T8`.
+
+##### Scheduling envelope: P05-T9
+
+- **Planning PR/status:** [#119](https://github.com/likefudan/ainvest/pull/119)
+  assigns the unique task ID only. Implementation is unclaimed and
+  owner-paused-by-dependency; this record neither resumes `P05-T4` nor creates
+  an implementation worktree.
+- **Serial unlock:** merged `P06-T2` Part 1 is satisfied. The owner must first
+  resume `P05-T4`; merge `P05-T4`, then rebase/review/merge `P05-T5`, and only
+  then claim `P05-T9`. It is a display-only add-on and is not required by Gate
+  3 or `P06-T2` Part 2.
+- **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
+  `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
+  error envelope. P05-T9 owns its exact `TelegramQueryError` wire and
+  deterministic renderer, must not import/copy the CLI's private JSON helpers,
+  and follows the task card's silent-ignore versus authorized-reply matrix.
+  `/help` is private/allowlisted/rate-limited but deliberately opens neither
+  the gateway nor account secret and returns no display envelope.
+- **Pinned history behavior:** `1d`, `5d`, `1m`, `3m`, and `1y` mean fixed
+  rolling UTC durations of 24, 120, 720, 2,160, and 8,760 hours. Their intervals
+  are `5minute`, `30minute`, `hour`, `day`, and `day`; every request uses
+  `regular` bounds and `split` adjustment. No exchange-calendar dependency or
+  trade-grade session claim is allowed.
+- **Account-secret ownership:** the exact setting/environment/file-secret key
+  is `ROBINHOOD_READ_ACCOUNT_NUMBER`, on the Settings field
+  `robinhood_read_account_number`. Only the Paper runtime's READ_BROKER
+  read-query subcomposition reads it; P05-T4/P05-T5 do not own or receive it,
+  and the poller gets only a narrow query port. `load_settings(secrets_dir=...)`
+  is explicit and never searches implicitly. The task card fixes the value's
+  1–128 visible-ASCII grammar, optional single file-secret LF, rejected
+  CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper
+  lifetime, per-call reveal, and no application-data persistence/logging/message
+  rule. It introduces no second parser, `SecretId`, or dependency.
+- **Review remediation:** the first independent review correctly rejected the
+  earlier ambiguous error, history-window, and account-secret contracts. Those
+  three contracts are now pinned in the task card; no production code,
+  dependency, credential, Bot value, claim, or pause state changes in #119.
 
 #### Deferred live approval track
 
