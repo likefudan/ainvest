@@ -73,7 +73,10 @@ YAML, then fail-closed defaults. The notification sender receives validated
 `Settings`; it never reads a file or environment variable. At the file-secret
 layer, no top-level Telegram JSON file, case variant, or alternate nested
 filename may provide a Bot token. Malformed, oversized, non-UTF-8, or unreadable
-exact token files fail with a stable redacted configuration error.
+exact token files fail with a stable redacted configuration error. The raw file
+may contain the token bytes exactly or add one terminal LF. Leading/trailing
+spaces, tabs, CRLF, repeated LF, and every other control/whitespace variation
+are rejected rather than normalized.
 
 ## Offline and owner-assisted validation
 

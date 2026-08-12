@@ -342,9 +342,14 @@ class _TelegramTokenFileSecretSource(PydanticBaseSettingsSource):
             if not raw or len(raw) > _MAX_TELEGRAM_TOKEN_FILE_BYTES:
                 raise SettingsError("Invalid Telegram token file secret")
             try:
-                token = raw.decode("utf-8").strip()
+                token = raw.decode("utf-8")
             except UnicodeDecodeError:
                 raise SettingsError("Invalid Telegram token file secret") from None
+            # Secret tooling commonly writes one POSIX terminal LF.  Permit
+            # exactly that normalization and leave every other byte subject to
+            # the token grammar; never hide whitespace/control corruption.
+            if token.endswith("\n"):
+                token = token[:-1]
             if _TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(token) is None:
                 raise SettingsError("Invalid Telegram token file secret")
             values[environment] = {"bot_token": token}
