@@ -43,3 +43,14 @@ def test_sanitized_mapping_fixture_matches_pinned_output_schema(capability: str)
 def test_contract_covers_exactly_the_claimed_part1_capabilities() -> None:
     fixture_names = {path.stem for path in FIXTURES.glob("*.json")}
     assert fixture_names == set(CAPABILITIES)
+
+
+@pytest.mark.contract
+def test_accounts_fixture_exercises_the_v030_limited_margin_value() -> None:
+    """The migrated fixture guards the account-schema drift found in review."""
+    manifest = _document(MANIFEST)
+    entry = next(item for item in manifest["entries"] if item.get("capability") == "get_accounts")
+    fixture = _document(FIXTURES / "get_accounts.json")
+
+    Draft202012Validator(entry["output_schema"]).validate(fixture)
+    assert fixture["data"]["accounts"][0]["type"] == "limited_margin"

@@ -38,6 +38,7 @@ from ainvest.execution.robinhood import pins
 MANIFEST_PATH: Final = (
     Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.0" / "read-manifest.json"
 )
+DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
 FULL_MANIFEST_DIGEST_FIELD: Final = "full_manifest_digest"
 
@@ -384,6 +385,20 @@ def test_limited_margin_upgrade_read_is_reviewed_but_not_projected() -> None:
     assert capability in pins.MANIFEST_READ_CAPABILITIES
     assert capability not in projection
     assert len(projection) == 10
+
+
+@pytest.mark.contract
+def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None:
+    """Prevent the reviewed manifest from being described as the public API."""
+    design = DESIGN_PATH.read_text(encoding="utf-8")
+    phase4 = design.split("### Phase 4\uff1a", maxsplit=1)[1].split(
+        "### Phase 5\uff1a", maxsplit=1
+    )[0]
+
+    assert "manifest 精确允许 35 个读取能力和 11 个非交易 mutation" in phase4
+    assert "ainvest 当前只能调用已有 10 个命名读取能力" in phase4
+    assert "永久拒绝 8 个交易能力" in phase4
+    assert "调用精确批准的 34 个读取能力" not in design
 
 
 @pytest.mark.contract

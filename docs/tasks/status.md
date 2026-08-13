@@ -818,6 +818,16 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   rows/records in `docs/security/{control-matrix.md,control-evidence.json}`.
   Narrow an individual file further when no stale pin/count/prose references
   require it; do not edit unrelated code or generated artifacts.
+- **Review-remediation scope expansion:** [independent review of implementation
+  head `6662d6df98c52708101c70fe5fc703dd142a5bcd`](https://github.com/likefudan/ainvest/pull/127#issuecomment-5280792258) found that the reviewed
+  `v0.3.0` `get_accounts` schema accepts `type=limited_margin` while the
+  normalized account enum still rejected it. The coordinator approved the
+  minimum expansion to `read_models.py`, `mappers.py` only if needed, the
+  sanitized `get_accounts` fixture, and existing Robinhood unit/contract/
+  integration tests. The model must retain `limited_margin` as a distinct
+  provider-independent label; it cannot infer leverage, canonical account
+  binding, broker tradability, or permission to trade. This does not expose
+  `get_limited_margin_upgrade_info` or widen `ReadCapability`.
 - **Release and dependency refresh:** replace the broker-extra direct wheel
   URL/hash and lock entry with public `v0.3.0`; update all executable release,
   package, source, wheel/sdist, manifest, provider-surface, and count pins from
@@ -875,12 +885,15 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   166 packages and `lock-check` passes; hash-verifying `broker-install` installs
   `rh-mcp` `0.3.0`, and the PEP 610 probe verifies wheel digest
   `1dbd512c51e6bc0f5a90626d5a562ca4d79f3b6c5cb1ee24be9c1af24045b76e`.
-  Focused Robinhood/dependency tests pass 220/220. Full suites pass 1,315 unit,
-  201 contract, and 42 integration tests; `./scripts/dev verify` passes all
-  1,558 tests with 87.58% coverage, current schema snapshots, formatting,
-  Ruff, mypy, dependency lock, migration, and policy checks. Migrated P06-T1
-  payload fixtures validate unchanged against the `v0.3.0` schemas. Real
-  owner-assisted `status` and read validation remain pending.
+  The expanded Robinhood unit/contract/integration regression suite passes
+  360/360. Full suites pass 1,316 unit, 203 contract, and 42 integration tests;
+  `./scripts/dev verify` passes all 1,561 tests with 87.58% coverage, current
+  schema snapshots, formatting,
+  Ruff, mypy, dependency lock, migration, and policy checks. All migrated
+  P06-T1 payload fixtures validate against the `v0.3.0` schemas; only the
+  sanitized account fixture changes, deliberately exercising the newly valid
+  `limited_margin` label. Real owner-assisted `status` and read validation
+  remain pending.
 
 ##### Execution envelope: P06-T1 integration Part 1
 

@@ -982,7 +982,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 - 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；审查 manifest 的读取面固定为 35 个能力，ainvest 的命名读取投影仍为已有 10 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation
 - 将真实组合快照用于 Paper Trading
 
-验收标准：系统可以调用精确批准的 34 个读取能力和 11 个非交易 mutation，但无法调用 8 个交易能力或任何未知能力；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
+验收标准：审查 manifest 精确允许 35 个读取能力和 11 个非交易 mutation，并永久拒绝 8 个交易能力；ainvest 当前只能调用已有 10 个命名读取能力，不能调用任何非交易 mutation、交易能力或未知能力，除非后续独立任务明确扩展该投影；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
 
 ### Phase 5：受控实盘
 

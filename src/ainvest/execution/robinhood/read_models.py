@@ -130,7 +130,10 @@ class RobinhoodAccountScope(StrEnum):
 
 
 class BrokerageTradingType(StrEnum):
+    """Provider trading-permissions label, not leverage or tradability proof."""
+
     CASH = "cash"
+    LIMITED_MARGIN = "limited_margin"
     MARGIN = "margin"
 
 
