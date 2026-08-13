@@ -71,8 +71,8 @@ External data
 30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 32. The pinned `rh-mcp` manifest must match its independently reviewed exact
-    capability sets and `mutates` flags. The current `v0.3.0` pin-refresh
-    implementation has 35 reads, 11 explicitly reviewed non-trading
+    capability sets and `mutates` flags. The current executable `v0.3.0`
+    artifact has 35 reads, 11 explicitly reviewed non-trading
     mutations, and 8 denied trading capabilities across 54 entries; the
     additional read does not widen ainvest's
     existing 10-operation `ReadCapability` projection. The boundary is no
@@ -202,11 +202,13 @@ Primary parallelization opportunities:
   records the tag, artifact provenance/digest, and expected full-manifest
   digest → `P06-T0` → `P06-T1` → `P06-T2` Part 1 display CLI. `P06-T2` Part 2
   is the later Paper-promotion step under the same task ID. The complete
-  display-only priority lane through `P06-T2` Part 1 is merged. A narrow
-  `P06-T0` implementation now refreshes the runtime to reviewed `rh-mcp`
-  `v0.3.0` before real-provider validation. This refresh does not block
-  deterministic offline `P05-T9` implementation, but it merges before any
-  real P05-T9 validation. `P06-T0`, `P06-T1`, and `P06-T2`
+  display-only priority lane through `P06-T2` Part 1 is merged. The narrow
+  `P06-T0` runtime refresh to reviewed `rh-mcp` `v0.3.0` also merged through
+  [#126](https://github.com/likefudan/ainvest/pull/126) and
+  [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
+  current executable dependency authority. Owner-assisted real-provider
+  validation remains pending but does not block deterministic offline
+  `P05-T9` implementation. `P06-T0`, `P06-T1`, and `P06-T2`
   Part 1 are on `main`. `P05-T9` remains queued/unclaimed. On 2026-08-12 the
   owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
@@ -1086,10 +1088,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
   `P08-T7`, accepted `DEC-005`, and environment integration under `DEC-010`.
-  Real-provider validation also requires the deliberate ainvest pin update to
-  the separately reviewed `rh-mcp` `v0.3.0` release. That narrow P06-T0 refresh
-  is claimed but not yet merged, so readiness remains fail-closed; this does
-  not block P05-T9's deterministic offline implementation.
+  The deliberate ainvest pin update to the separately reviewed `rh-mcp`
+  `v0.3.0` release is merged and is the current executable authority.
+  Owner-assisted real `rh-mcp status` and read validation remains pending;
+  this does not block P05-T9's deterministic offline implementation.
 - **Primary files:** new `src/ainvest/approval/telegram_queries.py`; narrow
   query-dispatch additions to `src/ainvest/approval/telegram_updates.py` after
   `P05-T5` owns that file; the minimum account-secret/config composition
@@ -1405,8 +1407,9 @@ artifact digest/checksum, and a committed full-manifest digest. Reviewed
 `rh-mcp` `v0.2.0` satisfied the original integration. Reviewed and publicly
 verified `v0.3.0` now satisfies the maintenance-refresh prerequisite; its exact
 tag, commit, artifacts, provenance, manifest, envelope, and review evidence are
-recorded under "Approved pin-refresh target" in `docs/tasks/status.md`.
-The prior executable pin remains separately recorded as historical evidence.
+recorded under "Current executable dependency pin" in
+`docs/tasks/status.md`. The prior pin remains separately recorded as historical
+evidence only.
 A source commit may still be provenance evidence but cannot substitute for the
 consumable release artifact.
 
@@ -1415,21 +1418,21 @@ consumable release artifact.
 - **Objective:** Compose a thin ainvest adapter over a pinned `rh-mcp` release
   without taking ownership of MCP transport, OAuth, tokens, or provider SDK
   types.
-- **Current maintenance claim:** the original adapter/runtime/hardening work is
-  merged. A narrow follow-up implements only the deliberate `v0.2.0` to
-  independently reviewed `v0.3.0` release, artifact, manifest, and fixture pin
-  refresh described in `docs/tasks/status.md`. `P05-T9` remains
-  dependency-ready but queued/unclaimed; its offline implementation was never
-  blocked by live readiness, while any owner-assisted real validation waits
-  for this refresh.
+- **Maintenance completion:** the original adapter/runtime/hardening work and
+  the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
+  artifact, manifest, and fixture pin refresh are merged through #126/#127.
+  `v0.3.0` is the current executable dependency authority; `v0.2.0` is
+  historical evidence only. `P05-T9` remains dependency-ready but
+  queued/unclaimed, and owner-assisted real validation remains pending.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
   digest/checksum, committed reviewed capability manifest, and full-manifest
   digest recorded in `docs/tasks/status.md`. The core dependency was satisfied
-  by reviewed `v0.2.0`. The active maintenance dependency is satisfied by
-  reviewed and publicly verified `v0.3.0`; take every refresh value from
-  "Approved pin-refresh target" in `docs/tasks/status.md`. Do not infer a pin
+  by reviewed `v0.2.0`; the maintenance dependency is now satisfied by
+  reviewed and publicly verified `v0.3.0`. Take every current executable value
+  from "Current executable dependency pin" in `docs/tasks/status.md`. Do not
+  infer a pin
   from package version or transcribe one from release prose or a changelog;
   verify the tagged and artifact-shipped manifest directly.
 - **Primary file:** `src/ainvest/execution/robinhood/read_client.py`.
@@ -1577,9 +1580,8 @@ consumable release artifact.
 - **Dependencies:** Part 1 depends on P06-T0, completed P06-T1 normalization,
   P03-T16, and P08-T0. Part 2 additionally requires trustworthy canonical
   instrument identity, verified Agentic-account binding, and regular-session
-  evidence. Neither the pinned `rh-mcp` `v0.2.0` contract nor the approved
-  `v0.3.0` pin-refresh target supplies those three promotion prerequisites;
-  the refresh restores a reviewed provider-surface pin but does not promote
+  evidence. The current `rh-mcp` `v0.3.0` pin supplies the reviewed provider
+  surface but does not supply those three promotion prerequisites or promote
   display data into Paper.
 - **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
 - **Implementation checklist:**
@@ -1607,8 +1609,8 @@ consumable release artifact.
     CLI or Telegram display through `UntrustedDisplayText`, with the stable
     marker and `omitted_untrusted_fields` metadata defined in `P06-T1`; it must
     never reach a model prompt or log. This is requirement 5 of the `rh-mcp`
-    `v0.2.0` review, recorded in `docs/tasks/status.md` under "Recorded external
-    dependency pin".
+    `v0.2.0` review, recorded in `docs/tasks/status.md` under "Historical
+    external dependency pin".
   - **Part 2 — real-portfolio Paper:** only after canonical identity,
     Agentic-account binding, and regular-session proof are verified, promote
     eligible Robinhood quotes, fundamentals, and real portfolio snapshots into
@@ -2029,16 +2031,17 @@ line.
    -> `P06-T1` -> `P06-T2` Part 1, without waiting for every Batch E track. This
    is a display-only Non-Trading Preview, not a gate acceptance. Every original
    step in this display-only lane is complete, and `P06-T0`, `P06-T1`, and
-   `P06-T2` Part 1 are merged. A narrow `P06-T0` maintenance implementation
-   refreshes the pin to independently reviewed `v0.3.0` before real-provider
-   validation; it does not reopen the adapter or normalization scope.
+   `P06-T2` Part 1 are merged. The narrow `P06-T0` maintenance refresh to
+   independently reviewed `v0.3.0` also merged through #126/#127 without
+   reopening the adapter or normalization scope; `v0.3.0` is the current
+   executable dependency authority.
 2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
    on that display projection and merged `P05-T4`/`P05-T5`. It is
    dependency-ready but queued/unclaimed; open a separate claim before
    implementation, then rebase, independently review, check, and squash-merge.
    Offline implementation does not depend on real Robinhood readiness, but its
-   owner-assisted real validation follows the `P06-T0` `v0.3.0` pin-refresh
-   merge.
+   merge prerequisite is satisfied; owner-assisted real validation remains
+   pending.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
