@@ -9,10 +9,11 @@ parse database error text.
 from __future__ import annotations
 
 from collections.abc import Callable, Sequence
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, cast
 
-from sqlalchemy import select, update
+from sqlalchemy import case, select, update
 from sqlalchemy.engine import CursorResult
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
@@ -31,7 +32,217 @@ from ainvest.db.models import (
     BrokerOrderRow,
     OrderProposalRow,
     RiskDecisionRow,
+    TelegramPollStateRow,
+    TelegramProcessedUpdateRow,
 )
+
+
+@dataclass(frozen=True, slots=True)
+class TelegramPollState:
+    """ORM-free snapshot returned to the Telegram boundary."""
+
+    environment: str
+    next_offset: int
+    lease_owner: str | None
+    lease_expires_at: datetime | None
+    lease_epoch: int
+    version: int
+
+
+def _telegram_poll_state(row: TelegramPollStateRow) -> TelegramPollState:
+    return TelegramPollState(
+        environment=row.environment,
+        next_offset=row.next_offset,
+        lease_owner=row.lease_owner,
+        lease_expires_at=row.lease_expires_at,
+        lease_epoch=row.lease_epoch,
+        version=row.version,
+    )
+
+
+class TelegramUpdateRepository:
+    """Fenced cursor and terminal-update persistence for Telegram polling."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_state(self, environment: str) -> TelegramPollState | None:
+        row = self._session.get(TelegramPollStateRow, environment)
+        return None if row is None else _telegram_poll_state(row)
+
+    def ensure_state(self, environment: str) -> TelegramPollState:
+        row, _ = _insert_idempotent(
+            self._session,
+            TelegramPollStateRow(environment=environment),
+            lookup=lambda: self._session.get(TelegramPollStateRow, environment),
+            conflict_message="telegram poll state conflict without existing row",
+        )
+        return _telegram_poll_state(row)
+
+    def acquire_lease(
+        self,
+        environment: str,
+        *,
+        owner: str,
+        now: datetime,
+        expires_at: datetime,
+    ) -> TelegramPollState | None:
+        """Acquire or take over an expired lease and increment its fencing epoch."""
+        state = self.ensure_state(environment)
+        result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(TelegramPollStateRow)
+                .where(
+                    TelegramPollStateRow.environment == environment,
+                    TelegramPollStateRow.version == state.version,
+                    (TelegramPollStateRow.lease_owner.is_(None))
+                    | (TelegramPollStateRow.lease_expires_at <= now),
+                )
+                .values(
+                    lease_owner=owner,
+                    lease_expires_at=expires_at,
+                    lease_epoch=TelegramPollStateRow.lease_epoch + 1,
+                    version=TelegramPollStateRow.version + 1,
+                )
+            ),
+        )
+        if result.rowcount != 1:
+            return None
+        self._session.flush()
+        return self.get_state(environment)
+
+    def renew_lease(
+        self,
+        environment: str,
+        *,
+        owner: str,
+        epoch: int,
+        version: int,
+        now: datetime,
+        expires_at: datetime,
+    ) -> TelegramPollState | None:
+        """Renew only the still-live lease identified by owner and epoch."""
+        result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(TelegramPollStateRow)
+                .where(
+                    TelegramPollStateRow.environment == environment,
+                    TelegramPollStateRow.lease_owner == owner,
+                    TelegramPollStateRow.lease_epoch == epoch,
+                    TelegramPollStateRow.version == version,
+                    TelegramPollStateRow.lease_expires_at > now,
+                )
+                .values(
+                    lease_expires_at=expires_at,
+                    version=TelegramPollStateRow.version + 1,
+                )
+            ),
+        )
+        if result.rowcount != 1:
+            return None
+        self._session.flush()
+        return self.get_state(environment)
+
+    def release_lease(self, environment: str, *, owner: str, epoch: int, version: int) -> bool:
+        result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(TelegramPollStateRow)
+                .where(
+                    TelegramPollStateRow.environment == environment,
+                    TelegramPollStateRow.lease_owner == owner,
+                    TelegramPollStateRow.lease_epoch == epoch,
+                    TelegramPollStateRow.version == version,
+                )
+                .values(
+                    lease_owner=None,
+                    lease_expires_at=None,
+                    version=TelegramPollStateRow.version + 1,
+                )
+            ),
+        )
+        return result.rowcount == 1
+
+    def is_processed(self, environment: str, update_id: int) -> bool:
+        return (
+            self._session.scalar(
+                select(TelegramProcessedUpdateRow.id).where(
+                    TelegramProcessedUpdateRow.environment == environment,
+                    TelegramProcessedUpdateRow.update_id == update_id,
+                )
+            )
+            is not None
+        )
+
+    def callback_digest_seen(self, environment: str, digest: str) -> bool:
+        return (
+            self._session.scalar(
+                select(TelegramProcessedUpdateRow.id).where(
+                    TelegramProcessedUpdateRow.environment == environment,
+                    TelegramProcessedUpdateRow.callback_query_digest == digest,
+                )
+            )
+            is not None
+        )
+
+    def record_terminal(
+        self,
+        environment: str,
+        *,
+        owner: str,
+        epoch: int,
+        version: int,
+        now: datetime,
+        update_id: int,
+        kind: str,
+        disposition: str,
+        callback_query_digest: str | None,
+    ) -> TelegramPollState | None:
+        """Atomically fence the lease, insert the marker, and advance the cursor."""
+        if callback_query_digest is not None and (
+            len(callback_query_digest) != 64
+            or any(character not in "0123456789abcdef" for character in callback_query_digest)
+        ):
+            raise ValueError("callback query digest must be lowercase SHA-256 hex")
+        result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(TelegramPollStateRow)
+                .where(
+                    TelegramPollStateRow.environment == environment,
+                    TelegramPollStateRow.lease_owner == owner,
+                    TelegramPollStateRow.lease_epoch == epoch,
+                    TelegramPollStateRow.version == version,
+                    TelegramPollStateRow.lease_expires_at > now,
+                )
+                .values(
+                    next_offset=case(
+                        (
+                            TelegramPollStateRow.next_offset < update_id + 1,
+                            update_id + 1,
+                        ),
+                        else_=TelegramPollStateRow.next_offset,
+                    ),
+                    version=TelegramPollStateRow.version + 1,
+                )
+            ),
+        )
+        if result.rowcount != 1:
+            return None
+        self._session.add(
+            TelegramProcessedUpdateRow(
+                environment=environment,
+                update_id=update_id,
+                kind=kind,
+                disposition=disposition,
+                processed_at=now,
+                callback_query_digest=callback_query_digest,
+            )
+        )
+        self._session.flush()
+        return self.get_state(environment)
 
 
 def _insert_idempotent[T](
@@ -489,4 +700,6 @@ __all__ = [
     "BrokerOrderRepository",
     "ProposalRepository",
     "RiskDecisionRepository",
+    "TelegramPollState",
+    "TelegramUpdateRepository",
 ]
