@@ -1,7 +1,7 @@
 """Pinned identity of the external `rh-mcp` Non-Trading Gateway (P06-T0).
 
 Every current value here is transcribed from **one** authority: the
-``Approved pin-refresh target: likefudan/rh-mcp v0.3.0`` subsection of
+``Current executable dependency pin: likefudan/rh-mcp v0.3.0`` subsection of
 `docs/tasks/status.md`. Nothing here is inferred from a package version or
 release prose: the tagged source, public artifacts, and artifact-shipped
 manifest were independently verified. The historical

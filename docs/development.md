@@ -111,8 +111,8 @@ The broker profile installs the independently reviewed, artifact-pinned `rh-mcp`
 `v0.3.0`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
 wheel with a `#sha256=` fragment, not as a version specifier: `rh-mcp` is not published on
 PyPI, so a version specifier would resolve against an index where that name is unregistered
-and therefore claimable. Every current pinned value comes from "Approved pin-refresh target:
-`likefudan/rh-mcp` `v0.3.0`" in `docs/tasks/status.md` by way of
+and therefore claimable. Every current pinned value comes from "Current executable dependency
+pin: `likefudan/rh-mcp` `v0.3.0`" in `docs/tasks/status.md` by way of
 `src/ainvest/execution/robinhood/pins.py`; the recorded `v0.2.0` subsection is retained only as
 historical evidence.
 

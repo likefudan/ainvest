@@ -807,6 +807,11 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   [remediation](https://github.com/likefudan/ainvest/pull/127#issuecomment-5280880204),
   and [approval](https://github.com/likefudan/ainvest/pull/127#issuecomment-5280923809)
   bind the completed implementation to #127's final reviewed head.
+- **Tracker-cleanup review remediation:** independent review of #128 authorized
+  only stale authority-reference and security-status corrections in the
+  existing P06-T0 allowlisted documentation/comment surfaces. The `pins.py`
+  change is docstring-only, and the `pyproject.toml` change is comment-only;
+  no executable pin, dependency, capability, or behavior changes.
 - **External evidence:** the exact `v0.3.0` release, artifacts, manifest, and
   review links are recorded in the pin subsection below. PR
   [#34 approval](https://github.com/likefudan/rh-mcp/pull/34#issuecomment-5265584770),
@@ -1661,7 +1666,7 @@ marked **new**.
 | 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — tracked in the security register by planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`) on both `T-007` and `T-016`, with a preventive control on each row and `P06-T2` added to `T-007`'s tasks; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
 | 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
 | 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in `P06-T0`'s own **Allowed paths** further down this file, not in that checklist; the new bullet is where the two now sit together |
-| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, and #107, and P06-T1 normalization satisfied its review obligation in #111 and #114. `T-016` remains `partial`/`partial` pending P06-T2 sinks/deployment, real owner-assisted authorization, and end-to-end `P-GATEWAY-PROSE` evidence |
+| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, #107, and #127, P06-T1 normalization satisfied its review obligation in #111/#114, and P06-T2 Part 1 display passed review in #117. `T-016` remains `partial`/`partial` pending P06-T2 Part 2's three promotion prerequisites, deployment evidence, owner-assisted real status/read validation, and end-to-end `P-GATEWAY-PROSE` evidence |
 
 Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
 description, and schema prose travels inside result envelopes, is

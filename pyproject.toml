@@ -50,7 +50,7 @@ broker = [
     #    catch a corrupted one; `tests/unit/test_dependency_boundary.py` binds
     #    it to `pins.PINNED_WHEEL_SHA256` and to `uv.lock` instead.
     #
-    # Both values come from the "Recorded external dependency pin" subsection
+    # Both values come from the "Current executable dependency pin" subsection
     # of `docs/tasks/status.md` by way of
     # `ainvest.execution.robinhood.pins`, which stays the single authority.
     #
