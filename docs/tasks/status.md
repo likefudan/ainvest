@@ -741,8 +741,11 @@ existing 10 named read operations. Its serial merge order is:
 3. An ainvest tracker PR records that exact release tag, artifact identity,
    source provenance, artifact digest/checksum, and expected full-manifest
    digest. A source commit may be provenance evidence but cannot substitute for
-   the consumable release artifact. This step is this record; the values are in
-   **Recorded external dependency pin** below.
+   the consumable release artifact. For the claimed refresh, this step is the
+   **Approved pin-refresh target: `likefudan/rh-mcp` `v0.3.0`** subsection
+   below; it is the sole source for every implementation target value. The
+   separate `v0.2.0` subsection remains the authority only for the executable
+   code already on `main` until the refresh implementation squash-merges.
 4. `P06-T0` composes a thin adapter over the pinned SDK-neutral gateway
    contract. Deployment/startup verifies the installed release/artifact pins;
    readiness verifies manifest version and full-manifest digest, while every
@@ -817,9 +820,11 @@ existing 10 named read operations. Its serial merge order is:
 - **Release and dependency refresh:** replace the broker-extra direct wheel
   URL/hash and lock entry with public `v0.3.0`; update all executable release,
   package, source, wheel/sdist, manifest, provider-surface, and count pins from
-  the values in the recorded pin below. Preserve the existing public adapter
-  API, result/error envelopes, and private dependency ranges (`mcp>=2,<3`,
-  `httpx2>=2.5,<3`); add no dependency and perform no unrelated upgrade.
+  **Approved pin-refresh target: `likefudan/rh-mcp` `v0.3.0`** below. Do not
+  take an implementation target from the `v0.2.0` executable-history
+  subsection. Preserve the existing public adapter API, result/error
+  envelopes, and private dependency ranges (`mcp>=2,<3`, `httpx2>=2.5,<3`);
+  add no dependency and perform no unrelated upgrade.
 - **Manifest and capability boundary:** move the committed manifest fixture
   from `tests/fixtures/rh_mcp/v0.2.0` to `v0.3.0` using Git history, replace it
   with the byte-exact tagged `v0.3.0` manifest, and update every executable
@@ -1480,11 +1485,13 @@ schemas and changes fixture data only when required for conformance.
 ##### Recorded external dependency pin: `likefudan/rh-mcp` `v0.2.0` (executable until refresh merges)
 
 This subsection remains the authority for the currently executable pins until
-the `v0.3.0` implementation squash-merges. `P06-T0` currently takes its pins
-from here, not from prose elsewhere in this file and not from the dependency's
-own changelog. Every value below was re-derived on 2026-08-06 from the release
-artifacts and tagged tree. The approved target above becomes executable only
-through the separately reviewed implementation.
+the `v0.3.0` implementation squash-merges. Existing `P06-T0` code on `main`
+currently takes its pins from here. The refresh implementation must not take
+target values from this subsection; it takes them only from **Approved
+pin-refresh target: `likefudan/rh-mcp` `v0.3.0`** above. Every historical value
+below was re-derived on 2026-08-06 from the release artifacts and tagged tree.
+The approved target becomes executable only through the separately reviewed
+implementation.
 
 **Release identity**
 
@@ -1815,9 +1822,10 @@ excludes the contents of a result envelope's `data`. It also records that
   digest/checksum, a committed reviewed capability manifest and full-manifest
   digest, and an ainvest tracker record of those exact values — is satisfied by
   `v0.2.0` and by **Recorded external dependency pin** above. That subsection is
-  the authority for every pinned value; do not re-derive a pin from `rh-mcp`'s
-  `CHANGELOG.md`, which prints a digest belonging to a different manifest
-  version. The merged `rh-mcp` design correction
+  the authority for the completed historical `v0.2.0` delivery only; the active
+  refresh takes every target value from **Approved pin-refresh target:
+  `likefudan/rh-mcp` `v0.3.0`**. Do not re-derive a pin from `rh-mcp` release
+  prose or changelog text. The merged `rh-mcp` design correction
   `366e7556cc765a0742fed7d6e17e0b9ec8e20aec` defines direction, is not an
   implementation release, and is not the consumable dependency.
 - **Design and task authority:** `design.md` sections 3.5, 5.1, 5.2, 5.6,
@@ -1933,9 +1941,10 @@ excludes the contents of a result envelope's `data`. It also records that
   traceability but cannot be treated as a consumable release, runtime artifact,
   or schema evidence. The approval is conditional on the **eight** consumer
   requirements in `security-review/v0.2.0/REPORT.md`; that section is the
-  authority and **Recorded external dependency pin** above maps all eight to
-  where ainvest carries them. Three of them are obligations on the adapter's
-  own code rather than on its configuration, so they are repeated here:
+  authority, and the historical `v0.2.0` pin subsection above maps all eight to
+  where ainvest carries them. It is not the source of the active refresh target
+  values. Three requirements are obligations on the adapter's own code rather
+  than on its configuration, so they are repeated here:
   (a) the review's accepted P2 residual makes "import only `rh-mcp`'s published
   surface" an ainvest obligation to assert by test, not something the gateway
   enforces (requirement 3); (b) `rh-mcp` ships no read-only projection —
