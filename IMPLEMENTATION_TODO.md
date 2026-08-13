@@ -201,10 +201,10 @@ Primary parallelization opportunities:
   card for Telegram read-only queries. On 2026-08-12 the owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
   [#120](https://github.com/likefudan/ainvest/pull/120) and
-  [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now the
-  next dependency-ready queued/unclaimed task. `P05-T9` remains
-  queued/unclaimed until `P05-T5` separately claims, rebases, reviews, and
-  squash-merges.
+  [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now
+  claimed for bounded long polling and durable inbound deduplication.
+  `P05-T9` remains queued/unclaimed until `P05-T5` rebases, independently
+  reviews, and squash-merges.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1062,9 +1062,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Status and scheduling:** `queued/unclaimed`, waiting on the remaining
   serial prerequisite. `P05-T4` squash-merged in
   [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
-  `P05-T5` is dependency-ready but remains queued/unclaimed; rebase latest
-  `main`, claim, implement, review, and squash-merge it before any agent claims
-  this card. Assigning `P05-T9` does not start or claim `P05-T5`.
+  `P05-T5` is now claimed; rebase latest `main`, implement, independently
+  review, and squash-merge it before any agent claims this card. Assigning
+  `P05-T9` does not broaden or replace the active `P05-T5` claim.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1979,8 +1979,8 @@ line.
   separate promotion step under the same task ID. The release, tracker pin,
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
   queued/unclaimed Telegram read-only task. `P05-T4` squash-merged on
-  2026-08-12. `P05-T5` must now be separately claimed, rebased, reviewed, and
-  squash-merged before `P05-T9` may be claimed. By owner
+  2026-08-12 and `P05-T5` is now claimed. It must be rebased, independently
+  reviewed, and squash-merged before `P05-T9` may be claimed. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -1995,9 +1995,9 @@ line.
    `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
    merged.
 2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
-   on that display projection and `P05-T4`/`P05-T5`. `P05-T4` is merged;
-   separately claim, rebase, review, and squash-merge the dependency-ready
-   `P05-T5` before claiming `P05-T9`. Do not combine queries with Telegram
+   on that display projection and `P05-T4`/`P05-T5`. `P05-T4` is merged and
+   `P05-T5` is claimed; rebase, independently review, and squash-merge P05-T5
+   before claiming `P05-T9`. Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
