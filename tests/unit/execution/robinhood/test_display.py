@@ -32,7 +32,7 @@ from ainvest.execution.robinhood.read_models import (
     ReportingPeriod,
 )
 
-FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.2.0"
+FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.0"
 OBSERVED_AT = "2026-08-08T15:00:02Z"
 RECEIVED_AT = datetime(2026, 8, 8, 15, 0, 3, tzinfo=UTC)
 DIGEST = f"sha256:{'d' * 64}"

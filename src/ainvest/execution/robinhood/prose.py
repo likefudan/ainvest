@@ -1,15 +1,15 @@
 """Discard provider-controlled prose at the gateway boundary (P06-T0).
 
-`rh-mcp`'s `v0.2.0` independent review records this as ainvest consumer
-requirement 5 and as a standing residual risk: provider ``guide`` text, tool
+The independent `rh-mcp` reviews record this as an ainvest consumer
+requirement and standing residual risk: provider ``guide`` text, tool
 ``description`` text, and JSON-Schema ``description`` text ride inside result
 envelopes **and** inside the reviewed manifest's own entries. `rh-mcp` does
 not execute that prose and does not strip it. It is provider-controlled
 prompt-injection material, and it must not reach a model prompt, Telegram, CLI
 output, or a log.
 
-The delivery path is concrete rather than hypothetical. Every one of the 53
-reviewed ``v0.2.0`` capabilities declares an output schema of the shape
+The delivery path is concrete rather than hypothetical. Every one of the 54
+reviewed ``v0.3.0`` capabilities declares an output schema of the shape
 ``{"data": {...}, "guide": ...}`` with **both** keys ``required``, so every
 successful read carries a provider ``guide`` sibling of its payload; and the
 schemas nested under ``data`` carry ``description`` on individual fields.

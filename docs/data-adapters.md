@@ -126,8 +126,9 @@ ports:
 - `LivePriceBookPort` identifies `robinhood.mcp.get_equity_price_book`.
 
 These protocols expose no provider list, fallback chain, or automatic fallback
-method. The future Robinhood adapter reaches the external Non-Trading Gateway
-through a read projection over its 34 `mutates=false` capabilities, and must
+method. The Robinhood adapter reaches the external Non-Trading Gateway through
+an explicitly named 10-operation projection over its 35 reviewed
+`mutates=false` capabilities, and must
 fail closed when a pinned schema, manifest digest, or result is unavailable,
 incomplete, stale, or inconsistent. Offline
 providers such as yfinance may implement the ordinary research ports but must

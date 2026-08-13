@@ -82,7 +82,7 @@ flowchart TB
   end
 
   MKT --> ADP
-  RH -->|"34 reviewed read capabilities"| ADP
+  RH -->|"35 reviewed read capabilities"| ADP
   ADP --> RA
   OAI --> RA
   RA --> RP
@@ -117,7 +117,7 @@ affect funds are marked **critical**.
 | Crossing | From → To | Payload | Controls | Threats |
 |---|---|---|---|---|
 | X1 | External → Data | Quotes, filings, news, calendar | Source tags, freshness, quality flags; no silent mix of as-of times | `T-016` |
-| X2 | Data → Research | Versioned read schemas only | Read projection over the gateway's 34 `mutates=false` capabilities; no generic capability invocation, no non-trading mutation, no trading capability | `T-007`, `T-016` |
+| X2 | Data → Research | Versioned read schemas only | Explicitly named 10-operation projection over the gateway's 35 reviewed `mutates=false` capabilities; no generic capability invocation, no non-trading mutation, no trading capability | `T-007`, `T-016` |
 | X3 | Research → Strategy | Immutable `ResearchPacket` | Schema validation; incomplete packet cannot drive trading | `T-001` |
 | X4 | Strategy → Risk | `TradeSignal` only | Worker isolation; no broker/network; conformance suite | `T-001` |
 | X5 | Risk → Approval | Frozen `OrderProposal` + `order_hash` | Canonical hash; complete risk limits; session rules | `T-004`, `T-015` |

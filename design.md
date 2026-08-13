@@ -156,7 +156,7 @@ flowchart LR
 Robinhood Non-Trading Gateway 由独立的
 [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) 项目实现；它私有持有
 MCP SDK v2 传输与 OAuth 生命周期，并固定经过审查的完整 capability manifest
-和 schema digest。首版 manifest 精确允许 34 个 `mutates=false` 读取能力和
+和 schema digest。当前固定的 manifest 精确允许 35 个 `mutates=false` 读取能力和
 11 个 `mutates=true` 的 watchlist/saved-scan 非交易 mutation，并永久拒绝 8 个
 下单、撤单、行权和订单模拟能力。OAuth credential 本身具备交易能力，因此真正
 的安全边界是经过审查和 digest 固定的 **no-trading manifest**，而不是 token scope
@@ -765,7 +765,7 @@ stateDiagram-v2
 | 数据库 | [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) + Alembic | 事务、持久化和迁移 |
 | 调度 | [APScheduler](https://github.com/agronholm/apscheduler) 3.11.x | 4.x 稳定前固定 3.x |
 | 大规模持久工作流 | [Temporal](https://github.com/temporalio/temporal)，可选 | 多进程或长时审批后再引入 |
-| Robinhood Non-Trading Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、具备交易能力的 OAuth credential、34 个读取能力 + 11 个非交易 mutation 的 allowlist/manifest 与 SDK-neutral 协议；永久拒绝 8 个交易能力；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest |
+| Robinhood Non-Trading Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、具备交易能力的 OAuth credential、35 个读取能力 + 11 个非交易 mutation 的 allowlist/manifest 与 SDK-neutral 协议；永久拒绝 8 个交易能力；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest；ainvest 的公开读取投影仍固定为已有 10 个能力 |
 | 日志与监控 | structlog、OpenTelemetry、Prometheus | 结构化日志、trace 和指标 |
 | 测试 | pytest、Hypothesis、HTTPX mock | 单元、性质和故障注入测试 |
 
@@ -954,7 +954,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 ### Phase 2：研究能力
 
-- 建立 Robinhood Non-Trading Gateway 接口和完整 capability manifest；固定 34 个读取能力、11 个非交易 mutation 与 8 个永久拒绝的交易能力；在尚未授权 MCP 时使用 fake 或可选 yfinance 完成开发
+- 建立 Robinhood Non-Trading Gateway 接口和完整 capability manifest；固定 35 个读取能力、11 个非交易 mutation 与 8 个永久拒绝的交易能力；ainvest 仅投影已有 10 个命名读取能力；在尚未授权 MCP 时使用 fake 或可选 yfinance 完成开发
 - 接入 GDELT、SEC EDGAR 和公司 Investor Relations 新闻/事件数据
 - 接入 SEC 原始申报，并为 Robinhood MCP 标准化基本面预留统一适配器
 - 实现技术指标工具
@@ -979,7 +979,7 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 - 连接官方 Trading MCP
 - 读取实时报价、price book、历史行情、基本面、账户、持仓、购买力和订单历史
-- 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；读取面固定为 34 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation
+- 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；审查 manifest 的读取面固定为 35 个能力，ainvest 的命名读取投影仍为已有 10 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation
 - 将真实组合快照用于 Paper Trading
 
 验收标准：系统可以调用精确批准的 34 个读取能力和 11 个非交易 mutation，但无法调用 8 个交易能力或任何未知能力；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。

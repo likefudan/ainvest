@@ -108,11 +108,13 @@ mypy, pytest, and other development tools are intentionally absent from those en
 ### Broker profile
 
 The broker profile installs the independently reviewed, artifact-pinned `rh-mcp` release
-`v0.2.0`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
+`v0.3.0`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
 wheel with a `#sha256=` fragment, not as a version specifier: `rh-mcp` is not published on
 PyPI, so a version specifier would resolve against an index where that name is unregistered
-and therefore claimable. Every pinned value comes from "Recorded external dependency pin" in
-`docs/tasks/status.md` by way of `src/ainvest/execution/robinhood/pins.py`.
+and therefore claimable. Every current pinned value comes from "Approved pin-refresh target:
+`likefudan/rh-mcp` `v0.3.0`" in `docs/tasks/status.md` by way of
+`src/ainvest/execution/robinhood/pins.py`; the recorded `v0.2.0` subsection is retained only as
+historical evidence.
 
 **The broker profile is installed with pip, not with `uv sync`, and that is a security
 requirement.** `ainvest.execution.robinhood.artifact` verifies the installed gateway at
