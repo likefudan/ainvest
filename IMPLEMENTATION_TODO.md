@@ -1006,7 +1006,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Dependencies:** P05-T4 and P01-T4.
 - **Primary files:** `src/ainvest/approval/telegram_updates.py`, future `src/ainvest/api/routes/telegram.py`.
 - **Implementation checklist:**
-  - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset.
+  - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset. Fence every handler call and terminal offset commit with the same unexpired database lease owner and monotonic acquisition epoch; a stale worker dispatches or commits nothing after takeover.
+  - Give handler retry-later/error/timeout/cancellation a separate bounded,
+    jittered processing backoff. Release the lease during that delay, preserve
+    the offset, and reset this backoff only after a terminal commit so a valid
+    Telegram response cannot hot-loop one failing update.
   - Enable only required `allowed_updates`; validate Bot identity, private
     chat, and the environment-scoped bound `(user_id, private_chat_id)`
     recipient record before dispatch. Never authorize the cross-product of
@@ -1014,7 +1018,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Route Paper callbacks to P05-T1. Plain text may query/reject status only and never approve.
   - A future webhook validates HTTPS secret token, body/rate limits, and the same identity rules; configuration forbids simultaneous polling and webhook modes.
   - Fill/rejection/expiry message updates grant no new approval capability.
-- **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, groups, unapproved users, and forged callbacks cannot duplicate or elevate approval; tests prove the first release needs no public domain.
+- **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, lease takeover during a maximum-duration poll or handler, handler retry/failure, groups, unapproved users, and forged callbacks cannot duplicate, hot-loop, or elevate approval; deterministic injected-time tests prove stale workers never dispatch or commit and the first release needs no public domain.
 
 ### P05-T6 — Hand Off an Approval to Execution Exactly Once
 

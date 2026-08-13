@@ -2169,7 +2169,8 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
   conditional-update, savepoint, UTC timestamp, and sanitized persistence-error
   patterns:
   1. one poll-state row per Telegram environment containing non-negative
-     `next_offset`, nullable lease owner/expiry, and optimistic version; and
+     `next_offset`, nullable lease owner/expiry, a non-negative monotonic
+     `lease_epoch` fencing token, and optimistic row version; and
   2. terminal processed-update rows uniquely keyed by
      `(environment, update_id)`, with fixed kind/disposition, processing time,
      and an optional domain-separated SHA-256 digest of callback-query ID for
@@ -2205,27 +2206,54 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
   its own result durable but before the P05-T5 commit may replay the handler,
   so the stable `(environment, update_id)` and callback digest must be passed
   as its idempotency input and downstream handlers must be replay-safe.
-- **Single-writer lease:** acquire/renew a database lease on the selected
-  environment with a generated non-secret owner ID, injected UTC clock, a
-  fixed 60-second TTL, and conditional owner/expiry/version updates. Renew
-  before each long poll and between returned updates. Every terminal commit
-  rechecks that the same unexpired owner still holds the lease. A second poller
-  cannot call the handler or move the offset while another lease is valid; an
-  expired lease is takeover-safe. A former owner that resumes after expiry
-  must observe lease loss and stop before any handler/offset write. No process
-  mutex or in-memory singleton is represented as cross-process safety.
-- **Network errors, backoff, and shutdown:** use an injected sleeper and clock.
-  A valid empty/successful response resets backoff. Transient timeout/network
-  errors do not move the offset and use capped deterministic delays
-  `1, 2, 4, 8, 16, 30` seconds; a provider `retry_after` is honored only after
-  clamping it to 1–60 seconds. Authentication, Bot-identity, invalid-request,
-  or response-contract failures stop the poller with a fixed sanitized code.
-  Release the lease before a transient backoff and reacquire it before another
-  provider request, so an unhealthy process does not exclude a healthy
-  replacement. Never log/retry provider text or spin immediately. Graceful shutdown starts
-  no new request, allows only the current bounded classifier/handler operation,
-  rolls back a cancelled non-terminal transaction, and best-effort releases
-  its lease; process death relies on expiry.
+- **Single-writer lease and fencing:** acquire/renew a database lease on the
+  selected environment with a generated non-secret owner ID, injected UTC
+  clock, fixed 75-second TTL, conditional owner/expiry/epoch/version updates,
+  and a monotonic signed-64-bit `lease_epoch`. A new acquisition or expired
+  takeover increments the epoch; renewal by the same still-unexpired owner
+  preserves it. The poller carries the acquired `(owner_id, lease_epoch)` as
+  its fencing token. Renew before each long poll, immediately after every
+  successful poll response, and immediately before **each** authorized handler
+  invocation, including the first returned update. Each renewal must
+  conditionally match the same unexpired owner and epoch and restore the full
+  75-second horizon. That horizon exceeds the 20-second handler deadline plus
+  a fixed 10-second terminal-commit margin; if the renewal or invariant check
+  fails, invoke no handler and stop processing the batch. Before every terminal
+  disposition, including terminal ignores and handler success, conditionally
+  renew/verify the same token again so at least the 10-second commit margin
+  remains. The transaction that inserts the processed row and advances the
+  offset must compare the same owner and epoch and require the lease to remain
+  unexpired at commit; otherwise it rolls back both writes. Takeover therefore
+  prevents an old worker from invoking the next handler or committing a result,
+  even if it resumes after a full-duration poll or handler. A valid lease keeps
+  a second poller from provider polling or handler dispatch. No process mutex
+  or in-memory singleton is represented as cross-process safety.
+- **Processing retry schedule:** handler `retry-later`, raised exception,
+  non-shutdown cancellation, or 20-second timeout is non-terminal: roll back,
+  preserve the offset, stop the batch, best-effort release the lease, and wait
+  before reacquiring and re-polling. Use a processing-specific base sequence
+  `1, 2, 4, 8, 16, 30` seconds plus injected-random non-negative jitter of at
+  most `min(1 second, base / 4)`, with the final sleep clamped to 30 seconds.
+  A successful Telegram response does not reset this counter; only a terminal
+  processed/ignored/duplicate commit resets it. The interruptible injected
+  sleeper makes tests deterministic and exits immediately when shutdown is
+  requested. A cancellation caused by shutdown never schedules a delay,
+  reacquires a lease, or starts another poll.
+- **Provider errors, backoff, and shutdown:** keep provider/network backoff
+  independent from processing backoff. Transient timeout/network failures make
+  no progress and use the same injected-random jitter rule over base delays
+  `1, 2, 4, 8, 16, 30`, capped at 30 seconds. A provider `retry_after` (HTTP
+  429) is clamped to 1–60 seconds first, receives the same non-negative jitter,
+  and is finally capped at 60 seconds. Any valid provider response resets only
+  provider/network backoff, never processing backoff. Authentication,
+  Bot-identity, invalid-request, or response-contract failures stop the poller
+  with a fixed sanitized code. Release the lease before every provider or
+  processing delay and reacquire it before another request, so an unhealthy
+  worker does not exclude a healthy replacement. Never log/retry provider text
+  or spin immediately. Graceful shutdown starts no request or handler, cancels
+  or bounds current work, rolls back a cancelled non-terminal transaction,
+  interrupts any backoff without re-polling, and best-effort releases the
+  lease; process death relies on expiry.
 - **Webhook boundary only:** define the transport-neutral normalized update,
   classifier, processor, and handler protocols so a future authenticated HTTPS
   adapter can reuse them. Do not add a FastAPI route, listener, webhook secret,
@@ -2271,12 +2299,17 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
   batches; 0/max/invalid update IDs and batch bounds; ascending, duplicate,
   conflicting duplicate, out-of-order, and gapped IDs; atomic terminal
   disposition plus `N+1`; restart before/after commit; poison/malformed
-  advancement; handler retry/cancel/timeout rollback; duplicate update and
+  advancement; handler retry/error/cancel/timeout rollback and independent
+  no-hot-loop processing backoff; duplicate update and
   callback-digest suppression; exact pair authorization and crossed pairs;
   groups/channels/inline/edited/forwarded/service/unsupported updates; typed
-  callback/text and ignore contracts; two-poller lease exclusion, renewal,
-  expiry takeover, stale-owner rejection, and graceful shutdown; bounded
-  backoff/rate-limit/fatal errors; migration upgrade/downgrade and constraints;
+  callback/text and ignore contracts; two-poller lease exclusion, monotonic
+  acquisition epoch, post-full-duration-poll renewal before the first handler,
+  renewal before every later handler, near-deadline handler/commit margin,
+  takeover before dispatch and before commit, stale-owner rejection, and
+  graceful shutdown during poll/handler/backoff; deterministic injected-clock/
+  random jitter, separate processing/network counters and reset rules, bounded
+  network/429/fatal errors; migration upgrade/downgrade and constraints;
   absence of delete APIs; no P05-T1/P05-T9/broker invocation; and secret/
   identity/payload absence from rows, repr, errors, logs, metrics, snapshots,
   and docs. Run focused tests, `./scripts/dev unit`, `contract`, `integration`,
