@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-08-12
+Last updated: 2026-08-13
 
 ## Status vocabulary
 
@@ -101,11 +101,11 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
 | Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` and `P04-T1` merged; remaining work unclaimed) |
-| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` and `P05-T4` merged; `P05-T5` is next queued/unclaimed) |
+| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` and `P05-T4` merged; `P05-T5` claimed for long-polling ingress) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, both `P06-T1` integration parts, and `P06-T2` Part 1 display-only CLI merged; Part 2 remains blocked) |
-| Telegram read-only display adapter | Batch F add-on | `P05-T9` after `P05-T4` → `P05-T5` and merged `P06-T2` Part 1 | `queued/unclaimed`; `P05-T4` is merged and `P05-T9` now waits only for the serial claim, review, and squash merge of `P05-T5` |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after `P05-T4` → `P05-T5` and merged `P06-T2` Part 1 | `queued/unclaimed`; `P05-T4` is merged and `P05-T9` waits for the claimed `P05-T5` to rebase, review, and squash-merge |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -170,10 +170,10 @@ implementation merged in [#117](https://github.com/likefudan/ainvest/pull/117).
 The owner lifted the `P05-T4` pause on 2026-08-12. Its claim merged in
 [#120](https://github.com/likefudan/ainvest/pull/120), and its independently
 reviewed notification/config implementation merged in
-[#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now the only
-dependency-ready next Telegram task but remains queued/unclaimed; `P05-T9`
-remains queued/unclaimed until `P05-T5` subsequently claims, rebases, reviews,
-and squash-merges. Later candidates enter the merge queue
+[#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now claimed
+for the bounded long-polling ingress and durable deduplication boundary;
+`P05-T9` remains queued/unclaimed until `P05-T5` rebases, independently
+reviews, and squash-merges. Later candidates enter the merge queue
 only after their recorded dependencies are on `main`. The coordinator may
 reorder independent ready branches to reduce conflicts, but may not bypass the
 rebase, review, checks, or squash-merge rules above.
@@ -547,14 +547,14 @@ Shared-surface ownership for this claim is exclusive:
 
 The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T4` pause on 2026-08-12; that notification/config task is now merged.
-`P05-T5` is dependency-ready but remains queued/unclaimed, while `P05-T9`
-remains queued/unclaimed behind the serial `P05-T5` merge. The complete
+`P05-T5` is now claimed for long polling and durable inbound deduplication,
+while `P05-T9` remains queued/unclaimed behind the serial `P05-T5` merge. The complete
 `P06-T0` adapter, runtime-dependency, and hardening delivery is merged, and
 both integration parts of `P06-T1` are merged. `P06-T2` Part 1 display-only
 CLI is merged. `P05-T9` now names the queued/unclaimed Telegram read-only
 display adapter; its implementation depends on the display projection plus
-merged `P05-T4` and `P05-T5`. This record marks only `P05-T4` complete; it does
-not claim or start `P05-T5`, `P05-T9`, or any unrelated task chain.
+merged `P05-T4` and `P05-T5`. This record claims only `P05-T5`; it does not
+claim or start `P05-T9` or any unrelated task chain.
 
 ##### Execution envelope: P08-T4
 
@@ -1280,9 +1280,9 @@ capabilities only. Its serial merge order is:
 - **Next queued work:** `P05-T9` is queued and unclaimed for Telegram read-only
   queries. It builds on the reusable display service and names `P05-T4` and
   `P05-T5` as serial transport prerequisites. `P05-T4` is merged and complete;
-  `P05-T5` is the sole remaining dependency-ready transport prerequisite but
-  remains queued/unclaimed. `P05-T9` remains unclaimed until `P05-T5` is
-  separately claimed, rebased, reviewed, and squash-merged. The slice remains
+  `P05-T5` is the sole remaining transport prerequisite and is now claimed.
+  `P05-T9` remains unclaimed until `P05-T5` is rebased, independently reviewed,
+  and squash-merged. The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
 
@@ -1769,11 +1769,12 @@ be started for it. On 2026-08-12 the owner explicitly lifted the separate
 `P05-T4` pause and authorized the serial Telegram transport chain to begin with
 that task only. Now that the `P06-T2` Part 1 display-only CLI is merged,
 `P05-T9` is queued/unclaimed for Telegram read-only queries built on that
-display projection and the `P05-T4`/`P05-T5` transport. `P05-T4` is now merged;
+display projection and the `P05-T4`/`P05-T5` transport. `P05-T4` is now merged
+and `P05-T5` is claimed;
 `P05-T9` must not wait for Part 2 or mix that read surface with Paper promotion,
 Telegram approval, a non-trading mutation, or a trading capability. It remains
-unclaimed until the now dependency-ready `P05-T5` separately claims, rebases,
-reviews, and squash-merges. The unrelated `P04-T2` pause remains in force.
+unclaimed until `P05-T5` rebases, independently reviews, and squash-merges.
+The unrelated `P04-T2` pause remains in force.
 
 #### Research track — `P04-T0` through `P04-T12`
 
@@ -1812,14 +1813,14 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T0` | `merged` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
 | `P05-T1` | `not_started` | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` | `approval/telegram_approval.py`; callback validation, audit/outbox integration, tests |
 | `P05-T4` | `merged` ([#120](https://github.com/likefudan/ainvest/pull/120), [#121](https://github.com/likefudan/ainvest/pull/121); squash `2dd706980475fd6598f33d21e9c5974515de5629`) | `P05-T0`, `DEC-005` satisfied; real environment validation remains owner-assisted and pending under proposed `DEC-010` | completed notification/config adapter, snapshots, fake-transport tests, strict file-secret and fail-closed delivery boundaries |
-| `P05-T5` | `queued/unclaimed` (next; dependency-ready) | merged `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; poller offset/dedup persistence; bounded webhook interface; tests; claim separately from latest `main` |
+| `P05-T5` | `in_progress` — `p05_t5_telegram_long_polling` | merged `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; bounded long poller, typed inbound classification/handler port, durable offset/dedup/lease persistence, migration, fake-transport tests, and documentation under the envelope below |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `queued/unclaimed` (waiting on `P05-T5`) | merged `P06-T2` Part 1 and `P05-T4`; then merged `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition; focused tests and `docs/telegram-read-queries.md` |
+| `P05-T9` | `queued/unclaimed` (waiting on claimed `P05-T5`) | merged `P06-T2` Part 1 and `P05-T4`; then merged `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition; focused tests and `docs/telegram-read-queries.md` |
 
-`P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is complete;
-`P05-T5` is the next dependency-ready Telegram task but is not claimed by this
-tracker update. `P05-T6` follows `P05-T1`. `P05-T9` is a display-only add-on,
+`P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is complete and
+`P05-T5` alone is claimed by this tracker update. `P05-T6` follows `P05-T1`.
+`P05-T9` is a display-only add-on,
 not a Gate 3 dependency and not an approval path; it may be claimed only after
 `P05-T5` merges. The completed Paper approval path unlocks `P08-T13`, then
 `P05-T8`.
@@ -1829,8 +1830,8 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
 - **Title:** Configure Telegram Bots and Send Private Notifications.
 - **Status/owner:** `merged` — implementation owner
   `p05_t4_telegram_notifications`. The owner explicitly lifted the prior pause
-  on 2026-08-12. This completed only `P05-T4`; `P05-T5` and `P05-T9` remain
-  queued/unclaimed.
+  on 2026-08-12. This completed only `P05-T4`; the later claim below starts
+  `P05-T5`, while `P05-T9` remains queued/unclaimed.
 - **Claim branch/worktree/base:** `agent/p05-t4-claim` /
   `.worktrees/p05-t4-claim`, based on immutable `main`
   `e605558bbae6d71e66f01551192b964f23334094`. After this tracker claim is
@@ -2065,21 +2066,278 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
   Until then the real adapter stays disabled and real `getMe`/private-message
   validation is unverified. This does not block deterministic offline
   implementation, review, or merge.
-- **Serial handoff:** `P05-T4` is complete. Create a new, separate `P05-T5`
-  claim from latest `main`; it is dependency-ready but remains unclaimed.
-  Rebase, independently review, and squash-merge `P05-T5` before claiming
-  `P05-T9`.
+- **Serial handoff:** `P05-T4` is complete and the separate `P05-T5` claim is
+  now active below. Rebase, independently review, and squash-merge `P05-T5`
+  before claiming `P05-T9`.
+
+##### Execution envelope: P05-T5
+
+- **Title:** Operate Idempotent Telegram Long Polling and Preserve a Webhook
+  Boundary.
+- **Status/owner:** `in_progress` — `p05_t5_telegram_long_polling`. This claim
+  starts only `P05-T5`; it does not claim `P05-T1`, `P05-T9`, a webhook
+  deployment, or any business handler.
+- **Claim branch/worktree/base:** `agent/p05-t5-claim` /
+  `.worktrees/p05-t5-claim`, based on immutable `main`
+  `de32f4fd578d9898a38657526e9f6592dabcf3df`. After this claim is independently
+  reviewed and squash-merged, implementation uses
+  `agent/p05-t5-telegram-long-polling` / `.worktrees/p05-t5` from that latest
+  `main` and records the new immutable implementation base before code changes.
+- **Dependencies and authority:** `P05-T4` and `P01-T4` are merged; `DEC-005`
+  is accepted. Follow `design.md` sections 3.3–3.6, 5.5, 7, 9, 11, 13–15;
+  `IMPLEMENTATION_TODO.md` sections 1, 8 (`P05-T0`, `P05-T4`, `P05-T5`, and
+  `P05-T9`), 12, and 16; `DEC-005`; and the merged P05-T4 environment, Bot
+  identity, bound-recipient, token-redaction, and timeout contracts.
+  `DEC-010` remains proposed: real Bot tokens and numeric identities are not
+  invented or recorded here.
+- **Objective and minimum product boundary:** implement one active first-release
+  `getUpdates` long poller for an explicitly selected staging or production
+  Bot. It normalizes only the minimum inbound fields, classifies an update as a
+  typed authorized callback/text update or a typed terminal ignore, and hands
+  authorized updates to an injected narrow handler port. The transport never
+  approves/rejects a proposal, consumes a nonce, dispatches a Robinhood query,
+  sends an order, or changes business state. It exposes no public HTTP server.
+- **Exact provider request:** after selected-environment configuration and
+  `getMe.id == expected_bot_id` validation succeed, call `getUpdates` with the
+  durable `next_offset`, `timeout=25`, `limit=100`, and exactly
+  `allowed_updates=("message", "callback_query")`; use a 35-second outer
+  request deadline. Values are constants, not caller- or update-controlled.
+  Do not request edited messages, channel posts, chat-member changes, inline
+  queries, polls, reactions, or other update classes. A normalized fake or a
+  future ingress that nevertheless supplies such a class is terminally
+  ignored, never dispatched.
+- **Configuration and identity reuse:** select exactly one existing P05-T4
+  `TelegramBotSettings` environment. Reuse its enabled flag, `SecretStr` Bot
+  token, positive `expected_bot_id`, exact bound `(user_id, private_chat_id)`
+  records, and no-fallback environment selection. Reuse P05-T4's at-most-two
+  bounded five-second `getMe` attempts and validate Bot identity before
+  acquiring/polling under that environment; username is display-only. The
+  update module receives already-loaded `Settings` and never reads an
+  environment variable, file, or secret directory. Do not change
+  `settings.py`, `.env.example`, token grammar, source precedence, or the
+  outbound P05-T4 transport contract.
+- **Normalized ingress and bounds:** reject an invalid provider batch before
+  processing any element if it exceeds 100 entries or any element lacks an
+  integer `update_id` in `0..2^63-2`; `2^63-1` is rejected because its required
+  next offset cannot fit the signed-64-bit column. Normalize no arbitrary provider
+  object/dict past the transport adapter. Bound callback-query ID, callback
+  data, message text, and every string before classification: callback-query
+  ID is 1–128 visible ASCII characters, callback data is 1–64 UTF-8 bytes and
+  is not otherwise interpreted, and original message text is at most 4,096
+  Unicode code points. Keep callback ID/data in redacted in-memory wrappers and
+  mark numeric identity fields `repr=False`. Never persist or log raw update JSON,
+  callback data/nonce, message text, usernames, Bot token, user/chat/message
+  IDs, or provider exception text.
+- **Typed classifier and handler port:** the pure classifier returns either a
+  frozen `AuthorizedCallbackUpdate` / `AuthorizedTextUpdate` or a frozen
+  `IgnoredTelegramUpdate` with a fixed reason enum. Authorized records carry
+  the selected environment and idempotency identity `(environment,
+  update_id)` plus the minimum bounded numeric private-message fields needed by
+  a later handler. Callback material remains redacted in representations.
+  The poller invokes one injected `TelegramAuthorizedUpdateHandler` only for an
+  authorized record. Its fixed result is terminal-handled or retry-later; it
+  cannot return an ApprovalEvent, query result, broker command, or free-form
+  disposition. Invoke it outside a database transaction with one fixed
+  20-second deadline. The handler must make its own idempotent outcome durable
+  before returning terminal-handled. A raised error, cancellation, timeout, or
+  retry-later result is non-terminal: record no processed row, do not advance
+  offset, stop the current batch, and retry later.
+- **Authorization and ignore matrix:** require numeric `from.id`, numeric
+  `chat.id`, `chat.type == "private"`, and exact membership of the selected
+  environment's bound `(user_id, private_chat_id)` record before dispatch.
+  Independent membership and crossed pairs fail closed. Terminally ignore
+  wrong environment/Bot context, unknown or crossed recipients, absent sender,
+  group/supergroup/channel/non-private chat, inline callback without the bound
+  message, edited message, forwarded/automatically-forwarded message, service
+  message, unsupported update class, and malformed bounded content. Plain
+  `approve`/`reject` is merely authorized text for a later handler and gains no
+  authority here; P05-T5 itself never interprets it as an approval decision.
+- **Callback and query separation:** an authorized callback is only transported
+  through the typed port with its update/callback/message identity and bounded
+  opaque data; P05-T1 later owns message/proposal/hash/nonce/expiry validation,
+  one-time approval state, audit/outbox, and answering the callback. An
+  authorized text update is only transported through the same narrow port;
+  P05-T9 later owns command parsing, rate limiting, replies, and Robinhood
+  display calls. Deterministic test fakes may return a terminal
+  no-business-action disposition; production code has no default discard
+  handler and this task adds no runtime composition. P05-T5 imports neither
+  `telegram_approval.py` nor `telegram_queries.py` and creates no approval or
+  query behavior.
+- **Durable database shape:** add one new Alembic revision after the current
+  single head; never edit `ec71aaa3381a_initial_schema.py`. Add exactly two
+  purpose-specific ORM tables and repositories, reusing the existing UoW,
+  conditional-update, savepoint, UTC timestamp, and sanitized persistence-error
+  patterns:
+  1. one poll-state row per Telegram environment containing non-negative
+     `next_offset`, nullable lease owner/expiry, a non-negative monotonic
+     `lease_epoch` fencing token, and optimistic row version; and
+  2. terminal processed-update rows uniquely keyed by
+     `(environment, update_id)`, with fixed kind/disposition, processing time,
+     and an optional domain-separated SHA-256 digest of callback-query ID for
+     cross-update callback deduplication.
+  Store no raw callback-query ID, raw payload, nonce/data, message text,
+  username, recipient identity, message ID, or business result. A later update
+  repeating a callback-query digest is recorded as a terminal duplicate update
+  without storing the repeated digest again or invoking the handler.
+  Use stable table names `telegram_poll_states` and
+  `telegram_processed_updates`, signed-64-bit integer/check constraints for
+  offsets/IDs, fixed bounded strings/dispositions, and database uniqueness for
+  environment/update and environment/callback-digest keys.
+- **Offset and transaction rule:** the durable value is the next request
+  offset. Start a new environment at `0`. For an update with valid ID `N`, the
+  poller first obtains a terminal classifier/handler disposition without
+  holding a database transaction; only the following transaction may insert
+  the processed-update row and set
+  `next_offset = max(current_next_offset, N + 1)`. Both writes commit together;
+  neither may survive alone. A handler retry/failure or lost lease rolls both
+  back. An already processed update or `N < next_offset` is a terminal no-op
+  and performs no handler call. Process a valid response in ascending
+  `update_id` order; collapse identical normalized envelopes with duplicate IDs
+  in memory, but treat conflicting normalized envelopes with one ID as a
+  provider contract failure with no batch progress.
+- **Gaps, poison updates, and crash semantics:** Telegram update IDs need not be
+  contiguous. Do not synthesize or wait for a missing number: process returned
+  valid IDs in ascending order and advance only after each terminal commit. A
+  structurally malformed or unauthorized update with a valid ID is a bounded
+  terminal ignore and advances, so poison input cannot wedge the poller. A
+  batch whose update ID cannot be trusted makes no progress. If the process
+  crashes before terminal commit, the update is replayed; if it crashes after
+  commit, the durable offset skips it. A crash after a downstream handler made
+  its own result durable but before the P05-T5 commit may replay the handler,
+  so the stable `(environment, update_id)` and callback digest must be passed
+  as its idempotency input and downstream handlers must be replay-safe.
+- **Single-writer lease and fencing:** acquire/renew a database lease on the
+  selected environment with a generated non-secret owner ID, injected UTC
+  clock, fixed 75-second TTL, conditional owner/expiry/epoch/version updates,
+  and a monotonic signed-64-bit `lease_epoch`. A new acquisition or expired
+  takeover increments the epoch; renewal by the same still-unexpired owner
+  preserves it. The poller carries the acquired `(owner_id, lease_epoch)` as
+  its fencing token. Renew before each long poll, immediately after every
+  successful poll response, and immediately before **each** authorized handler
+  invocation, including the first returned update. Each renewal must
+  conditionally match the same unexpired owner and epoch and restore the full
+  75-second horizon. That horizon exceeds the 20-second handler deadline plus
+  a fixed 10-second terminal-commit margin; if the renewal or invariant check
+  fails, invoke no handler and stop processing the batch. Before every terminal
+  disposition, including terminal ignores and handler success, conditionally
+  renew/verify the same token again so at least the 10-second commit margin
+  remains. The transaction that inserts the processed row and advances the
+  offset must compare the same owner and epoch and require the lease to remain
+  unexpired at commit; otherwise it rolls back both writes. Takeover therefore
+  prevents an old worker from invoking the next handler or committing a result,
+  even if it resumes after a full-duration poll or handler. A valid lease keeps
+  a second poller from provider polling or handler dispatch. No process mutex
+  or in-memory singleton is represented as cross-process safety.
+- **Processing retry schedule:** handler `retry-later`, raised exception,
+  non-shutdown cancellation, or 20-second timeout is non-terminal: roll back,
+  preserve the offset, stop the batch, best-effort release the lease, and wait
+  before reacquiring and re-polling. Use a processing-specific base sequence
+  `1, 2, 4, 8, 16, 30` seconds plus injected-random non-negative jitter of at
+  most `min(1 second, base / 4)`, with the final sleep clamped to 30 seconds.
+  A successful Telegram response does not reset this counter; only a terminal
+  processed/ignored/duplicate commit resets it. The interruptible injected
+  sleeper makes tests deterministic and exits immediately when shutdown is
+  requested. A cancellation caused by shutdown never schedules a delay,
+  reacquires a lease, or starts another poll.
+- **Provider errors, backoff, and shutdown:** keep provider/network backoff
+  independent from processing backoff. Transient timeout/network failures make
+  no progress and use the same injected-random jitter rule over base delays
+  `1, 2, 4, 8, 16, 30`, capped at 30 seconds. A provider `retry_after` (HTTP
+  429) is clamped to 1–60 seconds first, receives the same non-negative jitter,
+  and is finally capped at 60 seconds. Any valid provider response resets only
+  provider/network backoff, never processing backoff. Authentication,
+  Bot-identity, invalid-request, or response-contract failures stop the poller
+  with a fixed sanitized code. Release the lease before every provider or
+  processing delay and reacquire it before another request, so an unhealthy
+  worker does not exclude a healthy replacement. Never log/retry provider text
+  or spin immediately. Graceful shutdown starts no request or handler, cancels
+  or bounds current work, rolls back a cancelled non-terminal transaction,
+  interrupts any backoff without re-polling, and best-effort releases the
+  lease; process death relies on expiry.
+- **Webhook boundary only:** define the transport-neutral normalized update,
+  classifier, processor, and handler protocols so a future authenticated HTTPS
+  adapter can reuse them. Do not add a FastAPI route, listener, webhook secret,
+  public endpoint, deployment setting, or simultaneous polling/webhook mode.
+  The future adapter remains responsible for TLS, secret-token authentication,
+  body/rate limits, and choosing exactly one transport before it reaches this
+  processor.
+- **Retention and cleanup:** `DEC-013` is still proposed. First release retains
+  the small payload-free poll-state and processed-update records and exposes no
+  automatic deletion/cleanup job or repository delete method. Do not guess a
+  retention window. A later accepted retention task may prune processed rows
+  only with evidence that the durable offset and callback replay boundary stay
+  safe.
+- **Logging and metrics:** use existing structured logging/redaction and
+  low-cardinality `Workflow.APPROVAL`/fixed `Outcome` metrics only. Structured
+  events may contain environment and fixed reason/outcome enums, counts,
+  durations, lease state, and backoff bucket; existing metric labels remain
+  only their fixed enum labels and are not expanded. Neither may contain update,
+  callback, Bot, user, chat, message, proposal, token, nonce, text, payload, or
+  exception-derived values. Do not broaden the observability API merely for
+  this card.
+- **Allowed implementation paths:**
+  `src/ainvest/approval/telegram_updates.py`;
+  `src/ainvest/approval/__init__.py` for narrow type/port re-exports;
+  `src/ainvest/db/models.py`, `repositories.py`, `uow.py`, and `__init__.py`
+  only for the two new tables/repositories and UoW access;
+  one new `migrations/versions/*_telegram_update_ingress.py` revision;
+  `tests/unit/approval/test_telegram_updates.py`;
+  `tests/unit/db/test_telegram_updates.py`;
+  `tests/contract/approval/test_telegram_updates_contract.py`;
+  `tests/integration/approval/test_telegram_polling.py`;
+  narrow additions to `tests/integration/db/test_migrations.py`; and
+  `docs/telegram-polling.md`. `src/ainvest/approval/telegram.py`,
+  `src/ainvest/config/**`, `.env.example`, existing migration revisions,
+  `pyproject.toml`, `uv.lock`, observability modules, P05-T1/P05-T9 modules,
+  runtime composition, schemas, broker/workflow code, and CI are read-only.
+  Any necessary path outside this list requires a coordinator-recorded scope
+  expansion before editing.
+- **Required tests:** deterministic fake Telegram transport, injected clock/
+  sleeper/owner ID, and SQLite/PostgreSQL-compatible repository behavior only;
+  no public network or real credential. Cover exact getUpdates arguments and
+  identity-before-polling; each environment without fallback; empty/multi-item
+  batches; 0/max/invalid update IDs and batch bounds; ascending, duplicate,
+  conflicting duplicate, out-of-order, and gapped IDs; atomic terminal
+  disposition plus `N+1`; restart before/after commit; poison/malformed
+  advancement; handler retry/error/cancel/timeout rollback and independent
+  no-hot-loop processing backoff; duplicate update and
+  callback-digest suppression; exact pair authorization and crossed pairs;
+  groups/channels/inline/edited/forwarded/service/unsupported updates; typed
+  callback/text and ignore contracts; two-poller lease exclusion, monotonic
+  acquisition epoch, post-full-duration-poll renewal before the first handler,
+  renewal before every later handler, near-deadline handler/commit margin,
+  takeover before dispatch and before commit, stale-owner rejection, and
+  graceful shutdown during poll/handler/backoff; deterministic injected-clock/
+  random jitter, separate processing/network counters and reset rules, bounded
+  network/429/fatal errors; migration upgrade/downgrade and constraints;
+  absence of delete APIs; no P05-T1/P05-T9/broker invocation; and secret/
+  identity/payload absence from rows, repr, errors, logs, metrics, snapshots,
+  and docs. Run focused tests, `./scripts/dev unit`, `contract`, `integration`,
+  `git diff --check`, and `./scripts/dev verify`.
+- **Owner-assisted validation, not offline blocker:** real `getMe` and private
+  update validation remain disabled/unverified until the owner provisions each
+  environment under proposed `DEC-010`. Offline implementation, review, and
+  merge use synthetic IDs, fake tokens, and fake transport. No real value is
+  added to Git, issues, PR text, fixtures, logs, or chat.
+- **Forbidden scope and handoff:** no callback approval decision (`P05-T1`),
+  Telegram query/reply/rate-limit implementation (`P05-T9`), approval event,
+  proposal mutation, audit/outbox business event, broker/Paper/Robinhood call,
+  model/prompt, webhook server, new dependency, or live capability. After this
+  claim merges, implement on latest `main`; before review rebase latest `main`,
+  rerun all gates, obtain independent functionality/readability review, fix all
+  findings, and squash-merge serially. Only after the implementation is on
+  `main` may a new branch claim `P05-T9`.
 
 ##### Scheduling envelope: P05-T9
 
 - **Planning PR/status:** [#119](https://github.com/likefudan/ainvest/pull/119)
   assigns the unique task ID only. Implementation is unclaimed and
-  waiting on serial prerequisites; this record creates no `P05-T5` or `P05-T9`
-  implementation worktree.
+  waiting on its serial prerequisite; #119 created no implementation worktree,
+  and this claim creates only the P05-T5 planning worktree, not P05-T9 work.
 - **Serial unlock:** merged `P06-T2` Part 1 and `P05-T4` are satisfied.
-  `P05-T5` is dependency-ready but queued/unclaimed; claim it separately, then
-  rebase/review/squash-merge it before claiming `P05-T9`. `P05-T9` is a
-  display-only add-on and is not required by Gate 3 or `P06-T2` Part 2.
+  `P05-T5` is now claimed; rebase, independently review, and squash-merge its
+  implementation before claiming `P05-T9`. `P05-T9` is a display-only add-on
+  and is not required by Gate 3 or `P06-T2` Part 2.
 - **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
   `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
   error envelope. P05-T9 owns its exact `TelegramQueryError` wire and

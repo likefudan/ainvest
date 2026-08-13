@@ -201,10 +201,10 @@ Primary parallelization opportunities:
   card for Telegram read-only queries. On 2026-08-12 the owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
   [#120](https://github.com/likefudan/ainvest/pull/120) and
-  [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now the
-  next dependency-ready queued/unclaimed task. `P05-T9` remains
-  queued/unclaimed until `P05-T5` separately claims, rebases, reviews, and
-  squash-merges.
+  [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now
+  claimed for bounded long polling and durable inbound deduplication.
+  `P05-T9` remains queued/unclaimed until `P05-T5` rebases, independently
+  reviews, and squash-merges.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1006,7 +1006,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Dependencies:** P05-T4 and P01-T4.
 - **Primary files:** `src/ainvest/approval/telegram_updates.py`, future `src/ainvest/api/routes/telegram.py`.
 - **Implementation checklist:**
-  - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset.
+  - Run one active poller, persist offset, deduplicate by update and callback-query IDs, and resume from the last confirmed offset. Fence every handler call and terminal offset commit with the same unexpired database lease owner and monotonic acquisition epoch; a stale worker dispatches or commits nothing after takeover.
+  - Give handler retry-later/error/timeout/cancellation a separate bounded,
+    jittered processing backoff. Release the lease during that delay, preserve
+    the offset, and reset this backoff only after a terminal commit so a valid
+    Telegram response cannot hot-loop one failing update.
   - Enable only required `allowed_updates`; validate Bot identity, private
     chat, and the environment-scoped bound `(user_id, private_chat_id)`
     recipient record before dispatch. Never authorize the cross-product of
@@ -1014,7 +1018,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Route Paper callbacks to P05-T1. Plain text may query/reject status only and never approve.
   - A future webhook validates HTTPS secret token, body/rate limits, and the same identity rules; configuration forbids simultaneous polling and webhook modes.
   - Fill/rejection/expiry message updates grant no new approval capability.
-- **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, groups, unapproved users, and forged callbacks cannot duplicate or elevate approval; tests prove the first release needs no public domain.
+- **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, lease takeover during a maximum-duration poll or handler, handler retry/failure, groups, unapproved users, and forged callbacks cannot duplicate, hot-loop, or elevate approval; deterministic injected-time tests prove stale workers never dispatch or commit and the first release needs no public domain.
 
 ### P05-T6 — Hand Off an Approval to Execution Exactly Once
 
@@ -1062,9 +1066,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Status and scheduling:** `queued/unclaimed`, waiting on the remaining
   serial prerequisite. `P05-T4` squash-merged in
   [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
-  `P05-T5` is dependency-ready but remains queued/unclaimed; rebase latest
-  `main`, claim, implement, review, and squash-merge it before any agent claims
-  this card. Assigning `P05-T9` does not start or claim `P05-T5`.
+  `P05-T5` is now claimed; rebase latest `main`, implement, independently
+  review, and squash-merge it before any agent claims this card. Assigning
+  `P05-T9` does not broaden or replace the active `P05-T5` claim.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1979,8 +1983,8 @@ line.
   separate promotion step under the same task ID. The release, tracker pin,
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
   queued/unclaimed Telegram read-only task. `P05-T4` squash-merged on
-  2026-08-12. `P05-T5` must now be separately claimed, rebased, reviewed, and
-  squash-merged before `P05-T9` may be claimed. By owner
+  2026-08-12 and `P05-T5` is now claimed. It must be rebased, independently
+  reviewed, and squash-merged before `P05-T9` may be claimed. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -1995,9 +1999,9 @@ line.
    `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
    merged.
 2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
-   on that display projection and `P05-T4`/`P05-T5`. `P05-T4` is merged;
-   separately claim, rebase, review, and squash-merge the dependency-ready
-   `P05-T5` before claiming `P05-T9`. Do not combine queries with Telegram
+   on that display projection and `P05-T4`/`P05-T5`. `P05-T4` is merged and
+   `P05-T5` is claimed; rebase, independently review, and squash-merge P05-T5
+   before claiming `P05-T9`. Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
