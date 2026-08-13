@@ -26,7 +26,7 @@ from ainvest.execution.robinhood.pins import (
 )
 from ainvest.execution.robinhood.read_client import GatewayPort, RobinhoodReadClient
 
-FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.2.0"
+FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.0"
 SCHEMA_DIGEST: Final = f"sha256:{'3' * 64}"
 RESULT_DIGEST: Final = f"sha256:{'4' * 64}"
 OBSERVED_AT: Final = "2026-08-08T15:00:02Z"
@@ -175,6 +175,9 @@ def test_all_display_commands_cross_cli_service_mapper_and_named_read(
     quotes, price_book, tradability, historicals, fundamentals, financials = documents[6:]
     assert status["data"] == {"ready": True}
     assert len(accounts["data"]["accounts"]) == 1
+    assert accounts["data"]["accounts"][0]["trading_type"] == "limited_margin"
+    assert accounts["limitations"]["usable_for_trading"] is False
+    assert accounts["limitations"]["account_binding"] == "unverified"
     assert portfolio["limitations"]["account_binding"] == "unverified"
     assert positions["data"]["has_more"] is False
     assert [order["order_id"] for order in open_orders["data"]["open_orders"]] == ["order-open-123"]

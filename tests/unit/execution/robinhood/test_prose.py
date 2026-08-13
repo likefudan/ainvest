@@ -1,6 +1,6 @@
 """Provider-controlled prose is discarded, and the check that says so works.
 
-Consumer requirement 5 of `rh-mcp`'s `v0.2.0` review: provider ``guide``, tool
+Consumer requirement 5 of the independent `rh-mcp` review: provider ``guide``, tool
 descriptions and schema descriptions ride inside result envelopes **and inside
 the reviewed manifest's own fields**. `rh-mcp` never executes them and never
 strips them. They are provider-controlled prompt-injection material and must

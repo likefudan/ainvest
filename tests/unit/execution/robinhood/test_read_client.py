@@ -139,25 +139,36 @@ def test_unrecognized_failure_fails_closed_and_is_not_retryable(exc: BaseExcepti
 
 
 @pytest.mark.unit
-def test_reviewed_listing_verifies_and_reports_the_34_11_8_split() -> None:
+def test_reviewed_listing_verifies_and_reports_the_35_11_8_split() -> None:
     verification = verify_read_projection(manifest_capabilities())
 
     assert verification.manifest_read_capabilities == MANIFEST_READ_CAPABILITIES
     assert verification.approved_non_trading_mutations == APPROVED_NON_TRADING_MUTATIONS
     assert verification.denied_trading_capabilities == DENIED_TRADING_CAPABILITIES
-    assert len(verification.manifest_read_capabilities) == 34
+    assert len(verification.manifest_read_capabilities) == 35
     assert len(verification.approved_non_trading_mutations) == 11
     assert len(verification.denied_trading_capabilities) == 8
 
 
 @pytest.mark.unit
-def test_read_projection_is_a_strict_subset_of_the_34_and_touches_no_mutation() -> None:
+def test_read_projection_is_a_strict_subset_of_the_35_and_touches_no_mutation() -> None:
     """The projection may only ever narrow, never widen."""
     projection = {member.value for member in ReadCapability}
 
     assert projection < MANIFEST_READ_CAPABILITIES
+    assert len(projection) == 10
     assert projection.isdisjoint(APPROVED_NON_TRADING_MUTATIONS)
     assert projection.isdisjoint(DENIED_TRADING_CAPABILITIES)
+
+
+@pytest.mark.unit
+def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
+    """v0.3.0 reviews the provider tool without making it callable here."""
+    capability = "get_limited_margin_upgrade_info"
+
+    assert capability in MANIFEST_READ_CAPABILITIES
+    assert capability not in {member.value for member in ReadCapability}
+    assert not hasattr(RobinhoodReadClient, "read_limited_margin_upgrade_info")
 
 
 @pytest.mark.unit
@@ -225,7 +236,7 @@ def test_manifest_count_drift_fails_closed(
     listing_kwargs: dict[str, frozenset[str]],
     expected: ReadRejection,
 ) -> None:
-    """34 / 11 / 8 is executable here, not just recorded in prose."""
+    """35 / 11 / 8 is executable here, not just recorded in prose."""
     with pytest.raises(GatewayReadError) as caught:
         verify_read_projection(manifest_capabilities(**listing_kwargs))
 
@@ -234,7 +245,7 @@ def test_manifest_count_drift_fails_closed(
 
 @pytest.mark.unit
 def test_capability_moved_between_dispositions_fails_closed() -> None:
-    """Entry count stays 53, so only the name sets can catch this."""
+    """Entry count stays 54, so only the name sets can catch this."""
     listing = manifest_capabilities(
         reads=MANIFEST_READ_CAPABILITIES - {"get_watchlists"},
         mutations=APPROVED_NON_TRADING_MUTATIONS | {"get_watchlists"},
@@ -862,7 +873,7 @@ def test_cyclic_payload_fails_closed(container_kind: str) -> None:
 
 @pytest.mark.unit
 def test_provider_prose_is_discarded_from_a_result_and_from_its_log() -> None:
-    """The delivery path the `v0.2.0` review names, end to end.
+    """The delivery path the independent gateway reviews name, end to end.
 
     Every reviewed capability's output schema requires a top-level ``guide``
     sibling of ``data``, so this shape is what a real read returns. The

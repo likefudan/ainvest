@@ -1,6 +1,6 @@
 """Consumer requirement 3: only `rh-mcp`'s published surface is imported.
 
-`rh-mcp`'s `v0.2.0` review accepted, as a **P2 residual**, that
+The independent `rh-mcp` review accepted, as a **P2 residual**, that
 ``_open_provider_session``, ``_PrivateSession``, ``StoredTokenProvider`` and
 ``open_credential_store`` remain importable and can be assembled into a
 manifest-free session that never consults the reviewed manifest. `DESIGN.md`

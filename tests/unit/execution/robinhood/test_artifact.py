@@ -21,7 +21,6 @@ from ainvest.execution.robinhood.pins import (
     PINNED_RELEASE_TAG,
     PINNED_WHEEL_FILENAME,
     PINNED_WHEEL_SHA256,
-    RH_MCP_DISTRIBUTION,
 )
 
 OTHER_SHA256 = "0" * 64
@@ -29,7 +28,7 @@ OTHER_SHA256 = "0" * 64
 
 def _archive(sha256: str = PINNED_WHEEL_SHA256) -> dict[str, Any]:
     return {
-        "url": f"https://github.com/likefudan/rh-mcp/releases/download/v0.2.0/{RH_MCP_DISTRIBUTION}.whl",
+        "url": f"https://github.com/likefudan/rh-mcp/releases/download/{PINNED_RELEASE_TAG}/{PINNED_WHEEL_FILENAME}",
         "archive_info": {"hashes": {"sha256": sha256}},
     }
 
@@ -75,7 +74,7 @@ def test_the_deprecated_pep610_hash_spelling_also_verifies() -> None:
             ArtifactRejection.VERSION_MISMATCH,
         ),
         (
-            InstalledDistribution(version="0.3.0", direct_url=_archive()),
+            InstalledDistribution(version="0.4.0", direct_url=_archive()),
             ArtifactRejection.VERSION_MISMATCH,
         ),
         (
@@ -153,7 +152,7 @@ def test_a_sdist_only_install_does_not_satisfy_the_wheel_digest_pin() -> None:
     """The sdist has a different SHA-256; the pin is on the wheel artifact."""
     installed = InstalledDistribution(
         version=PINNED_PACKAGE_VERSION,
-        direct_url=_archive("da1d2231fd7be4129e035879eec4965727b968496c382bdaaa6f663bec11842c"),
+        direct_url=_archive("0b1945f8de11cdef126aef6959a7e0ffabbf957399675ee227a012b8e2aafd12"),
     )
 
     assert verify_installed_artifact(_probe(installed)).rejection is (

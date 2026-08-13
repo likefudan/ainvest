@@ -4,7 +4,7 @@
       {
         "account_number": "SENSITIVE-1234",
         "rhs_account_number": "99887766",
-        "type": "margin",
+        "type": "limited_margin",
         "brokerage_account_type": "individual",
         "is_default": true,
         "agentic_allowed": true,

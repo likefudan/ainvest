@@ -1,6 +1,6 @@
 """The one place ainvest names an `rh-mcp` symbol (P06-T0).
 
-Consumer requirement 3 of `rh-mcp`'s `v0.2.0` review: a consumer using only
+Consumer requirement 3 of the independent `rh-mcp` reviews: a consumer using only
 ``GatewayConfig`` + ``open_gateway`` / ``RobinhoodGateway.invoke`` cannot
 bypass the reviewed manifest; a consumer importing an underscore-prefixed name
 can. ``_open_provider_session``, ``_PrivateSession``, ``StoredTokenProvider``,
@@ -11,7 +11,7 @@ modules, in exactly one function, and
 ``tests/unit/execution/robinhood/test_published_surface.py`` walks the AST of
 every module in this package to prove it.
 
-Note that ``rh_mcp/__init__.py`` is empty in `v0.2.0` — the published surface
+Note that ``rh_mcp/__init__.py`` is empty in `v0.3.0` — the published surface
 is reached at ``rh_mcp.gateway`` and ``rh_mcp.config``, not re-exported at the
 package root.
 
@@ -86,7 +86,7 @@ def import_published_surface() -> PublishedSurface:
     the change is the finding rather than a formality. It used to be
     ``import-not-found`` — mypy could not locate the modules because nothing
     was installed. It is now ``import-untyped``: the modules resolve, and
-    `rh-mcp` `v0.2.0` ships **no** ``py.typed`` marker, so mypy still refuses
+    `rh-mcp` `v0.3.0` ships **no** ``py.typed`` marker, so mypy still refuses
     to read their annotations even though they are written and checked
     upstream under ``strict``. There are no real types to substitute here; the
     typed boundary is :class:`PublishedSurface` and the two adapter methods

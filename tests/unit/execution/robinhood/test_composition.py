@@ -1,7 +1,7 @@
 """`open_read_gateway`: the only place the recomputed pin is consumed.
 
 `tests/contract/execution/test_rh_mcp_manifest_contract.py` proves
-``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.2.0` manifest.
+``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.3.0` manifest.
 That proof is worth nothing if the runtime path passes a different value to
 ``GatewayConfig``, and until this file existed nothing executed that path:
 replacing the pin at the call site with sixty-four zeroes left the whole suite
@@ -39,7 +39,7 @@ import pytest
 
 # The installed wheel, imported here so the assertions below compare against
 # `rh-mcp`'s own objects rather than against a description of them. `rh-mcp`
-# `v0.2.0` ships no `py.typed`, so mypy sees these as untyped; the adapter's
+# `v0.3.0` ships no `py.typed`, so mypy sees these as untyped; the adapter's
 # typed boundary is `PublishedSurface`, not these modules.
 import rh_mcp.config  # type: ignore[import-untyped]
 import rh_mcp.gateway  # type: ignore[import-untyped]
@@ -55,6 +55,7 @@ from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErro
 from ainvest.execution.robinhood.pins import (
     EXPECTED_MANIFEST_DIGEST,
     PINNED_PACKAGE_VERSION,
+    PINNED_RELEASE_TAG,
     PINNED_WHEEL_FILENAME,
     PINNED_WHEEL_SHA256,
     REJECTED_CHANGELOG_MANIFEST_DIGEST,
@@ -107,7 +108,7 @@ def installed_probe() -> InstalledDistribution | None:
     return InstalledDistribution(
         version=PINNED_PACKAGE_VERSION,
         direct_url={
-            "url": f"https://github.com/likefudan/rh-mcp/releases/download/v0.2.0/{PINNED_WHEEL_FILENAME}",
+            "url": f"https://github.com/likefudan/rh-mcp/releases/download/{PINNED_RELEASE_TAG}/{PINNED_WHEEL_FILENAME}",
             "archive_info": {"hash": f"sha256={PINNED_WHEEL_SHA256}"},
         },
     )
@@ -138,7 +139,7 @@ def test_the_gateway_is_configured_with_the_recomputed_pin() -> None:
     # the call site reads would still pass if both moved together, which is
     # precisely the mutation this file exists to catch.
     assert surface.configs[0]["expected_manifest_digest"] == (
-        "sha256:70f88615716b05b8f547bf21ba756643ba2ded140202395998d428f63d84c91b"
+        "sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f"
     )
 
 

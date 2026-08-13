@@ -1,4 +1,4 @@
-"""Offline contract evidence for the pinned rh-mcp v0.2.0 Part 2 reads."""
+"""Offline contract evidence for the pinned rh-mcp v0.3.0 Part 2 reads."""
 
 from __future__ import annotations
 
@@ -21,7 +21,7 @@ from ainvest.execution.robinhood.mappers import (
 from ainvest.execution.robinhood.prose import discard_provider_prose
 from ainvest.execution.robinhood.read_client import GatewayReadResult
 
-ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.2.0"
+ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.0"
 MANIFEST: Final = ROOT / "read-manifest.json"
 FIXTURES: Final = ROOT / "p06-t1-part2"
 CAPABILITIES: Final = (

@@ -31,15 +31,17 @@ from ainvest.execution.robinhood.read_client import GatewayReadResult
 from ainvest.execution.robinhood.read_models import (
     UNAVAILABLE_UNTRUSTED_TEXT,
     AccountBinding,
+    BrokerageTradingType,
     HistoricalBounds,
     HistoricalInterval,
     NormalizedUnit,
     QuoteIneligibility,
     ReportingPeriod,
+    RobinhoodAccountScope,
     SessionEvidence,
 )
 
-FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.2.0" / "p06-t1-part1"
+FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.0" / "p06-t1-part1"
 PART2_FIXTURES = FIXTURES.parent / "p06-t1-part2"
 OBSERVED_AT = "2026-08-08T15:00:02Z"
 RECEIVED_AT = "2026-08-08T15:00:03Z"
@@ -108,6 +110,7 @@ def test_all_five_valid_reads_map_and_preserve_evidence() -> None:
     )
 
     assert accounts.accounts[0].tradable is True
+    assert accounts.accounts[0].trading_type is BrokerageTradingType.LIMITED_MARGIN
     assert portfolio.options_value > 0 and portfolio.crypto_value > 0
     assert positions.positions[0].symbol == "AAPL"
     assert quotes.quotes[0].live_eligible is False
@@ -133,6 +136,30 @@ def test_account_numbers_and_provider_prose_do_not_cross_boundary() -> None:
     assert "Provider-authored" not in rendered
     assert "account_number" not in rendered
     assert "guide" not in rendered
+
+
+@pytest.mark.unit
+def test_account_trading_types_remain_three_distinct_provider_labels() -> None:
+    """Limited margin is neither cash nor full margin and implies no policy."""
+    mapped: list[BrokerageTradingType] = []
+    eligibility: list[tuple[RobinhoodAccountScope, bool]] = []
+    for raw_type in ("cash", "limited_margin", "margin"):
+        payload = _provider_result("get_accounts")
+        payload["data"]["accounts"][0]["type"] = raw_type
+        account = map_accounts(
+            _result("get_accounts", payload),
+            received_at=RECEIVED_AT,
+        ).accounts[0]
+        mapped.append(account.trading_type)
+        eligibility.append((account.scope, account.tradable))
+
+    assert mapped == [
+        BrokerageTradingType.CASH,
+        BrokerageTradingType.LIMITED_MARGIN,
+        BrokerageTradingType.MARGIN,
+    ]
+    assert len(set(mapped)) == 3
+    assert len(set(eligibility)) == 1
 
 
 @pytest.mark.unit

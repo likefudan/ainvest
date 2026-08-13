@@ -41,7 +41,7 @@ broker = [
     # direct reference rather than a version specifier, and both halves of it
     # are security properties rather than packaging taste:
     #
-    #  * `rh-mcp` is not published on PyPI. A `rh-mcp==0.2.0` specifier would
+    #  * `rh-mcp` is not published on PyPI. A `rh-mcp==0.3.0` specifier would
     #    resolve against the public index, where that name is unregistered and
     #    therefore claimable by anyone — textbook dependency confusion. Naming
     #    the release asset takes the index out of the trust path entirely.
@@ -57,7 +57,7 @@ broker = [
     # ainvest still does not depend on or import the MCP SDK. `mcp` and
     # `httpx2` arrive only as rh-mcp's own private transitive dependencies;
     # no `ainvest.*` module imports either, which is asserted by test.
-    "rh-mcp @ https://github.com/likefudan/rh-mcp/releases/download/v0.2.0/rh_mcp-0.2.0-py3-none-any.whl#sha256=45bdfa7ef191a5dca834ddf52249fd92cfce0cf33456ec26839bdc8024e657b9",
+    "rh-mcp @ https://github.com/likefudan/rh-mcp/releases/download/v0.3.0/rh_mcp-0.3.0-py3-none-any.whl#sha256=1dbd512c51e6bc0f5a90626d5a562ca4d79f3b6c5cb1ee24be9c1af24045b76e",
 ]
 observability = [
     "opentelemetry-api>=1.32,<2",

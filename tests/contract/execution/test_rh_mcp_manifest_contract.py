@@ -1,23 +1,23 @@
 """Cross-repository contract: the pins are recomputed, never transcribed.
 
 `src/ainvest/execution/robinhood/pins.py` states the identity of the reviewed
-`rh-mcp` `v0.2.0` permission set. Until this module existed those constants
+`rh-mcp` `v0.3.0` permission set. Until this module existed those constants
 were prose: a reviewer demonstrated that swapping ``EXPECTED_MANIFEST_DIGEST``
 for the wrong-but-plausible digest `rh-mcp`'s changelog prints, *and* changing
-the 34/11/8 split, left ainvest's entire suite green. Nothing executable
+the capability split, left ainvest's entire suite green. Nothing executable
 guarded the values the whole Non-Trading Preview rests on.
 
 This file closes that. It does not import `rh_mcp` — the dependency is out of
 scope for `P06-T0` and importing the package would only prove that `rh-mcp`
 agrees with itself. Instead it implements `rh-canon-1` **from the written
 specification** in `rh-mcp` `canonical.py`'s module docstring and `DESIGN.md`
-§6, then recomputes the full-manifest digest of the committed `v0.2.0`
+§6, then recomputes the full-manifest digest of the committed `v0.3.0`
 manifest and compares it to the pin. Two independent implementations landing
 on the same 64 hex characters is evidence; one implementation agreeing with
 itself is not.
 
 The fixture is byte-identical to
-``git show v0.2.0:src/rh_mcp/manifests/read-manifest.json`` and
+``git show v0.3.0:src/rh_mcp/manifests/read-manifest.json`` and
 :func:`test_the_committed_fixture_is_the_reviewed_artifact` keeps it that way
 by re-deriving its digest rather than trusting the filename.
 """
@@ -36,8 +36,9 @@ import pytest
 from ainvest.execution.robinhood import pins
 
 MANIFEST_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.2.0" / "read-manifest.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.0" / "read-manifest.json"
 )
+DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
 FULL_MANIFEST_DIGEST_FIELD: Final = "full_manifest_digest"
 
@@ -244,14 +245,15 @@ def test_expected_manifest_digest_is_recomputed_from_the_manifest(
 
 
 @pytest.mark.contract
-def test_the_changelog_digest_is_not_this_manifests_digest(manifest: dict[str, Any]) -> None:
-    """`rh-mcp`'s changelog prints a digest belonging to a different manifest.
+def test_the_historical_rejected_digest_is_not_this_manifests_digest(
+    manifest: dict[str, Any],
+) -> None:
+    """The retained v0.2.0 documentation mismatch is not a current pin.
 
     Its ``[0.1.0]`` and ``[0.2.0]`` entries both show ``sha256:49b7218…``
-    beside manifest version ``2026.08.03.1``; that digest belongs to manifest
-    ``2026.08.05``, which only `rh-mcp` ``main`` ships. Pinning it against this
-    artifact would fail readiness at every startup, so the wrong value is named
-    and proven wrong rather than merely avoided.
+    beside manifest version ``2026.08.03.1``. That value remains named as a
+    regression, but it does not belong to the independently reviewed v0.3.0
+    artifact and can never become its accepted full-manifest digest.
     """
     # Widened to `str` deliberately. Both pins are `Final` literals, so mypy
     # folds the comparison and reports `comparison-overlap` — it can prove at
@@ -273,7 +275,7 @@ def test_manifest_identity_fields_match_the_pins(manifest: dict[str, Any]) -> No
 
 
 # ---------------------------------------------------------------------------
-# The 34 / 11 / 8 split (IMPLEMENTATION_TODO.md rule 32)
+# The 35 / 11 / 8 split (IMPLEMENTATION_TODO.md rule 32)
 # ---------------------------------------------------------------------------
 
 
@@ -295,7 +297,7 @@ def test_the_three_dispositions_are_the_pinned_name_sets(manifest: dict[str, Any
 
 
 @pytest.mark.contract
-def test_the_split_is_exactly_34_11_8(manifest: dict[str, Any]) -> None:
+def test_the_split_is_exactly_35_11_8(manifest: dict[str, Any]) -> None:
     """Rule 32's arithmetic, checked against the artifact and against itself."""
     reads, mutations, denied = _partition(manifest)
     assert (len(reads), len(mutations), len(denied)) == (
@@ -303,9 +305,9 @@ def test_the_split_is_exactly_34_11_8(manifest: dict[str, Any]) -> None:
         pins.EXPECTED_APPROVED_MUTATION_COUNT,
         pins.EXPECTED_DENIED_CAPABILITY_COUNT,
     )
-    assert (len(reads), len(mutations), len(denied)) == (34, 11, 8)
-    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 53
-    assert len(reads) + len(mutations) + len(denied) == 53
+    assert (len(reads), len(mutations), len(denied)) == (35, 11, 8)
+    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 54
+    assert len(reads) + len(mutations) + len(denied) == 54
     assert reads.isdisjoint(mutations) and reads.isdisjoint(denied)
     assert mutations.isdisjoint(denied)
 
@@ -349,7 +351,7 @@ def test_no_read_projection_entry_mutates(manifest: dict[str, Any]) -> None:
 
     The subset test above would still pass if the manifest marked one of these
     ``mutates=true`` and the partition helper had a bug. This asks each entry
-    directly, which is the flag requirement 6 of the `v0.2.0` review names.
+    directly, which is the flag requirement the external review names.
     """
     by_name = {e["capability"]: e for e in manifest["entries"]}
     for capability in pins.ReadCapability:
@@ -372,6 +374,31 @@ def test_read_capability_wire_names_are_pinned_as_literals() -> None:
         assert capability.value == wire_name
         assert str(capability) == wire_name
         assert json.dumps(capability) == json.dumps(wire_name)
+
+
+@pytest.mark.contract
+def test_limited_margin_upgrade_read_is_reviewed_but_not_projected() -> None:
+    """The v0.3.0 manifest expansion must not widen ainvest's public reads."""
+    capability = "get_limited_margin_upgrade_info"
+    projection = {member.value for member in pins.ReadCapability}
+
+    assert capability in pins.MANIFEST_READ_CAPABILITIES
+    assert capability not in projection
+    assert len(projection) == 10
+
+
+@pytest.mark.contract
+def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None:
+    """Prevent the reviewed manifest from being described as the public API."""
+    design = DESIGN_PATH.read_text(encoding="utf-8")
+    phase4 = design.split("### Phase 4\uff1a", maxsplit=1)[1].split(
+        "### Phase 5\uff1a", maxsplit=1
+    )[0]
+
+    assert "manifest 精确允许 35 个读取能力和 11 个非交易 mutation" in phase4
+    assert "ainvest 当前只能调用已有 10 个命名读取能力" in phase4
+    assert "永久拒绝 8 个交易能力" in phase4
+    assert "调用精确批准的 34 个读取能力" not in design
 
 
 @pytest.mark.contract

@@ -22,13 +22,13 @@ reached through the structural protocols below, so this module names no
 single place that does.
 
 **Three obligations here are ainvest's own, not the gateway's**, and each is
-recorded as a condition of `rh-mcp`'s `v0.2.0` approval:
+recorded as conditions of the independently reviewed `rh-mcp` releases:
 
 * `rh-mcp` ships **no read-only projection**. ``invoke()`` accepts any
   *allowed* capability, including the 11 approved non-trading mutations. So
   :func:`verify_read_projection` asserts at startup that every capability in
   the ainvest allowlist is ``allowed`` **and** ``mutates=false``, and that the
-  reviewed manifest still splits exactly 34 / 11 / 8 with the exact names
+  reviewed manifest still splits exactly 35 / 11 / 8 with the exact names
   P06-T0 pinned. A manifest that later reclassifies a capability fails closed
   rather than silently widening the surface.
 * Only `rh-mcp`'s published surface may be imported — never
@@ -302,7 +302,7 @@ def verify_read_projection(
     """Prove the reviewed manifest still supports the ainvest read projection.
 
     Fails closed on any drift: a changed disposition, a changed ``mutates``
-    flag, an added or removed capability, or a changed 34 / 11 / 8 split.
+    flag, an added or removed capability, or a changed 35 / 11 / 8 split.
     """
     reads: set[str] = set()
     mutations: set[str] = set()
