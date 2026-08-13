@@ -95,9 +95,7 @@ class TelegramProviderUpdate(BaseModel):
     @field_validator("update_id")
     @classmethod
     def _bounded_update_id(cls, value: int) -> int:
-        if value < 0 or value > TELEGRAM_MAX_UPDATE_ID:
-            raise ValueError("Telegram update_id is outside the signed 64-bit range")
-        return value
+        return _bounded_update_id(value)
 
     @field_validator("sender_user_id", "chat_id", "message_id")
     @classmethod
@@ -111,16 +109,12 @@ class TelegramProviderUpdate(BaseModel):
         if self.kind is TelegramProviderUpdateKind.CALLBACK:
             if self.callback_query_id is None or self.callback_data is None:
                 raise ValueError("callback updates require bounded callback values")
-            callback_id = self.callback_query_id.get_secret_value()
-            if not (1 <= len(callback_id) <= TELEGRAM_CALLBACK_ID_BYTES) or any(
-                not 0x21 <= ord(char) <= 0x7E for char in callback_id
-            ):
-                raise ValueError("callback query id must be visible ASCII")
-            callback_data = self.callback_data.get_secret_value()
-            if not (1 <= len(callback_data.encode("utf-8")) <= TELEGRAM_CALLBACK_DATA_BYTES):
-                raise ValueError("callback data must be 1..64 UTF-8 bytes")
-        if self.text is not None and len(self.text.get_secret_value()) > TELEGRAM_TEXT_LIMIT:
-            raise ValueError("Telegram text exceeds the bounded input limit")
+            _validate_callback_values(self.callback_query_id, self.callback_data)
+        if (
+            self.text is not None
+            and not 1 <= len(self.text.get_secret_value()) <= TELEGRAM_TEXT_LIMIT
+        ):
+            raise ValueError("Telegram text must contain 1..4096 code points")
         return self
 
 
@@ -135,6 +129,21 @@ class AuthorizedCallbackUpdate(BaseModel):
     callback_query_id: SecretStr = Field(repr=False)
     callback_data: SecretStr = Field(repr=False)
 
+    @field_validator("update_id")
+    @classmethod
+    def _validate_update_id(cls, value: int) -> int:
+        return _bounded_update_id(value)
+
+    @field_validator("sender_user_id", "chat_id", "message_id")
+    @classmethod
+    def _validate_identity(cls, value: int) -> int:
+        return _positive_telegram_id(value)
+
+    @model_validator(mode="after")
+    def _validate_callback(self) -> AuthorizedCallbackUpdate:
+        _validate_callback_values(self.callback_query_id, self.callback_data)
+        return self
+
 
 class AuthorizedTextUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -145,6 +154,24 @@ class AuthorizedTextUpdate(BaseModel):
     chat_id: StrictInt = Field(repr=False)
     message_id: StrictInt = Field(repr=False)
     text: SecretStr = Field(repr=False)
+
+    @field_validator("update_id")
+    @classmethod
+    def _validate_update_id(cls, value: int) -> int:
+        return _bounded_update_id(value)
+
+    @field_validator("sender_user_id", "chat_id", "message_id")
+    @classmethod
+    def _validate_identity(cls, value: int) -> int:
+        return _positive_telegram_id(value)
+
+    @field_validator("text")
+    @classmethod
+    def _validate_text(cls, value: SecretStr) -> SecretStr:
+        text = value.get_secret_value()
+        if not 1 <= len(text) <= TELEGRAM_TEXT_LIMIT:
+            raise ValueError("Telegram text must contain 1..4096 code points")
+        return value
 
 
 class IgnoredTelegramUpdate(BaseModel):
@@ -277,13 +304,49 @@ def _strict_int(value: object) -> int | None:
     return value
 
 
+def _bounded_update_id(value: int) -> int:
+    if value < 0 or value > TELEGRAM_MAX_UPDATE_ID:
+        raise ValueError("Telegram update_id is outside the signed 64-bit range")
+    return value
+
+
+def _positive_telegram_id(value: int) -> int:
+    if value <= 0 or value > 2**63 - 1:
+        raise ValueError("Telegram identity must be a positive signed 64-bit integer")
+    return value
+
+
+def _validate_callback_values(callback_query_id: SecretStr, callback_data: SecretStr) -> None:
+    callback_id = callback_query_id.get_secret_value()
+    if not (1 <= len(callback_id) <= TELEGRAM_CALLBACK_ID_BYTES) or any(
+        not 0x21 <= ord(character) <= 0x7E for character in callback_id
+    ):
+        raise ValueError("callback query id must be 1..128 visible ASCII characters")
+    try:
+        callback_data_size = len(callback_data.get_secret_value().encode("utf-8"))
+    except UnicodeEncodeError:
+        raise ValueError("callback data must be valid UTF-8") from None
+    if not 1 <= callback_data_size <= TELEGRAM_CALLBACK_DATA_BYTES:
+        raise ValueError("callback data must be 1..64 UTF-8 bytes")
+
+
 def _secret_text(
-    value: object, *, max_chars: int, max_bytes: int | None = None
+    value: object,
+    *,
+    max_chars: int,
+    max_bytes: int | None = None,
+    min_chars: int = 0,
+    min_bytes: int = 0,
 ) -> SecretStr | None:
-    if not isinstance(value, str) or len(value) > max_chars:
+    if not isinstance(value, str) or not min_chars <= len(value) <= max_chars:
         return None
-    if max_bytes is not None and len(value.encode("utf-8")) > max_bytes:
-        return None
+    if max_bytes is not None:
+        try:
+            size = len(value.encode("utf-8"))
+        except UnicodeEncodeError:
+            return None
+        if not min_bytes <= size <= max_bytes:
+            return None
     return SecretStr(value)
 
 
@@ -295,7 +358,13 @@ def _normalize_provider_update(update: object) -> TelegramProviderUpdate:
     callback = getattr(update, "callback_query", None)
     if callback is not None:
         callback_id = getattr(callback, "id", None)
-        callback_secret = _secret_text(callback_id, max_chars=128, max_bytes=128)
+        callback_secret = _secret_text(
+            callback_id,
+            max_chars=128,
+            max_bytes=128,
+            min_chars=1,
+            min_bytes=1,
+        )
         if (
             callback_secret is None
             or not isinstance(callback_id, str)
@@ -305,7 +374,11 @@ def _normalize_provider_update(update: object) -> TelegramProviderUpdate:
                 update_id=update_id, kind=TelegramProviderUpdateKind.MALFORMED
             )
         data = _secret_text(
-            getattr(callback, "data", None), max_chars=64, max_bytes=TELEGRAM_CALLBACK_DATA_BYTES
+            getattr(callback, "data", None),
+            max_chars=64,
+            max_bytes=TELEGRAM_CALLBACK_DATA_BYTES,
+            min_chars=1,
+            min_bytes=1,
         )
         sender = getattr(callback, "from_user", None)
         message = getattr(callback, "message", None)
@@ -335,7 +408,7 @@ def _normalize_provider_update(update: object) -> TelegramProviderUpdate:
         )
     raw_text = getattr(message, "text", None)
     if raw_text is not None and (
-        not isinstance(raw_text, str) or len(raw_text) > TELEGRAM_TEXT_LIMIT
+        not isinstance(raw_text, str) or not 1 <= len(raw_text) <= TELEGRAM_TEXT_LIMIT
     ):
         return TelegramProviderUpdate(
             update_id=update_id, kind=TelegramProviderUpdateKind.MALFORMED

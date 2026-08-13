@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import asyncio
 from types import SimpleNamespace
 
 import pytest
@@ -12,8 +13,11 @@ from ainvest.approval.telegram_updates import (
     AuthorizedCallbackUpdate,
     AuthorizedTextUpdate,
     IgnoredTelegramUpdate,
+    TelegramHttpsUpdateTransport,
     TelegramIgnoredReason,
     TelegramPollingFatal,
+    TelegramProviderRateLimited,
+    TelegramProviderTransient,
     TelegramProviderUpdate,
     TelegramProviderUpdateKind,
     _normalize_provider_update,
@@ -142,6 +146,38 @@ def test_normalizer_turns_bounded_malformed_content_into_terminal_input() -> Non
     assert result.kind is TelegramProviderUpdateKind.MALFORMED
 
 
+@pytest.mark.parametrize(
+    ("callback_id", "callback_data"),
+    [
+        ("", "opaque"),
+        ("id", ""),
+        ("contains space", "opaque"),
+        ("id", "x" * 65),
+        ("id", "\ud800"),
+    ],
+)
+def test_normalizer_turns_invalid_callback_content_into_terminal_malformed(
+    callback_id: str, callback_data: str
+) -> None:
+    callback = SimpleNamespace(
+        update_id=13,
+        callback_query=SimpleNamespace(
+            id=callback_id,
+            data=callback_data,
+            from_user=SimpleNamespace(id=101),
+            message=SimpleNamespace(
+                message_id=301,
+                chat=SimpleNamespace(id=201, type="private"),
+            ),
+        ),
+        message=None,
+    )
+    assert _normalize_provider_update(callback) == TelegramProviderUpdate(
+        update_id=13,
+        kind=TelegramProviderUpdateKind.MALFORMED,
+    )
+
+
 def test_normalizer_marks_automatic_forward_as_forwarded() -> None:
     automatic_forward = SimpleNamespace(
         update_id=11,
@@ -179,3 +215,219 @@ def test_normalizer_marks_overlong_text_and_invalid_message_id_malformed() -> No
     )
     assert isinstance(classified, IgnoredTelegramUpdate)
     assert classified.reason is TelegramIgnoredReason.MALFORMED_UPDATE
+
+    empty_text = SimpleNamespace(
+        update_id=14,
+        callback_query=None,
+        message=SimpleNamespace(
+            text="",
+            from_user=SimpleNamespace(id=101),
+            chat=SimpleNamespace(id=201, type="private"),
+            message_id=301,
+        ),
+    )
+    assert _normalize_provider_update(empty_text) == TelegramProviderUpdate(
+        update_id=14,
+        kind=TelegramProviderUpdateKind.MALFORMED,
+    )
+
+
+class _RetryAfter(Exception):
+    def __init__(self, retry_after: object) -> None:
+        self.retry_after = retry_after
+
+
+class _TimedOut(Exception):
+    pass
+
+
+class _NetworkError(Exception):
+    pass
+
+
+class _InvalidToken(Exception):
+    pass
+
+
+class _Forbidden(Exception):
+    pass
+
+
+class _BadRequest(Exception):
+    pass
+
+
+class _Conflict(Exception):
+    pass
+
+
+def _adapter_modules(
+    monkeypatch: pytest.MonkeyPatch,
+    *,
+    result: tuple[object, ...] = (),
+    error: BaseException | None = None,
+) -> list[dict[str, object]]:
+    calls: list[dict[str, object]] = []
+
+    class Bot:
+        def __init__(self, *, token: str) -> None:
+            assert token == "synthetic-token"
+
+        async def get_updates(self, **kwargs: object) -> tuple[object, ...]:
+            calls.append(kwargs)
+            if error is not None:
+                raise error
+            return result
+
+    telegram = SimpleNamespace(Bot=Bot)
+    errors = SimpleNamespace(
+        RetryAfter=_RetryAfter,
+        TimedOut=_TimedOut,
+        NetworkError=_NetworkError,
+        InvalidToken=_InvalidToken,
+        Forbidden=_Forbidden,
+        BadRequest=_BadRequest,
+        Conflict=_Conflict,
+    )
+
+    def fake_import(name: str) -> object:
+        return errors if name == "telegram.error" else telegram
+
+    monkeypatch.setattr("ainvest.approval.telegram_updates.import_module", fake_import)
+    return calls
+
+
+def test_https_adapter_passes_exact_bounds_and_terminalizes_empty_callback(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    raw = SimpleNamespace(
+        update_id=9,
+        callback_query=SimpleNamespace(
+            id="callback-id",
+            data="",
+            from_user=SimpleNamespace(id=101),
+            message=SimpleNamespace(
+                message_id=301,
+                chat=SimpleNamespace(id=201, type="private"),
+            ),
+        ),
+        message=None,
+    )
+    calls = _adapter_modules(monkeypatch, result=(raw,))
+    result = asyncio.run(
+        TelegramHttpsUpdateTransport().get_updates(
+            "synthetic-token",
+            offset=7,
+            timeout=25,
+            limit=100,
+            allowed_updates=("message", "callback_query"),
+            deadline_seconds=35.0,
+        )
+    )
+    assert result == (
+        TelegramProviderUpdate(update_id=9, kind=TelegramProviderUpdateKind.MALFORMED),
+    )
+    assert calls == [
+        {
+            "offset": 7,
+            "timeout": 25,
+            "limit": 100,
+            "allowed_updates": ("message", "callback_query"),
+            "read_timeout": 35.0,
+            "write_timeout": 35.0,
+            "connect_timeout": 35.0,
+            "pool_timeout": 35.0,
+        }
+    ]
+
+
+@pytest.mark.parametrize("provider_error", [_TimedOut(), _NetworkError()])
+def test_https_adapter_maps_transient_errors(
+    monkeypatch: pytest.MonkeyPatch, provider_error: BaseException
+) -> None:
+    _adapter_modules(monkeypatch, error=provider_error)
+    with pytest.raises(TelegramProviderTransient):
+        asyncio.run(
+            TelegramHttpsUpdateTransport().get_updates(
+                "synthetic-token",
+                offset=0,
+                timeout=25,
+                limit=100,
+                allowed_updates=("message", "callback_query"),
+                deadline_seconds=35,
+            )
+        )
+
+
+@pytest.mark.parametrize(
+    "provider_error",
+    [_InvalidToken(), _Forbidden(), _BadRequest(), _Conflict()],
+)
+def test_https_adapter_maps_rejections_to_sanitized_fatal(
+    monkeypatch: pytest.MonkeyPatch, provider_error: BaseException
+) -> None:
+    _adapter_modules(monkeypatch, error=provider_error)
+    with pytest.raises(TelegramPollingFatal, match="rejected the polling request"):
+        asyncio.run(
+            TelegramHttpsUpdateTransport().get_updates(
+                "synthetic-token",
+                offset=0,
+                timeout=25,
+                limit=100,
+                allowed_updates=("message", "callback_query"),
+                deadline_seconds=35,
+            )
+        )
+
+
+def test_https_adapter_maps_retry_after(monkeypatch: pytest.MonkeyPatch) -> None:
+    _adapter_modules(monkeypatch, error=_RetryAfter(17))
+    with pytest.raises(TelegramProviderRateLimited) as captured:
+        asyncio.run(
+            TelegramHttpsUpdateTransport().get_updates(
+                "synthetic-token",
+                offset=0,
+                timeout=25,
+                limit=100,
+                allowed_updates=("message", "callback_query"),
+                deadline_seconds=35,
+            )
+        )
+    assert captured.value.retry_after_seconds == 17
+
+
+def test_https_adapter_missing_optional_dependency_is_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    def missing_import(name: str) -> object:
+        raise ImportError(name)
+
+    monkeypatch.setattr("ainvest.approval.telegram_updates.import_module", missing_import)
+    with pytest.raises(TelegramPollingFatal, match="dependency is unavailable"):
+        asyncio.run(
+            TelegramHttpsUpdateTransport().get_updates(
+                "synthetic-token",
+                offset=0,
+                timeout=25,
+                limit=100,
+                allowed_updates=("message", "callback_query"),
+                deadline_seconds=35,
+            )
+        )
+
+
+def test_https_adapter_rejects_oversized_provider_batch(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    _adapter_modules(monkeypatch, result=tuple(SimpleNamespace(update_id=i) for i in range(101)))
+    with pytest.raises(TelegramPollingFatal, match="oversized"):
+        asyncio.run(
+            TelegramHttpsUpdateTransport().get_updates(
+                "synthetic-token",
+                offset=0,
+                timeout=25,
+                limit=100,
+                allowed_updates=("message", "callback_query"),
+                deadline_seconds=35,
+            )
+        )
