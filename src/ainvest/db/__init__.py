@@ -13,6 +13,7 @@ from ainvest.db.errors import (
     NotFoundError,
     PersistenceError,
 )
+from ainvest.db.repositories import TelegramPollState, TelegramUpdateRepository
 from ainvest.db.session import (
     DEFAULT_SQLITE_URL,
     create_all_tables,
@@ -29,6 +30,8 @@ __all__ = [
     "ConflictError",
     "NotFoundError",
     "PersistenceError",
+    "TelegramPollState",
+    "TelegramUpdateRepository",
     "UnitOfWork",
     "create_all_tables",
     "create_db_engine",

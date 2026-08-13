@@ -14,6 +14,7 @@ from ainvest.db.repositories import (
     BrokerOrderRepository,
     ProposalRepository,
     RiskDecisionRepository,
+    TelegramUpdateRepository,
 )
 
 
@@ -32,6 +33,7 @@ class UnitOfWork:
         self.approvals: ApprovalRepository | None = None
         self.broker_orders: BrokerOrderRepository | None = None
         self.audit: AuditRepository | None = None
+        self.telegram_updates: TelegramUpdateRepository | None = None
 
     def __enter__(self) -> Self:
         self.session = self._session_factory()
@@ -40,6 +42,7 @@ class UnitOfWork:
         self.approvals = ApprovalRepository(self.session)
         self.broker_orders = BrokerOrderRepository(self.session)
         self.audit = AuditRepository(self.session)
+        self.telegram_updates = TelegramUpdateRepository(self.session)
         return self
 
     def __exit__(
@@ -63,6 +66,7 @@ class UnitOfWork:
             self.approvals = None
             self.broker_orders = None
             self.audit = None
+            self.telegram_updates = None
 
     def commit(self) -> None:
         """Explicit mid-scope commit (rare; prefer context exit)."""
@@ -105,6 +109,12 @@ class UnitOfWork:
         if self.audit is None:
             raise RuntimeError("UnitOfWork is not active")
         return self.audit
+
+    @property
+    def telegram_updates_repo(self) -> TelegramUpdateRepository:
+        if self.telegram_updates is None:
+            raise RuntimeError("UnitOfWork is not active")
+        return self.telegram_updates
 
 
 @contextmanager

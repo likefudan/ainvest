@@ -11,6 +11,7 @@ from pathlib import Path
 
 import pytest
 from sqlalchemy import create_engine, inspect, select, text
+from sqlalchemy.exc import IntegrityError
 
 from ainvest.db.models import (
     OrderProposalRow,
@@ -61,6 +62,8 @@ def test_alembic_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
         "operator_actions",
         "portfolio_snapshots",
         "audit_events",
+        "telegram_poll_states",
+        "telegram_processed_updates",
         "alembic_version",
     }
     assert expected <= tables
@@ -74,8 +77,34 @@ def test_alembic_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
     run("upgrade", "head")
     engine = create_engine(url)
     restored = set(inspect(engine).get_table_names())
-    engine.dispose()
     assert expected <= restored
+
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO telegram_poll_states "
+                "(environment, next_offset, lease_epoch, version) "
+                "VALUES ('unknown', 0, 0, 1)"
+            )
+        )
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO telegram_processed_updates "
+                "(environment, update_id, kind, disposition, processed_at) "
+                "VALUES ('staging', 9223372036854775807, 'ignored', 'ignored', CURRENT_TIMESTAMP)"
+            )
+        )
+    with pytest.raises(IntegrityError), engine.begin() as connection:
+        connection.execute(
+            text(
+                "INSERT INTO telegram_processed_updates "
+                "(environment, update_id, kind, disposition, processed_at, "
+                "callback_query_digest) VALUES "
+                "('staging', 1, 'callback', 'handled', CURRENT_TIMESTAMP, 'short')"
+            )
+        )
+    engine.dispose()
 
 
 @pytest.mark.integration

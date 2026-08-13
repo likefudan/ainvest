@@ -12,7 +12,9 @@ from decimal import Decimal
 from typing import Any
 
 from sqlalchemy import (
+    BigInteger,
     Boolean,
+    CheckConstraint,
     ForeignKey,
     Index,
     Integer,
@@ -409,6 +411,76 @@ class AuditEventRow(Base):
     payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False, default=dict)
 
 
+class TelegramPollStateRow(Base, TimestampMixin):
+    """Durable Telegram cursor and fenced single-worker lease."""
+
+    __tablename__ = "telegram_poll_states"
+    __table_args__ = (
+        CheckConstraint("environment IN ('staging', 'production')", name="environment"),
+        CheckConstraint(
+            "next_offset >= 0 AND next_offset <= 9223372036854775807",
+            name="next_offset_range",
+        ),
+        CheckConstraint(
+            "lease_epoch >= 0 AND lease_epoch <= 9223372036854775807",
+            name="lease_epoch_range",
+        ),
+        CheckConstraint("version >= 1", name="version_positive"),
+        CheckConstraint(
+            "lease_owner IS NULL OR (length(lease_owner) >= 1 AND length(lease_owner) <= 64)",
+            name="lease_owner_length",
+        ),
+        CheckConstraint(
+            "(lease_owner IS NULL AND lease_expires_at IS NULL) OR "
+            "(lease_owner IS NOT NULL AND lease_expires_at IS NOT NULL)",
+            name="lease_fields_together",
+        ),
+    )
+
+    environment: Mapped[str] = mapped_column(String(16), primary_key=True)
+    next_offset: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    lease_owner: Mapped[str | None] = mapped_column(String(64), nullable=True)
+    lease_expires_at: Mapped[datetime | None] = mapped_column(UtcDateTime(), nullable=True)
+    lease_epoch: Mapped[int] = mapped_column(BigInteger, nullable=False, default=0)
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+
+class TelegramProcessedUpdateRow(Base):
+    """Terminal Telegram update marker; intentionally stores no provider payload."""
+
+    __tablename__ = "telegram_processed_updates"
+    __table_args__ = (
+        UniqueConstraint("environment", "update_id", name="uq_telegram_update_environment_id"),
+        UniqueConstraint(
+            "environment",
+            "callback_query_digest",
+            name="uq_telegram_update_environment_callback_digest",
+        ),
+        CheckConstraint("environment IN ('staging', 'production')", name="environment"),
+        CheckConstraint(
+            "update_id >= 0 AND update_id <= 9223372036854775806",
+            name="update_id_range",
+        ),
+        CheckConstraint("kind IN ('callback', 'text', 'ignored')", name="kind"),
+        CheckConstraint(
+            "disposition IN ('handled', 'ignored', 'duplicate_callback')",
+            name="disposition",
+        ),
+        CheckConstraint(
+            "callback_query_digest IS NULL OR length(callback_query_digest) = 64",
+            name="callback_digest_length",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    update_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    kind: Mapped[str] = mapped_column(String(16), nullable=False)
+    disposition: Mapped[str] = mapped_column(String(32), nullable=False)
+    processed_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    callback_query_digest: Mapped[str | None] = mapped_column(String(64), nullable=True)
+
+
 __all__ = [
     "ApprovalChallengeRow",
     "ApprovalEventRow",
@@ -423,5 +495,7 @@ __all__ = [
     "ResearchRunRow",
     "RiskDecisionRow",
     "StrategyRunRow",
+    "TelegramPollStateRow",
+    "TelegramProcessedUpdateRow",
     "TradeSignalRow",
 ]
