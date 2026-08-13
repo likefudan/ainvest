@@ -101,11 +101,11 @@ plan batch complete only when every card in that section has merged.
 | Batch D — Part 4b (D4b) | Batch D | `P03-T17` | complete (merged) |
 | **Batch D** | Batch D | `P03-T4`–`T17`, `P02-T9`–`T10` | **complete (Gate 1 accepted)** |
 | Batch E — Research | Batch E | `P04-T0`–`P04-T12` | `in_progress` (`P04-T0` and `P04-T1` merged; remaining work unclaimed) |
-| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0` and `P05-T4` merged; `P05-T5` claimed for long-polling ingress) |
+| Batch E — Paper approval | Batch E | `P05-T0`, `T1`, `T4`–`T6`, `T8` | `in_progress` (`P05-T0`, `P05-T4`, and `P05-T5` merged; remaining work unclaimed) |
 | Batch E — Deferred live approval | Batch E | `P05-T7`, `P08-T14`, `P05-T2`, `P05-T3` | `not_started`; owner decisions remain deferred |
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P08-T7`, `P06-T0`, both `P06-T1` integration parts, and `P06-T2` Part 1 display-only CLI merged; Part 2 remains blocked) |
-| Telegram read-only display adapter | Batch F add-on | `P05-T9` after `P05-T4` → `P05-T5` and merged `P06-T2` Part 1 | `queued/unclaimed`; `P05-T4` is merged and `P05-T9` waits for the claimed `P05-T5` to rebase, review, and squash-merge |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` and merged `P06-T2` Part 1 | `dependency-ready, queued/unclaimed`; requires its own claim, latest-main rebase, independent review, and squash-merge workflow |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -170,12 +170,15 @@ implementation merged in [#117](https://github.com/likefudan/ainvest/pull/117).
 The owner lifted the `P05-T4` pause on 2026-08-12. Its claim merged in
 [#120](https://github.com/likefudan/ainvest/pull/120), and its independently
 reviewed notification/config implementation merged in
-[#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now claimed
-for the bounded long-polling ingress and durable deduplication boundary;
-`P05-T9` remains queued/unclaimed until `P05-T5` rebases, independently
-reviews, and squash-merges. Later candidates enter the merge queue
-only after their recorded dependencies are on `main`. The coordinator may
-reorder independent ready branches to reduce conflicts, but may not bypass the
+[#121](https://github.com/likefudan/ainvest/pull/121). The `P05-T5` claim and
+implementation then squash-merged in [#123](https://github.com/likefudan/ainvest/pull/123)
+and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
+long polling and durable deduplication. `P05-T9` is now dependency-ready but
+remains queued/unclaimed until a separate claim begins its own latest-main
+rebase, independent review, checks, and squash-merge workflow. Later candidates
+enter the merge queue only after their recorded dependencies are on `main`.
+The coordinator may reorder independent ready branches to reduce conflicts,
+but may not bypass the
 rebase, review, checks, or squash-merge rules above.
 
 #### Initial claims
@@ -547,14 +550,14 @@ Shared-surface ownership for this claim is exclusive:
 
 The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T4` pause on 2026-08-12; that notification/config task is now merged.
-`P05-T5` is now claimed for long polling and durable inbound deduplication,
-while `P05-T9` remains queued/unclaimed behind the serial `P05-T5` merge. The complete
+`P05-T5` is merged with long polling and durable inbound deduplication,
+while `P05-T9` is dependency-ready but remains queued/unclaimed. The complete
 `P06-T0` adapter, runtime-dependency, and hardening delivery is merged, and
 both integration parts of `P06-T1` are merged. `P06-T2` Part 1 display-only
 CLI is merged. `P05-T9` now names the queued/unclaimed Telegram read-only
 display adapter; its implementation depends on the display projection plus
-merged `P05-T4` and `P05-T5`. This record claims only `P05-T5`; it does not
-claim or start `P05-T9` or any unrelated task chain.
+merged `P05-T4` and `P05-T5`. This completion record does not claim or start
+`P05-T9` or any unrelated task chain.
 
 ##### Execution envelope: P08-T4
 
@@ -1279,10 +1282,10 @@ capabilities only. Its serial merge order is:
   Part 1 value may be promoted into Paper, Strategy, Sizer, or Risk.
 - **Next queued work:** `P05-T9` is queued and unclaimed for Telegram read-only
   queries. It builds on the reusable display service and names `P05-T4` and
-  `P05-T5` as serial transport prerequisites. `P05-T4` is merged and complete;
-  `P05-T5` is the sole remaining transport prerequisite and is now claimed.
-  `P05-T9` remains unclaimed until `P05-T5` is rebased, independently reviewed,
-  and squash-merged. The slice remains
+  `P05-T5` as serial transport prerequisites. Both are merged and complete.
+  `P05-T9` is dependency-ready but remains queued/unclaimed until a new claim
+  starts its own latest-main rebase, independent review, checks, and
+  squash-merge workflow. The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
 
@@ -1768,12 +1771,13 @@ unclaimed, and paused; no background worktree or implementation agent should
 be started for it. On 2026-08-12 the owner explicitly lifted the separate
 `P05-T4` pause and authorized the serial Telegram transport chain to begin with
 that task only. Now that the `P06-T2` Part 1 display-only CLI is merged,
-`P05-T9` is queued/unclaimed for Telegram read-only queries built on that
-display projection and the `P05-T4`/`P05-T5` transport. `P05-T4` is now merged
-and `P05-T5` is claimed;
+`P05-T9` is dependency-ready but queued/unclaimed for Telegram read-only
+queries built on that display projection and the `P05-T4`/`P05-T5` transport.
+Both transport tasks are merged;
 `P05-T9` must not wait for Part 2 or mix that read surface with Paper promotion,
 Telegram approval, a non-trading mutation, or a trading capability. It remains
-unclaimed until `P05-T5` rebases, independently reviews, and squash-merges.
+unclaimed until a separate claim starts its own latest-main rebase,
+independent review, checks, and squash-merge workflow.
 The unrelated `P04-T2` pause remains in force.
 
 #### Research track — `P04-T0` through `P04-T12`
@@ -1813,16 +1817,16 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T0` | `merged` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
 | `P05-T1` | `not_started` | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` | `approval/telegram_approval.py`; callback validation, audit/outbox integration, tests |
 | `P05-T4` | `merged` ([#120](https://github.com/likefudan/ainvest/pull/120), [#121](https://github.com/likefudan/ainvest/pull/121); squash `2dd706980475fd6598f33d21e9c5974515de5629`) | `P05-T0`, `DEC-005` satisfied; real environment validation remains owner-assisted and pending under proposed `DEC-010` | completed notification/config adapter, snapshots, fake-transport tests, strict file-secret and fail-closed delivery boundaries |
-| `P05-T5` | `in_progress` — `p05_t5_telegram_long_polling` | merged `P05-T4`, `P01-T4` | `approval/telegram_updates.py`; bounded long poller, typed inbound classification/handler port, durable offset/dedup/lease persistence, migration, fake-transport tests, and documentation under the envelope below |
+| `P05-T5` | `merged` ([#123](https://github.com/likefudan/ainvest/pull/123), squash `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`; [#124](https://github.com/likefudan/ainvest/pull/124), squash `aeb402b8140882eaa7e1707ca50521c266949728`) | merged `P05-T4`, `P01-T4`; real environment validation remains owner-assisted and pending under proposed `DEC-010` | completed bounded long poller, typed inbound classification/handler port, durable offset/dedup/fenced-lease persistence, migration, adapter/concurrency/restart tests, and documentation |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `queued/unclaimed` (waiting on claimed `P05-T5`) | merged `P06-T2` Part 1 and `P05-T4`; then merged `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | `approval/telegram_queries.py`; narrow `telegram_updates.py` dispatch addition; READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition; focused tests and `docs/telegram-read-queries.md` |
+| `P05-T9` | `dependency-ready, queued/unclaimed` | merged `P06-T2` Part 1, `P05-T4`, and `P05-T5`; real calls also require a reviewed ready `rh-mcp` release/pin | separate claim, latest-main rebase, independent review, checks, and squash merge; then `approval/telegram_queries.py`, narrow `telegram_updates.py` dispatch addition, READ_BROKER-owned `ROBINHOOD_READ_ACCOUNT_NUMBER` setting/file-secret/subcomposition, focused tests, and `docs/telegram-read-queries.md` |
 
-`P05-T1` is dependency-ready but remains unclaimed. `P05-T4` is complete and
-`P05-T5` alone is claimed by this tracker update. `P05-T6` follows `P05-T1`.
-`P05-T9` is a display-only add-on,
-not a Gate 3 dependency and not an approval path; it may be claimed only after
-`P05-T5` merges. The completed Paper approval path unlocks `P08-T13`, then
+`P05-T1` is dependency-ready but remains unclaimed. `P05-T4` and `P05-T5` are
+complete; this tracker update claims no new task. `P05-T6` follows `P05-T1`.
+`P05-T9` is a display-only add-on, not a Gate 3 dependency and not an approval
+path; it is dependency-ready but remains queued/unclaimed. The completed Paper
+approval path unlocks `P08-T13`, then
 `P05-T8`.
 
 ##### Execution envelope: P05-T4
@@ -1830,8 +1834,9 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
 - **Title:** Configure Telegram Bots and Send Private Notifications.
 - **Status/owner:** `merged` — implementation owner
   `p05_t4_telegram_notifications`. The owner explicitly lifted the prior pause
-  on 2026-08-12. This completed only `P05-T4`; the later claim below starts
-  `P05-T5`, while `P05-T9` remains queued/unclaimed.
+  on 2026-08-12. This completed only `P05-T4`; the separate `P05-T5` work
+  below is now merged, while `P05-T9` remains dependency-ready but
+  queued/unclaimed.
 - **Claim branch/worktree/base:** `agent/p05-t4-claim` /
   `.worktrees/p05-t4-claim`, based on immutable `main`
   `e605558bbae6d71e66f01551192b964f23334094`. After this tracker claim is
@@ -2066,23 +2071,39 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
   Until then the real adapter stays disabled and real `getMe`/private-message
   validation is unverified. This does not block deterministic offline
   implementation, review, or merge.
-- **Serial handoff:** `P05-T4` is complete and the separate `P05-T5` claim is
-  now active below. Rebase, independently review, and squash-merge `P05-T5`
-  before claiming `P05-T9`.
+- **Serial handoff:** `P05-T4` and `P05-T5` are complete. `P05-T9` is now
+  dependency-ready but remains queued/unclaimed; it requires a separate claim
+  and the full latest-main rebase, independent-review, checks, and squash-merge
+  workflow.
 
 ##### Execution envelope: P05-T5
 
 - **Title:** Operate Idempotent Telegram Long Polling and Preserve a Webhook
   Boundary.
-- **Status/owner:** `in_progress` — `p05_t5_telegram_long_polling`. This claim
-  starts only `P05-T5`; it does not claim `P05-T1`, `P05-T9`, a webhook
-  deployment, or any business handler.
+- **Status/owner:** `merged` — `p05_t5_telegram_long_polling`. The completed
+  work covers only `P05-T5`; it did not claim or implement `P05-T1`, `P05-T9`,
+  a webhook deployment, or any business handler.
 - **Claim branch/worktree/base:** `agent/p05-t5-claim` /
   `.worktrees/p05-t5-claim`, based on immutable `main`
-  `de32f4fd578d9898a38657526e9f6592dabcf3df`. After this claim is independently
-  reviewed and squash-merged, implementation uses
-  `agent/p05-t5-telegram-long-polling` / `.worktrees/p05-t5` from that latest
-  `main` and records the new immutable implementation base before code changes.
+  `de32f4fd578d9898a38657526e9f6592dabcf3df`. After the claim was independently
+  reviewed and squash-merged, implementation used `agent/p05-t5` /
+  `.worktrees/p05-t5` from `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`.
+- **Merge and independent-review evidence:** the claim squash-merged through
+  [#123](https://github.com/likefudan/ainvest/pull/123) as
+  `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`, after its
+  [first independent review](https://github.com/likefudan/ainvest/pull/123#issuecomment-5276948866),
+  [remediation](https://github.com/likefudan/ainvest/pull/123#issuecomment-5276981879),
+  and [approval](https://github.com/likefudan/ainvest/pull/123#issuecomment-5277027103).
+  The implementation squash-merged through
+  [#124](https://github.com/likefudan/ainvest/pull/124) as
+  `aeb402b8140882eaa7e1707ca50521c266949728`, after its
+  [first independent review](https://github.com/likefudan/ainvest/pull/124#pullrequestreview-4924627032),
+  [remediation](https://github.com/likefudan/ainvest/pull/124#issuecomment-5277628772),
+  and [approval](https://github.com/likefudan/ainvest/pull/124#pullrequestreview-4924725077).
+  Final implementation evidence was focused `71`, unit `1314`, contract `200`,
+  integration `42`, and combined `1556` passing tests at `87.58%` coverage;
+  Alembic had the single head `bf42c70e30d1`, and required GitHub checks were
+  green.
 - **Dependencies and authority:** `P05-T4` and `P01-T4` are merged; `DEC-005`
   is accepted. Follow `design.md` sections 3.3–3.6, 5.5, 7, 9, 11, 13–15;
   `IMPLEMENTATION_TODO.md` sections 1, 8 (`P05-T0`, `P05-T4`, `P05-T5`, and
@@ -2322,22 +2343,23 @@ not a Gate 3 dependency and not an approval path; it may be claimed only after
 - **Forbidden scope and handoff:** no callback approval decision (`P05-T1`),
   Telegram query/reply/rate-limit implementation (`P05-T9`), approval event,
   proposal mutation, audit/outbox business event, broker/Paper/Robinhood call,
-  model/prompt, webhook server, new dependency, or live capability. After this
-  claim merges, implement on latest `main`; before review rebase latest `main`,
-  rerun all gates, obtain independent functionality/readability review, fix all
-  findings, and squash-merge serially. Only after the implementation is on
-  `main` may a new branch claim `P05-T9`.
+  model/prompt, webhook server, new dependency, or live capability. This
+  implementation merged only after the latest-main/review/checks workflow
+  completed. `P05-T9` is now dependency-ready but remains queued/unclaimed;
+  its future owner must begin with a separate claim and repeat the full
+  latest-main rebase, independent-review, checks, and squash-merge workflow.
 
 ##### Scheduling envelope: P05-T9
 
 - **Planning PR/status:** [#119](https://github.com/likefudan/ainvest/pull/119)
-  assigns the unique task ID only. Implementation is unclaimed and
-  waiting on its serial prerequisite; #119 created no implementation worktree,
-  and this claim creates only the P05-T5 planning worktree, not P05-T9 work.
-- **Serial unlock:** merged `P06-T2` Part 1 and `P05-T4` are satisfied.
-  `P05-T5` is now claimed; rebase, independently review, and squash-merge its
-  implementation before claiming `P05-T9`. `P05-T9` is a display-only add-on
-  and is not required by Gate 3 or `P06-T2` Part 2.
+  assigns the unique task ID only. Implementation is dependency-ready but
+  queued/unclaimed; #119 created no implementation worktree, and the completed
+  P05-T5 work created no P05-T9 work.
+- **Serial unlock:** merged `P06-T2` Part 1, `P05-T4`, and `P05-T5` satisfy the
+  serial dependencies. A separate tracker claim must precede implementation,
+  which then rebases latest `main`, receives independent review, passes checks,
+  and squash-merges. `P05-T9` is a display-only add-on and is not required by
+  Gate 3 or `P06-T2` Part 2.
 - **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
   `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
   error envelope. P05-T9 owns its exact `TelegramQueryError` wire and
