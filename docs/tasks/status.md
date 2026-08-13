@@ -1279,9 +1279,10 @@ capabilities only. Its serial merge order is:
   Part 1 value may be promoted into Paper, Strategy, Sizer, or Risk.
 - **Next queued work:** `P05-T9` is queued and unclaimed for Telegram read-only
   queries. It builds on the reusable display service and names `P05-T4` and
-  `P05-T5` as serial transport prerequisites. The owner lifted the `P05-T4`
-  pause on 2026-08-12 and that prerequisite is now claimed; `P05-T9` remains
-  unclaimed until `P05-T4` and then `P05-T5` squash-merge. The slice remains
+  `P05-T5` as serial transport prerequisites. `P05-T4` is merged and complete;
+  `P05-T5` is the sole remaining dependency-ready transport prerequisite but
+  remains queued/unclaimed. `P05-T9` remains unclaimed until `P05-T5` is
+  separately claimed, rebased, reviewed, and squash-merged. The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
 
