@@ -199,9 +199,12 @@ Primary parallelization opportunities:
   external dependency pin" in `docs/tasks/status.md`, and `P06-T0`, `P06-T1`,
   and `P06-T2` Part 1 are on `main`. `P05-T9` is now the queued/unclaimed task
   card for Telegram read-only queries. On 2026-08-12 the owner lifted the
-  `P05-T4` pause and that prerequisite was claimed. `P05-T5` and `P05-T9`
-  remain queued/unclaimed and must follow as separate serial claims after each
-  predecessor squash-merges.
+  `P05-T4` pause; its claim and implementation subsequently squash-merged in
+  [#120](https://github.com/likefudan/ainvest/pull/120) and
+  [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` is now the
+  next dependency-ready queued/unclaimed task. `P05-T9` remains
+  queued/unclaimed until `P05-T5` separately claims, rebases, reviews, and
+  squash-merges.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1056,11 +1059,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   approval, mutation, model, Paper-promotion, or trading capability. This is a
   transport adapter over the merged `P06-T2` Part 1 display service, not a new
   data provider or a Gate 3 requirement.
-- **Status and scheduling:** `queued/unclaimed`, waiting on serial
-  prerequisites. The owner lifted the `P05-T4` pause and that task was claimed
-  on 2026-08-12. After `P05-T4` squash-merges, rebase latest `main`, claim,
-  implement, review, and squash-merge `P05-T5`; only then may an agent claim
-  this card. Assigning `P05-T9` does not start or claim either prerequisite.
+- **Status and scheduling:** `queued/unclaimed`, waiting on the remaining
+  serial prerequisite. `P05-T4` squash-merged in
+  [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
+  `P05-T5` is dependency-ready but remains queued/unclaimed; rebase latest
+  `main`, claim, implement, review, and squash-merge it before any agent claims
+  this card. Assigning `P05-T9` does not start or claim `P05-T5`.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1961,8 +1965,9 @@ line.
   P04-T12; dispatch is currently paused at P04-T2.
 - Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
-  lifted the P05-T4 pause on 2026-08-12 and P05-T4 is the only claimed task in
-  the transport branch.
+  lifted the P05-T4 pause on 2026-08-12 and P05-T4 is now merged. P05-T5 is
+  the next dependency-ready task in the transport branch but remains
+  queued/unclaimed.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -1973,9 +1978,9 @@ line.
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
-  queued/unclaimed Telegram read-only task. The owner resumed and claimed
-  `P05-T4` on 2026-08-12. After it squash-merges, `P05-T5` must be claimed,
-  rebased, reviewed, and squash-merged before `P05-T9` may be claimed. By owner
+  queued/unclaimed Telegram read-only task. `P05-T4` squash-merged on
+  2026-08-12. `P05-T5` must now be separately claimed, rebased, reviewed, and
+  squash-merged before `P05-T9` may be claimed. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -1990,11 +1995,10 @@ line.
    `docs/tasks/status.md`, and `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are
    merged.
 2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
-   on that display projection and `P05-T4`/`P05-T5`. The owner lifted the
-   `P05-T4` pause and claimed that task on 2026-08-12. Complete `P05-T4` ->
-   `P05-T5` as separate serial rebase/review/squash-merge steps before claiming
-   `P05-T9`. Do not combine queries with Telegram approval, Paper promotion,
-   non-trading mutations, or trading capabilities.
+   on that display projection and `P05-T4`/`P05-T5`. `P05-T4` is merged;
+   separately claim, rebase, review, and squash-merge the dependency-ready
+   `P05-T5` before claiming `P05-T9`. Do not combine queries with Telegram
+   approval, Paper promotion, non-trading mutations, or trading capabilities.
 3. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
    contract if required; then complete `P06-T2` Part 2 real-portfolio Paper.
