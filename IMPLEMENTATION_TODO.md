@@ -207,18 +207,19 @@ Primary parallelization opportunities:
   [#126](https://github.com/likefudan/ainvest/pull/126) and
   [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
   current executable dependency authority. Owner-assisted real-provider
-  validation remains pending but does not block deterministic offline
-  `P05-T9` implementation. `P06-T0`, `P06-T1`, and `P06-T2`
-  Part 1 are on `main`. `P05-T9` remains queued/unclaimed. On 2026-08-12 the
+  validation remains pending. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  `main`. `P05-T10` is the claimed planning step immediately before P05-T9;
+  P05-T9 remains queued/unclaimed. On 2026-08-12 the
   owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
   [#120](https://github.com/likefudan/ainvest/pull/120) and
   [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` then
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
-  long polling and durable inbound deduplication. `P05-T9` is dependency-ready
-  but remains queued/unclaimed pending its own claim, latest-main rebase,
-  independent review, checks, and squash-merge workflow.
+  long polling and durable inbound deduplication. P05-T10 must now implement,
+  independently review, and squash-merge the Bot-environment provisioning and
+  validation contract. Only then may P05-T9 receive its own claim, latest-main
+  rebase, independent review, checks, and squash-merge workflow.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -232,7 +233,7 @@ Primary parallelization opportunities:
 | Phase 02 | Schemas, database, audit, and workflow state | P02-T0 through P02-T10 |
 | Phase 03 | Strategies, sizing, risk, deterministic Paper loop, Gate 1 | P03-T0 through P03-T17 |
 | Phase 04 | Data, Research Agent, backtesting, Gate 2 | P04-T0 through P04-T12 |
-| Phase 05 | Telegram Paper approval, read-only queries, deferred live approval preparation, Gate 3 | P05-T0 through P05-T9 |
+| Phase 05 | Telegram Paper approval, environment provisioning, read-only queries, deferred live approval preparation, Gate 3 | P05-T0 through P05-T10 |
 | Phase 06 | Official Robinhood MCP read path and Gate 4 | P06-T0 through P06-T3 |
 | Phase 07 | Controlled live execution, cancellation, reconciliation, and Gate 5 | P07-T0 through P07-T6 |
 | Phase 08 | Parallel runtime, observability, security, documentation, and test assurance | P08-T0 through P08-T15 |
@@ -259,6 +260,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 | P04-T12 | §15 Phase 2 |
 | P05-T0 through P05-T8 | §3.4–§3.5, §5.5, §7, §15 Phase 3 |
 | P05-T9 | §3.2–§3.5, §5.1, §5.5, §7, §11, §14.3, §16–§17 |
+| P05-T10 | §3.4–§3.5, §5.5, §7, §11, §14.3, §16–§17 |
 | P06-T0 through P06-T3 | §5.1, §5.6, §10.1, §15 Phase 4 |
 | P07-T0 through P07-T6 | §3.3–§3.5, §5.6–§5.7, §8, §14.4, §15 Phase 5 |
 | P08-T0 through P08-T15 | §3.5–§3.6, §5.7, §9, §11–§14 |
@@ -1070,6 +1072,244 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   - Verify database/logs contain no raw nonce or Bot token and the Paper deployment contains no public approval route or Robinhood write client.
 - **Acceptance criteria:** The design Phase 3 criteria pass; no Telegram input can create live scope or call a write broker; `docs/releases/phase-3-acceptance.md` is produced.
 
+### P05-T10 — Provision and Validate Telegram Bot Environments
+
+- **Objective:** Give the trusted local operator one repeatable, fail-closed
+  way to install and validate the separate first-release staging and production
+  Telegram Bot configurations that P05-T4 and P05-T5 already consume. Bot
+  creation in BotFather remains a manual owner action; this card never automates
+  or stores BotFather account access.
+- **Status and scheduling:** `claimed/planning`. This card is the serial step
+  immediately before P05-T9. Its claim must merge before implementation; its
+  implementation must then rebase latest `main`, receive independent review,
+  pass checks, and squash-merge before a separate P05-T9 claim. Owner-assisted
+  validation with real Bots is deployment evidence under proposed `DEC-010`,
+  not an input to offline implementation or CI.
+- **Dependencies:** merged P05-T4, P05-T5, P01-T4, and P02-T6; accepted
+  `DEC-005`; and the staging/production identity shape proposed in `DEC-010`.
+  This card does not accept `DEC-010` or invent any owner-controlled token or
+  numeric identity.
+- **Operator entry point:** add the dedicated console script
+  `ainvest-telegram-provision = "ainvest.approval.telegram_provisioning:main"`.
+  There is no repository-wide `ainvest` command, so documentation and tests
+  must use this exact narrow entry rather than inventing `ainvest telegram`.
+  It has exactly four subcommands: `add`, `validate`, `rotate-token`, and
+  `disable`. Every command requires an explicit `--environment` of `staging`
+  or `production`, explicit `--env-file`, and explicit `--secrets-dir`.
+  State-changing `add`, `rotate-token`, and `disable` also require an explicit
+  first-release SQLite `--database` path for best-effort P05-T5 lease
+  coordination;
+  `validate` does not need database access. Paths and numeric identities may
+  appear in arguments; a Bot token may not.
+- **Manual creation and secret input:** the owner creates each Bot in BotFather
+  and initiates a private message to it. The utility never reads or controls a
+  BotFather password, 2FA code, recovery code, session, browser, or API. `add`
+  and `rotate-token` read one Bot token only from a controlling TTY with
+  no-echo input. Reject non-TTY input; do not accept the token through argv,
+  stdin pipes, process environment, `.env`, prompt echo, clipboard automation,
+  logs, metrics, traces, exceptions, or shell history. Keep the token in a
+  redacted wrapper outside the narrow provider/file boundary.
+- **Exact configuration and file-secret contract:** write only the selected
+  environment's exact secret file,
+  `TELEGRAM_STAGING__BOT_TOKEN` or
+  `TELEGRAM_PRODUCTION__BOT_TOKEN`, in the explicitly supplied directory. The
+  installed and validated file is a regular owner-only `0600` file containing
+  the validated token plus at most the one terminal LF already accepted by
+  P05-T4. Use a
+  same-directory atomic install, reject a symlink or non-regular target, and
+  make `add` refuse an unrelated pre-existing target rather than overwrite it.
+  `rotate-token` is the sole operation allowed to replace that exact target,
+  and only after every rotation precondition and provider validation succeeds.
+  Temporary names, errors, output, and tests must not expose token bytes.
+- **File-secret-only token provenance:** before provider access or any write,
+  parse the entire explicit `.env` using the same case-insensitive field names,
+  nested delimiter, aliases, JSON shapes, and precedence as current Pydantic
+  Settings. Reject any assignment that can populate either environment's
+  `bot_token`: every ASCII-case variant of
+  `TELEGRAM_STAGING__BOT_TOKEN`/`TELEGRAM_PRODUCTION__BOT_TOKEN`, and a
+  case-variant top-level `TELEGRAM_STAGING`/`TELEGRAM_PRODUCTION` JSON object
+  containing any case-variant or accepted alias of `bot_token`. Comparing only
+  resolved bytes is insufficient because an equal dotenv token still has the
+  wrong provenance. Fail closed with a fixed, value-free instruction to remove
+  the plaintext assignment and retry; never print it or automatically delete
+  a secret. The exact `0600` file secret is the sole token source created or
+  accepted by this utility, and the utility never writes a token to `.env`.
+- **Safe `.env` update:** after that provenance check, edit only the six exact
+  non-secret keys for the selected prefix:
+  `ENABLED`, `EXPECTED_BOT_ID`, `ALLOWED_RECIPIENTS`, `TRANSPORT`,
+  `APPROVAL_METHOD`, and `APPROVAL_SCOPE`. Preserve comments, order, newline
+  style, and every unrelated key/value byte; refuse invalid UTF-8, NULs,
+  duplicate managed keys, symlinks, non-regular files, and ambiguous managed
+  assignments. Write a `0600` same-directory temporary file, flush it, and
+  atomically replace the validated regular `.env`. The resulting values are
+  `long_polling`, `telegram`, `paper`, one explicitly confirmed bound recipient
+  record, and the exact numeric `getMe.id`. Never write the token to `.env`.
+  There is no cross-file atomic primitive: keep the environment disabled while
+  staging changes, install/rotate the secret first, and make the final atomic
+  `.env` activation the last step. A crash can leave only a disabled
+  environment. A rerun may resume only when the selected disabled config and
+  existing regular `0600` secret match the just-validated values exactly;
+  otherwise it refuses overwrite.
+- **Provider validation before activation:** with bounded timeouts and
+  sanitized failures, call `getMe` first and require one positive signed-64-bit
+  numeric Bot ID. Then call `getWebhookInfo`; missing/malformed data, timeout,
+  provider rejection, or any non-empty webhook URL fails closed. Never call
+  `deleteWebhook` or otherwise change provider state. Staging and production
+  must have different Bot IDs and different token bytes. The same owner
+  `user_id` or exact private `(user_id, private_chat_id)` pair may be bound in
+  both Bot environments; isolation comes from observing and confirming the pair
+  through that environment's already validated Bot, storing it only under that
+  environment prefix, and forbidding fallback or cross-product construction.
+- **Private-recipient discovery and confirmation:** `add` may make bounded
+  `getUpdates` discovery calls with `allowed_updates=("message",)`, a bounded
+  timeout and limit, and **no `offset` argument**. It may display only unique
+  positive numeric candidate `(from.id, private chat.id)` pairs from original,
+  non-forwarded, non-service private messages. Ignore usernames, text,
+  callbacks, edited messages, inline messages, groups, supergroups, channels,
+  and malformed records. The operator must select and explicitly confirm the
+  exact numeric pair; a bounded `getChat` must then return that same ID with
+  `type=private`. Discovery never confirms a Telegram update by sending
+  `update_id + 1`, never advances or deletes a P05-T5 poll cursor, and never
+  writes a processed-update row. The best-effort maintenance acquisition below
+  may create the canonical payload-free poll-state row with `next_offset=0`
+  when none exists; that initialization is not update confirmation.
+- **Authoritative quiescence and best-effort database coordination:** a lease
+  observation alone does not prove that the poller process is stopped: P05-T5
+  releases its lease between cycles and during backoff. Before `add`,
+  `rotate-token`, or `disable`, the operator must first stop the selected
+  environment's poller through the external deployment/process manager, then
+  pass the explicit `--confirm-poller-stopped` acknowledgement. This external
+  stop plus acknowledgement is the sole authoritative exclusion boundary; the
+  utility never starts, stops, signals, or reconfigures the service.
+  The utility waits for any old unexpired lease to clear until one fixed bounded
+  deadline, then uses the existing P05-T5
+  `acquire_lease`/owner/monotonic-epoch/version mechanism for best-effort
+  detection and coordination with a conforming worker. It renews the lease with
+  a clear margin during provider calls/operator confirmation and rechecks the
+  same owner/epoch immediately before each atomic file replace. An observed
+  acquisition, renewal, or owner/epoch check failure aborts that write and all
+  later writes; activation-last leaves `add`/`rotate-token` disabled on a
+  partial operation, and a failed `disable` leaves the externally stopped
+  service stopped for operator recovery. Best-effort release occurs at the end;
+  process crash relies on lease expiry.
+  The existing `acquire_lease` is allowed to call `ensure_state` and create
+  exactly the canonical payload-free poll-state row (`next_offset=0`) when no
+  row exists. Acquisition, renewal, and release may normally change only lease
+  owner/expiry, monotonic epoch, and optimistic version. Capture `next_offset`
+  before acquisition when a row exists and prove it is exactly unchanged after
+  every lease operation; a newly initialized row must remain exactly zero.
+  Never advance `next_offset`, call `record_terminal`, or write
+  `telegram_processed_updates`.
+  The DB lease is not a filesystem fencing primitive. An owner/epoch recheck
+  detects only a takeover already visible in the database; takeover can occur
+  after the check and before/after `os.replace`, because no transaction spans
+  SQLite and the filesystem. Do not roll back an already completed single-file
+  atomic replace as if the multi-file operation were a transaction. Owner-
+  assisted validation must independently verify the process-manager stop.
+  `add` and `rotate-token` additionally require the selected environment
+  to be disabled before provider/file mutation. A successful `add` activates
+  the newly complete environment. A successful `rotate-token` requires
+  `getMe.id` to equal the already configured `expected_bot_id` exactly and
+  reactivates the environment only after atomic replacement succeeds.
+  `disable` changes only `ENABLED=false`; it retains the token, expected Bot
+  ID, recipient record, and all unrelated configuration. It cannot terminate a
+  running process, so an active lease instructs the operator to stop the
+  poller and retry after release/expiry.
+- **Validation and optional test delivery:** `validate` performs no config,
+  secret, database, cursor, or provider mutation. It loads through the public
+  `load_settings(environ={}, env_file=..., secrets_dir=...)` path so ambient
+  variables cannot override the inspected files; proves exact `getMe`
+  identity, secret-file mode, empty webhook configuration, bound private-chat
+  identity, and cross-environment isolation; and emits only a sanitized
+  result. By default it sends no message. Only explicit
+  `validate --send-test` may make one
+  `sendMessage` attempt, after all checks, with a fixed bounded plain-text
+  environment label and no account/order/secret data. Never retry after send
+  begins; timeout/disconnect is an unknown outcome and a second message is
+  forbidden. This proves only the explicitly inspected files with an empty
+  injected environment. It cannot prove that a separately launched service has
+  no ambient nested token or top-level Telegram JSON override; deployment
+  validation must enforce and verify that absence without displaying values
+  before enabling integration.
+- **Primary and allowed implementation paths:** `pyproject.toml` for the one
+  console script; new `src/ainvest/approval/telegram_provisioning.py` for CLI,
+  orchestration, narrow provider port/adapter, and safe file updates; narrow
+  re-exports in `src/ainvest/approval/__init__.py` only if a public library port
+  is necessary; existing `src/ainvest/config/settings.py` only if a small
+  reusable exact-key/file-secret constant prevents duplication; existing
+  `src/ainvest/db/repositories.py` only if a narrow bounded maintenance-lease
+  helper is clearer than composing the existing fenced methods; focused unit
+  tests in
+  `tests/unit/approval/test_telegram_provisioning.py`; focused config tests only
+  for a touched helper; one SQLite/filesystem integration test in
+  `tests/integration/approval/test_telegram_provisioning.py`;
+  `tests/unit/test_dependency_boundary.py` only to update the exact additive
+  console-script mapping; `docs/telegram-notifications.md` for the operator
+  workflow; and `docs/decisions/README.md` for the P05-T10 DEC-005/DEC-010
+  traceability/deadline correction. No migration,
+  schema, lock-file, dependency, runtime, or shared CLI framework change is
+  authorized. Reuse stdlib `argparse`, `getpass`, filesystem primitives,
+  existing SQLAlchemy/P05-T5 repositories, and the existing optional
+  `python-telegram-bot` approval dependency.
+- **Forbidden scope:** no BotFather automation or credentials; no webhook
+  server or provider-side webhook mutation; no group/channel recipient; no
+  username authorization; no P05-T5 offset advancement, terminal record, or
+  processed-row mutation. The only permitted P05-T5 database mutations are
+  payload-free poll-state initialization and normal lease-field changes. No
+  P05-T1 callback approval, P05-T9 query, Robinhood call, or Paper/live
+  execution, approval, order, strategy, risk, research, LLM, natural-language,
+  or generic admin/control-plane capability; no new dependency; and no real
+  network or owner credential in canonical tests.
+- **Required tests:** use fake provider transports, synthetic IDs/tokens,
+  injected clock, a temporary filesystem, and real temporary SQLite sessions.
+  Cover exact parser commands/options and the absence of any token argument;
+  no-echo TTY and non-TTY rejection; both environments and cross-environment
+  Bot/token rejection and permitted same-owner recipient reuse without
+  fallback or cross-product construction; exact filenames and `0600` modes;
+  symlink,
+  non-regular, pre-existing, permission, duplicate-key, malformed `.env`, and
+  atomic-write failure paths; preservation of unrelated `.env` content;
+  value-free rejection without automatic deletion of every case-variant nested
+  token key and top-level Telegram JSON/`bot_token` alias supported by current
+  Pydantic dotenv mapping; proof that the exact file is the utility's only
+  accepted token source; explicit process-stop acknowledgement; bounded
+  old-lease wait; acquisition/renewal/release with competing real SQLite
+  sessions; owner/epoch loss observed before each write; a forced takeover
+  after the check proving there is no cross-system atomicity claim; and no file
+  write before acquisition; then cover
+  disabled activation-last crash/retry behavior; `getMe`-before-other-call,
+  webhook fail-closed behavior, bounded discovery with omitted offset, every
+  candidate filter and explicit confirmation; `getChat` private binding;
+  empty/expired/active lease and takeover states, including permitted
+  first-acquisition row creation at `next_offset=0`, exact preservation of an
+  existing `next_offset`, normal lease/version changes, and no processed rows;
+  same-ID-only rotation and old-secret preservation on precommit failure;
+  disable retaining
+  the token/config; default validation with zero sends and explicit test mode
+  with at most one send; sanitized stdout/stderr/repr/error/log output; and
+  structural proof that no P05-T5 offset-advancement, terminal-record,
+  processed-update, business/query, or broker port is reachable. Load the
+  resulting files through `load_settings`
+  to prove the selected environment is complete and the other remains
+  isolated. Update the exact dependency-boundary assertion so all four console
+  scripts are present and no fifth entry is admitted. Canonical tests make no
+  public-network call.
+- **Acceptance criteria:** on an owner-controlled host, the operator can
+  provision, revalidate, safely rotate, and disable each separate Bot without
+  exposing a token or advancing inbound state; only an explicitly confirmed
+  numeric private recipient and exact Bot identity can activate; missing
+  process-stop acknowledgement, quiescence timeout, observed database
+  acquisition/renewal/owner-epoch loss, webhook,
+  crossed Bot/token environment, partial write, and ambiguous input all fail
+  closed. Neither the maintenance lease nor a pre-write owner/epoch comparison
+  is represented as proof that the external poller stopped or as an atomic
+  database/filesystem fence. Focused tests, `./scripts/dev unit`,
+  `./scripts/dev contract`,
+  `./scripts/dev integration`, `git diff --check`, and `./scripts/dev verify`
+  pass. Owner-assisted real staging/production validation is recorded
+  separately and may remain pending under proposed `DEC-010` after offline
+  implementation merge.
+
 ### P05-T9 — Expose Display-Only Robinhood Queries in Telegram
 
 - **Objective:** Let the allowlisted owner inspect the already normalized
@@ -1077,17 +1317,19 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   approval, mutation, model, Paper-promotion, or trading capability. This is a
   transport adapter over the merged `P06-T2` Part 1 display service, not a new
   data provider or a Gate 3 requirement.
-- **Status and scheduling:** `dependency-ready, queued/unclaimed`; no agent has
-  claimed this card. `P05-T4` squash-merged in
+- **Status and scheduling:** `queued/unclaimed; waiting for P05-T10`; no agent
+  has claimed this card. `P05-T4` squash-merged in
   [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
   `P05-T5` squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
-  and [#124](https://github.com/likefudan/ainvest/pull/124). A separate claim
-  must precede P05-T9 implementation, followed by latest-main rebase,
-  independent review, checks, and squash merge.
+  and [#124](https://github.com/likefudan/ainvest/pull/124). P05-T10's
+  provisioning/validation implementation must squash-merge first. A later,
+  separate claim must precede P05-T9 implementation, followed by latest-main
+  rebase, independent review, checks, and squash merge.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
-  `P08-T7`, accepted `DEC-005`, and environment integration under `DEC-010`.
+  `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
+  provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
   `v0.3.0` release is merged and is the current executable authority.
   Owner-assisted real `rh-mcp status` and read validation remains pending;
@@ -1422,8 +1664,9 @@ consumable release artifact.
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
   `v0.3.0` is the current executable dependency authority; `v0.2.0` is
-  historical evidence only. `P05-T9` remains dependency-ready but
-  queued/unclaimed, and owner-assisted real validation remains pending.
+  historical evidence only. P05-T10 is the claimed provisioning step;
+  `P05-T9` remains queued/unclaimed behind its implementation merge, and
+  owner-assisted real validation remains pending.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
@@ -2005,7 +2248,8 @@ line.
 - Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
   lifted the P05-T4 pause on 2026-08-12; P05-T4 and P05-T5 are now merged.
-  P05-T9 is the next dependency-ready task but remains queued/unclaimed.
+  P05-T10 is the claimed next step for real Bot-environment provisioning and
+  validation; P05-T9 stays queued/unclaimed behind its merge.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -2015,11 +2259,13 @@ line.
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` Part 1 serially for the
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
-  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T9` is the assigned
-  dependency-ready but queued/unclaimed Telegram read-only task. `P05-T4`
+  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T10` is the claimed
+  Bot-environment provisioning step before the queued/unclaimed P05-T9
+  Telegram read-only task. `P05-T4`
   squash-merged on 2026-08-12 and `P05-T5` subsequently squash-merged through
-  #123/#124. P05-T9 requires a separate claim and the full latest-main rebase,
-  independent-review, checks, and squash-merge workflow. By owner
+  #123/#124. P05-T10 requires its implementation, latest-main rebase,
+  independent-review, checks, and squash-merge workflow first; P05-T9 then
+  requires a separate claim and the same workflow. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -2035,24 +2281,26 @@ line.
    independently reviewed `v0.3.0` also merged through #126/#127 without
    reopening the adapter or normalization scope; `v0.3.0` is the current
    executable dependency authority.
-2. `P05-T9` is the queued/unclaimed task for Telegram read-only queries built
-   on that display projection and merged `P05-T4`/`P05-T5`. It is
-   dependency-ready but queued/unclaimed; open a separate claim before
-   implementation, then rebase, independently review, check, and squash-merge.
-   Offline implementation does not depend on real Robinhood readiness, but its
-   merge prerequisite is satisfied; owner-assisted real validation remains
-   pending.
+2. Implement, independently review, check, and squash-merge `P05-T10`, the
+   claimed local Bot-environment provisioning and validation utility. BotFather
+   creation and real owner values stay manual, and owner-assisted environment
+   validation may remain pending after the deterministic offline merge.
+3. `P05-T9` remains queued/unclaimed for Telegram read-only queries built on
+   the display projection and merged `P05-T4`/`P05-T5`/`P05-T10`. Open a
+   separate claim only after P05-T10 merges, then rebase, independently review,
+   check, and squash-merge. Offline implementation does not depend on real
+   Robinhood readiness; owner-assisted real validation remains pending.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
-3. Supply and independently review canonical identity, Agentic-account
+4. Supply and independently review canonical identity, Agentic-account
    binding, and regular-session evidence; deliberately update the pinned
    contract if required; then complete `P06-T2` Part 2 real-portfolio Paper.
-4. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
+5. Complete Gate 2, Gate 3, P08-T4, and the remaining P06-T3 dependencies,
    then perform the P06-T3 capability permission audit and Gate 4 acceptance.
-5. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
-6. P07-T0 through P07-T5.
-7. P08-T15 plus an independent security review.
-8. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
+6. P05-T7 -> P08-T14 -> P05-T2 -> P05-T3 for the fixed origin, authenticated operator plane, Passkey bootstrap, and recovery credentials.
+7. P07-T0 through P07-T5.
+8. P08-T15 plus an independent security review.
+9. P07-T6. Perform the real-order step only after the user explicitly authorizes it.
 
 ### Parallel-Edit Warnings
 
