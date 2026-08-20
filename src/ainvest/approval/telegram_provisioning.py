@@ -697,10 +697,7 @@ def _validate_directory(directory: Path) -> None:
 def _read_token_file(path: Path) -> SecretStr:
     descriptor = -1
     try:
-        descriptor = os.open(
-            path,
-            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
-        )
+        descriptor = os.open(path, _secure_token_read_flags())
         details = os.fstat(descriptor)
         if not stat.S_ISREG(details.st_mode):
             raise ProvisioningFailure("token_file_not_regular")
@@ -725,6 +722,15 @@ def _read_token_file(path: Path) -> SecretStr:
     if TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(value) is None:
         raise ProvisioningFailure("token_file_invalid")
     return SecretStr(value)
+
+
+def _secure_token_read_flags() -> int:
+    try:
+        no_follow = os.O_NOFOLLOW
+        non_block = os.O_NONBLOCK
+    except AttributeError:
+        raise ProvisioningFailure("secure_file_open_unavailable") from None
+    return os.O_RDONLY | no_follow | non_block
 
 
 def _atomic_replace(path: Path, content: bytes) -> None:

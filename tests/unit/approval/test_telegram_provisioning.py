@@ -27,6 +27,7 @@ from ainvest.approval.telegram_provisioning import (
     _candidate_from_update,
     _EnvDocument,
     _read_token_file,
+    _secure_token_read_flags,
     build_parser,
     execute,
     main,
@@ -345,6 +346,35 @@ def test_token_file_rejects_fifo_and_directory_without_blocking(tmp_path: Path) 
         _read_token_file(fifo)
 
 
+@pytest.mark.parametrize(
+    ("content", "accepted"),
+    [
+        (b"", False),
+        (("1" * 20 + ":" + "A" * 128).encode(), True),
+        (("1" * 20 + ":" + "A" * 129).encode(), False),
+    ],
+)
+def test_token_grammar_empty_and_exact_maximum(
+    tmp_path: Path, content: bytes, accepted: bool
+) -> None:
+    path = tmp_path / "token"
+    path.write_bytes(content)
+    os.chmod(path, 0o600)
+    if accepted:
+        assert _read_token_file(path).get_secret_value()
+    else:
+        with pytest.raises(ProvisioningFailure):
+            _read_token_file(path)
+
+
+def test_secure_open_flags_require_both_platform_guarantees(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    assert _secure_token_read_flags() & os.O_NOFOLLOW
+    assert _secure_token_read_flags() & os.O_NONBLOCK
+    monkeypatch.delattr(os, "O_NOFOLLOW")
+    with pytest.raises(ProvisioningFailure, match="secure_file_open_unavailable"):
+        _secure_token_read_flags()
+
+
 def test_candidate_filter_accepts_only_original_private_messages() -> None:
     message = SimpleNamespace(
         from_user=SimpleNamespace(id=101),
@@ -509,14 +539,33 @@ def test_rotate_requires_same_bot_and_preserves_old_secret_on_failure(tmp_path: 
     assert "TELEGRAM_STAGING__ENABLED=true" in request.env_file.read_text(encoding="utf-8")
 
 
-def test_rotate_resumes_after_secret_commit_when_activation_failed(tmp_path: Path) -> None:
+def test_rotate_resumes_after_real_secret_commit_and_activation_failure(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     request = _request(tmp_path, "rotate-token")
-    _configured_files(tmp_path, enabled=False, token=STAGING_TOKEN_NEW)
+    _configured_files(tmp_path, enabled=False, token=STAGING_TOKEN)
     transport = FakeTransport(
         token=STAGING_TOKEN_NEW,
         bot_id=9001,
         candidate=ProvisioningCandidate(user_id=101, private_chat_id=201),
     )
+    original = provisioning_module._atomic_replace
+    replacements = 0
+
+    def fail_activation(path: Path, content: bytes) -> None:
+        nonlocal replacements
+        replacements += 1
+        if replacements == 2:
+            raise ProvisioningFailure("injected_activation_failure")
+        original(path, content)
+
+    monkeypatch.setattr(provisioning_module, "_atomic_replace", fail_activation)
+    with pytest.raises(ProvisioningFailure, match="injected_activation_failure"):
+        asyncio.run(execute(request, _dependencies(transport, token=STAGING_TOKEN_NEW)))
+    target = request.secrets_dir / "TELEGRAM_STAGING__BOT_TOKEN"
+    assert target.read_text(encoding="utf-8") == STAGING_TOKEN_NEW + "\n"
+    assert "TELEGRAM_STAGING__ENABLED=false" in request.env_file.read_text(encoding="utf-8")
+    monkeypatch.setattr(provisioning_module, "_atomic_replace", original)
     asyncio.run(execute(request, _dependencies(transport, token=STAGING_TOKEN_NEW)))
     assert "TELEGRAM_STAGING__ENABLED=true" in request.env_file.read_text(encoding="utf-8")
 
@@ -616,8 +665,54 @@ def test_lazy_adapter_uses_exact_read_and_send_arguments(monkeypatch) -> None:  
         "send_message",
     ]
     assert calls[2][1]["chat_id"] == 201
+    timeout_kwargs = {
+        "read_timeout": 5,
+        "write_timeout": 5,
+        "connect_timeout": 5,
+        "pool_timeout": 5,
+    }
+    assert calls[0][1] == timeout_kwargs
+    assert calls[1][1] == timeout_kwargs
+    assert calls[2][1] == {"chat_id": 201, **timeout_kwargs}
     assert calls[3][1]["parse_mode"] is None
     assert calls[3][1]["text"] == "fixed"
+    assert calls[3][1] == {
+        "chat_id": 201,
+        "text": "fixed",
+        "parse_mode": None,
+        **timeout_kwargs,
+    }
+
+
+@pytest.mark.parametrize(
+    "failure", [TimeoutError(), RuntimeError("provider detail"), asyncio.CancelledError()]
+)
+def test_lazy_adapter_send_failure_is_one_call_unknown_and_sanitized(
+    monkeypatch: pytest.MonkeyPatch, failure: BaseException
+) -> None:
+    calls = 0
+
+    class Bot:
+        def __init__(self, *, token: str) -> None:
+            pass
+
+        async def send_message(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            nonlocal calls
+            calls += 1
+            raise failure
+
+    monkeypatch.setattr(
+        "ainvest.approval.telegram_provisioning.importlib.import_module",
+        lambda name: SimpleNamespace(Bot=Bot),
+    )
+    with pytest.raises(ProvisioningFailure, match="test_delivery_unknown") as caught:
+        asyncio.run(
+            TelegramProvisioningHttpsTransport().send_test_message(
+                STAGING_TOKEN, 201, "fixed", timeout_seconds=5
+            )
+        )
+    assert calls == 1
+    assert "provider detail" not in str(caught.value)
 
 
 def test_lazy_adapter_missing_dependency_is_sanitized(monkeypatch) -> None:  # type: ignore[no-untyped-def]

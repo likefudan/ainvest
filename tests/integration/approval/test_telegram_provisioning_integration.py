@@ -32,9 +32,11 @@ TOKEN = "123456:" + "A" * 32
 
 @dataclass
 class TokenReader:
+    token: str = TOKEN
+
     def read(self, prompt: str) -> SecretStr:
         assert prompt
-        return SecretStr(TOKEN)
+        return SecretStr(self.token)
 
 
 @dataclass
@@ -46,27 +48,29 @@ class Selector:
 
 @dataclass
 class Transport:
+    token: str = TOKEN
+    bot_id: int = 9001
     sends: int = 0
 
     async def get_me(self, token: str, *, timeout_seconds: float) -> TelegramBotIdentity:
-        assert token == TOKEN
-        return TelegramBotIdentity(id=9001)
+        assert token == self.token
+        return TelegramBotIdentity(id=self.bot_id)
 
     async def get_webhook_info(
         self, token: str, *, timeout_seconds: float
     ) -> ProvisioningWebhookInfo:
-        assert token == TOKEN
+        assert token == self.token
         return ProvisioningWebhookInfo(url="")
 
     async def discover_private_candidates(self, token: str, **kwargs: object):  # type: ignore[no-untyped-def]
-        assert token == TOKEN
+        assert token == self.token
         assert "offset" not in kwargs
         return (ProvisioningCandidate(user_id=101, private_chat_id=201),)
 
     async def get_chat(
         self, token: str, chat_id: int, *, timeout_seconds: float
     ) -> TelegramChatIdentity:
-        assert token == TOKEN
+        assert token == self.token
         return TelegramChatIdentity(id=chat_id, type="private")
 
     async def send_test_message(
@@ -151,6 +155,55 @@ def test_add_preserves_existing_offset_and_never_processes_discovery_updates(
         processed_after = session.scalar(select(func.count(TelegramProcessedUpdateRow.id))) or 0
     assert processed_after == processed_before
     assert transport.sends == 0
+    engine.dispose()
+
+
+def test_execute_provisions_both_bots_for_same_owner_with_distinct_identity(
+    tmp_path: Path,
+) -> None:
+    production_token = "654321:" + "B" * 32
+    env_file = tmp_path / ".env"
+    env_file.write_text("REGULAR_TRADING_HOURS_ONLY=true\n", encoding="utf-8")
+    os.chmod(env_file, 0o600)
+    secrets_dir = tmp_path / "secrets"
+    secrets_dir.mkdir()
+    database = tmp_path / "state.sqlite3"
+    engine = create_db_engine(f"sqlite+pysqlite:///{database}")
+    create_all_tables(engine)
+    policy = LeasePolicy(wait_seconds=0)
+    for environment, token, bot_id in (
+        (TelegramEnvironment.STAGING, TOKEN, 9001),
+        (TelegramEnvironment.PRODUCTION, production_token, 9002),
+    ):
+        asyncio.run(
+            execute(
+                ProvisioningRequest(
+                    command="add",
+                    environment=environment,
+                    env_file=env_file,
+                    secrets_dir=secrets_dir,
+                    database=database,
+                    confirm_poller_stopped=True,
+                ),
+                RuntimeDependencies(
+                    transport=Transport(token=token, bot_id=bot_id),
+                    token_reader=TokenReader(token),
+                    candidate_selector=Selector(),
+                    lease_policy=policy,
+                ),
+            )
+        )
+    settings = load_settings(environ={}, env_file=env_file, secrets_dir=secrets_dir)
+    assert settings.telegram_staging.expected_bot_id == 9001
+    assert settings.telegram_production.expected_bot_id == 9002
+    assert (
+        settings.telegram_staging.allowed_recipients
+        == settings.telegram_production.allowed_recipients
+    )
+    with create_session_factory(engine)() as session:
+        production = TelegramUpdateRepository(session).get_state("production")
+        assert production is not None and production.next_offset == 0
+        assert session.scalar(select(func.count(TelegramProcessedUpdateRow.id))) == 0
     engine.dispose()
 
 
