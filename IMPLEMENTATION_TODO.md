@@ -208,18 +208,19 @@ Primary parallelization opportunities:
   [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
   current executable dependency authority. Owner-assisted real-provider
   validation remains pending. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
-  `main`. `P05-T10` is the claimed planning step immediately before P05-T9;
-  P05-T9 remains queued/unclaimed. On 2026-08-12 the
+  `main`. `P05-T10` claim and implementation are merged through
+  [#135](https://github.com/likefudan/ainvest/pull/135) and
+  [#136](https://github.com/likefudan/ainvest/pull/136). P05-T9 is now the
+  dependency-ready next task but remains queued/unclaimed. On 2026-08-12 the
   owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
   [#120](https://github.com/likefudan/ainvest/pull/120) and
   [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` then
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
-  long polling and durable inbound deduplication. P05-T10 must now implement,
-  independently review, and squash-merge the Bot-environment provisioning and
-  validation contract. Only then may P05-T9 receive its own claim, latest-main
-  rebase, independent review, checks, and squash-merge workflow.
+  long polling and durable inbound deduplication. P05-T9 must still receive its
+  own separate claim, latest-main rebase, independent review, checks, and
+  squash-merge workflow before implementation can begin.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1079,12 +1080,15 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   Telegram Bot configurations that P05-T4 and P05-T5 already consume. Bot
   creation in BotFather remains a manual owner action; this card never automates
   or stores BotFather account access.
-- **Status and scheduling:** `claimed/planning`. This card is the serial step
-  immediately before P05-T9. Its claim must merge before implementation; its
-  implementation must then rebase latest `main`, receive independent review,
-  pass checks, and squash-merge before a separate P05-T9 claim. Owner-assisted
-  validation with real Bots is deployment evidence under proposed `DEC-010`,
-  not an input to offline implementation or CI.
+- **Status and scheduling:** `completed/merged`. The claim squash-merged in
+  [#135](https://github.com/likefudan/ainvest/pull/135) as `fcb1425`; the
+  independently reviewed implementation squash-merged in
+  [#136](https://github.com/likefudan/ainvest/pull/136) as `69e8831`.
+  P05-T9 is now dependency-ready but remains queued/unclaimed and requires its
+  own separate claim, latest-main rebase, independent review, checks, and
+  squash-merge workflow. Owner-assisted validation with real staging and
+  production Bots remains pending deployment evidence under proposed
+  `DEC-010`; it was not an offline implementation or CI blocker.
 - **Dependencies:** merged P05-T4, P05-T5, P01-T4, and P02-T6; accepted
   `DEC-005`; and the staging/production identity shape proposed in `DEC-010`.
   This card does not accept `DEC-010` or invent any owner-controlled token or
@@ -1317,14 +1321,16 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   approval, mutation, model, Paper-promotion, or trading capability. This is a
   transport adapter over the merged `P06-T2` Part 1 display service, not a new
   data provider or a Gate 3 requirement.
-- **Status and scheduling:** `queued/unclaimed; waiting for P05-T10`; no agent
-  has claimed this card. `P05-T4` squash-merged in
+- **Status and scheduling:** `queued/unclaimed; dependency-ready`; no agent has
+  claimed this card. `P05-T4` squash-merged in
   [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
   `P05-T5` squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124). P05-T10's
-  provisioning/validation implementation must squash-merge first. A later,
-  separate claim must precede P05-T9 implementation, followed by latest-main
-  rebase, independent review, checks, and squash merge.
+  provisioning/validation implementation squash-merged through
+  [#135](https://github.com/likefudan/ainvest/pull/135) and
+  [#136](https://github.com/likefudan/ainvest/pull/136). A separate claim must
+  precede P05-T9 implementation, followed by latest-main rebase, independent
+  review, checks, and squash merge.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1664,9 +1670,9 @@ consumable release artifact.
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
   `v0.3.0` is the current executable dependency authority; `v0.2.0` is
-  historical evidence only. P05-T10 is the claimed provisioning step;
-  `P05-T9` remains queued/unclaimed behind its implementation merge, and
-  owner-assisted real validation remains pending.
+  historical evidence only. P05-T10 is merged; `P05-T9` is dependency-ready
+  but remains queued/unclaimed pending its own claim, and owner-assisted real
+  validation remains pending.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
@@ -2248,8 +2254,8 @@ line.
 - Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
   lifted the P05-T4 pause on 2026-08-12; P05-T4 and P05-T5 are now merged.
-  P05-T10 is the claimed next step for real Bot-environment provisioning and
-  validation; P05-T9 stays queued/unclaimed behind its merge.
+  P05-T10 Bot-environment provisioning and validation is merged; P05-T9 is the
+  next dependency-ready task but stays queued/unclaimed pending its own claim.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -2259,13 +2265,13 @@ line.
   then integrate `P06-T0` -> `P06-T1` -> `P06-T2` Part 1 serially for the
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
-  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T10` is the claimed
-  Bot-environment provisioning step before the queued/unclaimed P05-T9
-  Telegram read-only task. `P05-T4`
+  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T10` Bot-environment
+  provisioning is also merged, making P05-T9 the next dependency-ready but
+  still queued/unclaimed Telegram read-only task. `P05-T4`
   squash-merged on 2026-08-12 and `P05-T5` subsequently squash-merged through
-  #123/#124. P05-T10 requires its implementation, latest-main rebase,
-  independent-review, checks, and squash-merge workflow first; P05-T9 then
-  requires a separate claim and the same workflow. By owner
+  #123/#124; P05-T10 subsequently merged through #135/#136. P05-T9 requires a
+  separate claim and the same latest-main rebase, independent-review, checks,
+  and squash-merge workflow. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -2281,14 +2287,15 @@ line.
    independently reviewed `v0.3.0` also merged through #126/#127 without
    reopening the adapter or normalization scope; `v0.3.0` is the current
    executable dependency authority.
-2. Implement, independently review, check, and squash-merge `P05-T10`, the
-   claimed local Bot-environment provisioning and validation utility. BotFather
-   creation and real owner values stay manual, and owner-assisted environment
-   validation may remain pending after the deterministic offline merge.
-3. `P05-T9` remains queued/unclaimed for Telegram read-only queries built on
+2. `P05-T10`, the local Bot-environment provisioning and validation utility,
+   is complete and merged through #135/#136. BotFather creation and real owner
+   values stay manual, and owner-assisted staging/production validation remains
+   pending under proposed `DEC-010` after the deterministic offline merge.
+3. `P05-T9` is dependency-ready but remains queued/unclaimed for Telegram
+   read-only queries built on
    the display projection and merged `P05-T4`/`P05-T5`/`P05-T10`. Open a
-   separate claim only after P05-T10 merges, then rebase, independently review,
-   check, and squash-merge. Offline implementation does not depend on real
+   separate claim, then rebase latest `main`, independently review, check, and
+   squash-merge. Offline implementation does not depend on real
    Robinhood readiness; owner-assisted real validation remains pending.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
