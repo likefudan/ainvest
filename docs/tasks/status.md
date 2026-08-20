@@ -912,8 +912,11 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   Ruff, mypy, dependency lock, migration, and policy checks. All migrated
   P06-T1 payload fixtures validate against the `v0.3.0` schemas; only the
   sanitized account fixture changes, deliberately exercising the newly valid
-  `limited_margin` label. Real owner-assisted `status` and read validation
-  remain pending. Verify, Secret scan, Dependency audit, SAST, and CodeQL were
+  `limited_margin` label. Owner-assisted `status` is now verified `ready=true`
+  for manifest `2026.08.12` / digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`;
+  individual real reads remain pending. Verify, Secret scan, Dependency audit,
+  SAST, and CodeQL were
   green on the final reviewed head before squash merge.
 
 ##### Execution envelope: P06-T1 integration Part 1
@@ -1413,10 +1416,11 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   and `./scripts/dev verify`.
 - **Real-provider state:** prior owner validation proved authentication is
   healthy and correctly showed the old `v0.2.0` pin failing closed on provider
-  drift. The implementation now pins reviewed `v0.3.0`; owner-assisted
-  `status` and real-read validation against the live provider remain pending
-  and do not block offline review. Do not weaken, bypass, or special-case any
-  future not-ready result.
+  drift. The implementation now pins reviewed `v0.3.0`; owner-assisted status
+  is verified `ready=true` for manifest `2026.08.12` / digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`.
+  Individual real reads remain pending and do not block offline review. Do not
+  weaken, bypass, or special-case any future not-ready result.
 - **Forbidden scope and Part 2 blockers:** do not implement Telegram, Paper
   proposal generation, Strategy/Sizer/Risk inputs, live execution, a trading
   capability, any approved non-trading mutation, OAuth/credential lifecycle,
@@ -1674,7 +1678,7 @@ marked **new**.
 | 5 | **Discards provider `guide`, tool descriptions, and schema descriptions from model / Telegram / CLI / log context** | **new** — tracked in the security register by planned evidence `P-GATEWAY-PROSE` (`SEC-PROSE-*`) on both `T-007` and `T-016`, with a preventive control on each row and `P06-T2` added to `T-007`'s tasks; `P06-T0` Handoff/blockers item (c); checklist lines on the `P06-T0` and `P06-T2` cards |
 | 6 | Gates writes using the reviewed `mutates` flag | `IMPLEMENTATION_TODO.md` rule 32 and the `P06-T0` checklist requirement that every allowlisted capability be `allowed` **and** `mutates=false`; `P06-T0` Handoff/blockers item (b) |
 | 7 | Resolves MCP SDK compatibility (`rh-mcp` requires `mcp>=2,<3`) | **new** — the concrete range was recorded nowhere in ainvest; added as a `P06-T0` checklist bullet. The related "must not install a second conflicting public MCP SDK" rule already existed, but in `P06-T0`'s own **Allowed paths** further down this file, not in that checklist; the new bullet is where the two now sit together |
-| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, #107, and #127, P06-T1 normalization satisfied its review obligation in #111/#114, and P06-T2 Part 1 display passed review in #117. `T-016` remains `partial`/`partial` pending P06-T2 Part 2's three promotion prerequisites, deployment evidence, owner-assisted real status/read validation, and end-to-end `P-GATEWAY-PROSE` evidence |
+| 8 | Completes a separate independent review of the ainvest adapter itself before production use | The Batch E integration policy (independent sub-agent review per PR); P06-T0 satisfied its adapter-review obligation in #104, #105, #107, and #127, P06-T1 normalization satisfied its review obligation in #111/#114, and P06-T2 Part 1 display passed review in #117. `T-016` remains `partial`/`partial` pending P06-T2 Part 2's three promotion prerequisites, deployment evidence, individual real-read validation, and end-to-end `P-GATEWAY-PROSE` evidence; owner status is already verified ready for manifest `2026.08.12` / digest `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f` |
 
 Requirement 5 is repeated in the report's residual-risk list — provider `guide`,
 description, and schema prose travels inside result envelopes, is
@@ -1975,8 +1979,10 @@ excludes the contents of a result envelope's `data`. It also records that
 - **Handoff/blockers:** no external blocker remains for the completed core
   `P06-T0` implementation. Reviewed `rh-mcp` `v0.3.0` now satisfies the
   external release prerequisite, and the narrow ainvest pin refresh is merged.
-  Owner-assisted real-readiness remains pending until the owner reruns
-  status/read validation. The reviewed immutable
+  Owner-assisted status is verified `ready=true` for manifest `2026.08.12` /
+  digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`;
+  only individual real-read validation remains pending. The reviewed immutable
   tagged release, artifact provenance/digests, and committed full-manifest
   digest are recorded in the `v0.3.0` target subsection above. The design
   correction commit is recorded for
@@ -2711,8 +2717,10 @@ completed Paper approval path unlocks `P08-T13`, then
   values and validation remain owner-assisted and pending under proposed
   `DEC-010`, which keeps real Telegram integration disabled but does not block
   deterministic offline implementation. Owner-assisted `rh-mcp v0.3.0 status`
-  reports ready; individual real reads may be validated later and are not an
-  offline implementation prerequisite. `P05-T9` is a display-only add-on and
+  is verified `ready=true` against manifest version `2026.08.12` and digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`;
+  individual real reads may be validated later and are not an offline
+  implementation prerequisite. `P05-T9` is a display-only add-on and
   is not required by Gate 3 or `P06-T2` Part 2.
 - **Architecture correction:** `approval -> execution` is forbidden by the
   repository dependency matrix. The implementation therefore places the sole
@@ -2730,11 +2738,14 @@ completed Paper approval path unlocks `P08-T13`, then
   `src/ainvest/config/settings.py`; optional private
   `src/ainvest/config/file_secrets.py`; `src/ainvest/config/__init__.py` only
   for narrow exports; `.env.example` only for a commented empty account value
-  and exact file-secret guidance; new
+  and exact file-secret guidance; `pyproject.toml` only for
+  `ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"`; new
   `tests/unit/orchestrator/test_telegram_queries.py` and
   `tests/integration/orchestrator/test_telegram_queries.py`; narrow additions
   to `tests/unit/approval/test_telegram.py`,
-  `tests/unit/config/test_settings.py`, and
+  `tests/unit/config/test_settings.py`,
+  `tests/unit/test_dependency_boundary.py`,
+  `tests/integration/approval/test_telegram_polling.py`, and
   `tests/unit/architecture/test_package_boundaries.py`; optional
   `tests/unit/config/test_file_secrets.py` only if its matching production
   module is created; and `docs/telegram-read-queries.md`. Dependencies, lock
@@ -2745,27 +2756,59 @@ completed Paper approval path unlocks `P08-T13`, then
   `/positions`, `/orders open|closed [SYMBOL]`, `/quotes`, `/pricebook`,
   `/tradability`, `/history`, `/fundamentals`, and `/financials`. Error
   `command` uses those Telegram tokens without `/` or `null`, while successful
-  envelopes retain the public P06-T2 `DisplayCommand`. Fixed adapter codes and
-  retryability remain `invalid_command`/false,
-  `account_secret_unavailable`/false, `rate_limited`/true,
-  `result_too_large`/false, `render_failed`/false, `send_failed`/true, and
-  `internal_error`/false; gateway and mapping codes retain their public typed
-  values. Authorized replies use `[READ ONLY - NOT FOR TRADING]`,
-  `parse_mode=None`, pre-render all output, and use at most four deterministic
-  parts of at most 3,500 Unicode code points. `/help` opens neither gateway nor
+  envelopes retain the public P06-T2 `DisplayCommand`. Reply-wire mappings are
+  `invalid_command`/false, `account_secret_unavailable`/false,
+  `result_too_large`/false, `render_failed`/false, and `internal_error`/false;
+  gateway and mapping codes retain their public typed values.
+  `send_failed`/false is an internal terminal observation that is never sent
+  as a second reply. `retryable=true` says only that the user may submit a new
+  update later; every expected gateway, mapping, render, rate, and send outcome
+  is P05-T5 terminal. Authorized replies use
+  `[READ ONLY - NOT FOR TRADING]`, `parse_mode=None`, pre-render all output,
+  and make exactly one attempt of at most 3,500 Unicode code points; oversize
+  success becomes a pre-send `result_too_large` error, never partial output.
+  `/help` opens neither gateway nor
   account secret. Only portfolio, positions, orders, and tradability resolve
   the server-side account secret.
-- **Dedup/rate/delivery boundary:** P05-T5 authorization and persisted
-  `(environment, update_id)`/message dedup happen before P05-T9. Use one
-  in-flight query and an injected-monotonic-clock fixed window of six admitted
-  authorized text updates per `(environment, user_id, chat_id)` in 60 seconds;
-  count `/help` and invalid commands, do not extend a window on excess, and
-  reject before account/gateway access. Each update makes at most one named
-  display call and no provider retry. Each pre-rendered Telegram part is
-  attempted at most once; stop on the first send failure/unknown result, send
-  no follow-up error/retry, and return terminal-handled so P05-T5 does not
-  replay an ambiguous delivery. A crash before P05-T5 terminal commit may
-  replay a harmless read, never a mutation, approval, or trade.
+- **Actual persistence/replay boundary:** P05-T5 authorizes first but persists
+  only terminal `(environment, update_id)` plus the confirmed offset after the
+  handler returns `TERMINAL_HANDLED`; it carries but neither persists nor
+  deduplicates `message_id`. Before that commit, a provider replay, process
+  failure, or crash after send may repeat a read or reply. This is bounded
+  at-least-once behavior, never exactly-once. Within one process, the current
+  uncommitted update reuses its pending rate decision across pre-send retry and
+  does not consume quota twice.
+- **Rate/deadline/delivery boundary:** use one in-flight query and one
+  process-local fixed 60-second window per `(environment, user_id)`, excluding
+  chat ID so a second authorized binding cannot multiply quota. At most six
+  distinct update IDs make any reply attempt, counting successes, errors,
+  `/help`, and invalid commands. Every excess authorized update is silent
+  `TERMINAL_HANDLED` before secret/gateway/send; `rate_limited`/true is internal
+  observation only, never a seventh wire reply. Restart resets this best-effort
+  abuse control. Under P05-T5's 20.0-second outer deadline, cap the complete
+  per-update gateway context/open/startup-readiness/named-call/close phase at
+  12.0 seconds and the sole send at 4.0 seconds, reserving 4.0 seconds for
+  bounded local work, cancellation unwind, and return. Before send starts,
+  outer cancellation may return `RETRY_LATER`; after the attempt flag is set,
+  every send success/failure/unknown/timeout/cancellation sends no follow-up
+  and returns `TERMINAL_HANDLED`. A crash before the later terminal DB commit
+  can still duplicate a reply.
+- **Runnable composition/lifecycle:** the dedicated script takes required
+  `--environment staging|production` and `--database PATH` plus optional
+  `--env-file PATH` and `--secrets-dir PATH`. It uses `load_settings`, requires
+  Paper/non-live mode and complete selected Bot config, opens an existing
+  migrated regular SQLite database without schema creation, builds the existing
+  engine/session factory, `TelegramLongPoller`, HTTPS identity/update/plain-send
+  transports, and an `AsyncioTelegramPollingControl` wired to SIGINT/SIGTERM.
+  The public async runner accepts typed injected equivalents for tests. Help,
+  invalid/rate-exhausted input, and account-secret failure happen before lazy
+  gateway open. Every other admitted update owns one 12-second
+  `open_read_gateway()` async context: the existing API verifies artifact,
+  constructs the pinned `GatewayConfig`, enters `rh-mcp v0.3.0 open_gateway`,
+  verifies projection/readiness, yields the read client for one named display
+  call, then closes the provider session on exit. Normal stop, fatal failure,
+  and cancellation release the polling lease and dispose the DB engine; no
+  generic runtime framework or provider retry is added.
 - **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
   `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
   error envelope. P05-T9 owns its exact `TelegramQueryError` wire and
@@ -2808,7 +2851,11 @@ completed Paper approval path unlocks `P08-T13`, then
   `./scripts/dev contract`, `./scripts/dev integration`, `git diff --check`,
   and `./scripts/dev verify`; independently review functionality, fail-closed
   behavior, tests, readability, duplication, secret handling, and architecture
-  before squash merge. No real token, account number, credential, account data,
+  before squash merge. Composition integration uses the real session/UoW with
+  fakes. A narrow real-`TelegramLongPoller` integration asserts its production
+  20.0-second constant while shortening elapsed test time deterministically and
+  proves pre-send retry/no terminal row versus post-send terminal persistence/
+  no second attempt. No real token, account number, credential, account data,
   or provider payload may enter Git, PRs, logs, snapshots, or chat.
 - **Historical planning remediation:** the first independent review correctly rejected the
   earlier ambiguous error, history-window, and account-secret contracts. Those

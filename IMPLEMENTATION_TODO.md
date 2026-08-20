@@ -1342,10 +1342,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
   `v0.3.0` release is merged and is the current executable authority.
-  Owner-assisted `rh-mcp v0.3.0 status` now reports ready. Individual real read
-  validation may remain owner-assisted until after the offline merge and does
-  not authorize credentials, network calls, or account data in implementation
-  or CI.
+  Owner-assisted `rh-mcp v0.3.0 status` is verified `ready=true` against
+  manifest version `2026.08.12` and digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`.
+  Individual real reads may remain owner-assisted until after the offline
+  merge and do not authorize credentials, network calls, or account data in
+  implementation or CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
   `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
@@ -1360,18 +1362,23 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   behavior; `src/ainvest/config/settings.py`; optional private
   `src/ainvest/config/file_secrets.py`; `src/ainvest/config/__init__.py` for
   narrow exports; `.env.example` for a commented empty account value and exact
-  file-secret guidance; `tests/unit/orchestrator/test_telegram_queries.py`;
+  file-secret guidance; the one
+  `ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"`
+  console entry in `pyproject.toml`;
+  `tests/unit/orchestrator/test_telegram_queries.py`;
   `tests/integration/orchestrator/test_telegram_queries.py`;
   narrow additions to `tests/unit/approval/test_telegram.py` and
-  `tests/unit/config/test_settings.py`; optional
+  `tests/unit/config/test_settings.py`,
+  `tests/unit/test_dependency_boundary.py`, and
+  `tests/integration/approval/test_telegram_polling.py`; optional
   `tests/unit/config/test_file_secrets.py` only if that production module is
   created; `tests/unit/architecture/test_package_boundaries.py` for the
   no-`approval -> execution` regression; and
   `docs/telegram-read-queries.md`. The merged
   `src/ainvest/approval/telegram_updates.py`, P06 display/read/mapping modules,
-  dependencies, lock file, schemas, database, migrations, and other runtime
-  paths are read-only. Any other path requires coordinator-approved scope
-  expansion before editing.
+  dependencies, lock file, schemas, database production code, migrations, and
+  other runtime paths are read-only. Any other path requires
+  coordinator-approved scope expansion before editing.
 - **Exact first-release command grammar:** accept only one private-chat text
   message containing ASCII tokens separated by single spaces. Commands are
   case-sensitive and symbols remain exact uppercase `Symbol` values. Reject
@@ -1422,7 +1429,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   unverified, these windows are never usable for trading.
 
 - **Identity and authorization boundary:** process text only after `P05-T5`
-  has deduplicated the update and verified the environment-specific Bot,
+  has verified the environment-specific Bot,
   numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
   exact membership of the configured bound `(user_id, private_chat_id)`
   recipient record. Independent membership and crossed pairs fail closed.
@@ -1505,7 +1512,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `UNSPECIFIED`/`comparable=false`, `has_more`, unavailable symbols, and
   `omitted_untrusted_fields`. Never total, rank, convert, or label an
   unspecified value as USD. `/help` is the sole success exception: after the
-  same private-chat numeric allowlist, deduplication, and rate-limit checks, it
+  same private-chat numeric allowlist, terminal-update, and rate-limit checks, it
   returns only the static bounded command list and does not open the gateway,
   resolve the account secret, or construct a `DisplaySuccess` envelope.
 - **Telegram-owned error wire and reusable boundary:** current main exposes no
@@ -1524,7 +1531,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
     "schema_version": "1.0",
     "kind": "error",
     "command": "quotes",
-    "error": {"code": "rate_limited", "retryable": false}
+    "error": {"code": "invalid_command", "retryable": false}
   }
   ```
 
@@ -1534,28 +1541,33 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `financials` — or `null` when no allowed command was parsed. Display-success
   envelopes retain their existing P06-T2 `DisplayCommand` values; do not
   rewrite that public envelope merely because `rh_status`, `pricebook`, and
-  `history` use different Telegram spellings. Fixed adapter mappings are
+  `history` use different Telegram spellings. Reply-wire mappings are
   `invalid_command`/false, `account_secret_unavailable`/false,
-  `rate_limited`/true, `result_too_large`/false,
-  `render_failed`/false, `send_failed`/true, and `internal_error`/false.
+  `result_too_large`/false, `render_failed`/false, and `internal_error`/false.
   `GatewayReadError` retains its existing `code.value` and `retryable` flag;
   `RobinhoodMappingError` retains `code.value` with `retryable=false`. Error
   replies contain no static help beyond the code; the user may send `/help`.
   A serialization failure uses a small pre-serialized constant
-  `render_failed` document. `send_failed` is the stable terminal outcome for
-  sanitized log/metric accounting when Telegram delivery itself failed; no
-  second send is attempted, so that code is not falsely claimed to reach the
-  user.
+  `render_failed` document. `send_failed`/false is a stable internal terminal
+  outcome for sanitized log/metric accounting when Telegram delivery itself
+  failed; no second send is attempted, so that code is not falsely claimed to
+  reach the user. Wire `retryable=true` means only that the user may submit a new
+  Telegram update later; it never maps to P05-T5 `RETRY_LATER`. Every expected
+  gateway, mapping, render, rate, and send outcome returns
+  `TERMINAL_HANDLED`. Only cancellation before the first reply-send attempt
+  may return `RETRY_LATER`.
 - **Silent-ignore versus reply matrix:** `P05-T5` silently ignores an update
   at the query boundary, performs no query/account/gateway work, and sends no
   P05-T9 reply for a wrong Bot or environment, non-allowlisted numeric user or
   chat, non-private chat/group/channel, missing or wrong `chat.type`, edited or
-  forwarded message, callback query, or duplicate `update_id`/message. A valid
+  forwarded message, callback query, or an already-terminal persisted
+  `(environment, update_id)`. `message_id` is carried in the authorized update
+  but is not persisted or independently deduplicated. A valid
   approval callback may still be routed by `P05-T5` to `P05-T1`; it is merely
-  invisible to P05-T9. After all identity/private-message/dedup checks pass,
+  invisible to P05-T9. After all identity/private-message/terminal checks pass,
   malformed text, unknown commands, bad spacing/case/arguments, and plain
-  `approve`/`reject` receive `invalid_command`; rate excess receives
-  `rate_limited`; missing/invalid account secret receives
+  `approve`/`reject` receive `invalid_command`; a rate-exhausted authorized
+  update is terminal-silent; missing/invalid account secret receives
   `account_secret_unavailable`; and authorized gateway/mapping/render/internal
   failures receive the mapped error when delivery is available. `/help` obeys
   the allowlist and rate limit but is independent of gateway readiness and the
@@ -1564,11 +1576,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   rationale, tool/schema descriptions, and other instructional prose remain
   discarded. Only existing bounded `UntrustedDisplayText` may reach the reply,
   after JSON escaping, with the stable omission marker and path metadata.
-  Send plain UTF-8 text in at most four messages of at most 3,500 Unicode code
-  points each, labelled with deterministic part numbers. Split only the
-  already-rendered envelope; do not introduce Markdown/HTML interpretation. If
-  it cannot fit, send one sanitized `result_too_large` error and no partial
-  result.
+  Pre-render exactly one plain UTF-8 Telegram message of at most 3,500 Unicode
+  code points with `parse_mode=None`; do not split, truncate normalized data,
+  or introduce Markdown/HTML interpretation. If the success envelope cannot
+  fit, replace it before any send with one bounded sanitized
+  `result_too_large` error. Each authorized update therefore makes at most one
+  Telegram reply attempt.
 - **Errors, readiness, and provider calls:** readiness/auth/schema/artifact
   mismatch, timeout, mapping failure, missing account secret, render failure,
   or Telegram delivery failure fails closed. Emit only the error wire above;
@@ -1577,23 +1590,69 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   untrusted text. Perform at most one gateway/display call for each accepted
   update and never retry automatically or fall back to Alpaca, yfinance, or
   another provider.
-- **Idempotency, deduplication, and rate limit:** use the `P05-T5` persisted
-  `update_id`/message identity and confirmed offset as the dispatch key;
-  duplicates are rejected before query execution. A crash may cause a harmless
-  read replay, but can never create state, approval, mutation, or trading
-  action. Permit one in-flight query per `(environment, user_id, chat_id)` and
-  at most six authorized text updates that produce a reply in one in-memory
-  fixed 60-second window for that key. Count `/help` and invalid commands so
-  malformed-input reply spam cannot bypass the limit; an excess update does
-  not extend the window. Use an injected monotonic clock, open the window on
-  the first admitted update, reset at elapsed time greater than or equal to 60
-  seconds, and reject excess work with `rate_limited` before account-secret or
-  gateway access. Do not add persistence or a distributed rate-limit service
-  in v1. After any reply-send sequence begins, including a multipart success,
-  attempt each planned part at most once, stop after the first failure or
-  unknown outcome, never send a second error/retry for that failure, and return
-  terminal-handled to P05-T5 so delivery ambiguity cannot trigger an automatic
-  replay.
+- **P05-T5 terminal persistence and replay:** merged P05-T5 persists only a
+  terminal `(environment, update_id)` row and confirmed offset, after the
+  handler returns `TERMINAL_HANDLED`; it does not persist or deduplicate
+  `message_id`. Before that commit, provider replay, process failure, or a
+  crash after a send attempt may repeat a read or reply. This is bounded
+  at-least-once behavior, not exactly-once delivery. It can never create
+  approval, mutation, or trading state. Within one process, retain the pending
+  admission decision for the current uncommitted `(environment, update_id)` so
+  a pre-send `RETRY_LATER` re-entry does not consume rate quota again.
+- **Best-effort rate and concurrency boundary:** permit one in-flight query per
+  `(environment, user_id)` and use that same key for an in-memory fixed
+  60-second window. The chat ID is deliberately excluded so another authorized
+  private-chat binding cannot multiply a user's allowance. Admit at most six
+  distinct authorized text `update_id` values for reply attempts, counting
+  every success or error including `/help` and invalid commands. Every excess
+  authorized update returns `TERMINAL_HANDLED` silently, without a Telegram
+  send, account-secret access, or gateway open. `rate_limited`/true may exist
+  only as a sanitized internal observation meaning the user may submit a new
+  update after the window; it is not a Telegram wire or a seventh reply. Thus
+  each key has at most six total send attempts per window. An excess update
+  does not extend the window. Use an injected monotonic clock, open on the
+  first admitted update, and reset at elapsed time greater than or equal to 60
+  seconds. A process restart resets both this abuse control and its bounded
+  pending-admission state; neither is durable authorization. Do not add
+  persistent/distributed rate limiting in v1.
+- **20-second handler deadline and delivery:** P05-T5 applies one outer
+  `TELEGRAM_HANDLER_DEADLINE_SECONDS == 20.0` timeout. P05-T9 must fit inside it
+  with a 12.0-second absolute gateway phase timeout covering
+  `open_read_gateway()` entry, artifact/startup projection/readiness checks,
+  exactly one named display call, and context exit; one 4.0-second timeout for
+  the sole Telegram send attempt; and the remaining 4.0 seconds reserved for
+  bounded local parse/render, cancellation unwinding, and terminal return. No
+  awaited P05-T9 operation may escape those budgets. A controlled gateway
+  timeout is rendered once and terminates; it never asks P05-T5 to retry.
+  Cancellation before the send attempt begins may return `RETRY_LATER`. Set a
+  send-attempt flag immediately before calling the action-free transport; after
+  that point, success, rejection, timeout, unknown result, or outer
+  cancellation stops work, sends no follow-up, absorbs cancellation as needed,
+  and returns `TERMINAL_HANDLED`. A process crash before the later P05-T5
+  terminal commit can still replay the update and duplicate the reply; do not
+  claim otherwise.
+- **Executable composition and lifecycle:** add the dedicated
+  `ainvest-telegram-read` console entry above with exact required
+  `--environment staging|production` and `--database PATH`, plus optional
+  `--env-file PATH` and `--secrets-dir PATH`. It must load `Settings` through
+  `load_settings`, require Paper/non-live mode and a complete selected Bot,
+  require an existing migrated regular SQLite database without creating or
+  migrating it, build the existing engine/session factory and P05-T5
+  `TelegramLongPoller`, use `TelegramHttpsTransport` for identity/action-free
+  replies and `TelegramHttpsUpdateTransport` for ingress, and install
+  SIGINT/SIGTERM shutdown through `AsyncioTelegramPollingControl`. A public
+  async runner in `orchestrator/telegram_queries.py` accepts these typed
+  dependencies for deterministic tests. `/help`, invalid input, rate rejection,
+  and account-secret validation happen before lazy gateway open. Every other
+  admitted command opens one per-update `open_read_gateway()` context; that
+  existing ainvest context constructs pinned `GatewayConfig`, opens the actual
+  `rh-mcp v0.3.0` async context, verifies the read projection and readiness,
+  yields `RobinhoodReadClient`, and closes the provider session on context exit.
+  The handler builds `RobinhoodDisplayService` inside that scope and performs
+  exactly one named call. On normal stop, fatal startup/polling failure, or
+  cancellation, stop polling, let the active per-update context exit, release
+  the P05-T5 lease, dispose the DB engine, and return a sanitized nonzero CLI
+  result when appropriate. Do not add a generic runtime framework.
 - **Forbidden scope:** no webhook deployment, browser/UI, group/channel use,
   LLM or natural-language routing, arbitrary capability/tool name, generic
   `invoke`, prompt construction, callback button, approval/rejection command,
@@ -1615,17 +1674,26 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   regression tests proving init/env/dotenv still override the strict file,
   strict file still overrides YAML, every unrelated file-secret field retains
   stock Pydantic behavior, and absent/unrelated files do not change settings;
-  readiness/auth/timeout/contract/mapping/render and send failures; persisted
-  update deduplication and restart; one-in-flight and six-per-minute limits;
+  readiness/auth/timeout/contract/mapping/render and send failures; actual
+  terminal `(environment, update_id)` persistence and restart replay without a
+  false `message_id` dedup claim; same-update in-process retry accounting;
+  one-in-flight, six total send attempts, terminal-silent excess, and
+  process-restart rate reset;
   all five exact history argument dictionaries at a fixed injected UTC clock,
   microsecond truncation, timezone conversion, month/leap/DST independence,
   naive-clock failure, and proof no market-calendar call occurs; exact
-  message/part limits and oversize failure; stable sanitized errors; no account
+  single-message limit and oversize failure; stable sanitized errors; no account
   ID or secret reference in replies/logs/errors/snapshots; omission markers and
   JSON escaping; non-comparable units; and structural proof that the adapter
   cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
   Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway
   transports only; no real credential or public network is required in CI.
+  Drive the public async composition with fakes and the real session/UoW. Add a
+  narrow integration test through the real `TelegramLongPoller` deadline path,
+  asserting the production 20.0-second constant while shortening elapsed test
+  time deterministically, to prove pre-send cancellation returns `RETRY_LATER`
+  without terminal persistence and post-send cancellation returns
+  `TERMINAL_HANDLED` and persists the update without a second reply attempt.
 - **Acceptance criteria:** an authorized private chat can run each fixed query
   and receive the same honest display posture as the CLI; unauthorized,
   malformed, duplicate, excessive, not-ready, or failed requests produce no
