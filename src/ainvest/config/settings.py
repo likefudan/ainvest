@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import os
 import re
+import stat
 from collections.abc import Iterator, Mapping
 from contextlib import contextmanager
 from contextvars import ContextVar
@@ -24,6 +25,8 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
+    DotEnvSettingsSource,
+    EnvSettingsSource,
     PydanticBaseSettingsSource,
     SecretsSettingsSource,
     SettingsConfigDict,
@@ -52,6 +55,9 @@ TELEGRAM_BOT_TOKEN_FILENAMES: Final[Mapping[str, str]] = {
     "telegram_staging": "TELEGRAM_STAGING__BOT_TOKEN",
     "telegram_production": "TELEGRAM_PRODUCTION__BOT_TOKEN",
 }
+ROBINHOOD_READ_ACCOUNT_FILENAME: Final[str] = "ROBINHOOD_READ_ACCOUNT_NUMBER"
+MAX_ROBINHOOD_ACCOUNT_FILE_BYTES: Final[int] = 130
+_ROBINHOOD_ACCOUNT_PATTERN: Final[re.Pattern[str]] = re.compile(r"^[\x21-\x7e]{1,128}$")
 
 _RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
     r"^(?=.{1,253}$)"
@@ -355,21 +361,110 @@ class _TelegramTokenFileSecretSource(PydanticBaseSettingsSource):
         return values
 
 
+class _RobinhoodAccountFileSecretSource(PydanticBaseSettingsSource):
+    """Load only the exact P05-T9 account reference from an explicit directory."""
+
+    def __init__(self, settings_cls: type[BaseSettings], secrets_dir: object) -> None:
+        super().__init__(settings_cls)
+        self._secrets_dir = secrets_dir
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        del field
+        return None, field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        if self._secrets_dir is None or isinstance(self._secrets_dir, (list, tuple, set)):
+            return {}
+        directory = Path(self._secrets_dir)  # type: ignore[arg-type]
+        try:
+            if not directory.exists() or not directory.is_dir():
+                return {}
+            entries = {entry.name: entry for entry in directory.iterdir()}
+            path = entries.get(ROBINHOOD_READ_ACCOUNT_FILENAME)
+            if path is None:
+                return {}
+            no_follow = getattr(os, "O_NOFOLLOW", None)
+            nonblock = getattr(os, "O_NONBLOCK", None)
+            if no_follow is None or nonblock is None:
+                raise SettingsError("Secure Robinhood account file open is unavailable")
+            descriptor = os.open(path, os.O_RDONLY | no_follow | nonblock)
+            try:
+                metadata = os.fstat(descriptor)
+                if not stat.S_ISREG(metadata.st_mode):
+                    raise SettingsError("Robinhood account secret must be a regular file")
+                if metadata.st_size > MAX_ROBINHOOD_ACCOUNT_FILE_BYTES:
+                    raise SettingsError("Invalid Robinhood account file secret")
+                raw = os.read(descriptor, MAX_ROBINHOOD_ACCOUNT_FILE_BYTES)
+                if len(raw) != metadata.st_size:
+                    raise SettingsError("Robinhood account file changed while reading")
+            finally:
+                os.close(descriptor)
+        except (OSError, SettingsError):
+            raise SettingsError("Unable to read Robinhood account file secret") from None
+        try:
+            value = raw.decode("utf-8")
+        except UnicodeDecodeError:
+            raise SettingsError("Invalid Robinhood account file secret") from None
+        if value.endswith("\n"):
+            value = value[:-1]
+        if _ROBINHOOD_ACCOUNT_PATTERN.fullmatch(value) is None:
+            raise SettingsError("Invalid Robinhood account file secret")
+        return {ROBINHOOD_READ_ACCOUNT_FILENAME: value}
+
+
+def _account_setting_only(values: Mapping[str, Any]) -> dict[str, Any]:
+    return {
+        key: value
+        for key, value in values.items()
+        if key.casefold()
+        in {
+            ROBINHOOD_READ_ACCOUNT_FILENAME.casefold(),
+            "robinhood_read_account_number",
+        }
+    }
+
+
+class _RobinhoodAccountEnvSource(EnvSettingsSource):
+    """Preserve empty account values for exact validation without global drift."""
+
+    def __call__(self) -> dict[str, Any]:
+        return _account_setting_only(super().__call__())
+
+
+class _RobinhoodAccountDotEnvSource(DotEnvSettingsSource):
+    """Preserve empty dotenv account values while other fields keep stock behavior."""
+
+    def __call__(self) -> dict[str, Any]:
+        return _account_setting_only(super().__call__())
+
+
 class _FilteredStockFileSecretSource(SecretsSettingsSource):
     """Preserve stock file secrets while excluding Telegram top-level JSON."""
 
-    _TELEGRAM_FIELDS: Final[frozenset[str]] = frozenset({"telegram_staging", "telegram_production"})
+    _EXCLUDED_FIELDS: Final[frozenset[str]] = frozenset(
+        {
+            "robinhood_read_account_number",
+            "telegram_staging",
+            "telegram_production",
+        }
+    )
 
     def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
-        if field_name in self._TELEGRAM_FIELDS:
+        aliases = getattr(field.validation_alias, "choices", ())
+        normalized = {field_name.casefold(), *(str(alias).casefold() for alias in aliases)}
+        if normalized & {name.casefold() for name in self._EXCLUDED_FIELDS}:
             return None, field_name, False
         return super().get_field_value(field, field_name)
 
     def __call__(self) -> dict[str, Any]:
         try:
-            return super().__call__()
+            values = super().__call__()
         except (OSError, UnicodeError, SettingsError):
             raise SettingsError("Unable to load file-secret configuration") from None
+        for key in tuple(values):
+            if key.casefold() == "robinhood_read_account_number":
+                values.pop(key)
+        return values
 
 
 class Settings(BaseSettings):
@@ -424,6 +519,14 @@ class Settings(BaseSettings):
 
     database_password: SecretStr | None = Field(default=None, repr=False)
     robinhood_oauth_token: SecretStr | None = Field(default=None, repr=False)
+    robinhood_read_account_number: SecretStr | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices(
+            "ROBINHOOD_READ_ACCOUNT_NUMBER",
+            "robinhood_read_account_number",
+        ),
+    )
 
     @classmethod
     def settings_customise_sources(
@@ -438,9 +541,20 @@ class Settings(BaseSettings):
         del cls
         return (
             init_settings,
+            _RobinhoodAccountEnvSource(settings_cls, env_ignore_empty=False),
             env_settings,
+            _RobinhoodAccountDotEnvSource(
+                settings_cls,
+                env_file=getattr(dotenv_settings, "env_file", None),
+                env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
+                env_ignore_empty=False,
+            ),
             dotenv_settings,
             _TelegramTokenFileSecretSource(
+                settings_cls,
+                getattr(file_secret_settings, "secrets_dir", None),
+            ),
+            _RobinhoodAccountFileSecretSource(
                 settings_cls,
                 getattr(file_secret_settings, "secrets_dir", None),
             ),
@@ -460,6 +574,19 @@ class Settings(BaseSettings):
                 "REGULAR_TRADING_HOURS_ONLY cannot be false in the first release (DEC-001)"
             )
         return value
+
+    @field_validator("robinhood_read_account_number", mode="before")
+    @classmethod
+    def _validate_robinhood_read_account_number(cls, value: object) -> SecretStr | None:
+        del cls
+        if value is None:
+            return None
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if not isinstance(raw, str) or _ROBINHOOD_ACCOUNT_PATTERN.fullmatch(raw) is None:
+            raise ValueError(
+                "ROBINHOOD_READ_ACCOUNT_NUMBER must be 1..128 visible ASCII characters"
+            )
+        return SecretStr(raw)
 
     @field_validator("require_complete_risk_limits")
     @classmethod

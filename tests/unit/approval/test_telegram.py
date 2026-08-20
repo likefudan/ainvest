@@ -633,6 +633,78 @@ def test_https_adapter_uses_plain_text_and_one_send_call(monkeypatch: pytest.Mon
 
 
 @pytest.mark.unit
+def test_https_adapter_plain_send_has_no_action_or_parse_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules()
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+
+    message_id = asyncio.run(
+        TelegramHttpsTransport().send_plain_message(
+            "synthetic-token",
+            900000201,
+            "[READ ONLY - NOT FOR TRADING]",
+            timeout_seconds=4.0,
+        )
+    )
+
+    assert message_id == 707
+    assert calls == [
+        {
+            "chat_id": 900000201,
+            "text": "[READ ONLY - NOT FOR TRADING]",
+            "parse_mode": None,
+            "reply_markup": None,
+            "read_timeout": 4.0,
+            "write_timeout": 4.0,
+            "connect_timeout": 4.0,
+            "pool_timeout": 4.0,
+        }
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("effect", "expected"),
+    [
+        (FakeProviderError.BadRequest("provider-payload"), TelegramTransportRejected),
+        (FakeProviderError.TimedOut("provider-payload"), TelegramDeliveryUnknown),
+        (asyncio.CancelledError(), TelegramDeliveryUnknown),
+        (RuntimeError("provider-payload"), TelegramDeliveryUnknown),
+    ],
+)
+def test_https_adapter_plain_send_failures_are_one_call_and_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+    effect: BaseException,
+    expected: type[Exception],
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules(effect=effect)
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+
+    with pytest.raises(expected) as caught:
+        asyncio.run(
+            TelegramHttpsTransport().send_plain_message(
+                "synthetic-token",
+                900000201,
+                "[READ ONLY - NOT FOR TRADING]",
+                timeout_seconds=4.0,
+            )
+        )
+
+    assert len(calls) == 1
+    assert "provider-payload" not in str(caught.value)
+    assert "synthetic-token" not in str(caught.value)
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "effect",
     [
