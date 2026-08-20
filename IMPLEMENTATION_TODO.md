@@ -1097,7 +1097,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `disable`. Every command requires an explicit `--environment` of `staging`
   or `production`, explicit `--env-file`, and explicit `--secrets-dir`.
   State-changing `add`, `rotate-token`, and `disable` also require an explicit
-  first-release SQLite `--database` path for the read-only P05-T5 lease check;
+  first-release SQLite `--database` path for the shared P05-T5 fenced lease;
   `validate` does not need database access. Paths and numeric identities may
   appear in arguments; a Bot token may not.
 - **Manual creation and secret input:** the owner creates each Bot in BotFather
@@ -1112,14 +1112,29 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   environment's exact secret file,
   `TELEGRAM_STAGING__BOT_TOKEN` or
   `TELEGRAM_PRODUCTION__BOT_TOKEN`, in the explicitly supplied directory. The
-  installed and validated file is a regular owner-only `0600` file containing the validated
-  token plus at most the one terminal LF already accepted by P05-T4. Use a
+  installed and validated file is a regular owner-only `0600` file containing
+  the validated token plus at most the one terminal LF already accepted by
+  P05-T4. Use a
   same-directory atomic install, reject a symlink or non-regular target, and
   make `add` refuse an unrelated pre-existing target rather than overwrite it.
   `rotate-token` is the sole operation allowed to replace that exact target,
   and only after every rotation precondition and provider validation succeeds.
   Temporary names, errors, output, and tests must not expose token bytes.
-- **Safe `.env` update:** edit only the six exact keys for the selected prefix:
+- **File-secret-only token provenance:** before provider access or any write,
+  parse the entire explicit `.env` using the same case-insensitive field names,
+  nested delimiter, aliases, JSON shapes, and precedence as current Pydantic
+  Settings. Reject any assignment that can populate either environment's
+  `bot_token`: every ASCII-case variant of
+  `TELEGRAM_STAGING__BOT_TOKEN`/`TELEGRAM_PRODUCTION__BOT_TOKEN`, and a
+  case-variant top-level `TELEGRAM_STAGING`/`TELEGRAM_PRODUCTION` JSON object
+  containing any case-variant or accepted alias of `bot_token`. Comparing only
+  resolved bytes is insufficient because an equal dotenv token still has the
+  wrong provenance. Fail closed with a fixed, value-free instruction to remove
+  the plaintext assignment and retry; never print it or automatically delete
+  a secret. The exact `0600` file secret is the sole token source created or
+  accepted by this utility, and the utility never writes a token to `.env`.
+- **Safe `.env` update:** after that provenance check, edit only the six exact
+  non-secret keys for the selected prefix:
   `ENABLED`, `EXPECTED_BOT_ID`, `ALLOWED_RECIPIENTS`, `TRANSPORT`,
   `APPROVAL_METHOD`, and `APPROVAL_SCOPE`. Preserve comments, order, newline
   style, and every unrelated key/value byte; refuse invalid UTF-8, NULs,
@@ -1139,9 +1154,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   numeric Bot ID. Then call `getWebhookInfo`; missing/malformed data, timeout,
   provider rejection, or any non-empty webhook URL fails closed. Never call
   `deleteWebhook` or otherwise change provider state. Staging and production
-  must have different Bot IDs, different token bytes, and disjoint bound
-  `(user_id, private_chat_id)` pairs; never fall back or copy values between
-  environments.
+  must have different Bot IDs and different token bytes. The same owner
+  `user_id` or exact private `(user_id, private_chat_id)` pair may be bound in
+  both Bot environments; isolation comes from observing and confirming the pair
+  through that environment's already validated Bot, storing it only under that
+  environment prefix, and forbidding fallback or cross-product construction.
 - **Private-recipient discovery and confirmation:** `add` may make bounded
   `getUpdates` discovery calls with `allowed_updates=("message",)`, a bounded
   timeout and limit, and **no `offset` argument**. It may display only unique
@@ -1153,12 +1170,28 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `type=private`. Discovery never confirms a Telegram update by sending
   `update_id + 1`, and never creates, advances, deletes, or otherwise writes a
   P05-T5 poll cursor or processed-update row.
-- **Lease and command semantics:** use `TelegramUpdateRepository.get_state`
-  only to inspect the selected environment; do not call `ensure_state`,
-  acquire, renew, release, or terminal-record methods. An unexpired P05-T5
-  lease is active. `add`, `rotate-token`, and `disable` require no active lease;
-  `add` and `rotate-token` additionally require the selected environment to be
-  disabled before any provider or file mutation. A successful `add` activates
+- **Quiescence and fenced maintenance lease:** a lease observation alone does
+  not prove that the poller process is stopped: P05-T5 releases its lease
+  between cycles and during backoff. Before `add`, `rotate-token`, or `disable`,
+  the operator must first stop the selected environment's poller through the
+  external deployment/process manager, then pass the explicit
+  `--confirm-poller-stopped` acknowledgement. The utility never starts, stops,
+  signals, or reconfigures that service. It waits for any old unexpired lease
+  to clear until one fixed bounded quiescence deadline; timeout fails before
+  provider access or writes. It then uses the existing P05-T5
+  `acquire_lease`/owner/monotonic-epoch/version mechanism, holds the selected
+  environment lease for the entire state-changing command, renews it with a
+  clear deadline margin during provider calls and operator confirmation, and
+  conditionally verifies the same owner/epoch/version immediately before every
+  atomic `.env` or secret-file write. Acquisition, renewal, or fence loss
+  aborts further writes; best-effort release occurs only at the end, while
+  crash recovery is lease expiry. Do not call `ensure_state` separately,
+  advance `next_offset`, write a processed row, or call `record_terminal`. The
+  shared lease prevents a conforming P05-T5 poller from polling or reacquiring
+  while maintenance holds it, but does not prove an external process was
+  stopped; owner-assisted validation must separately verify the process-manager
+  stop. `add` and `rotate-token` additionally require the selected environment
+  to be disabled before provider/file mutation. A successful `add` activates
   the newly complete environment. A successful `rotate-token` requires
   `getMe.id` to equal the already configured `expected_bot_id` exactly and
   reactivates the environment only after atomic replacement succeeds.
@@ -1170,25 +1203,34 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   secret, database, cursor, or provider mutation. It loads through the public
   `load_settings(environ={}, env_file=..., secrets_dir=...)` path so ambient
   variables cannot override the inspected files; proves exact `getMe`
-  identity, secret-file mode, empty webhook configuration, bound private-chat identity, and
-  cross-environment isolation; and emits only a sanitized result. By default it
-  sends no message. Only explicit `validate --send-test` may make one
+  identity, secret-file mode, empty webhook configuration, bound private-chat
+  identity, and cross-environment isolation; and emits only a sanitized
+  result. By default it sends no message. Only explicit
+  `validate --send-test` may make one
   `sendMessage` attempt, after all checks, with a fixed bounded plain-text
   environment label and no account/order/secret data. Never retry after send
   begins; timeout/disconnect is an unknown outcome and a second message is
-  forbidden.
+  forbidden. This proves only the explicitly inspected files with an empty
+  injected environment. It cannot prove that a separately launched service has
+  no ambient nested token or top-level Telegram JSON override; deployment
+  validation must enforce and verify that absence without displaying values
+  before enabling integration.
 - **Primary and allowed implementation paths:** `pyproject.toml` for the one
   console script; new `src/ainvest/approval/telegram_provisioning.py` for CLI,
   orchestration, narrow provider port/adapter, and safe file updates; narrow
   re-exports in `src/ainvest/approval/__init__.py` only if a public library port
   is necessary; existing `src/ainvest/config/settings.py` only if a small
   reusable exact-key/file-secret constant prevents duplication; existing
-  `src/ainvest/db/repositories.py` only if a read-only `has_active_lease`
-  helper is clearer than using `get_state`; focused unit tests in
+  `src/ainvest/db/repositories.py` only if a narrow bounded maintenance-lease
+  helper is clearer than composing the existing fenced methods; focused unit
+  tests in
   `tests/unit/approval/test_telegram_provisioning.py`; focused config tests only
   for a touched helper; one SQLite/filesystem integration test in
-  `tests/integration/approval/test_telegram_provisioning.py`; and
-  `docs/telegram-notifications.md` for the operator workflow. No migration,
+  `tests/integration/approval/test_telegram_provisioning.py`;
+  `tests/unit/test_dependency_boundary.py` only to update the exact additive
+  console-script mapping; `docs/telegram-notifications.md` for the operator
+  workflow; and `docs/decisions/README.md` for the P05-T10 DEC-005/DEC-010
+  traceability/deadline correction. No migration,
   schema, lock-file, dependency, runtime, or shared CLI framework change is
   authorized. Reuse stdlib `argparse`, `getpass`, filesystem primitives,
   existing SQLAlchemy/P05-T5 repositories, and the existing optional
@@ -1204,26 +1246,40 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   injected clock, a temporary filesystem, and real temporary SQLite sessions.
   Cover exact parser commands/options and the absence of any token argument;
   no-echo TTY and non-TTY rejection; both environments and cross-environment
-  Bot/token/recipient rejection; exact filenames and `0600` modes; symlink,
+  Bot/token rejection and permitted same-owner recipient reuse without
+  fallback or cross-product construction; exact filenames and `0600` modes;
+  symlink,
   non-regular, pre-existing, permission, duplicate-key, malformed `.env`, and
   atomic-write failure paths; preservation of unrelated `.env` content;
+  value-free rejection without automatic deletion of every case-variant nested
+  token key and top-level Telegram JSON/`bot_token` alias supported by current
+  Pydantic dotenv mapping; proof that the exact file is the utility's only
+  accepted token source; explicit process-stop acknowledgement; bounded
+  old-lease wait; acquisition/renewal/release with competing real SQLite
+  sessions; fence loss before each write; and no write before acquisition;
   disabled activation-last crash/retry behavior; `getMe`-before-other-call,
   webhook fail-closed behavior, bounded discovery with omitted offset, every
   candidate filter and explicit confirmation; `getChat` private binding;
-  empty/expired/active lease states without database writes; same-ID-only
+  empty/expired/active lease and takeover states without cursor/processed-row
+  writes; same-ID-only
   rotation and old-secret preservation on precommit failure; disable retaining
   the token/config; default validation with zero sends and explicit test mode
   with at most one send; sanitized stdout/stderr/repr/error/log output; and
   structural proof that no P05-T5 terminal/cursor method or business/query/
   broker port is reachable. Load the resulting files through `load_settings`
   to prove the selected environment is complete and the other remains
-  isolated. Canonical tests make no public-network call.
+  isolated. Update the exact dependency-boundary assertion so all four console
+  scripts are present and no fifth entry is admitted. Canonical tests make no
+  public-network call.
 - **Acceptance criteria:** on an owner-controlled host, the operator can
   provision, revalidate, safely rotate, and disable each separate Bot without
   exposing a token or advancing inbound state; only an explicitly confirmed
-  numeric private recipient and exact Bot identity can activate; active poller,
-  webhook, crossed environment, partial write, and ambiguous input all fail
-  closed. Focused tests, `./scripts/dev unit`, `./scripts/dev contract`,
+  numeric private recipient and exact Bot identity can activate; missing
+  process-stop acknowledgement, quiescence timeout, lease/fence loss, webhook,
+  crossed Bot/token environment, partial write, and ambiguous input all fail
+  closed. The maintenance lease is not represented as proof that the external
+  poller process stopped. Focused tests, `./scripts/dev unit`,
+  `./scripts/dev contract`,
   `./scripts/dev integration`, `git diff --check`, and `./scripts/dev verify`
   pass. Owner-assisted real staging/production validation is recorded
   separately and may remain pending under proposed `DEC-010` after offline

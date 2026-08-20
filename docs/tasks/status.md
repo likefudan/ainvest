@@ -2611,26 +2611,39 @@ approval path unlocks `P08-T13`, then
   one as part of this task. Every command selects exactly staging or production
   and receives explicit `.env` and secrets-directory paths. State-changing
   commands additionally receive the first-release SQLite database path for the
-  read-only lease check; validation requires no database.
+  shared fenced maintenance lease; validation requires no database.
 - **Safety contract:** token input is no-echo controlling-TTY only and never
   argv/env/log output. Install only the exact P05-T4 token filename as a
   regular `0600` file; refuse symlinks and unintended overwrite. Preserve
-  unrelated `.env` content through a validated `0600` atomic rewrite and keep
-  the environment disabled until the final activation. Require `getMe` exact
-  Bot identity, empty `getWebhookInfo`, an explicitly confirmed numeric private
-  `(user_id, chat_id)` candidate, and cross-environment Bot/token/recipient
-  isolation. Candidate `getUpdates` omits `offset`; no P05-T5 cursor or
-  processed row is confirmed or written. Add/rotate require disabled config
-  and no active lease; rotation retains the existing exact expected Bot ID;
+  unrelated `.env` content through a validated `0600` atomic rewrite, but fail
+  without disclosure or automatic deletion if any case-variant nested token
+  key or top-level Telegram JSON/`bot_token` alias could override the exact file
+  secret. Keep the environment disabled until final activation. Require exact
+  `getMe` Bot identity, empty `getWebhookInfo`, an explicitly confirmed numeric private
+  `(user_id, chat_id)` candidate, and distinct cross-environment Bots/tokens.
+  The same owner/pair may be bound separately through both validated Bots;
+  never construct a cross-product or fallback. Candidate `getUpdates` omits
+  `offset`; no P05-T5 cursor or processed row is confirmed or written.
+  State-changing commands require external service-manager stop plus explicit
+  CLI acknowledgement, bounded old-lease wait, then acquisition/renewal/holding
+  of the existing owner/epoch/version-fenced P05-T5 lease before provider work
+  or any file write. A lease alone does not prove the process stopped. Any
+  acquisition/renewal/fence loss aborts further writes. Add/rotate also require
+  disabled config; rotation retains the existing exact expected Bot ID;
   disable retains token and binding. Validate sends nothing unless explicit
-  `--send-test`, which has one bounded at-most-once attempt.
+  `--send-test`, which has one bounded at-most-once attempt. File-only
+  validation uses `environ={}` and cannot prove the launched service has no
+  ambient override; owner-assisted deployment validation must enforce that.
 - **Allowed implementation paths:** `pyproject.toml` for that one script; new
   `src/ainvest/approval/telegram_provisioning.py`; narrow approval re-export,
-  config constant/helper, or read-only lease helper only when they remove real
+  config constant/helper, or maintenance-lease helper only when they remove real
   duplication; `tests/unit/approval/test_telegram_provisioning.py`; focused
   touched-helper tests; one
-  `tests/integration/approval/test_telegram_provisioning.py`; and
-  `docs/telegram-notifications.md`. No lock, dependency, migration, schema,
+  `tests/integration/approval/test_telegram_provisioning.py`;
+  `tests/unit/test_dependency_boundary.py` for the exact four-script mapping;
+  `docs/telegram-notifications.md`; and `docs/decisions/README.md` only for
+  P05-T10 traceability and DEC-010's corrected target/deadline. No lock,
+  dependency, migration, schema,
   runtime, shared CLI framework, provider-state mutation, query, approval,
   broker, LLM, or webhook-server change.
 - **Implementation workflow:** after this docs claim is independently reviewed
