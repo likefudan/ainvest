@@ -2009,9 +2009,9 @@ Per owner instruction on 2026-07-29, `P04-T2` remains `not_started`,
 unclaimed, and paused; no background worktree or implementation agent should
 be started for it. On 2026-08-12 the owner explicitly lifted the separate
 `P05-T4` pause and authorized the serial Telegram transport chain to begin with
-that task only. Now that the `P06-T2` Part 1 display-only CLI and the
-`P05-T4`/`P05-T5` transport and P05-T10 provisioning/validation boundary are
-merged. P05-T9 is dependency-ready but remains queued/unclaimed pending its
+that task only. Now that the `P06-T2` Part 1 display-only CLI, the
+`P05-T4`/`P05-T5` transport, and P05-T10 provisioning/validation boundary are
+merged, P05-T9 is dependency-ready but remains queued/unclaimed pending its
 own separate claim. It must not wait for P06-T2
 Part 2 or mix the read surface with Paper promotion, Telegram approval, a
 non-trading mutation, or a trading capability. P05-T9 still requires a
@@ -2675,10 +2675,12 @@ approval path unlocks `P08-T13`, then
   [fifth-round final approval](https://github.com/likefudan/ainvest/pull/136#issuecomment-5357561003)
   found no remaining P0–P2 issue.
 - **Final verification:** focused provisioning/dependency suite 85 passed; unit
-  1,374, contract 203, integration 46, combined 1,623 tests; branch coverage
-  87.13%. `./scripts/dev verify`, `git diff --check`, Verify, Secret scan,
-  Dependency audit, SAST, and CodeQL all passed on the approved implementation
-  head `fa556b715454965159e373b657e411a359704509` before squash merge.
+  1,374, contract 203, integration 46, combined 1,623 tests. The local full
+  `./scripts/dev verify` run reported 87.13% branch coverage; GitHub Verify on
+  the exact approved implementation head
+  `fa556b715454965159e373b657e411a359704509` reported 87.16%. `git diff
+  --check`, Verify, Secret scan, Dependency audit, SAST, and CodeQL all passed
+  on that head before squash merge.
 - **Owner-assisted validation:** real staging and production Bot creation,
   tokens, expected Bot IDs, and bound numeric recipient pairs remain pending
   owner-assisted environment evidence under proposed `DEC-010`. This is not a
