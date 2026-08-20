@@ -277,6 +277,42 @@ class TelegramHttpsTransport:
             raise TelegramDeliveryUnknown
         return message_id
 
+    async def send_plain_message(
+        self,
+        token: str,
+        chat_id: int,
+        text: str,
+        *,
+        timeout_seconds: float,
+    ) -> int:
+        """Attempt one action-free, parse-mode-free text delivery."""
+        telegram, error = _telegram_modules()
+        try:
+            bot = telegram.Bot(token=token)
+        except Exception:
+            raise TelegramTransportRejected from None
+        try:
+            result = await bot.send_message(
+                chat_id=chat_id,
+                text=text,
+                parse_mode=None,
+                reply_markup=None,
+                read_timeout=timeout_seconds,
+                write_timeout=timeout_seconds,
+                connect_timeout=timeout_seconds,
+                pool_timeout=timeout_seconds,
+            )
+        except asyncio.CancelledError:
+            raise TelegramDeliveryUnknown from None
+        except Exception as exc:
+            if _is_definitive_send_rejection(exc, error):
+                raise TelegramTransportRejected from None
+            raise TelegramDeliveryUnknown from None
+        message_id = getattr(result, "message_id", None)
+        if not isinstance(message_id, int) or isinstance(message_id, bool) or message_id <= 0:
+            raise TelegramDeliveryUnknown
+        return message_id
+
 
 class TelegramNotificationSender:
     """Validate one selected private destination and attempt one outbound send."""

@@ -82,6 +82,23 @@ def test_production_packages_have_no_forbidden_imports() -> None:
 
 
 @pytest.mark.unit
+def test_telegram_query_execution_bridge_exists_only_in_orchestrator() -> None:
+    """P05-T9 must not create an approval-to-execution dependency bypass."""
+    assert not (AINVEST_ROOT / "approval" / "telegram_queries.py").exists()
+    bridge = AINVEST_ROOT / "orchestrator" / "telegram_queries.py"
+    imports = {
+        module
+        for module, _ in extract_module_imports(
+            bridge.read_text(encoding="utf-8"),
+            source_path=bridge,
+            current_package="ainvest.orchestrator",
+        )
+    }
+    assert "ainvest.approval.telegram_updates" in imports
+    assert "ainvest.execution.robinhood.display" in imports
+
+
+@pytest.mark.unit
 def test_production_packages_have_no_import_cycles() -> None:
     """Boundary packages under ``src/ainvest`` must not form import cycles."""
     edges = collect_import_edges(AINVEST_ROOT)

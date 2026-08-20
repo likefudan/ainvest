@@ -28,6 +28,7 @@ EXAMPLE_RISK = REPO_ROOT / "config" / "risk.example.yaml"
 EXAMPLE_STRATEGIES = REPO_ROOT / "config" / "strategies.example.yaml"
 FAKE_STAGING_FILE_TOKEN = "900000001:" + ("A" * 35)
 FAKE_PRODUCTION_FILE_TOKEN = "900000002:" + ("B" * 35)
+FAKE_ACCOUNT_REFERENCE = "synthetic-account-reference"
 
 
 def _complete_webauthn() -> WebAuthnSettings:
@@ -770,3 +771,176 @@ def test_disabled_canonical_env_example_loads_without_secrets() -> None:
     assert settings.telegram_staging.allowed_recipients == (
         TelegramRecipient(user_id=900000101, private_chat_id=900000201),
     )
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("terminal", [b"", b"\n"], ids=("exact", "one_lf"))
+@pytest.mark.parametrize("length", [1, 128])
+def test_robinhood_account_exact_file_accepts_visible_ascii_boundaries(
+    tmp_path: Path,
+    terminal: bytes,
+    length: int,
+) -> None:
+    raw = b"A" * length
+    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_bytes(raw + terminal)
+
+    settings = load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert settings.robinhood_read_account_number is not None
+    assert settings.robinhood_read_account_number.get_secret_value() == raw.decode("ascii")
+    assert "robinhood_read_account_number" not in repr(settings)
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "raw",
+    [
+        b"",
+        b"A" * 129,
+        b"value\r\n",
+        b"value\n\n",
+        b" leading",
+        b"trailing ",
+        b"value\tpart",
+        b"value\npart",
+        b"value\x00part",
+        "non-ascii-é".encode(),
+        b"\xff",
+    ],
+    ids=(
+        "empty",
+        "129_bytes",
+        "crlf",
+        "repeated_lf",
+        "leading_space",
+        "trailing_space",
+        "tab",
+        "embedded_lf",
+        "control",
+        "non_ascii",
+        "invalid_utf8",
+    ),
+)
+def test_robinhood_account_exact_file_rejects_every_invalid_shape(
+    tmp_path: Path,
+    raw: bytes,
+) -> None:
+    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_bytes(raw)
+
+    with pytest.raises(ConfigError) as caught:
+        load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    assert caught.value.code == "CONFIG_INVALID"
+    assert str(caught.value) == "Unable to load file-secret configuration"
+    assert "non-ascii" not in str(caught.value)
+
+
+@pytest.mark.unit
+def test_robinhood_account_file_rejects_symlink_and_stock_alias_bypass(
+    tmp_path: Path,
+) -> None:
+    target = tmp_path / "target"
+    target.write_text(FAKE_ACCOUNT_REFERENCE, encoding="utf-8")
+    canonical = tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER"
+    canonical.symlink_to(target)
+    with pytest.raises(ConfigError):
+        load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+
+    canonical.unlink()
+    (tmp_path / "robinhood_read_account_number").write_text(
+        FAKE_ACCOUNT_REFERENCE,
+        encoding="utf-8",
+    )
+    settings = load_settings(environ={}, env_file=None, secrets_dir=tmp_path)
+    assert settings.robinhood_read_account_number is None
+
+
+@pytest.mark.unit
+def test_robinhood_account_source_precedence_is_exact(tmp_path: Path) -> None:
+    secrets_dir = tmp_path / "secrets"
+    secrets_dir.mkdir()
+    (secrets_dir / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_text(
+        "file-value",
+        encoding="utf-8",
+    )
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("ROBINHOOD_READ_ACCOUNT_NUMBER=dotenv-value\n", encoding="utf-8")
+
+    from_file = load_settings(environ={}, env_file=None, secrets_dir=secrets_dir)
+    from_dotenv = load_settings(environ={}, env_file=dotenv, secrets_dir=secrets_dir)
+    from_env = load_settings(
+        environ={"ROBINHOOD_READ_ACCOUNT_NUMBER": "environment-value"},
+        env_file=dotenv,
+        secrets_dir=secrets_dir,
+    )
+    explicit = load_settings(
+        environ={"ROBINHOOD_READ_ACCOUNT_NUMBER": "environment-value"},
+        env_file=dotenv,
+        secrets_dir=secrets_dir,
+        robinhood_read_account_number=SecretStr("explicit-value"),
+    )
+
+    assert from_file.robinhood_read_account_number is not None
+    assert from_file.robinhood_read_account_number.get_secret_value() == "file-value"
+    assert from_dotenv.robinhood_read_account_number is not None
+    assert from_dotenv.robinhood_read_account_number.get_secret_value() == "dotenv-value"
+    assert from_env.robinhood_read_account_number is not None
+    assert from_env.robinhood_read_account_number.get_secret_value() == "environment-value"
+    assert explicit.robinhood_read_account_number is not None
+    assert explicit.robinhood_read_account_number.get_secret_value() == "explicit-value"
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    "value",
+    ["", " leading", "trailing ", "value\tpart", "value\npart", "é", "A" * 129],
+)
+def test_robinhood_account_environment_value_is_never_trimmed_or_normalized(
+    value: str,
+) -> None:
+    with pytest.raises(ConfigError):
+        load_settings(
+            environ={"ROBINHOOD_READ_ACCOUNT_NUMBER": value},
+            env_file=None,
+        )
+
+
+@pytest.mark.unit
+def test_robinhood_account_empty_dotenv_is_invalid_and_cannot_fall_back(
+    tmp_path: Path,
+) -> None:
+    secrets_dir = tmp_path / "secrets"
+    secrets_dir.mkdir()
+    (secrets_dir / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_text(
+        FAKE_ACCOUNT_REFERENCE,
+        encoding="utf-8",
+    )
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("ROBINHOOD_READ_ACCOUNT_NUMBER=\n", encoding="utf-8")
+
+    with pytest.raises(ConfigError):
+        load_settings(environ={}, env_file=dotenv, secrets_dir=secrets_dir)
+
+
+@pytest.mark.unit
+def test_unrelated_empty_environment_and_dotenv_values_keep_stock_ignore_behavior(
+    tmp_path: Path,
+) -> None:
+    dotenv = tmp_path / ".env"
+    dotenv.write_text("DATABASE_PASSWORD=\n", encoding="utf-8")
+
+    from_env = load_settings(environ={"DATABASE_PASSWORD": ""}, env_file=None)
+    from_dotenv = load_settings(environ={}, env_file=dotenv)
+
+    assert from_env.database_password is None
+    assert from_dotenv.database_password is None
+
+
+@pytest.mark.unit
+def test_robinhood_account_never_uses_implicit_secret_path(tmp_path: Path) -> None:
+    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_text(
+        FAKE_ACCOUNT_REFERENCE,
+        encoding="utf-8",
+    )
+    settings = load_settings(environ={}, env_file=None)
+    assert settings.robinhood_read_account_number is None
