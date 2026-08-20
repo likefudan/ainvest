@@ -8,7 +8,8 @@ from types import SimpleNamespace
 import pytest
 from pydantic import SecretStr, ValidationError
 
-from ainvest.approval.telegram import TelegramEnvironment
+import ainvest.approval.telegram as telegram_module
+from ainvest.approval.telegram import TelegramEnvironment, TelegramHttpsTransport
 from ainvest.approval.telegram_updates import (
     AuthorizedCallbackUpdate,
     AuthorizedTextUpdate,
@@ -294,6 +295,7 @@ def _adapter_modules(
         return errors if name == "telegram.error" else telegram
 
     monkeypatch.setattr("ainvest.approval.telegram_updates.import_module", fake_import)
+    monkeypatch.setattr(telegram_module, "_telegram_modules", lambda: (telegram, errors))
     return calls
 
 
@@ -315,7 +317,7 @@ def test_https_adapter_passes_exact_bounds_and_terminalizes_empty_callback(
     )
     calls = _adapter_modules(monkeypatch, result=(raw,))
     result = asyncio.run(
-        TelegramHttpsUpdateTransport().get_updates(
+        TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
             "synthetic-token",
             offset=7,
             timeout=25,
@@ -348,7 +350,7 @@ def test_https_adapter_maps_transient_errors(
     _adapter_modules(monkeypatch, error=provider_error)
     with pytest.raises(TelegramProviderTransient):
         asyncio.run(
-            TelegramHttpsUpdateTransport().get_updates(
+            TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
                 "synthetic-token",
                 offset=0,
                 timeout=25,
@@ -369,7 +371,7 @@ def test_https_adapter_maps_rejections_to_sanitized_fatal(
     _adapter_modules(monkeypatch, error=provider_error)
     with pytest.raises(TelegramPollingFatal, match="rejected the polling request"):
         asyncio.run(
-            TelegramHttpsUpdateTransport().get_updates(
+            TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
                 "synthetic-token",
                 offset=0,
                 timeout=25,
@@ -384,7 +386,7 @@ def test_https_adapter_maps_retry_after(monkeypatch: pytest.MonkeyPatch) -> None
     _adapter_modules(monkeypatch, error=_RetryAfter(17))
     with pytest.raises(TelegramProviderRateLimited) as captured:
         asyncio.run(
-            TelegramHttpsUpdateTransport().get_updates(
+            TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
                 "synthetic-token",
                 offset=0,
                 timeout=25,
@@ -405,7 +407,7 @@ def test_https_adapter_missing_optional_dependency_is_sanitized(
     monkeypatch.setattr("ainvest.approval.telegram_updates.import_module", missing_import)
     with pytest.raises(TelegramPollingFatal, match="dependency is unavailable"):
         asyncio.run(
-            TelegramHttpsUpdateTransport().get_updates(
+            TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
                 "synthetic-token",
                 offset=0,
                 timeout=25,
@@ -422,7 +424,7 @@ def test_https_adapter_rejects_oversized_provider_batch(
     _adapter_modules(monkeypatch, result=tuple(SimpleNamespace(update_id=i) for i in range(101)))
     with pytest.raises(TelegramPollingFatal, match="oversized"):
         asyncio.run(
-            TelegramHttpsUpdateTransport().get_updates(
+            TelegramHttpsUpdateTransport(TelegramHttpsTransport()).get_updates(
                 "synthetic-token",
                 offset=0,
                 timeout=25,

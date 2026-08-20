@@ -25,6 +25,11 @@ creates or migrates it. SIGINT and SIGTERM stop polling, finish bounded cleanup,
 release the polling lease, and close the database engine. Live trading mode is
 rejected.
 
+The long-running process initializes one `python-telegram-bot` Bot and its two
+HTTP clients, then reuses that same client for Bot identity, polling, and reply
+delivery. Normal stop, startup failure, polling failure, and cancellation close
+the owned clients exactly once.
+
 The selected Telegram Bot must be enabled with its exact Bot ID, token, and at
 least one bound numeric `(user_id, private_chat_id)` pair. P05-T5 silently
 discards every non-private, unbound, forwarded, edited, callback, wrong-Bot, or
@@ -44,6 +49,14 @@ LF. CRLF, whitespace, controls, extra lines, invalid UTF-8, symlinks, and
 oversized values are rejected. The chat cannot provide or select this value.
 It is revealed only inside the named account-bound display call and never
 appears in a reply, log, database row, snapshot, or error.
+
+Account configuration is resolved lazily and independently from global startup
+configuration. Its precedence is explicit value, environment, dotenv, exact
+file secret, then an injected YAML value. Missing and invalid sources become
+the fixed `account_secret_missing` and `account_secret_invalid` replies only
+for the four account-bound commands. They cannot block `/help`, `/rh_status`,
+`/accounts`, `/quotes`, `/pricebook`, `/history`, `/fundamentals`, or
+`/financials` and cannot open the gateway for an account-bound command.
 
 ## Exact commands
 
@@ -77,9 +90,18 @@ attempt has a 4-second budget, and the enclosing P05-T5 handler retains a
 
 Replies are one plain message (`parse_mode=None`) of at most 3,500 Unicode code
 points. Oversized results are replaced by a bounded error rather than split or
-truncated. A crash after a send but before P05-T5 commits the update can replay
+truncated. Compact JSON is ASCII-escaped at this boundary, so provider-owned
+Unicode format, bidi, control, and separator characters never reach Telegram
+raw. A crash after a send but before P05-T5 commits the update can replay
 the read and reply; delivery is intentionally bounded at-least-once and no
 Telegram `message_id` is persisted.
+
+This query-only runner parks every authorized callback by returning
+`RETRY_LATER`: it sends no reply, writes no terminal/digest row, and does not
+advance the offset. That deliberately blocks later updates with bounded P05-T5
+backoff until a future P05-T1 composite callback router is deployed. The
+availability cost is preferable to irreversibly consuming an approval callback
+in the display-only process.
 
 Real Bot and Robinhood reads remain owner-assisted validation. Offline tests
 use fake transports, synthetic identifiers, a synthetic account reference,

@@ -53,7 +53,14 @@ from ainvest.approval.telegram_updates import (
     TelegramPollingControl,
     TelegramUpdateTransport,
 )
-from ainvest.config import Settings, TelegramBotSettings, TradingMode, load_settings
+from ainvest.config import (
+    RobinhoodAccountSecretInvalid,
+    Settings,
+    TelegramBotSettings,
+    TradingMode,
+    load_robinhood_read_account_number,
+    load_settings,
+)
 from ainvest.config.errors import ConfigError
 from ainvest.db import create_db_engine, create_session_factory
 from ainvest.execution.robinhood.composition import ComposedReadGateway, open_read_gateway
@@ -246,6 +253,14 @@ class AccountSecretUnavailable(Exception):
     """The account-bound command has no approved server-side account secret."""
 
 
+class AccountSecretMissing(AccountSecretUnavailable):
+    """The lazy READ_BROKER account source has no configured value."""
+
+
+class AccountSecretInvalid(AccountSecretUnavailable):
+    """The lazy READ_BROKER account source failed strict validation."""
+
+
 class TelegramPlainMessageTransport(Protocol):
     async def send_plain_message(
         self,
@@ -262,6 +277,10 @@ class TelegramDisplayQueryPort(Protocol):
 
 
 GatewayContextFactory = Callable[[], AbstractAsyncContextManager[ComposedReadGateway]]
+AccountSecretLoader = Callable[[], SecretStr | None]
+TelegramTransportContextFactory = Callable[
+    [str], AbstractAsyncContextManager[TelegramHttpsTransport]
+]
 WallClock = Callable[[], datetime]
 MonotonicClock = Callable[[], float]
 OutcomeSink = Callable[[str, bool], None]
@@ -432,30 +451,31 @@ def _rfc3339(value: datetime) -> str:
 class ReadGatewayQueryExecutor:
     """Account-owning READ_BROKER subcomposition over named display calls."""
 
-    __slots__ = ("_account_number", "_clock", "_gateway_factory")
+    __slots__ = ("_account_loader", "_clock", "_gateway_factory")
 
     def __init__(
         self,
-        account_number: SecretStr | None,
+        account_loader: AccountSecretLoader,
         *,
         gateway_factory: GatewayContextFactory = lambda: open_read_gateway(),
         clock: WallClock = lambda: datetime.now(UTC),
     ) -> None:
-        self._account_number = account_number
+        self._account_loader = account_loader
         self._gateway_factory = gateway_factory
         self._clock = clock
 
     async def execute(self, query: TelegramQuery) -> DisplaySuccess:
-        if query.command in _ACCOUNT_COMMANDS and self._account_number is None:
-            raise AccountSecretUnavailable
+        account = self._account() if query.command in _ACCOUNT_COMMANDS else None
         async with self._gateway_factory() as composed:
             service = RobinhoodDisplayService(composed.client, clock=self._clock)
-            return await self._execute_named(service, query)
+            return await self._execute_named(service, query, account=account)
 
     async def _execute_named(
         self,
         service: RobinhoodDisplayService,
         query: TelegramQuery,
+        *,
+        account: str | None,
     ) -> DisplaySuccess:
         command = query.command
         if command is TelegramQueryCommand.RH_STATUS:
@@ -463,19 +483,23 @@ class ReadGatewayQueryExecutor:
         if command is TelegramQueryCommand.ACCOUNTS:
             return await service.accounts()
         if command is TelegramQueryCommand.PORTFOLIO:
-            return await service.portfolio(self._account())
+            assert account is not None
+            return await service.portfolio(account)
         if command is TelegramQueryCommand.POSITIONS:
-            return await service.positions(self._account())
+            assert account is not None
+            return await service.positions(account)
         if command is TelegramQueryCommand.ORDERS:
             assert query.order_view is not None
             filters = {} if not query.symbols else {"symbol": query.symbols[0]}
-            return await service.orders(self._account(), view=query.order_view, filters=filters)
+            assert account is not None
+            return await service.orders(account, view=query.order_view, filters=filters)
         if command is TelegramQueryCommand.QUOTES:
             return await service.quotes(query.symbols)
         if command is TelegramQueryCommand.PRICEBOOK:
             return await service.price_book(query.symbols)
         if command is TelegramQueryCommand.TRADABILITY:
-            return await service.tradability(self._account(), query.symbols)
+            assert account is not None
+            return await service.tradability(account, query.symbols)
         if command is TelegramQueryCommand.HISTORY:
             assert query.history_start is not None
             assert query.history_end is not None
@@ -501,9 +525,15 @@ class ReadGatewayQueryExecutor:
         raise TelegramQueryInternalError
 
     def _account(self) -> str:
-        if self._account_number is None:
-            raise AccountSecretUnavailable
-        return self._account_number.get_secret_value()
+        try:
+            account = self._account_loader()
+        except RobinhoodAccountSecretInvalid:
+            raise AccountSecretInvalid from None
+        except Exception:
+            raise AccountSecretInvalid from None
+        if account is None:
+            raise AccountSecretMissing
+        return account.get_secret_value()
 
 
 @dataclass(slots=True)
@@ -573,7 +603,9 @@ class TelegramQueryHandler:
 
     async def handle(self, update: AuthorizedTelegramUpdate) -> TelegramHandlerDisposition:
         if isinstance(update, AuthorizedCallbackUpdate):
-            return TelegramHandlerDisposition.TERMINAL_HANDLED
+            # Query-only composition must park callbacks until P05-T1 owns a
+            # composite router. Terminalizing here would irreversibly consume it.
+            return TelegramHandlerDisposition.RETRY_LATER
         try:
             admitted = self._rate.enter(update)
         except TelegramQueryInternalError:
@@ -603,9 +635,13 @@ class TelegramQueryHandler:
         try:
             async with asyncio.timeout(TELEGRAM_QUERY_GATEWAY_SECONDS):
                 success = await self._executor.execute(query)
-        except AccountSecretUnavailable:
+        except AccountSecretMissing:
             return await self._send_error(
-                update, command, "account_secret_unavailable", retryable=False
+                update, command, "account_secret_missing", retryable=False
+            )
+        except AccountSecretInvalid:
+            return await self._send_error(
+                update, command, "account_secret_invalid", retryable=False
             )
         except GatewayReadError as exc:
             return await self._send_error(update, command, exc.code.value, retryable=exc.retryable)
@@ -680,7 +716,7 @@ def _render_success(success: DisplaySuccess) -> str | None:
     try:
         body = json.dumps(
             success.model_dump(mode="json"),
-            ensure_ascii=False,
+            ensure_ascii=True,
             separators=(",", ":"),
         )
     except Exception:
@@ -701,7 +737,7 @@ def _render_error(
         )
         body = json.dumps(
             error.model_dump(mode="json"),
-            ensure_ascii=False,
+            ensure_ascii=True,
             separators=(",", ":"),
         )
         rendered = f"{_READ_ONLY_HEADER}\n{body}"
@@ -751,6 +787,7 @@ async def run_telegram_read(
     gateway_factory: GatewayContextFactory = lambda: open_read_gateway(),
     clock: WallClock = lambda: datetime.now(UTC),
     monotonic: MonotonicClock = time.monotonic,
+    account_loader: AccountSecretLoader = lambda: None,
 ) -> None:
     """Run the real P05-T5 poller and always dispose its database engine."""
     try:
@@ -758,7 +795,7 @@ async def run_telegram_read(
         _require_runtime(settings, config)
         assert config.bot_token is not None
         executor = ReadGatewayQueryExecutor(
-            settings.robinhood_read_account_number,
+            account_loader,
             gateway_factory=gateway_factory,
             clock=clock,
         )
@@ -824,7 +861,14 @@ def _require_migrated_sqlite(path: Path) -> None:
         raise TelegramReadRunnerFailure("database_migration_required")
 
 
-async def _run_cli(namespace: argparse.Namespace) -> None:
+async def _run_cli(
+    namespace: argparse.Namespace,
+    *,
+    transport_factory: TelegramTransportContextFactory = lambda token: TelegramHttpsTransport(
+        token
+    ),
+    gateway_factory: GatewayContextFactory = lambda: open_read_gateway(),
+) -> None:
     try:
         settings = load_settings(
             env_file=namespace.env_file,
@@ -836,8 +880,6 @@ async def _run_cli(namespace: argparse.Namespace) -> None:
     config = _selected_bot(settings, environment)
     _require_runtime(settings, config)
     _require_migrated_sqlite(namespace.database)
-    engine = create_db_engine(f"sqlite+pysqlite:///{namespace.database.resolve()}")
-    session_factory = create_session_factory(engine)
     stop = asyncio.Event()
     control = AsyncioTelegramPollingControl(stop)
     loop = asyncio.get_running_loop()
@@ -848,19 +890,29 @@ async def _run_cli(namespace: argparse.Namespace) -> None:
             installed.append(item)
         except (NotImplementedError, RuntimeError):
             continue
-    transport = TelegramHttpsTransport()
     try:
-        await run_telegram_read(
-            settings=settings,
-            environment=environment,
-            engine=engine,
-            session_factory=session_factory,
-            identity_transport=transport,
-            update_transport=TelegramHttpsUpdateTransport(),
-            reply_transport=transport,
-            control=control,
-        )
+        assert config.bot_token is not None
+        token = config.bot_token.get_secret_value()
+        async with transport_factory(token) as transport:
+            engine = create_db_engine(f"sqlite+pysqlite:///{namespace.database.resolve()}")
+            session_factory = create_session_factory(engine)
+            await run_telegram_read(
+                settings=settings,
+                environment=environment,
+                engine=engine,
+                session_factory=session_factory,
+                identity_transport=transport,
+                update_transport=TelegramHttpsUpdateTransport(transport),
+                reply_transport=transport,
+                control=control,
+                gateway_factory=gateway_factory,
+                account_loader=lambda: load_robinhood_read_account_number(
+                    env_file=namespace.env_file,
+                    secrets_dir=namespace.secrets_dir,
+                ),
+            )
     finally:
+        token = ""
         for item in installed:
             loop.remove_signal_handler(item)
 
@@ -886,6 +938,9 @@ __all__ = [
     "TELEGRAM_QUERY_RATE_LIMIT",
     "TELEGRAM_QUERY_RATE_WINDOW_SECONDS",
     "TELEGRAM_QUERY_SEND_SECONDS",
+    "AccountSecretInvalid",
+    "AccountSecretLoader",
+    "AccountSecretMissing",
     "AccountSecretUnavailable",
     "GatewayContextFactory",
     "ReadGatewayQueryExecutor",
@@ -897,6 +952,7 @@ __all__ = [
     "TelegramQueryHandler",
     "TelegramQueryInputError",
     "TelegramReadRunnerFailure",
+    "TelegramTransportContextFactory",
     "build_parser",
     "main",
     "parse_telegram_query",
