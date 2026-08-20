@@ -9,6 +9,7 @@ from datetime import UTC, datetime, timedelta, timezone
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
+from zoneinfo import ZoneInfo
 
 import pytest
 from pydantic import SecretStr, ValidationError
@@ -20,6 +21,7 @@ from ainvest.approval.telegram_updates import (
     AuthorizedTextUpdate,
     TelegramHandlerDisposition,
 )
+from ainvest.config import RobinhoodAccountSecretInvalid
 from ainvest.execution.robinhood.display import (
     AdjustmentType,
     DisplaySuccess,
@@ -29,7 +31,8 @@ from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErro
 from ainvest.execution.robinhood.mappers import MappingErrorCode, RobinhoodMappingError
 from ainvest.execution.robinhood.read_models import HistoricalBounds, HistoricalInterval
 from ainvest.orchestrator.telegram_queries import (
-    AccountSecretUnavailable,
+    AccountSecretInvalid,
+    AccountSecretMissing,
     GatewayContextFactory,
     ReadGatewayQueryExecutor,
     TelegramQuery,
@@ -193,6 +196,40 @@ def test_history_rejects_naive_clock_as_internal_not_input() -> None:
         )
 
 
+@pytest.mark.parametrize(
+    ("clock", "window", "start", "end"),
+    [
+        (
+            datetime(2026, 3, 31, 12, tzinfo=UTC),
+            "1m",
+            "2026-03-01T12:00:00Z",
+            "2026-03-31T12:00:00Z",
+        ),
+        (
+            datetime(2024, 2, 29, 12, tzinfo=UTC),
+            "1y",
+            "2023-03-01T12:00:00Z",
+            "2024-02-29T12:00:00Z",
+        ),
+        (
+            datetime(2026, 3, 8, 1, 30, tzinfo=ZoneInfo("America/Los_Angeles")),
+            "1d",
+            "2026-03-07T09:30:00Z",
+            "2026-03-08T09:30:00Z",
+        ),
+    ],
+)
+def test_history_windows_are_fixed_duration_across_month_leap_and_dst(
+    clock: datetime,
+    window: str,
+    start: str,
+    end: str,
+) -> None:
+    query = parse_telegram_query(f"/history AAPL {window}", clock=lambda: clock)
+    assert query.history_start == start
+    assert query.history_end == end
+
+
 def test_query_model_rejects_cross_command_fields() -> None:
     with pytest.raises(ValidationError):
         TelegramQuery(command=TelegramQueryCommand.HELP, symbols=("AAPL",))
@@ -249,7 +286,7 @@ def test_executor_uses_one_named_display_call_and_closes_gateway(
 
     monkeypatch.setattr(query_module, "RobinhoodDisplayService", Service)
     executor = ReadGatewayQueryExecutor(
-        SecretStr(ACCOUNT),
+        lambda: SecretStr(ACCOUNT),
         gateway_factory=cast(GatewayContextFactory, Gateway),
         clock=lambda: NOW,
     )
@@ -305,7 +342,8 @@ def test_executor_passes_each_history_window_as_one_exact_argument_dictionary(
 
     monkeypatch.setattr(query_module, "RobinhoodDisplayService", Service)
     executor = ReadGatewayQueryExecutor(
-        SecretStr(ACCOUNT), gateway_factory=cast(GatewayContextFactory, Gateway)
+        lambda: SecretStr(ACCOUNT),
+        gateway_factory=cast(GatewayContextFactory, Gateway),
     )
     asyncio.run(
         executor.execute(parse_telegram_query(f"/history AAPL {window}", clock=lambda: NOW))
@@ -333,15 +371,93 @@ def test_account_secret_failure_precedes_gateway_open() -> None:
         async def __aexit__(self, *args: object) -> None:
             pass
 
-    executor = ReadGatewayQueryExecutor(None, gateway_factory=cast(GatewayContextFactory, Gateway))
-    with pytest.raises(AccountSecretUnavailable):
+    executor = ReadGatewayQueryExecutor(
+        lambda: None, gateway_factory=cast(GatewayContextFactory, Gateway)
+    )
+    with pytest.raises(AccountSecretMissing):
         asyncio.run(executor.execute(parse_telegram_query("/portfolio")))
+    assert opened is False
+
+
+def test_invalid_lazy_account_does_not_block_status_or_nonaccount_reads(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    opened = 0
+
+    def invalid_account() -> SecretStr | None:
+        raise RobinhoodAccountSecretInvalid
+
+    class Service:
+        def __init__(self, client: object, *, clock: object) -> None:
+            del client, clock
+
+        def status(self) -> DisplaySuccess:
+            return _success()
+
+        async def quotes(self, symbols: object) -> DisplaySuccess:
+            assert symbols == ("AAPL",)
+            return _success()
+
+    class Gateway:
+        async def __aenter__(self) -> SimpleNamespace:
+            nonlocal opened
+            opened += 1
+            return SimpleNamespace(client=object())
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+    monkeypatch.setattr(query_module, "RobinhoodDisplayService", Service)
+    executor = ReadGatewayQueryExecutor(
+        invalid_account,
+        gateway_factory=cast(GatewayContextFactory, Gateway),
+    )
+
+    asyncio.run(executor.execute(parse_telegram_query("/rh_status")))
+    asyncio.run(executor.execute(parse_telegram_query("/quotes AAPL")))
+    with pytest.raises(AccountSecretInvalid):
+        asyncio.run(executor.execute(parse_telegram_query("/portfolio")))
+    assert opened == 2
+
+
+@pytest.mark.parametrize(
+    ("loader", "code"),
+    [
+        (lambda: None, "account_secret_missing"),
+        (
+            lambda: (_ for _ in ()).throw(RobinhoodAccountSecretInvalid()),
+            "account_secret_invalid",
+        ),
+    ],
+)
+def test_account_source_failure_replies_before_gateway_open(
+    loader: query_module.AccountSecretLoader,
+    code: str,
+) -> None:
+    opened = False
+
+    class Gateway:
+        async def __aenter__(self) -> SimpleNamespace:
+            nonlocal opened
+            opened = True
+            return SimpleNamespace(client=object())
+
+        async def __aexit__(self, *args: object) -> None:
+            pass
+
+    executor = ReadGatewayQueryExecutor(
+        loader,
+        gateway_factory=cast(GatewayContextFactory, Gateway),
+    )
+    transport = FakeReplyTransport()
+    asyncio.run(_handler(transport, executor).handle(_update("/portfolio")))
+    assert _wire(transport)["error"] == {"code": code, "retryable": False}
     assert opened is False
 
 
 def _handler(
     transport: FakeReplyTransport,
-    executor: FakeExecutor,
+    executor: query_module.TelegramDisplayQueryPort,
     *,
     monotonic: Any = lambda: 0.0,
     clock: Any = lambda: NOW,
@@ -380,7 +496,8 @@ def test_help_is_static_and_never_opens_gateway() -> None:
 @pytest.mark.parametrize(
     ("effect", "code", "retryable"),
     [
-        (AccountSecretUnavailable(), "account_secret_unavailable", False),
+        (AccountSecretMissing(), "account_secret_missing", False),
+        (AccountSecretInvalid(), "account_secret_invalid", False),
         (GatewayReadError(GatewayReadErrorCode.TIMEOUT), "timeout", True),
         (RobinhoodMappingError(MappingErrorCode.INVALID_VALUE), "invalid_value", False),
         (RuntimeError("provider-payload"), "internal_error", False),
@@ -451,7 +568,7 @@ def test_callback_is_silent_and_never_queries_or_sends() -> None:
         callback_data=SecretStr("approve"),
     )
     result = asyncio.run(_handler(transport, executor).handle(callback))
-    assert result is TelegramHandlerDisposition.TERMINAL_HANDLED
+    assert result is TelegramHandlerDisposition.RETRY_LATER
     assert executor.calls == []
     assert transport.calls == []
 
@@ -483,6 +600,18 @@ def test_rate_window_resets_at_sixty_seconds() -> None:
     now = 60.0
     asyncio.run(handler.handle(_update("/help", update_id=8)))
     assert len(transport.calls) == 7
+
+
+def test_rate_limit_resets_when_query_process_restarts() -> None:
+    first_transport = FakeReplyTransport()
+    second_transport = FakeReplyTransport()
+    first = _handler(first_transport, FakeExecutor())
+    second = _handler(second_transport, FakeExecutor())
+    for update_id in range(1, 8):
+        asyncio.run(first.handle(_update("/help", update_id=update_id)))
+        asyncio.run(second.handle(_update("/help", update_id=update_id)))
+    assert len(first_transport.calls) == 6
+    assert len(second_transport.calls) == 6
 
 
 def test_pre_send_cancellation_retries_without_double_rate_charge() -> None:
@@ -582,6 +711,49 @@ def test_render_failure_uses_prebuilt_fallback(monkeypatch: pytest.MonkeyPatch) 
     asyncio.run(_handler(transport, FakeExecutor()).handle(_update("/rh_status")))
     assert '"code":"render_failed"' in transport.calls[0][2]
     assert "provider-payload" not in transport.calls[0][2]
+
+
+def test_renderer_ascii_escapes_bidi_separators_quotes_and_backslashes() -> None:
+    untrusted = 'left\u202eright\u2028"quote"\\pathé'
+
+    class Payload:
+        def model_dump(self, *, mode: str) -> dict[str, object]:
+            assert mode == "json"
+            return {"text": untrusted}
+
+    rendered = query_module._render_success(cast(DisplaySuccess, Payload()))
+    assert rendered is not None
+    assert rendered.isascii()
+    assert "\\u202e" in rendered
+    assert "\\u2028" in rendered
+    assert "\\u00e9" in rendered
+    assert json.loads(rendered.split("\n", maxsplit=1)[1]) == {"text": untrusted}
+
+
+def test_message_limit_is_applied_after_ascii_escaping() -> None:
+    class Payload:
+        def model_dump(self, *, mode: str) -> dict[str, object]:
+            assert mode == "json"
+            return {"text": "é" * 600}
+
+    class Executor:
+        async def execute(self, query: TelegramQuery) -> DisplaySuccess:
+            del query
+            return cast(DisplaySuccess, Payload())
+
+    transport = FakeReplyTransport()
+    asyncio.run(
+        TelegramQueryHandler(
+            token=SecretStr(TOKEN),
+            transport=transport,
+            executor=Executor(),
+        ).handle(_update("/rh_status"))
+    )
+    assert _wire(transport)["error"] == {
+        "code": "result_too_large",
+        "retryable": False,
+    }
+    assert len(transport.calls[0][2]) <= 3_500
 
 
 def test_module_has_no_generic_or_trading_surface() -> None:

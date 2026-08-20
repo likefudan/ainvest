@@ -69,6 +69,10 @@ _YAML_SETTINGS_DATA: ContextVar[Mapping[str, Any] | None] = ContextVar(
     "ainvest_yaml_settings_data",
     default=None,
 )
+_ROBINHOOD_ACCOUNT_YAML_VALUE: ContextVar[object | None] = ContextVar(
+    "ainvest_robinhood_account_yaml_value",
+    default=None,
+)
 
 
 def _is_int64(value: int) -> bool:
@@ -412,30 +416,104 @@ class _RobinhoodAccountFileSecretSource(PydanticBaseSettingsSource):
         return {ROBINHOOD_READ_ACCOUNT_FILENAME: value}
 
 
-def _account_setting_only(values: Mapping[str, Any]) -> dict[str, Any]:
-    return {
-        key: value
-        for key, value in values.items()
-        if key.casefold()
-        in {
-            ROBINHOOD_READ_ACCOUNT_FILENAME.casefold(),
-            "robinhood_read_account_number",
+class _RobinhoodAccountYamlSource(PydanticBaseSettingsSource):
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        del field
+        return _ROBINHOOD_ACCOUNT_YAML_VALUE.get(), field_name, False
+
+    def __call__(self) -> dict[str, Any]:
+        value = _ROBINHOOD_ACCOUNT_YAML_VALUE.get()
+        return {} if value is None else {ROBINHOOD_READ_ACCOUNT_FILENAME: value}
+
+
+class _FilteredAccountDotEnvSource(PydanticBaseSettingsSource):
+    """Hide the lazy READ_BROKER key from global Settings only."""
+
+    def __init__(
+        self, settings_cls: type[BaseSettings], source: PydanticBaseSettingsSource
+    ) -> None:
+        super().__init__(settings_cls)
+        self._source = source
+
+    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
+        return self._source.get_field_value(field, field_name)
+
+    def __call__(self) -> dict[str, Any]:
+        values = self._source()
+        return {
+            key: value
+            for key, value in values.items()
+            if key.casefold()
+            not in {
+                ROBINHOOD_READ_ACCOUNT_FILENAME.casefold(),
+                "robinhood_read_account_number",
+            }
         }
-    }
 
 
-class _RobinhoodAccountEnvSource(EnvSettingsSource):
-    """Preserve empty account values for exact validation without global drift."""
+class _RobinhoodReadAccountSettings(BaseSettings):
+    """Dedicated lazy source composition for the READ_BROKER account reference."""
 
-    def __call__(self) -> dict[str, Any]:
-        return _account_setting_only(super().__call__())
+    model_config = SettingsConfigDict(
+        env_file=None,
+        env_file_encoding="utf-8",
+        env_ignore_empty=False,
+        extra="ignore",
+        frozen=True,
+        populate_by_name=True,
+        case_sensitive=False,
+        validate_default=True,
+    )
+
+    robinhood_read_account_number: SecretStr | None = Field(
+        default=None,
+        repr=False,
+        validation_alias=AliasChoices(
+            ROBINHOOD_READ_ACCOUNT_FILENAME,
+            "robinhood_read_account_number",
+        ),
+    )
+
+    @classmethod
+    def settings_customise_sources(
+        cls,
+        settings_cls: type[BaseSettings],
+        init_settings: PydanticBaseSettingsSource,
+        env_settings: PydanticBaseSettingsSource,
+        dotenv_settings: PydanticBaseSettingsSource,
+        file_secret_settings: PydanticBaseSettingsSource,
+    ) -> tuple[PydanticBaseSettingsSource, ...]:
+        del cls
+        return (
+            init_settings,
+            EnvSettingsSource(settings_cls, env_ignore_empty=False),
+            DotEnvSettingsSource(
+                settings_cls,
+                env_file=getattr(dotenv_settings, "env_file", None),
+                env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
+                env_ignore_empty=False,
+            ),
+            _RobinhoodAccountFileSecretSource(
+                settings_cls,
+                getattr(file_secret_settings, "secrets_dir", None),
+            ),
+            _RobinhoodAccountYamlSource(settings_cls),
+        )
+
+    @field_validator("robinhood_read_account_number", mode="before")
+    @classmethod
+    def _validate_account(cls, value: object) -> SecretStr | None:
+        del cls
+        if value is None:
+            return None
+        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
+        if not isinstance(raw, str) or _ROBINHOOD_ACCOUNT_PATTERN.fullmatch(raw) is None:
+            raise ValueError("invalid Robinhood READ_BROKER account reference")
+        return SecretStr(raw)
 
 
-class _RobinhoodAccountDotEnvSource(DotEnvSettingsSource):
-    """Preserve empty dotenv account values while other fields keep stock behavior."""
-
-    def __call__(self) -> dict[str, Any]:
-        return _account_setting_only(super().__call__())
+class RobinhoodAccountSecretInvalid(Exception):
+    """Sanitized lazy READ_BROKER configuration failure."""
 
 
 class _FilteredStockFileSecretSource(SecretsSettingsSource):
@@ -519,14 +597,6 @@ class Settings(BaseSettings):
 
     database_password: SecretStr | None = Field(default=None, repr=False)
     robinhood_oauth_token: SecretStr | None = Field(default=None, repr=False)
-    robinhood_read_account_number: SecretStr | None = Field(
-        default=None,
-        repr=False,
-        validation_alias=AliasChoices(
-            "ROBINHOOD_READ_ACCOUNT_NUMBER",
-            "robinhood_read_account_number",
-        ),
-    )
 
     @classmethod
     def settings_customise_sources(
@@ -541,20 +611,9 @@ class Settings(BaseSettings):
         del cls
         return (
             init_settings,
-            _RobinhoodAccountEnvSource(settings_cls, env_ignore_empty=False),
             env_settings,
-            _RobinhoodAccountDotEnvSource(
-                settings_cls,
-                env_file=getattr(dotenv_settings, "env_file", None),
-                env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
-                env_ignore_empty=False,
-            ),
-            dotenv_settings,
+            _FilteredAccountDotEnvSource(settings_cls, dotenv_settings),
             _TelegramTokenFileSecretSource(
-                settings_cls,
-                getattr(file_secret_settings, "secrets_dir", None),
-            ),
-            _RobinhoodAccountFileSecretSource(
                 settings_cls,
                 getattr(file_secret_settings, "secrets_dir", None),
             ),
@@ -574,19 +633,6 @@ class Settings(BaseSettings):
                 "REGULAR_TRADING_HOURS_ONLY cannot be false in the first release (DEC-001)"
             )
         return value
-
-    @field_validator("robinhood_read_account_number", mode="before")
-    @classmethod
-    def _validate_robinhood_read_account_number(cls, value: object) -> SecretStr | None:
-        del cls
-        if value is None:
-            return None
-        raw = value.get_secret_value() if isinstance(value, SecretStr) else value
-        if not isinstance(raw, str) or _ROBINHOOD_ACCOUNT_PATTERN.fullmatch(raw) is None:
-            raise ValueError(
-                "ROBINHOOD_READ_ACCOUNT_NUMBER must be 1..128 visible ASCII characters"
-            )
-        return SecretStr(raw)
 
     @field_validator("require_complete_risk_limits")
     @classmethod
@@ -729,6 +775,42 @@ def load_settings(
         with _temporary_environ(environ):
             return _build(dotenv=env_file)
 
+    if env_file is not None:
+        return _build(dotenv=env_file)
+    return _build(dotenv=".env")
+
+
+def load_robinhood_read_account_number(
+    *,
+    explicit: SecretStr | str | None = None,
+    env_file: Path | str | None = None,
+    secrets_dir: Path | str | None = None,
+    yaml_value: SecretStr | str | None = None,
+    environ: Mapping[str, str] | None = None,
+) -> SecretStr | None:
+    """Resolve the strict account reference only when READ_BROKER needs it."""
+
+    init_data: dict[str, Any] = {}
+    if explicit is not None:
+        init_data["robinhood_read_account_number"] = explicit
+
+    def _build(*, dotenv: Path | str | None) -> SecretStr | None:
+        yaml_token = _ROBINHOOD_ACCOUNT_YAML_VALUE.set(yaml_value)
+        try:
+            settings = _RobinhoodReadAccountSettings(  # type: ignore[call-arg]
+                _env_file=dotenv,
+                _secrets_dir=secrets_dir,
+                **init_data,
+            )
+        except (ValidationError, SettingsError):
+            raise RobinhoodAccountSecretInvalid from None
+        finally:
+            _ROBINHOOD_ACCOUNT_YAML_VALUE.reset(yaml_token)
+        return settings.robinhood_read_account_number
+
+    if environ is not None:
+        with _temporary_environ(environ):
+            return _build(dotenv=env_file)
     if env_file is not None:
         return _build(dotenv=env_file)
     return _build(dotenv=".env")

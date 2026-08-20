@@ -1438,15 +1438,17 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   and cannot be interpreted as `approve`, `reject`, operator authentication,
   WebAuthn registration/reset, or live authorization. Telegram identity is
   never an Operator Control Plane identity.
-- **Account-secret contract and ownership:** add exactly one optional
-  `SecretStr` setting named `robinhood_read_account_number`, with the canonical
+- **Account-secret contract and ownership:** add one dedicated lazy
+  READ_BROKER setting named `robinhood_read_account_number`, with the canonical
   environment alias and file-secret filename
-  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Reuse the public explicit
-  `load_settings(secrets_dir=...)` entry point delivered by `P05-T4`; do not
-  add, replace, or take ownership of that API and do not search a
-  working-directory secret path implicitly. Load the field once through the
-  existing explicit > environment > dotenv > file-secret > YAML precedence.
-  The Paper runtime's READ_BROKER read-query
+  `ROBINHOOD_READ_ACCOUNT_NUMBER`. Keep it out of global `Settings`, so a
+  missing or invalid account value cannot block runner startup or a command
+  that does not need an account. Reuse the existing explicit env-file and
+  secrets-directory inputs; do not replace the public loader entry or search a
+  working-directory secret path implicitly. Resolve this field only when an
+  account-bound command runs, through explicit > environment > dotenv > exact
+  file-secret > injected YAML precedence. The Paper runtime's READ_BROKER
+  read-query
   subcomposition is the sole owner/reader of this field. It injects into the
   Telegram dispatcher only a narrow callable/query port; Approval, Research,
   Strategy, the write broker, `telegram_updates.py`, `P05-T4`, and `P05-T5`
@@ -1473,8 +1475,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   strict source when the authorized file is absent. Keep
   `settings_customise_sources` ordered explicit/init > environment > dotenv >
   file-secret > YAML; the narrow source occupies only that existing
-  file-secret position and a lower-precedence file can never override
-  init/environment/dotenv.
+  file-secret position in the dedicated lazy loader and a lower-precedence file
+  can never override init/environment/dotenv. Global `Settings` must ignore
+  this dedicated key without reading or validating it.
 - **Account-secret grammar and lifetime:** after source decoding, accept 1
   through 128 visible ASCII characters (`0x21` through `0x7e`) and reject empty,
   oversized, non-ASCII, whitespace/control-bearing, CR-bearing, or multi-line
@@ -1496,8 +1499,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   do not cache or return it, and release the local reference immediately after
   that call (while acknowledging Python cannot guarantee memory zeroization).
   The chat can neither supply nor select the value. Missing or invalid
-  configuration maps to `account_secret_unavailable` before the gateway opens
-  for `/portfolio`, `/positions`, `/orders`, and `/tradability` only. `/help`,
+  configuration maps respectively to `account_secret_missing` or
+  `account_secret_invalid` before the gateway opens for `/portfolio`,
+  `/positions`, `/orders`, and `/tradability` only. `/help`,
   `/rh_status`, `/accounts`, `/quotes`, `/pricebook`, `/history`,
   `/fundamentals`, and `/financials` never resolve this secret;
   output retains `account_binding="unverified"` and contains no account
@@ -1542,7 +1546,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   envelopes retain their existing P06-T2 `DisplayCommand` values; do not
   rewrite that public envelope merely because `rh_status`, `pricebook`, and
   `history` use different Telegram spellings. Reply-wire mappings are
-  `invalid_command`/false, `account_secret_unavailable`/false,
+  `invalid_command`/false, `account_secret_missing`/false,
+  `account_secret_invalid`/false,
   `result_too_large`/false, `render_failed`/false, and `internal_error`/false.
   `GatewayReadError` retains its existing `code.value` and `retryable` flag;
   `RobinhoodMappingError` retains `code.value` with `retryable=false`. Error
@@ -1560,22 +1565,29 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   at the query boundary, performs no query/account/gateway work, and sends no
   P05-T9 reply for a wrong Bot or environment, non-allowlisted numeric user or
   chat, non-private chat/group/channel, missing or wrong `chat.type`, edited or
-  forwarded message, callback query, or an already-terminal persisted
+  forwarded message, or an already-terminal persisted
   `(environment, update_id)`. `message_id` is carried in the authorized update
   but is not persisted or independently deduplicated. A valid
-  approval callback may still be routed by `P05-T5` to `P05-T1`; it is merely
-  invisible to P05-T9. After all identity/private-message/terminal checks pass,
+  callback presented to this query-only composition is parked: return
+  `RETRY_LATER`, send no reply, write no terminal update or callback digest, and
+  do not advance the offset. P05-T5's bounded backoff then blocks later updates
+  until a future P05-T1 composite router can decide the callback. This explicit
+  availability cost prevents the display-only process from irreversibly
+  consuming approval input. After all identity/private-message/terminal checks pass,
   malformed text, unknown commands, bad spacing/case/arguments, and plain
   `approve`/`reject` receive `invalid_command`; a rate-exhausted authorized
   update is terminal-silent; missing/invalid account secret receives
-  `account_secret_unavailable`; and authorized gateway/mapping/render/internal
+  `account_secret_missing` or `account_secret_invalid`; and authorized
+  gateway/mapping/render/internal
   failures receive the mapped error when delivery is available. `/help` obeys
   the allowlist and rate limit but is independent of gateway readiness and the
   account secret.
 - **Untrusted text and output bounds:** provider-controlled `guide`, manifest
   rationale, tool/schema descriptions, and other instructional prose remain
   discarded. Only existing bounded `UntrustedDisplayText` may reach the reply,
-  after JSON escaping, with the stable omission marker and path metadata.
+  after ASCII JSON escaping, with the stable omission marker and path metadata;
+  raw Unicode format, bidi, control, and separator characters never reach the
+  Telegram message.
   Pre-render exactly one plain UTF-8 Telegram message of at most 3,500 Unicode
   code points with `parse_mode=None`; do not split, truncate normalized data,
   or introduce Markdown/HTML interpretation. If the success envelope cannot
@@ -1638,8 +1650,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `load_settings`, require Paper/non-live mode and a complete selected Bot,
   require an existing migrated regular SQLite database without creating or
   migrating it, build the existing engine/session factory and P05-T5
-  `TelegramLongPoller`, use `TelegramHttpsTransport` for identity/action-free
-  replies and `TelegramHttpsUpdateTransport` for ingress, and install
+  `TelegramLongPoller`, initialize one runner-owned `TelegramHttpsTransport`
+  and its two HTTP clients once, reuse that same Bot for identity, ingress, and
+  action-free replies through `TelegramHttpsUpdateTransport`, and install
   SIGINT/SIGTERM shutdown through `AsyncioTelegramPollingControl`. A public
   async runner in `orchestrator/telegram_queries.py` accepts these typed
   dependencies for deterministic tests. `/help`, invalid input, rate rejection,
@@ -1651,7 +1664,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   The handler builds `RobinhoodDisplayService` inside that scope and performs
   exactly one named call. On normal stop, fatal startup/polling failure, or
   cancellation, stop polling, let the active per-update context exit, release
-  the P05-T5 lease, dispose the DB engine, and return a sanitized nonzero CLI
+  the P05-T5 lease, shut down the shared Bot/HTTP transport exactly once,
+  dispose the DB engine, and return a sanitized nonzero CLI
   result when appropriate. Do not add a generic runtime framework.
 - **Forbidden scope:** no webhook deployment, browser/UI, group/channel use,
   LLM or natural-language routing, arbitrary capability/tool name, generic
@@ -1665,7 +1679,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   Bot/environment/user/chat/type; group, edited and forwarded messages;
   the exact silent-ignore/reply matrix and `/help` exception; every exact error
   key/code/retryability mapping, render fallback, and unsendable `send_failed`
-  terminal outcome; missing/invalid account secret; all source precedence and
+  terminal outcome; distinct missing/invalid account-secret wires and proof
+  bad account configuration cannot block startup, help, status, or any
+  non-account command; all source precedence and
   exact account grammar cases including optional single file LF, rejected CRLF,
   invalid UTF-8/non-ASCII, whitespace/newline/control/0/1/128/129-byte
   boundaries, explicit `secrets_dir` with no implicit path search, no
@@ -1684,10 +1700,17 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   naive-clock failure, and proof no market-calendar call occurs; exact
   single-message limit and oversize failure; stable sanitized errors; no account
   ID or secret reference in replies/logs/errors/snapshots; omission markers and
-  JSON escaping; non-comparable units; and structural proof that the adapter
+  ASCII JSON escaping of Unicode format/bidi/control/separator text;
+  non-comparable units; managed Bot startup/normal stop/fatal failure/
+  cancellation cleanup and one shared client across identity, polling, and
+  send; parked callback retry with no terminal row/digest/offset movement; and
+  structural proof that the adapter
   cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
   Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway
-  transports only; no real credential or public network is required in CI.
+  transports only; no real credential or public network is required in CI. A
+  narrow optional-runtime compatibility test may use the locked
+  `python-telegram-bot` package and must explicitly skip when the `approval`
+  extra is absent; the fake lifecycle contract tests always run.
   Drive the public async composition with fakes and the real session/UoW. Add a
   narrow integration test through the real `TelegramLongPoller` deadline path,
   asserting the production 20.0-second constant while shortening elapsed test
