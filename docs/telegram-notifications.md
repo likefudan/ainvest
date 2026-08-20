@@ -59,10 +59,10 @@ TELEGRAM_PRODUCTION__ALLOWED_RECIPIENTS
 The numbers above are synthetic documentation values. Do not copy them into a
 real deployment.
 
-The claimed P05-T10 contract fixes provisioning to the two exact file-secret names
+The P05-T10 provisioner fixes tokens to the two exact file-secret names
 `TELEGRAM_STAGING__BOT_TOKEN` and `TELEGRAM_PRODUCTION__BOT_TOKEN` only.
 Although lower-level Settings precedence still recognizes legacy
-environment/dotenv token input, its future provisioning utility must reject every
+environment/dotenv token input, the provisioning utility rejects every
 case-variant nested token assignment and every top-level Telegram JSON object
 whose case-variant/alias `bot_token` could populate either environment. It
 never writes or automatically deletes such an assignment; it fails with a
@@ -84,11 +84,61 @@ validated `Settings`; it never reads a file or environment variable. At the
 existing file-secret layer, no top-level Telegram JSON file, case variant, or
 alternate nested filename may provide a Bot token. Malformed, oversized,
 non-UTF-8, or unreadable exact token files fail with a stable redacted
-configuration error. P05-T10 will additionally require the exact target to be
+configuration error. The provisioner additionally requires the exact target to be
 non-symlinked, regular, and `0600` before validation accepts it. The raw file
 may contain the token bytes exactly or add one terminal LF. Leading/trailing
 spaces, tabs, CRLF, repeated LF, and every other control/whitespace variation
 are rejected rather than normalized.
+
+## Operator provisioning workflow
+
+Install the `approval` deployment profile, then use only the dedicated
+`ainvest-telegram-provision` executable. It has exactly four commands. Every
+invocation selects one environment and supplies explicit configuration and
+secret paths:
+
+```text
+ainvest-telegram-provision add --environment staging \
+  --env-file /protected/ainvest.env --secrets-dir /protected/secrets \
+  --database /protected/ainvest.sqlite3 --confirm-poller-stopped
+
+ainvest-telegram-provision validate --environment staging \
+  --env-file /protected/ainvest.env --secrets-dir /protected/secrets
+
+ainvest-telegram-provision rotate-token --environment staging \
+  --env-file /protected/ainvest.env --secrets-dir /protected/secrets \
+  --database /protected/ainvest.sqlite3 --confirm-poller-stopped
+
+ainvest-telegram-provision disable --environment staging \
+  --env-file /protected/ainvest.env --secrets-dir /protected/secrets \
+  --database /protected/ainvest.sqlite3 --confirm-poller-stopped
+```
+
+Before `add`, `rotate-token`, or `disable`, stop that environment's poller with
+the deployment/process manager and verify it is stopped. The acknowledgement
+flag records that manual step; the utility neither stops nor starts services.
+Its database lease is only best-effort detection of a conforming worker and is
+not an atomic fence for filesystem writes. If an operation fails, keep the
+poller stopped, inspect the fixed error code, and retry only after correcting
+the cause. `add` and `rotate-token` require the selected environment to be
+disabled; both activate only as their final write. `disable` retains the Bot
+identity, recipient binding, and token.
+
+Create the Bot manually in BotFather, send it a private message, and run `add`.
+The token prompt uses a controlling TTY without echo. Discovery displays only
+numeric user/private-chat pairs; select one and confirm the exact
+`user_id:private_chat_id` value. Discovery deliberately omits a Telegram update
+offset, so it does not acknowledge messages or advance the durable poller
+cursor. The utility requires `getMe` identity, an empty webhook URL, and an
+exact private `getChat` result before activation. It never deletes a webhook.
+
+`validate` inspects only the explicit files with an empty injected process
+environment and performs no configuration, secret, database, cursor, or
+provider mutation. It sends no message by default. Add `--send-test` only when
+one fixed, plain-text test delivery is desired; a started send is never retried.
+Run the same workflow separately for production. The Bots and token bytes must
+differ, but the same owner and private-chat pair may be bound independently
+through both Bots.
 
 ## Offline and owner-assisted validation
 

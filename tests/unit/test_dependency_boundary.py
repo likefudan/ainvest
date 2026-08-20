@@ -218,7 +218,7 @@ def test_the_broker_extra_declares_exactly_the_pinned_wheel(
 
 
 @pytest.mark.unit
-def test_robinhood_display_console_script_is_narrow_and_additive(
+def test_console_scripts_are_narrow_and_additive(
     pyproject: dict[str, Any],
 ) -> None:
     """The read CLI gets one entry point and does not replace existing tools."""
@@ -226,6 +226,7 @@ def test_robinhood_display_console_script_is_narrow_and_additive(
         "ainvest-strategy-conformance": "ainvest.strategy_conformance.cli:main",
         "ainvest-paper-flow": "ainvest.orchestrator.cli:main",
         "ainvest-robinhood-read": "ainvest.execution.robinhood.cli:main",
+        "ainvest-telegram-provision": "ainvest.approval.telegram_provisioning:main",
     }
 
 
