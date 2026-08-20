@@ -26,8 +26,10 @@ from ainvest.approval.telegram_provisioning import (
     TtyTokenReader,
     _candidate_from_update,
     _EnvDocument,
+    _read_token_file,
     build_parser,
     execute,
+    main,
 )
 from ainvest.db import create_all_tables, create_db_engine
 
@@ -190,10 +192,19 @@ def test_parser_has_exact_commands_and_no_token_option(tmp_path: Path) -> None:
         )
         assert parsed.command == command
     assert parser.parse_args(["validate", *base]).command == "validate"
-    with pytest.raises(SystemExit):
+    with pytest.raises(ProvisioningFailure, match="invalid_cli_input"):
         parser.parse_args(["validate", *base, "--token", STAGING_TOKEN])
-    with pytest.raises(SystemExit):
+    with pytest.raises(ProvisioningFailure, match="invalid_cli_input"):
         parser.parse_args(["unknown", *base])
+
+
+def test_main_parse_error_is_fixed_and_does_not_echo_unknown_value(tmp_path: Path, capsys) -> None:  # type: ignore[no-untyped-def]
+    result = main(["validate", "--token", STAGING_TOKEN])
+    captured = capsys.readouterr()
+    assert result == 2
+    assert captured.out == ""
+    assert captured.err == '{"code":"invalid_cli_input","status":"error"}\n'
+    assert STAGING_TOKEN not in captured.err
 
 
 def test_tty_token_reader_rejects_non_tty_without_calling_getpass(monkeypatch) -> None:  # type: ignore[no-untyped-def]
@@ -202,13 +213,33 @@ def test_tty_token_reader_rejects_non_tty_without_calling_getpass(monkeypatch) -
         TtyTokenReader(stdin=io.StringIO(), stderr=io.StringIO()).read("token")
 
 
+def test_tty_token_reader_rejects_echo_fallback_warning(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    import getpass
+    import warnings
+
+    class Tty(io.StringIO):
+        def isatty(self) -> bool:
+            return True
+
+    def warned(*args: object, **kwargs: object) -> str:
+        warnings.warn("echo fallback", getpass.GetPassWarning, stacklevel=2)
+        return STAGING_TOKEN
+
+    monkeypatch.setattr(getpass, "getpass", warned)
+    with pytest.raises(ProvisioningFailure, match="token_input_cancelled"):
+        TtyTokenReader(stdin=Tty(), stderr=io.StringIO()).read("token")
+
+
 @pytest.mark.parametrize(
     "line",
     [
         f"TELEGRAM_STAGING__BOT_TOKEN={STAGING_TOKEN}\n",
         f"telegram_PRODUCTION__bot_TOKEN={PRODUCTION_TOKEN}\n",
+        f"'TELEGRAM_STAGING__BOT_TOKEN'={STAGING_TOKEN}\n",
+        f"export 'TELEGRAM_PRODUCTION__BOT_TOKEN'={PRODUCTION_TOKEN}\n",
         'TELEGRAM_STAGING={"bot_token":"not-shown"}\n',
         'telegram_production=\'{"BOT_TOKEN":"not-shown"}\'\n',
+        "'TELEGRAM_STAGING'='{\"bot_token\":\"not-shown\"}'\n",
     ],
 )
 def test_env_rejects_every_plaintext_token_shape_without_deleting_or_disclosing(
@@ -235,6 +266,19 @@ def test_env_update_preserves_unrelated_bytes_order_and_crlf(tmp_path: Path) -> 
     )
 
 
+@pytest.mark.parametrize("control", ["\u2028", "\u0085", "\v", "\f"])
+def test_env_update_preserves_non_newline_controls(tmp_path: Path, control: str) -> None:
+    path = tmp_path / ".env"
+    original = (
+        f"# before{control}after\nTELEGRAM_STAGING__ENABLED=false\nTAIL={control}x"
+    ).encode()
+    path.write_bytes(original)
+    rendered = _EnvDocument.read(path).rendered(TelegramEnvironment.STAGING, {"ENABLED": "true"})
+    assert rendered == original.replace(
+        b"TELEGRAM_STAGING__ENABLED=false", b"TELEGRAM_STAGING__ENABLED=true"
+    )
+
+
 def test_env_rejects_duplicate_case_variant_and_symlink(tmp_path: Path) -> None:
     path = tmp_path / ".env"
     path.write_text(
@@ -249,6 +293,21 @@ def test_env_rejects_duplicate_case_variant_and_symlink(tmp_path: Path) -> None:
     path.symlink_to(target)
     with pytest.raises(ProvisioningFailure, match="not_regular"):
         _EnvDocument.read(path)
+
+
+def test_token_file_bounded_read_rejects_oversize_and_symlink(tmp_path: Path) -> None:
+    path = tmp_path / "token"
+    path.write_bytes(b"x" * 257)
+    os.chmod(path, 0o600)
+    with pytest.raises(ProvisioningFailure, match="token_file_invalid"):
+        _read_token_file(path)
+    path.unlink()
+    target = tmp_path / "target"
+    target.write_text(STAGING_TOKEN, encoding="utf-8")
+    os.chmod(target, 0o600)
+    path.symlink_to(target)
+    with pytest.raises(ProvisioningFailure, match="token_file_unreadable"):
+        _read_token_file(path)
 
 
 def test_candidate_filter_accepts_only_original_private_messages() -> None:
@@ -295,6 +354,28 @@ def test_candidate_filter_accepts_only_original_private_messages() -> None:
         }
         values.update(changed)
         assert _candidate_from_update(SimpleNamespace(**values)) is None
+
+
+@pytest.mark.parametrize(
+    "field",
+    [
+        "via_bot",
+        "sender_chat",
+        "business_connection_id",
+        "video_chat_started",
+        "write_access_allowed",
+        "users_shared",
+        "gift",
+    ],
+)
+def test_candidate_filter_rejects_current_inline_business_and_service_fields(field: str) -> None:
+    message = SimpleNamespace(
+        from_user=SimpleNamespace(id=101),
+        chat=SimpleNamespace(id=201, type="private"),
+        text="hello",
+        **{field: object()},
+    )
+    assert _candidate_from_update(SimpleNamespace(message=message)) is None
 
 
 def test_add_is_activation_last_and_loadable_with_exact_secret(tmp_path: Path) -> None:
@@ -393,6 +474,18 @@ def test_rotate_requires_same_bot_and_preserves_old_secret_on_failure(tmp_path: 
     assert "TELEGRAM_STAGING__ENABLED=true" in request.env_file.read_text(encoding="utf-8")
 
 
+def test_rotate_resumes_after_secret_commit_when_activation_failed(tmp_path: Path) -> None:
+    request = _request(tmp_path, "rotate-token")
+    _configured_files(tmp_path, enabled=False, token=STAGING_TOKEN_NEW)
+    transport = FakeTransport(
+        token=STAGING_TOKEN_NEW,
+        bot_id=9001,
+        candidate=ProvisioningCandidate(user_id=101, private_chat_id=201),
+    )
+    asyncio.run(execute(request, _dependencies(transport, token=STAGING_TOKEN_NEW)))
+    assert "TELEGRAM_STAGING__ENABLED=true" in request.env_file.read_text(encoding="utf-8")
+
+
 def test_disable_changes_only_enabled_and_keeps_secret(tmp_path: Path) -> None:
     request = _request(tmp_path, "disable")
     _configured_files(tmp_path, enabled=True)
@@ -415,7 +508,9 @@ def test_disable_changes_only_enabled_and_keeps_secret(tmp_path: Path) -> None:
 def test_lazy_adapter_omits_offset_and_deduplicates_candidates(monkeypatch) -> None:  # type: ignore[no-untyped-def]
     calls: list[dict[str, object]] = []
     message = SimpleNamespace(
-        from_user=SimpleNamespace(id=101), chat=SimpleNamespace(id=201, type="private")
+        from_user=SimpleNamespace(id=101),
+        chat=SimpleNamespace(id=201, type="private"),
+        text="hello",
     )
 
     class Bot:

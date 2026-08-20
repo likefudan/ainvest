@@ -12,20 +12,22 @@ import asyncio
 import contextlib
 import getpass
 import importlib
+import io
 import json
 import os
-import re
 import secrets
 import stat
 import sys
 import tempfile
+import warnings
 from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from types import TracebackType
-from typing import Any, Final, Protocol, TextIO, cast
+from typing import Any, Final, Never, Protocol, TextIO, cast
 
+from dotenv.parser import parse_stream
 from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictInt, ValidationError
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -48,10 +50,6 @@ _LEASE_WAIT_SECONDS: Final[float] = 90.0
 _LEASE_WAIT_POLL_SECONDS: Final[float] = 0.5
 _TOKEN_REMEDIATION: Final[str] = (
     "remove the plaintext Telegram bot-token assignment manually and retry"
-)
-_ASSIGNMENT = re.compile(
-    r"^[ \t]*(?:export[ \t]+)?(?P<key>[A-Za-z_][A-Za-z0-9_]*)[ \t]*="
-    r"[ \t]*(?P<value>.*?)[ \t]*$"
 )
 _MANAGED_SUFFIXES: Final[tuple[str, ...]] = (
     "ENABLED",
@@ -233,6 +231,8 @@ def _candidate_from_update(update: object) -> ProvisioningCandidate | None:
     sender = getattr(message, "from_user", None)
     if chat is None or sender is None or getattr(chat, "type", None) != "private":
         return None
+    if not isinstance(getattr(message, "text", None), str) or not message.text:
+        return None
     if any(
         bool(getattr(message, field, None))
         for field in (
@@ -252,6 +252,31 @@ def _candidate_from_update(update: object) -> ProvisioningCandidate | None:
             "migrate_to_chat_id",
             "migrate_from_chat_id",
             "pinned_message",
+            "via_bot",
+            "sender_chat",
+            "business_connection_id",
+            "video_chat_started",
+            "video_chat_ended",
+            "video_chat_participants_invited",
+            "video_chat_scheduled",
+            "write_access_allowed",
+            "users_shared",
+            "chat_shared",
+            "gift",
+            "unique_gift",
+            "giveaway",
+            "giveaway_created",
+            "giveaway_completed",
+            "giveaway_winners",
+            "boost_added",
+            "forum_topic_created",
+            "forum_topic_closed",
+            "forum_topic_edited",
+            "forum_topic_reopened",
+            "general_forum_topic_hidden",
+            "general_forum_topic_unhidden",
+            "proximity_alert_triggered",
+            "web_app_data",
         )
     ) or getattr(message, "is_automatic_forward", False):
         return None
@@ -286,8 +311,10 @@ class TtyTokenReader:
         if not self._stdin.isatty():
             raise ProvisioningFailure("controlling_tty_required")
         try:
-            value = getpass.getpass(prompt, stream=self._stderr)
-        except (EOFError, KeyboardInterrupt):
+            with warnings.catch_warnings():
+                warnings.simplefilter("error", getpass.GetPassWarning)
+                value = getpass.getpass(prompt, stream=self._stderr)
+        except (EOFError, KeyboardInterrupt, getpass.GetPassWarning):
             raise ProvisioningFailure("token_input_cancelled") from None
         if TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(value) is None:
             raise ProvisioningFailure("token_invalid")
@@ -568,20 +595,22 @@ class _EnvDocument:
             raise ProvisioningFailure("env_file_ambiguous_newlines")
         newline = "\r\n" if has_crlf else "\n"
         assignments: dict[str, int] = {}
-        for index, line in enumerate(text.splitlines()):
-            match = _ASSIGNMENT.fullmatch(line)
-            if match is None:
-                stripped = line.lstrip()
-                if stripped and not stripped.startswith("#") and _mentions_managed_key(stripped):
-                    raise ProvisioningFailure("env_file_ambiguous_managed_assignment")
+        for binding in parse_stream(io.StringIO(text)):
+            if binding.error:
+                raise ProvisioningFailure("env_file_ambiguous_assignment")
+            if binding.key is None:
                 continue
-            key = match.group("key").casefold()
-            value = match.group("value")
+            key = binding.key.casefold()
+            value = binding.value or ""
             _reject_plaintext_token_assignment(key, value)
             if _is_managed_key(key):
                 if key in assignments:
                     raise ProvisioningFailure("env_file_duplicate_managed_key")
-                assignments[key] = index
+                original = binding.original.string
+                body = original.removesuffix("\r\n").removesuffix("\n")
+                if "\n" in body or "\r" in body:
+                    raise ProvisioningFailure("env_file_ambiguous_managed_assignment")
+                assignments[key] = binding.original.line - 1
         return cls(
             path=path,
             text=text,
@@ -593,15 +622,13 @@ class _EnvDocument:
     def rendered(self, environment: TelegramEnvironment, values: dict[str, str]) -> bytes:
         prefix = f"TELEGRAM_{environment.value.upper()}__"
         canonical = {f"{prefix}{suffix}": values[suffix] for suffix in values}
-        lines = self.text.splitlines()
+        lines = self.text.split(self.newline)
+        if self.trailing_newline:
+            lines.pop()
         replaced: set[str] = set()
-        for index, line in enumerate(lines):
-            match = _ASSIGNMENT.fullmatch(line)
-            if match is None:
-                continue
-            key = match.group("key").casefold()
+        for index, _line in enumerate(lines):
             for full_key, value in canonical.items():
-                if key == full_key.casefold():
+                if self.assignments.get(full_key.casefold()) == index:
                     lines[index] = f"{full_key}={value}"
                     replaced.add(full_key)
                     break
@@ -620,12 +647,6 @@ def _is_managed_key(key: str) -> bool:
         for environment in ("staging", "production")
         for suffix in _MANAGED_SUFFIXES
     )
-
-
-def _mentions_managed_key(line: str) -> bool:
-    normalized = line.casefold()
-    prefixes = ("telegram_staging", "telegram_production")
-    return any(normalized.startswith(prefix) for prefix in prefixes)
 
 
 def _dotenv_json(value: str) -> object:
@@ -674,17 +695,22 @@ def _validate_directory(directory: Path) -> None:
 
 
 def _read_token_file(path: Path) -> SecretStr:
+    descriptor = -1
     try:
-        details = path.lstat()
-        if stat.S_ISLNK(details.st_mode) or not stat.S_ISREG(details.st_mode):
+        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        details = os.fstat(descriptor)
+        if not stat.S_ISREG(details.st_mode):
             raise ProvisioningFailure("token_file_not_regular")
         if stat.S_IMODE(details.st_mode) != 0o600:
             raise ProvisioningFailure("token_file_permissions_invalid")
-        raw = path.read_bytes()
+        raw = os.read(descriptor, MAX_TELEGRAM_TOKEN_FILE_BYTES + 1)
     except ProvisioningFailure:
         raise
     except OSError:
         raise ProvisioningFailure("token_file_unreadable") from None
+    finally:
+        if descriptor >= 0:
+            os.close(descriptor)
     if not raw or len(raw) > MAX_TELEGRAM_TOKEN_FILE_BYTES:
         raise ProvisioningFailure("token_file_invalid")
     if raw.endswith(b"\n"):
@@ -949,8 +975,7 @@ async def _rotate(
     new_token = new_token_secret.get_secret_value()
     if TELEGRAM_BOT_TOKEN_PATTERN.fullmatch(new_token) is None:
         raise ProvisioningFailure("token_invalid")
-    if secrets.compare_digest(old_token, new_token):
-        raise ProvisioningFailure("rotation_token_unchanged")
+    resume_existing_secret = secrets.compare_digest(old_token, new_token)
     _reject_cross_environment_token(request, new_token)
     identity = await _provider_identity(request, new_token, settings, dependencies)
     if identity.id != selected.expected_bot_id:
@@ -963,8 +988,9 @@ async def _rotate(
     )
     if chat.id != recipient.private_chat_id or chat.type != "private":
         raise ProvisioningFailure("recipient_not_private")
-    await lease.verify_before_write()
-    _atomic_replace(target, new_token.encode("utf-8") + b"\n")
+    if not resume_existing_secret:
+        await lease.verify_before_write()
+        _atomic_replace(target, new_token.encode("utf-8") + b"\n")
     await lease.verify_before_write()
     _atomic_replace(
         request.env_file,
@@ -1039,9 +1065,17 @@ def _environment_values(
     }
 
 
+class _SanitizedArgumentParser(argparse.ArgumentParser):
+    def error(self, message: str) -> Never:
+        del message
+        raise ProvisioningFailure("invalid_cli_input")
+
+
 def build_parser() -> argparse.ArgumentParser:
-    parser = argparse.ArgumentParser(prog="ainvest-telegram-provision")
-    subparsers = parser.add_subparsers(dest="command", required=True)
+    parser = _SanitizedArgumentParser(prog="ainvest-telegram-provision")
+    subparsers = parser.add_subparsers(
+        dest="command", required=True, parser_class=_SanitizedArgumentParser
+    )
     for command in ("add", "validate", "rotate-token", "disable"):
         command_parser = subparsers.add_parser(command)
         command_parser.add_argument(
@@ -1086,7 +1120,7 @@ def main(argv: Sequence[str] | None = None) -> int:
         if exc.remediation is not None:
             payload["remediation"] = exc.remediation
         sys.stderr.write(json.dumps(payload, separators=(",", ":"), sort_keys=True) + "\n")
-        return 1
+        return 2 if exc.code == "invalid_cli_input" else 1
     except Exception:
         sys.stderr.write('{"status":"error","code":"internal_error"}\n')
         return 1
