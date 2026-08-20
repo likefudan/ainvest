@@ -1097,7 +1097,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `disable`. Every command requires an explicit `--environment` of `staging`
   or `production`, explicit `--env-file`, and explicit `--secrets-dir`.
   State-changing `add`, `rotate-token`, and `disable` also require an explicit
-  first-release SQLite `--database` path for the shared P05-T5 fenced lease;
+  first-release SQLite `--database` path for best-effort P05-T5 lease
+  coordination;
   `validate` does not need database access. Paths and numeric identities may
   appear in arguments; a Bot token may not.
 - **Manual creation and secret input:** the owner creates each Bot in BotFather
@@ -1168,29 +1169,44 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   and malformed records. The operator must select and explicitly confirm the
   exact numeric pair; a bounded `getChat` must then return that same ID with
   `type=private`. Discovery never confirms a Telegram update by sending
-  `update_id + 1`, and never creates, advances, deletes, or otherwise writes a
-  P05-T5 poll cursor or processed-update row.
-- **Quiescence and fenced maintenance lease:** a lease observation alone does
-  not prove that the poller process is stopped: P05-T5 releases its lease
-  between cycles and during backoff. Before `add`, `rotate-token`, or `disable`,
-  the operator must first stop the selected environment's poller through the
-  external deployment/process manager, then pass the explicit
-  `--confirm-poller-stopped` acknowledgement. The utility never starts, stops,
-  signals, or reconfigures that service. It waits for any old unexpired lease
-  to clear until one fixed bounded quiescence deadline; timeout fails before
-  provider access or writes. It then uses the existing P05-T5
-  `acquire_lease`/owner/monotonic-epoch/version mechanism, holds the selected
-  environment lease for the entire state-changing command, renews it with a
-  clear deadline margin during provider calls and operator confirmation, and
-  conditionally verifies the same owner/epoch/version immediately before every
-  atomic `.env` or secret-file write. Acquisition, renewal, or fence loss
-  aborts further writes; best-effort release occurs only at the end, while
-  crash recovery is lease expiry. Do not call `ensure_state` separately,
-  advance `next_offset`, write a processed row, or call `record_terminal`. The
-  shared lease prevents a conforming P05-T5 poller from polling or reacquiring
-  while maintenance holds it, but does not prove an external process was
-  stopped; owner-assisted validation must separately verify the process-manager
-  stop. `add` and `rotate-token` additionally require the selected environment
+  `update_id + 1`, never advances or deletes a P05-T5 poll cursor, and never
+  writes a processed-update row. The best-effort maintenance acquisition below
+  may create the canonical payload-free poll-state row with `next_offset=0`
+  when none exists; that initialization is not update confirmation.
+- **Authoritative quiescence and best-effort database coordination:** a lease
+  observation alone does not prove that the poller process is stopped: P05-T5
+  releases its lease between cycles and during backoff. Before `add`,
+  `rotate-token`, or `disable`, the operator must first stop the selected
+  environment's poller through the external deployment/process manager, then
+  pass the explicit `--confirm-poller-stopped` acknowledgement. This external
+  stop plus acknowledgement is the sole authoritative exclusion boundary; the
+  utility never starts, stops, signals, or reconfigures the service.
+  The utility waits for any old unexpired lease to clear until one fixed bounded
+  deadline, then uses the existing P05-T5
+  `acquire_lease`/owner/monotonic-epoch/version mechanism for best-effort
+  detection and coordination with a conforming worker. It renews the lease with
+  a clear margin during provider calls/operator confirmation and rechecks the
+  same owner/epoch immediately before each atomic file replace. An observed
+  acquisition, renewal, or owner/epoch check failure aborts that write and all
+  later writes; activation-last leaves `add`/`rotate-token` disabled on a
+  partial operation, and a failed `disable` leaves the externally stopped
+  service stopped for operator recovery. Best-effort release occurs at the end;
+  process crash relies on lease expiry.
+  The existing `acquire_lease` is allowed to call `ensure_state` and create
+  exactly the canonical payload-free poll-state row (`next_offset=0`) when no
+  row exists. Acquisition, renewal, and release may normally change only lease
+  owner/expiry, monotonic epoch, and optimistic version. Capture `next_offset`
+  before acquisition when a row exists and prove it is exactly unchanged after
+  every lease operation; a newly initialized row must remain exactly zero.
+  Never advance `next_offset`, call `record_terminal`, or write
+  `telegram_processed_updates`.
+  The DB lease is not a filesystem fencing primitive. An owner/epoch recheck
+  detects only a takeover already visible in the database; takeover can occur
+  after the check and before/after `os.replace`, because no transaction spans
+  SQLite and the filesystem. Do not roll back an already completed single-file
+  atomic replace as if the multi-file operation were a transaction. Owner-
+  assisted validation must independently verify the process-manager stop.
+  `add` and `rotate-token` additionally require the selected environment
   to be disabled before provider/file mutation. A successful `add` activates
   the newly complete environment. A successful `rotate-token` requires
   `getMe.id` to equal the already configured `expected_bot_id` exactly and
@@ -1237,8 +1253,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `python-telegram-bot` approval dependency.
 - **Forbidden scope:** no BotFather automation or credentials; no webhook
   server or provider-side webhook mutation; no group/channel recipient; no
-  username authorization; no P05-T5 poller/cursor/processed-row mutation; no
-  P05-T1 callback approval; no P05-T9 query; no Robinhood call; no Paper/live
+  username authorization; no P05-T5 offset advancement, terminal record, or
+  processed-row mutation. The only permitted P05-T5 database mutations are
+  payload-free poll-state initialization and normal lease-field changes. No
+  P05-T1 callback approval, P05-T9 query, Robinhood call, or Paper/live
   execution, approval, order, strategy, risk, research, LLM, natural-language,
   or generic admin/control-plane capability; no new dependency; and no real
   network or owner credential in canonical tests.
@@ -1256,17 +1274,22 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   Pydantic dotenv mapping; proof that the exact file is the utility's only
   accepted token source; explicit process-stop acknowledgement; bounded
   old-lease wait; acquisition/renewal/release with competing real SQLite
-  sessions; fence loss before each write; and no write before acquisition;
+  sessions; owner/epoch loss observed before each write; a forced takeover
+  after the check proving there is no cross-system atomicity claim; and no file
+  write before acquisition; then cover
   disabled activation-last crash/retry behavior; `getMe`-before-other-call,
   webhook fail-closed behavior, bounded discovery with omitted offset, every
   candidate filter and explicit confirmation; `getChat` private binding;
-  empty/expired/active lease and takeover states without cursor/processed-row
-  writes; same-ID-only
-  rotation and old-secret preservation on precommit failure; disable retaining
+  empty/expired/active lease and takeover states, including permitted
+  first-acquisition row creation at `next_offset=0`, exact preservation of an
+  existing `next_offset`, normal lease/version changes, and no processed rows;
+  same-ID-only rotation and old-secret preservation on precommit failure;
+  disable retaining
   the token/config; default validation with zero sends and explicit test mode
   with at most one send; sanitized stdout/stderr/repr/error/log output; and
-  structural proof that no P05-T5 terminal/cursor method or business/query/
-  broker port is reachable. Load the resulting files through `load_settings`
+  structural proof that no P05-T5 offset-advancement, terminal-record,
+  processed-update, business/query, or broker port is reachable. Load the
+  resulting files through `load_settings`
   to prove the selected environment is complete and the other remains
   isolated. Update the exact dependency-boundary assertion so all four console
   scripts are present and no fifth entry is admitted. Canonical tests make no
@@ -1275,10 +1298,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   provision, revalidate, safely rotate, and disable each separate Bot without
   exposing a token or advancing inbound state; only an explicitly confirmed
   numeric private recipient and exact Bot identity can activate; missing
-  process-stop acknowledgement, quiescence timeout, lease/fence loss, webhook,
+  process-stop acknowledgement, quiescence timeout, observed database
+  acquisition/renewal/owner-epoch loss, webhook,
   crossed Bot/token environment, partial write, and ambiguous input all fail
-  closed. The maintenance lease is not represented as proof that the external
-  poller process stopped. Focused tests, `./scripts/dev unit`,
+  closed. Neither the maintenance lease nor a pre-write owner/epoch comparison
+  is represented as proof that the external poller stopped or as an atomic
+  database/filesystem fence. Focused tests, `./scripts/dev unit`,
   `./scripts/dev contract`,
   `./scripts/dev integration`, `git diff --check`, and `./scripts/dev verify`
   pass. Owner-assisted real staging/production validation is recorded

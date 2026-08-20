@@ -102,9 +102,12 @@ provisioned, environment validation must separately confirm:
 3. only synthetic non-trading notifications are sent during validation;
 4. tokens, callback nonces, links, and account identifiers do not enter logs;
 5. the deployment/process manager stopped the target poller before each
-   state-changing P05-T10 operation; the shared fenced maintenance lease
-   prevents a conforming poller from reacquiring during that operation but is
-   not itself proof that the external process stopped; and
+   state-changing P05-T10 operation and the operator explicitly acknowledged
+   that stop; this is the sole authoritative exclusion boundary, while the
+   database lease is only best-effort coordination and cannot atomically fence
+   a filesystem replace. First acquisition may create the payload-free
+   poll-state row at offset zero, but an existing offset remains exact and no
+   processed update is written; and
 6. the launched service has no ambient Telegram token override.
 
 Until that owner-assisted check is complete, real Telegram integration remains

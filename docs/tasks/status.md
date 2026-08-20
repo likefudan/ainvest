@@ -2611,7 +2611,7 @@ approval path unlocks `P08-T13`, then
   one as part of this task. Every command selects exactly staging or production
   and receives explicit `.env` and secrets-directory paths. State-changing
   commands additionally receive the first-release SQLite database path for the
-  shared fenced maintenance lease; validation requires no database.
+  best-effort P05-T5 coordination lease; validation requires no database.
 - **Safety contract:** token input is no-echo controlling-TTY only and never
   argv/env/log output. Install only the exact P05-T4 token filename as a
   regular `0600` file; refuse symlinks and unintended overwrite. Preserve
@@ -2623,13 +2623,20 @@ approval path unlocks `P08-T13`, then
   `(user_id, chat_id)` candidate, and distinct cross-environment Bots/tokens.
   The same owner/pair may be bound separately through both validated Bots;
   never construct a cross-product or fallback. Candidate `getUpdates` omits
-  `offset`; no P05-T5 cursor or processed row is confirmed or written.
+  `offset`; it never advances a P05-T5 offset or writes a processed row.
   State-changing commands require external service-manager stop plus explicit
-  CLI acknowledgement, bounded old-lease wait, then acquisition/renewal/holding
-  of the existing owner/epoch/version-fenced P05-T5 lease before provider work
-  or any file write. A lease alone does not prove the process stopped. Any
-  acquisition/renewal/fence loss aborts further writes. Add/rotate also require
-  disabled config; rotation retains the existing exact expected Bot ID;
+  CLI acknowledgement; that is the sole authoritative exclusion boundary.
+  After a bounded old-lease wait, reuse P05-T5 acquire/renew/release only as
+  best-effort concurrent-worker detection/coordination. First acquisition may
+  create the canonical payload-free state row at `next_offset=0`; existing
+  `next_offset` must remain exact, normal lease owner/expiry/epoch/version
+  changes are allowed, and no processed row/terminal record is allowed.
+  Recheck owner/epoch immediately before each write, but do not claim
+  atomic fencing across the database and filesystem. An already completed
+  single-file replace is not rolled back as a fake transaction; an observed
+  lease/check failure prevents later writes and activation-last keeps
+  add/rotate disabled. Add/rotate also require disabled config; rotation
+  retains the existing exact expected Bot ID;
   disable retains token and binding. Validate sends nothing unless explicit
   `--send-test`, which has one bounded at-most-once attempt. File-only
   validation uses `environ={}` and cannot prove the launched service has no
