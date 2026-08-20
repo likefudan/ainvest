@@ -206,21 +206,22 @@ Primary parallelization opportunities:
   `P06-T0` runtime refresh to reviewed `rh-mcp` `v0.3.0` also merged through
   [#126](https://github.com/likefudan/ainvest/pull/126) and
   [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
-  current executable dependency authority. Owner-assisted real-provider
-  validation remains pending. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  current executable dependency authority. Owner-assisted `rh-mcp v0.3.0`
+  status validation reports ready; individual real reads remain later
+  owner-assisted validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
-  [#136](https://github.com/likefudan/ainvest/pull/136). P05-T9 is now the
-  dependency-ready next task but remains queued/unclaimed. On 2026-08-12 the
+  [#136](https://github.com/likefudan/ainvest/pull/136). P05-T9 is now claimed
+  for planning only; no implementation has started. On 2026-08-12 the
   owner lifted the
   `P05-T4` pause; its claim and implementation subsequently squash-merged in
   [#120](https://github.com/likefudan/ainvest/pull/120) and
   [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` then
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
-  long polling and durable inbound deduplication. P05-T9 must still receive its
-  own separate claim, latest-main rebase, independent review, checks, and
-  squash-merge workflow before implementation can begin.
+  long polling and durable inbound deduplication. After this separate claim
+  squash-merges, P05-T9 implementation must start from latest `main`, receive
+  independent review, pass checks, and squash-merge.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1084,9 +1085,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   [#135](https://github.com/likefudan/ainvest/pull/135) as `fcb1425`; the
   independently reviewed implementation squash-merged in
   [#136](https://github.com/likefudan/ainvest/pull/136) as `69e8831`.
-  P05-T9 is now dependency-ready but remains queued/unclaimed and requires its
-  own separate claim, latest-main rebase, independent review, checks, and
-  squash-merge workflow. Owner-assisted validation with real staging and
+  P05-T9's separate planning claim is now active; implementation has not
+  started and still requires latest-main rebase, independent review, checks,
+  and squash-merge workflow. Owner-assisted validation with real staging and
   production Bots remains pending deployment evidence under proposed
   `DEC-010`; it was not an offline implementation or CI blocker.
 - **Dependencies:** merged P05-T4, P05-T5, P01-T4, and P02-T6; accepted
@@ -1321,16 +1322,19 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   approval, mutation, model, Paper-promotion, or trading capability. This is a
   transport adapter over the merged `P06-T2` Part 1 display service, not a new
   data provider or a Gate 3 requirement.
-- **Status and scheduling:** `queued/unclaimed; dependency-ready`; no agent has
-  claimed this card. `P05-T4` squash-merged in
+- **Status and scheduling:** `claimed/planning`; this docs-only claim uses
+  `agent/p05-t9-claim` / `.worktrees/p05-t9-claim` from immutable base
+  `24d49c7e2817aa7884a3e86abdefc30aefade5cf`. No implementation has started.
+  `P05-T4` squash-merged in
   [#121](https://github.com/likefudan/ainvest/pull/121) on 2026-08-12.
   `P05-T5` squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124). P05-T10's
   provisioning/validation implementation squash-merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
-  [#136](https://github.com/likefudan/ainvest/pull/136). A separate claim must
-  precede P05-T9 implementation, followed by latest-main rebase, independent
-  review, checks, and squash merge.
+  [#136](https://github.com/likefudan/ainvest/pull/136). After this claim
+  squash-merges, reserve `agent/p05-t9` / `.worktrees/p05-t9`, create it from
+  the then-latest `main`, record that exact immutable base before code changes,
+  and require independent review, checks, and squash merge.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1338,22 +1342,43 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
   `v0.3.0` release is merged and is the current executable authority.
-  Owner-assisted real `rh-mcp status` and read validation remains pending;
-  this does not block P05-T9's deterministic offline implementation.
-- **Primary files:** new `src/ainvest/approval/telegram_queries.py`; narrow
-  query-dispatch additions to `src/ainvest/approval/telegram_updates.py` after
-  `P05-T5` owns that file; the minimum account-secret/config composition
-  addition under `src/ainvest/config/settings.py` and the Paper runtime's
-  READ_BROKER read-query subcomposition; the field-only strict file source may
-  be a private class in `settings.py` or, if separation improves readability,
-  new `src/ainvest/config/file_secrets.py`; matching
-  `tests/unit/config/test_settings.py` plus optional narrowly named
-  `tests/unit/config/test_file_secrets.py`,
-  `tests/unit/approval/test_telegram_queries.py`, bounded additions to the
-  `P05-T5` Telegram update tests, one dependency-boundary test, and
-  `docs/telegram-read-queries.md`. Do not edit the display models or broaden
-  `RobinhoodReadClient` unless a separately reviewed defect/scope expansion is
-  approved.
+  Owner-assisted `rh-mcp v0.3.0 status` is verified `ready=true` against
+  manifest version `2026.08.12` and digest
+  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`.
+  Individual real reads may remain owner-assisted until after the offline
+  merge and do not authorize credentials, network calls, or account data in
+  implementation or CI.
+- **Architecture and exact implementation paths:** the existing dependency
+  matrix forbids `approval -> execution`, so the implementation must not put a
+  `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
+  that rule. New `src/ainvest/orchestrator/telegram_queries.py` is the sole
+  composition/handler bridge allowed to import both the P05-T5 authorized
+  update types and the P06-T2 display service. It also owns the Paper
+  READ_BROKER account-bound subcomposition. Allow only:
+  `src/ainvest/orchestrator/telegram_queries.py`;
+  `src/ainvest/orchestrator/__init__.py` for narrow exports;
+  `src/ainvest/approval/telegram.py` only for one reusable action-free
+  plain-message transport operation, without changing P05-T4 notification
+  behavior; `src/ainvest/config/settings.py`; optional private
+  `src/ainvest/config/file_secrets.py`; `src/ainvest/config/__init__.py` for
+  narrow exports; `.env.example` for a commented empty account value and exact
+  file-secret guidance; the one
+  `ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"`
+  console entry in `pyproject.toml`;
+  `tests/unit/orchestrator/test_telegram_queries.py`;
+  `tests/integration/orchestrator/test_telegram_queries.py`;
+  narrow additions to `tests/unit/approval/test_telegram.py` and
+  `tests/unit/config/test_settings.py`,
+  `tests/unit/test_dependency_boundary.py`, and
+  `tests/integration/approval/test_telegram_polling.py`; optional
+  `tests/unit/config/test_file_secrets.py` only if that production module is
+  created; `tests/unit/architecture/test_package_boundaries.py` for the
+  no-`approval -> execution` regression; and
+  `docs/telegram-read-queries.md`. The merged
+  `src/ainvest/approval/telegram_updates.py`, P06 display/read/mapping modules,
+  dependencies, lock file, schemas, database production code, migrations, and
+  other runtime paths are read-only. Any other path requires
+  coordinator-approved scope expansion before editing.
 - **Exact first-release command grammar:** accept only one private-chat text
   message containing ASCII tokens separated by single spaces. Commands are
   case-sensitive and symbols remain exact uppercase `Symbol` values. Reject
@@ -1404,7 +1429,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   unverified, these windows are never usable for trading.
 
 - **Identity and authorization boundary:** process text only after `P05-T5`
-  has deduplicated the update and verified the environment-specific Bot,
+  has verified the environment-specific Bot,
   numeric `from.id`, numeric private `chat.id`, `chat.type == "private"`, and
   exact membership of the configured bound `(user_id, private_chat_id)`
   recipient record. Independent membership and crossed pairs fail closed.
@@ -1442,7 +1467,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `secrets_dir`, performs no fallback or path search, exposes no generic public
   parser, and returns a value for this one exact field only. The stock
   file-secret source remains responsible for every other Settings field with
-  unchanged values, aliases, case behavior, errors, and precedence. Keep
+  unchanged values, aliases, case behavior, errors, and precedence. Extend the
+  filtered stock source to exclude `robinhood_read_account_number`, so a
+  lower-priority alias or case-variant stock lookup cannot bypass the exact
+  strict source when the authorized file is absent. Keep
   `settings_customise_sources` ordered explicit/init > environment > dotenv >
   file-secret > YAML; the narrow source occupies only that existing
   file-secret position and a lower-precedence file can never override
@@ -1468,7 +1496,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   do not cache or return it, and release the local reference immediately after
   that call (while acknowledging Python cannot guarantee memory zeroization).
   The chat can neither supply nor select the value. Missing or invalid
-  configuration maps to `account_secret_unavailable` before the gateway opens;
+  configuration maps to `account_secret_unavailable` before the gateway opens
+  for `/portfolio`, `/positions`, `/orders`, and `/tradability` only. `/help`,
+  `/rh_status`, `/accounts`, `/quotes`, `/pricebook`, `/history`,
+  `/fundamentals`, and `/financials` never resolve this secret;
   output retains `account_binding="unverified"` and contains no account
   identifier or secret reference.
 - **Display and message contract:** call only a named
@@ -1481,7 +1512,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `UNSPECIFIED`/`comparable=false`, `has_more`, unavailable symbols, and
   `omitted_untrusted_fields`. Never total, rank, convert, or label an
   unspecified value as USD. `/help` is the sole success exception: after the
-  same private-chat numeric allowlist, deduplication, and rate-limit checks, it
+  same private-chat numeric allowlist, terminal-update, and rate-limit checks, it
   returns only the static bounded command list and does not open the gateway,
   resolve the account secret, or construct a `DisplaySuccess` envelope.
 - **Telegram-owned error wire and reusable boundary:** current main exposes no
@@ -1500,33 +1531,43 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
     "schema_version": "1.0",
     "kind": "error",
     "command": "quotes",
-    "error": {"code": "rate_limited", "retryable": false}
+    "error": {"code": "invalid_command", "retryable": false}
   }
   ```
 
-  `command` is the normalized Telegram command name without `/`, or `null`
-  when no allowed command was parsed. Fixed adapter mappings are
+  `command` is the exact normalized Telegram token without `/` — one of
+  `help`, `rh_status`, `accounts`, `portfolio`, `positions`, `orders`,
+  `quotes`, `pricebook`, `tradability`, `history`, `fundamentals`, or
+  `financials` — or `null` when no allowed command was parsed. Display-success
+  envelopes retain their existing P06-T2 `DisplayCommand` values; do not
+  rewrite that public envelope merely because `rh_status`, `pricebook`, and
+  `history` use different Telegram spellings. Reply-wire mappings are
   `invalid_command`/false, `account_secret_unavailable`/false,
-  `rate_limited`/true, `result_too_large`/false,
-  `render_failed`/false, `send_failed`/true, and `internal_error`/false.
+  `result_too_large`/false, `render_failed`/false, and `internal_error`/false.
   `GatewayReadError` retains its existing `code.value` and `retryable` flag;
   `RobinhoodMappingError` retains `code.value` with `retryable=false`. Error
   replies contain no static help beyond the code; the user may send `/help`.
   A serialization failure uses a small pre-serialized constant
-  `render_failed` document. `send_failed` is the stable terminal outcome for
-  sanitized log/metric accounting when Telegram delivery itself failed; no
-  second send is attempted, so that code is not falsely claimed to reach the
-  user.
+  `render_failed` document. `send_failed`/false is a stable internal terminal
+  outcome for sanitized log/metric accounting when Telegram delivery itself
+  failed; no second send is attempted, so that code is not falsely claimed to
+  reach the user. Wire `retryable=true` means only that the user may submit a new
+  Telegram update later; it never maps to P05-T5 `RETRY_LATER`. Every expected
+  gateway, mapping, render, rate, and send outcome returns
+  `TERMINAL_HANDLED`. Only cancellation before the first reply-send attempt
+  may return `RETRY_LATER`.
 - **Silent-ignore versus reply matrix:** `P05-T5` silently ignores an update
   at the query boundary, performs no query/account/gateway work, and sends no
   P05-T9 reply for a wrong Bot or environment, non-allowlisted numeric user or
   chat, non-private chat/group/channel, missing or wrong `chat.type`, edited or
-  forwarded message, callback query, or duplicate `update_id`/message. A valid
+  forwarded message, callback query, or an already-terminal persisted
+  `(environment, update_id)`. `message_id` is carried in the authorized update
+  but is not persisted or independently deduplicated. A valid
   approval callback may still be routed by `P05-T5` to `P05-T1`; it is merely
-  invisible to P05-T9. After all identity/private-message/dedup checks pass,
+  invisible to P05-T9. After all identity/private-message/terminal checks pass,
   malformed text, unknown commands, bad spacing/case/arguments, and plain
-  `approve`/`reject` receive `invalid_command`; rate excess receives
-  `rate_limited`; missing/invalid account secret receives
+  `approve`/`reject` receive `invalid_command`; a rate-exhausted authorized
+  update is terminal-silent; missing/invalid account secret receives
   `account_secret_unavailable`; and authorized gateway/mapping/render/internal
   failures receive the mapped error when delivery is available. `/help` obeys
   the allowlist and rate limit but is independent of gateway readiness and the
@@ -1535,11 +1576,12 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   rationale, tool/schema descriptions, and other instructional prose remain
   discarded. Only existing bounded `UntrustedDisplayText` may reach the reply,
   after JSON escaping, with the stable omission marker and path metadata.
-  Send plain UTF-8 text in at most four messages of at most 3,500 Unicode code
-  points each, labelled with deterministic part numbers. Split only the
-  already-rendered envelope; do not introduce Markdown/HTML interpretation. If
-  it cannot fit, send one sanitized `result_too_large` error and no partial
-  result.
+  Pre-render exactly one plain UTF-8 Telegram message of at most 3,500 Unicode
+  code points with `parse_mode=None`; do not split, truncate normalized data,
+  or introduce Markdown/HTML interpretation. If the success envelope cannot
+  fit, replace it before any send with one bounded sanitized
+  `result_too_large` error. Each authorized update therefore makes at most one
+  Telegram reply attempt.
 - **Errors, readiness, and provider calls:** readiness/auth/schema/artifact
   mismatch, timeout, mapping failure, missing account secret, render failure,
   or Telegram delivery failure fails closed. Emit only the error wire above;
@@ -1548,14 +1590,69 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   untrusted text. Perform at most one gateway/display call for each accepted
   update and never retry automatically or fall back to Alpaca, yfinance, or
   another provider.
-- **Idempotency, deduplication, and rate limit:** use the `P05-T5` persisted
-  `update_id`/message identity and confirmed offset as the dispatch key;
-  duplicates are rejected before query execution. A crash may cause a harmless
-  read replay, but can never create state, approval, mutation, or trading
-  action. Permit one in-flight query per authorized chat and at most six
-  accepted commands in a fixed 60-second window per environment/user/chat;
-  reject excess work with `rate_limited` before opening the gateway. Do not add
-  a distributed rate-limit service in v1.
+- **P05-T5 terminal persistence and replay:** merged P05-T5 persists only a
+  terminal `(environment, update_id)` row and confirmed offset, after the
+  handler returns `TERMINAL_HANDLED`; it does not persist or deduplicate
+  `message_id`. Before that commit, provider replay, process failure, or a
+  crash after a send attempt may repeat a read or reply. This is bounded
+  at-least-once behavior, not exactly-once delivery. It can never create
+  approval, mutation, or trading state. Within one process, retain the pending
+  admission decision for the current uncommitted `(environment, update_id)` so
+  a pre-send `RETRY_LATER` re-entry does not consume rate quota again.
+- **Best-effort rate and concurrency boundary:** permit one in-flight query per
+  `(environment, user_id)` and use that same key for an in-memory fixed
+  60-second window. The chat ID is deliberately excluded so another authorized
+  private-chat binding cannot multiply a user's allowance. Admit at most six
+  distinct authorized text `update_id` values for reply attempts, counting
+  every success or error including `/help` and invalid commands. Every excess
+  authorized update returns `TERMINAL_HANDLED` silently, without a Telegram
+  send, account-secret access, or gateway open. `rate_limited`/true may exist
+  only as a sanitized internal observation meaning the user may submit a new
+  update after the window; it is not a Telegram wire or a seventh reply. Thus
+  each key has at most six total send attempts per window. An excess update
+  does not extend the window. Use an injected monotonic clock, open on the
+  first admitted update, and reset at elapsed time greater than or equal to 60
+  seconds. A process restart resets both this abuse control and its bounded
+  pending-admission state; neither is durable authorization. Do not add
+  persistent/distributed rate limiting in v1.
+- **20-second handler deadline and delivery:** P05-T5 applies one outer
+  `TELEGRAM_HANDLER_DEADLINE_SECONDS == 20.0` timeout. P05-T9 must fit inside it
+  with a 12.0-second absolute gateway phase timeout covering
+  `open_read_gateway()` entry, artifact/startup projection/readiness checks,
+  exactly one named display call, and context exit; one 4.0-second timeout for
+  the sole Telegram send attempt; and the remaining 4.0 seconds reserved for
+  bounded local parse/render, cancellation unwinding, and terminal return. No
+  awaited P05-T9 operation may escape those budgets. A controlled gateway
+  timeout is rendered once and terminates; it never asks P05-T5 to retry.
+  Cancellation before the send attempt begins may return `RETRY_LATER`. Set a
+  send-attempt flag immediately before calling the action-free transport; after
+  that point, success, rejection, timeout, unknown result, or outer
+  cancellation stops work, sends no follow-up, absorbs cancellation as needed,
+  and returns `TERMINAL_HANDLED`. A process crash before the later P05-T5
+  terminal commit can still replay the update and duplicate the reply; do not
+  claim otherwise.
+- **Executable composition and lifecycle:** add the dedicated
+  `ainvest-telegram-read` console entry above with exact required
+  `--environment staging|production` and `--database PATH`, plus optional
+  `--env-file PATH` and `--secrets-dir PATH`. It must load `Settings` through
+  `load_settings`, require Paper/non-live mode and a complete selected Bot,
+  require an existing migrated regular SQLite database without creating or
+  migrating it, build the existing engine/session factory and P05-T5
+  `TelegramLongPoller`, use `TelegramHttpsTransport` for identity/action-free
+  replies and `TelegramHttpsUpdateTransport` for ingress, and install
+  SIGINT/SIGTERM shutdown through `AsyncioTelegramPollingControl`. A public
+  async runner in `orchestrator/telegram_queries.py` accepts these typed
+  dependencies for deterministic tests. `/help`, invalid input, rate rejection,
+  and account-secret validation happen before lazy gateway open. Every other
+  admitted command opens one per-update `open_read_gateway()` context; that
+  existing ainvest context constructs pinned `GatewayConfig`, opens the actual
+  `rh-mcp v0.3.0` async context, verifies the read projection and readiness,
+  yields `RobinhoodReadClient`, and closes the provider session on context exit.
+  The handler builds `RobinhoodDisplayService` inside that scope and performs
+  exactly one named call. On normal stop, fatal startup/polling failure, or
+  cancellation, stop polling, let the active per-update context exit, release
+  the P05-T5 lease, dispose the DB engine, and return a sanitized nonzero CLI
+  result when appropriate. Do not add a generic runtime framework.
 - **Forbidden scope:** no webhook deployment, browser/UI, group/channel use,
   LLM or natural-language routing, arbitrary capability/tool name, generic
   `invoke`, prompt construction, callback button, approval/rejection command,
@@ -1577,17 +1674,26 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   regression tests proving init/env/dotenv still override the strict file,
   strict file still overrides YAML, every unrelated file-secret field retains
   stock Pydantic behavior, and absent/unrelated files do not change settings;
-  readiness/auth/timeout/contract/mapping/render and send failures; persisted
-  update deduplication and restart; one-in-flight and six-per-minute limits;
+  readiness/auth/timeout/contract/mapping/render and send failures; actual
+  terminal `(environment, update_id)` persistence and restart replay without a
+  false `message_id` dedup claim; same-update in-process retry accounting;
+  one-in-flight, six total send attempts, terminal-silent excess, and
+  process-restart rate reset;
   all five exact history argument dictionaries at a fixed injected UTC clock,
   microsecond truncation, timezone conversion, month/leap/DST independence,
   naive-clock failure, and proof no market-calendar call occurs; exact
-  message/part limits and oversize failure; stable sanitized errors; no account
+  single-message limit and oversize failure; stable sanitized errors; no account
   ID or secret reference in replies/logs/errors/snapshots; omission markers and
   JSON escaping; non-comparable units; and structural proof that the adapter
   cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
   Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway
   transports only; no real credential or public network is required in CI.
+  Drive the public async composition with fakes and the real session/UoW. Add a
+  narrow integration test through the real `TelegramLongPoller` deadline path,
+  asserting the production 20.0-second constant while shortening elapsed test
+  time deterministically, to prove pre-send cancellation returns `RETRY_LATER`
+  without terminal persistence and post-send cancellation returns
+  `TERMINAL_HANDLED` and persists the update without a second reply attempt.
 - **Acceptance criteria:** an authorized private chat can run each fixed query
   and receive the same honest display posture as the CLI; unauthorized,
   malformed, duplicate, excessive, not-ready, or failed requests produce no
@@ -1670,9 +1776,9 @@ consumable release artifact.
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
   `v0.3.0` is the current executable dependency authority; `v0.2.0` is
-  historical evidence only. P05-T10 is merged; `P05-T9` is dependency-ready
-  but remains queued/unclaimed pending its own claim, and owner-assisted real
-  validation remains pending.
+  historical evidence only. P05-T10 is merged; `P05-T9` is claimed for planning
+  only and implementation has not started. Owner-assisted v0.3 status reports
+  ready; individual real reads remain later owner-assisted validation.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
@@ -2254,8 +2360,8 @@ line.
 - Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
   lifted the P05-T4 pause on 2026-08-12; P05-T4 and P05-T5 are now merged.
-  P05-T10 Bot-environment provisioning and validation is merged; P05-T9 is the
-  next dependency-ready task but stays queued/unclaimed pending its own claim.
+  P05-T10 Bot-environment provisioning and validation is merged; P05-T9 is now
+  claimed for planning only and no implementation has started.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -2266,12 +2372,13 @@ line.
   earliest safe Robinhood Non-Trading Preview. `P06-T2` Part 2 remains a
   separate promotion step under the same task ID. The release, tracker pin,
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are merged. `P05-T10` Bot-environment
-  provisioning is also merged, making P05-T9 the next dependency-ready but
-  still queued/unclaimed Telegram read-only task. `P05-T4`
+  provisioning is also merged, and P05-T9 is now the claimed planning task for
+  the Telegram read-only adapter. `P05-T4`
   squash-merged on 2026-08-12 and `P05-T5` subsequently squash-merged through
-  #123/#124; P05-T10 subsequently merged through #135/#136. P05-T9 requires a
-  separate claim and the same latest-main rebase, independent-review, checks,
-  and squash-merge workflow. By owner
+  #123/#124; P05-T10 subsequently merged through #135/#136. This separate
+  P05-T9 claim contains no implementation; after it merges, implementation
+  requires the same latest-main rebase, independent-review, checks, and
+  squash-merge workflow. By owner
   instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
   they may not start until the owner/coordinator explicitly resumes them.
 
@@ -2291,12 +2398,12 @@ line.
    is complete and merged through #135/#136. BotFather creation and real owner
    values stay manual, and owner-assisted staging/production validation remains
    pending under proposed `DEC-010` after the deterministic offline merge.
-3. `P05-T9` is dependency-ready but remains queued/unclaimed for Telegram
-   read-only queries built on
-   the display projection and merged `P05-T4`/`P05-T5`/`P05-T10`. Open a
-   separate claim, then rebase latest `main`, independently review, check, and
-   squash-merge. Offline implementation does not depend on real
-   Robinhood readiness; owner-assisted real validation remains pending.
+3. `P05-T9` is claimed for planning only for Telegram read-only queries built on
+   the display projection and merged `P05-T4`/`P05-T5`/`P05-T10`. This claim
+   must merge before an implementation branch is created from
+   latest `main`, independently reviewed, checked, and squash-merged. Offline
+   implementation does not depend on a real read; owner-assisted v0.3 status
+   reports ready and individual real reads may be validated later.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 4. Supply and independently review canonical identity, Agentic-account
