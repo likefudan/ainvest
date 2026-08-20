@@ -566,7 +566,15 @@ def test_rotate_resumes_after_real_secret_commit_and_activation_failure(
     assert target.read_text(encoding="utf-8") == STAGING_TOKEN_NEW + "\n"
     assert "TELEGRAM_STAGING__ENABLED=false" in request.env_file.read_text(encoding="utf-8")
     monkeypatch.setattr(provisioning_module, "_atomic_replace", original)
+    resumed_paths: list[Path] = []
+
+    def spy(path: Path, content: bytes) -> None:
+        resumed_paths.append(path)
+        original(path, content)
+
+    monkeypatch.setattr(provisioning_module, "_atomic_replace", spy)
     asyncio.run(execute(request, _dependencies(transport, token=STAGING_TOKEN_NEW)))
+    assert resumed_paths == [request.env_file]
     assert "TELEGRAM_STAGING__ENABLED=true" in request.env_file.read_text(encoding="utf-8")
 
 
@@ -682,6 +690,68 @@ def test_lazy_adapter_uses_exact_read_and_send_arguments(monkeypatch) -> None:  
         "parse_mode": None,
         **timeout_kwargs,
     }
+
+
+@pytest.mark.parametrize(
+    ("method", "expected_code", "malformed"),
+    [
+        ("get_me", "provider_identity_failed", True),
+        ("get_me", "provider_identity_failed", False),
+        ("get_webhook_info", "provider_webhook_check_failed", True),
+        ("get_webhook_info", "provider_webhook_check_failed", False),
+        ("get_chat", "provider_chat_check_failed", True),
+        ("get_chat", "provider_chat_check_failed", False),
+    ],
+)
+def test_lazy_adapter_read_failures_are_one_call_and_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+    method: str,
+    expected_code: str,
+    malformed: bool,
+) -> None:
+    calls: list[str] = []
+
+    class Bot:
+        def __init__(self, *, token: str) -> None:
+            assert token == STAGING_TOKEN
+
+        async def get_me(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append("get_me")
+            if not malformed:
+                raise RuntimeError(f"provider-payload {STAGING_TOKEN}")
+            return SimpleNamespace(id="provider-payload")
+
+        async def get_webhook_info(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append("get_webhook_info")
+            if not malformed:
+                raise RuntimeError(f"provider-payload {STAGING_TOKEN}")
+            return SimpleNamespace(url={"provider": "payload"})
+
+        async def get_chat(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append("get_chat")
+            if not malformed:
+                raise RuntimeError(f"provider-payload {STAGING_TOKEN}")
+            return SimpleNamespace(id="provider-payload", type={"provider": "payload"})
+
+    monkeypatch.setattr(
+        "ainvest.approval.telegram_provisioning.importlib.import_module",
+        lambda name: SimpleNamespace(Bot=Bot),
+    )
+    adapter = TelegramProvisioningHttpsTransport()
+
+    async def run() -> object:
+        if method == "get_me":
+            return await adapter.get_me(STAGING_TOKEN, timeout_seconds=5)
+        if method == "get_webhook_info":
+            return await adapter.get_webhook_info(STAGING_TOKEN, timeout_seconds=5)
+        return await adapter.get_chat(STAGING_TOKEN, 201, timeout_seconds=5)
+
+    with pytest.raises(ProvisioningFailure, match=expected_code) as caught:
+        asyncio.run(run())
+    assert calls == [method]
+    assert caught.value.code == expected_code
+    assert "provider-payload" not in str(caught.value)
+    assert STAGING_TOKEN not in str(caught.value)
 
 
 @pytest.mark.parametrize(

@@ -171,10 +171,8 @@ def test_execute_provisions_both_bots_for_same_owner_with_distinct_identity(
     engine = create_db_engine(f"sqlite+pysqlite:///{database}")
     create_all_tables(engine)
     policy = LeasePolicy(wait_seconds=0)
-    for environment, token, bot_id in (
-        (TelegramEnvironment.STAGING, TOKEN, 9001),
-        (TelegramEnvironment.PRODUCTION, production_token, 9002),
-    ):
+
+    def provision(environment: TelegramEnvironment, token: str, bot_id: int) -> None:
         asyncio.run(
             execute(
                 ProvisioningRequest(
@@ -193,6 +191,16 @@ def test_execute_provisions_both_bots_for_same_owner_with_distinct_identity(
                 ),
             )
         )
+
+    provision(TelegramEnvironment.STAGING, TOKEN, 9001)
+    before_rejected_production = env_file.read_bytes()
+    production_secret = secrets_dir / "TELEGRAM_PRODUCTION__BOT_TOKEN"
+    with pytest.raises(ProvisioningFailure, match="cross_environment_bot_identity"):
+        provision(TelegramEnvironment.PRODUCTION, production_token, 9001)
+    assert env_file.read_bytes() == before_rejected_production
+    assert not production_secret.exists()
+
+    provision(TelegramEnvironment.PRODUCTION, production_token, 9002)
     settings = load_settings(environ={}, env_file=env_file, secrets_dir=secrets_dir)
     assert settings.telegram_staging.expected_bot_id == 9001
     assert settings.telegram_production.expected_bot_id == 9002
@@ -203,6 +211,8 @@ def test_execute_provisions_both_bots_for_same_owner_with_distinct_identity(
     with create_session_factory(engine)() as session:
         production = TelegramUpdateRepository(session).get_state("production")
         assert production is not None and production.next_offset == 0
+        assert production.lease_owner is None
+        assert production.lease_expires_at is None
         assert session.scalar(select(func.count(TelegramProcessedUpdateRow.id))) == 0
     engine.dispose()
 
