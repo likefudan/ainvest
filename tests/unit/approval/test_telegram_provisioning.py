@@ -310,6 +310,41 @@ def test_token_file_bounded_read_rejects_oversize_and_symlink(tmp_path: Path) ->
         _read_token_file(path)
 
 
+@pytest.mark.parametrize(
+    ("content", "mode", "accepted"),
+    [
+        (STAGING_TOKEN.encode(), 0o600, True),
+        ((STAGING_TOKEN + "\n").encode(), 0o600, True),
+        ((STAGING_TOKEN + "\r\n").encode(), 0o600, False),
+        ((STAGING_TOKEN + "\n\n").encode(), 0o600, False),
+        (b"\xff", 0o600, False),
+        (STAGING_TOKEN.encode(), 0o644, False),
+    ],
+)
+def test_token_file_exact_content_and_mode_matrix(
+    tmp_path: Path, content: bytes, mode: int, accepted: bool
+) -> None:
+    path = tmp_path / "token"
+    path.write_bytes(content)
+    os.chmod(path, mode)
+    if accepted:
+        assert _read_token_file(path).get_secret_value() == STAGING_TOKEN
+    else:
+        with pytest.raises(ProvisioningFailure):
+            _read_token_file(path)
+
+
+def test_token_file_rejects_fifo_and_directory_without_blocking(tmp_path: Path) -> None:
+    directory = tmp_path / "directory"
+    directory.mkdir()
+    with pytest.raises(ProvisioningFailure):
+        _read_token_file(directory)
+    fifo = tmp_path / "fifo"
+    os.mkfifo(fifo, 0o600)
+    with pytest.raises(ProvisioningFailure, match="not_regular"):
+        _read_token_file(fifo)
+
+
 def test_candidate_filter_accepts_only_original_private_messages() -> None:
     message = SimpleNamespace(
         from_user=SimpleNamespace(id=101),
@@ -536,6 +571,62 @@ def test_lazy_adapter_omits_offset_and_deduplicates_candidates(monkeypatch) -> N
     assert result == (ProvisioningCandidate(user_id=101, private_chat_id=201),)
     assert "offset" not in calls[0]
     assert calls[0]["allowed_updates"] == ("message",)
+
+
+def test_lazy_adapter_uses_exact_read_and_send_arguments(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    calls: list[tuple[str, dict[str, object]]] = []
+
+    class Bot:
+        def __init__(self, *, token: str) -> None:
+            assert token == STAGING_TOKEN
+
+        async def get_me(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append(("get_me", kwargs))
+            return SimpleNamespace(id=9001)
+
+        async def get_webhook_info(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append(("get_webhook_info", kwargs))
+            return SimpleNamespace(url="")
+
+        async def get_chat(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append(("get_chat", kwargs))
+            return SimpleNamespace(id=201, type="private")
+
+        async def send_message(self, **kwargs: object):  # type: ignore[no-untyped-def]
+            calls.append(("send_message", kwargs))
+            return SimpleNamespace(message_id=7)
+
+    monkeypatch.setattr(
+        "ainvest.approval.telegram_provisioning.importlib.import_module",
+        lambda name: SimpleNamespace(Bot=Bot),
+    )
+    adapter = TelegramProvisioningHttpsTransport()
+
+    async def run() -> None:
+        assert (await adapter.get_me(STAGING_TOKEN, timeout_seconds=5)).id == 9001
+        assert (await adapter.get_webhook_info(STAGING_TOKEN, timeout_seconds=5)).url == ""
+        assert (await adapter.get_chat(STAGING_TOKEN, 201, timeout_seconds=5)).type == "private"
+        assert await adapter.send_test_message(STAGING_TOKEN, 201, "fixed", timeout_seconds=5) == 7
+
+    asyncio.run(run())
+    assert [name for name, _ in calls] == [
+        "get_me",
+        "get_webhook_info",
+        "get_chat",
+        "send_message",
+    ]
+    assert calls[2][1]["chat_id"] == 201
+    assert calls[3][1]["parse_mode"] is None
+    assert calls[3][1]["text"] == "fixed"
+
+
+def test_lazy_adapter_missing_dependency_is_sanitized(monkeypatch) -> None:  # type: ignore[no-untyped-def]
+    monkeypatch.setattr(
+        "ainvest.approval.telegram_provisioning.importlib.import_module",
+        lambda name: (_ for _ in ()).throw(ImportError()),
+    )
+    with pytest.raises(ProvisioningFailure, match="provider_unavailable"):
+        asyncio.run(TelegramProvisioningHttpsTransport().get_me(STAGING_TOKEN, timeout_seconds=5))
 
 
 def test_results_and_failures_never_reveal_token() -> None:

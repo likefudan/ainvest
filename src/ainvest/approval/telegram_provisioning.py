@@ -697,7 +697,10 @@ def _validate_directory(directory: Path) -> None:
 def _read_token_file(path: Path) -> SecretStr:
     descriptor = -1
     try:
-        descriptor = os.open(path, os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0))
+        descriptor = os.open(
+            path,
+            os.O_RDONLY | getattr(os, "O_NOFOLLOW", 0) | getattr(os, "O_NONBLOCK", 0),
+        )
         details = os.fstat(descriptor)
         if not stat.S_ISREG(details.st_mode):
             raise ProvisioningFailure("token_file_not_regular")
