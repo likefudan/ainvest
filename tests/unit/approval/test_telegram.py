@@ -633,6 +633,342 @@ def test_https_adapter_uses_plain_text_and_one_send_call(monkeypatch: pytest.Mon
 
 
 @pytest.mark.unit
+def test_https_adapter_plain_send_has_no_action_or_parse_mode(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules()
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+
+    message_id = asyncio.run(
+        TelegramHttpsTransport().send_plain_message(
+            "synthetic-token",
+            900000201,
+            "[READ ONLY - NOT FOR TRADING]",
+            timeout_seconds=4.0,
+        )
+    )
+
+    assert message_id == 707
+    assert calls == [
+        {
+            "chat_id": 900000201,
+            "text": "[READ ONLY - NOT FOR TRADING]",
+            "parse_mode": None,
+            "reply_markup": None,
+            "read_timeout": 4.0,
+            "write_timeout": 4.0,
+            "connect_timeout": 4.0,
+            "pool_timeout": 4.0,
+        }
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("effect", "expected"),
+    [
+        (FakeProviderError.BadRequest("provider-payload"), TelegramTransportRejected),
+        (FakeProviderError.TimedOut("provider-payload"), TelegramDeliveryUnknown),
+        (asyncio.CancelledError(), TelegramDeliveryUnknown),
+        (RuntimeError("provider-payload"), TelegramDeliveryUnknown),
+    ],
+)
+def test_https_adapter_plain_send_failures_are_one_call_and_sanitized(
+    monkeypatch: pytest.MonkeyPatch,
+    effect: BaseException,
+    expected: type[Exception],
+) -> None:
+    fake_telegram, fake_error, calls = _fake_adapter_modules(effect=effect)
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (fake_telegram, fake_error),
+    )
+
+    with pytest.raises(expected) as caught:
+        asyncio.run(
+            TelegramHttpsTransport().send_plain_message(
+                "synthetic-token",
+                900000201,
+                "[READ ONLY - NOT FOR TRADING]",
+                timeout_seconds=4.0,
+            )
+        )
+
+    assert len(calls) == 1
+    assert "provider-payload" not in str(caught.value)
+    assert "synthetic-token" not in str(caught.value)
+
+
+@pytest.mark.unit
+def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    events: list[str] = []
+
+    class Request:
+        def __init__(self) -> None:
+            self.index = events.count("request_created")
+            events.append("request_created")
+
+        async def shutdown(self) -> None:
+            events.append(f"request_{self.index}_shutdown")
+
+    class Bot:
+        instances = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs["token"] == "synthetic-token"
+            self.request = cast(Request, kwargs["request"])
+            self.get_updates_request = cast(Request, kwargs["get_updates_request"])
+            Bot.instances += 1
+
+        async def initialize(self) -> None:
+            events.append("initialize")
+
+        async def shutdown(self) -> None:
+            events.append("shutdown")
+            await self.request.shutdown()
+            await self.get_updates_request.shutdown()
+
+        async def get_me(self, **kwargs: object) -> SimpleNamespace:
+            events.append("get_me")
+            return SimpleNamespace(id=9001)
+
+        async def get_updates(self, **kwargs: object) -> tuple[object, ...]:
+            events.append("get_updates")
+            return ()
+
+        async def send_message(self, **kwargs: object) -> SimpleNamespace:
+            events.append("send_message")
+            return SimpleNamespace(message_id=77)
+
+    telegram = SimpleNamespace(
+        Bot=Bot,
+        request=SimpleNamespace(HTTPXRequest=Request),
+        InlineKeyboardButton=lambda **kwargs: kwargs,
+        InlineKeyboardMarkup=lambda rows: rows,
+    )
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (telegram, FakeProviderError),
+    )
+
+    async def run() -> None:
+        transport = TelegramHttpsTransport("synthetic-token")
+        async with transport:
+            assert (await transport.get_me("synthetic-token", timeout_seconds=5)).id == 9001
+            assert (
+                await transport.get_raw_updates(
+                    "synthetic-token",
+                    offset=0,
+                    timeout=25,
+                    limit=100,
+                    allowed_updates=("message", "callback_query"),
+                    deadline_seconds=35,
+                )
+                == ()
+            )
+            assert (
+                await transport.send_plain_message(
+                    "synthetic-token", 201, "read only", timeout_seconds=4
+                )
+                == 77
+            )
+
+    asyncio.run(run())
+    assert Bot.instances == 1
+    assert events == [
+        "request_created",
+        "request_created",
+        "initialize",
+        "get_me",
+        "get_updates",
+        "send_message",
+        "shutdown",
+        "request_0_shutdown",
+        "request_1_shutdown",
+    ]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("failure", [RuntimeError("startup"), asyncio.CancelledError()])
+def test_managed_https_transport_partial_startup_closes_both_requests_once(
+    monkeypatch: pytest.MonkeyPatch,
+    failure: BaseException,
+) -> None:
+    shutdowns: list[int] = []
+
+    class Request:
+        next_index = 0
+
+        def __init__(self) -> None:
+            self.index = Request.next_index
+            Request.next_index += 1
+
+        async def shutdown(self) -> None:
+            shutdowns.append(self.index)
+
+    class Bot:
+        def __init__(self, **kwargs: object) -> None:
+            pass
+
+        async def initialize(self) -> None:
+            raise failure
+
+    telegram = SimpleNamespace(
+        Bot=Bot,
+        request=SimpleNamespace(HTTPXRequest=Request),
+    )
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (telegram, FakeProviderError),
+    )
+
+    async def run() -> None:
+        async with TelegramHttpsTransport("synthetic-token"):
+            raise AssertionError("unreachable")
+
+    with pytest.raises(type(failure)):
+        asyncio.run(run())
+    assert sorted(shutdowns) == [0, 1]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize(
+    ("fail_at", "expected_shutdowns"),
+    [("second_request", [0]), ("bot", [0, 1])],
+)
+def test_managed_https_transport_constructor_failure_closes_created_requests(
+    monkeypatch: pytest.MonkeyPatch,
+    fail_at: str,
+    expected_shutdowns: list[int],
+) -> None:
+    shutdowns: list[int] = []
+
+    class Request:
+        next_index = 0
+
+        def __init__(self) -> None:
+            self.index = Request.next_index
+            Request.next_index += 1
+            if fail_at == "second_request" and self.index == 1:
+                raise RuntimeError("synthetic request construction failure")
+
+        async def shutdown(self) -> None:
+            shutdowns.append(self.index)
+
+    class Bot:
+        def __init__(self, **kwargs: object) -> None:
+            del kwargs
+            if fail_at == "bot":
+                raise RuntimeError("synthetic Bot construction failure")
+
+    telegram = SimpleNamespace(
+        Bot=Bot,
+        request=SimpleNamespace(HTTPXRequest=Request),
+    )
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (telegram, FakeProviderError),
+    )
+
+    with pytest.raises(TelegramTransportRejected):
+        asyncio.run(TelegramHttpsTransport("synthetic-token").__aenter__())
+    assert shutdowns == expected_shutdowns
+
+
+@pytest.mark.unit
+def test_managed_https_transport_uses_locked_ptb_bot_request_shape(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    telegram = pytest.importorskip(
+        "telegram",
+        reason="requires the locked optional approval runtime",
+    )
+    lifecycle: list[str] = []
+
+    async def initialize(bot: object) -> None:
+        lifecycle.append("initialize")
+
+    async def shutdown(bot: object) -> None:
+        lifecycle.append("shutdown")
+
+    monkeypatch.setattr(telegram.Bot, "initialize", initialize)
+    monkeypatch.setattr(telegram.Bot, "shutdown", shutdown)
+
+    async def run() -> None:
+        transport = TelegramHttpsTransport("900000001:" + "A" * 35)
+        async with transport:
+            assert transport._bot is not None
+            assert type(transport._request).__name__ == "HTTPXRequest"
+            assert type(transport._get_updates_request).__name__ == "HTTPXRequest"
+
+    asyncio.run(run())
+    assert telegram.__version__ == "22.8"
+    assert lifecycle == ["initialize", "shutdown"]
+
+
+@pytest.mark.unit
+def test_managed_https_transport_body_cancellation_shuts_down_once(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle: list[str] = []
+
+    class Request:
+        async def shutdown(self) -> None:
+            lifecycle.append("request_shutdown")
+
+    class Bot:
+        def __init__(
+            self,
+            *,
+            token: str,
+            request: Request,
+            get_updates_request: Request,
+        ) -> None:
+            del token
+            self._requests = (request, get_updates_request)
+
+        async def initialize(self) -> None:
+            lifecycle.append("initialize")
+
+        async def shutdown(self) -> None:
+            lifecycle.append("shutdown")
+            await asyncio.gather(*(request.shutdown() for request in self._requests))
+
+    telegram = SimpleNamespace(
+        Bot=Bot,
+        request=SimpleNamespace(HTTPXRequest=Request),
+    )
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (telegram, FakeProviderError),
+    )
+
+    async def run() -> None:
+        async with TelegramHttpsTransport("synthetic-token"):
+            raise asyncio.CancelledError
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(run())
+    assert lifecycle == [
+        "initialize",
+        "shutdown",
+        "request_shutdown",
+        "request_shutdown",
+    ]
+
+
+@pytest.mark.unit
 @pytest.mark.parametrize(
     "effect",
     [

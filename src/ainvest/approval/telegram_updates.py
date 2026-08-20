@@ -230,6 +230,19 @@ class TelegramIdentityTransport(Protocol):
     async def get_me(self, token: str, *, timeout_seconds: float) -> Any: ...
 
 
+class TelegramRawUpdateTransport(Protocol):
+    async def get_raw_updates(
+        self,
+        token: str,
+        *,
+        offset: int,
+        timeout: int,
+        limit: int,
+        allowed_updates: tuple[str, ...],
+        deadline_seconds: float,
+    ) -> Sequence[Any]: ...
+
+
 class TelegramProviderTransient(Exception):
     """Sanitized retryable provider/network failure."""
 
@@ -247,7 +260,10 @@ class TelegramPollingFatal(Exception):
 
 
 class TelegramHttpsUpdateTransport:
-    """Lazy python-telegram-bot adapter that never exposes raw updates downstream."""
+    """Normalize raw updates from one runner-owned Telegram HTTPS transport."""
+
+    def __init__(self, raw_transport: TelegramRawUpdateTransport) -> None:
+        self._raw_transport = raw_transport
 
     async def get_updates(
         self,
@@ -260,25 +276,20 @@ class TelegramHttpsUpdateTransport:
         deadline_seconds: float,
     ) -> Sequence[TelegramProviderUpdate]:
         try:
-            telegram = import_module("telegram")
             error = import_module("telegram.error")
         except ImportError:
             raise TelegramPollingFatal(
                 "telegram polling transport dependency is unavailable"
             ) from None
         try:
-            bot = telegram.Bot(token=token)
-            async with asyncio.timeout(deadline_seconds):
-                updates = await bot.get_updates(
-                    offset=offset,
-                    timeout=timeout,
-                    limit=limit,
-                    allowed_updates=allowed_updates,
-                    read_timeout=deadline_seconds,
-                    write_timeout=deadline_seconds,
-                    connect_timeout=deadline_seconds,
-                    pool_timeout=deadline_seconds,
-                )
+            updates = await self._raw_transport.get_raw_updates(
+                token,
+                offset=offset,
+                timeout=timeout,
+                limit=limit,
+                allowed_updates=allowed_updates,
+                deadline_seconds=deadline_seconds,
+            )
             if len(updates) > TELEGRAM_POLL_LIMIT:
                 raise TelegramPollingFatal("telegram provider returned an oversized update batch")
             return tuple(_normalize_provider_update(update) for update in updates)
@@ -882,6 +893,7 @@ __all__ = [
     "TelegramProviderTransient",
     "TelegramProviderUpdate",
     "TelegramProviderUpdateKind",
+    "TelegramRawUpdateTransport",
     "TelegramUpdateTransport",
     "classify_update",
 ]

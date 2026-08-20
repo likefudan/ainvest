@@ -2757,7 +2757,8 @@ completed Paper approval path unlocks `P08-T13`, then
   `/tradability`, `/history`, `/fundamentals`, and `/financials`. Error
   `command` uses those Telegram tokens without `/` or `null`, while successful
   envelopes retain the public P06-T2 `DisplayCommand`. Reply-wire mappings are
-  `invalid_command`/false, `account_secret_unavailable`/false,
+  `invalid_command`/false, `account_secret_missing`/false,
+  `account_secret_invalid`/false,
   `result_too_large`/false, `render_failed`/false, and `internal_error`/false;
   gateway and mapping codes retain their public typed values.
   `send_failed`/false is an internal terminal observation that is never sent
@@ -2767,6 +2768,8 @@ completed Paper approval path unlocks `P08-T13`, then
   `[READ ONLY - NOT FOR TRADING]`, `parse_mode=None`, pre-render all output,
   and make exactly one attempt of at most 3,500 Unicode code points; oversize
   success becomes a pre-send `result_too_large` error, never partial output.
+  Compact JSON uses ASCII escaping so raw provider Unicode format, bidi,
+  control, or separator characters never reach Telegram.
   `/help` opens neither gateway nor
   account secret. Only portfolio, positions, orders, and tradability resolve
   the server-side account secret.
@@ -2798,8 +2801,9 @@ completed Paper approval path unlocks `P08-T13`, then
   `--env-file PATH` and `--secrets-dir PATH`. It uses `load_settings`, requires
   Paper/non-live mode and complete selected Bot config, opens an existing
   migrated regular SQLite database without schema creation, builds the existing
-  engine/session factory, `TelegramLongPoller`, HTTPS identity/update/plain-send
-  transports, and an `AsyncioTelegramPollingControl` wired to SIGINT/SIGTERM.
+  engine/session factory, `TelegramLongPoller`, one lifecycle-managed shared
+  HTTPS Bot/two-client transport reused for identity/update/plain-send, and an
+  `AsyncioTelegramPollingControl` wired to SIGINT/SIGTERM.
   The public async runner accepts typed injected equivalents for tests. Help,
   invalid/rate-exhausted input, and account-secret failure happen before lazy
   gateway open. Every other admitted update owns one 12-second
@@ -2807,13 +2811,17 @@ completed Paper approval path unlocks `P08-T13`, then
   constructs the pinned `GatewayConfig`, enters `rh-mcp v0.3.0 open_gateway`,
   verifies projection/readiness, yields the read client for one named display
   call, then closes the provider session on exit. Normal stop, fatal failure,
-  and cancellation release the polling lease and dispose the DB engine; no
-  generic runtime framework or provider retry is added.
+  and cancellation release the polling lease, shut the shared Bot/HTTP clients
+  down exactly once, and dispose the DB engine; no generic runtime framework or
+  provider retry is added.
 - **Reusable wire boundary:** `RobinhoodDisplayService` supplies public
   `DisplaySuccess` plus typed gateway/mapping exceptions; it does not supply an
   error envelope. P05-T9 owns its exact `TelegramQueryError` wire and
   deterministic renderer, must not import/copy the CLI's private JSON helpers,
   and follows the task card's silent-ignore versus authorized-reply matrix.
+  This query-only composition parks an authorized callback with `RETRY_LATER`:
+  no reply, terminal/digest row, or offset movement occurs, and bounded P05-T5
+  backoff blocks later updates until a future P05-T1 composite router owns it.
   `/help` is private/allowlisted/rate-limited but deliberately opens neither
   the gateway nor account secret and returns no display envelope.
 - **Pinned history behavior:** `1d`, `5d`, `1m`, `3m`, and `1y` mean fixed
@@ -2822,13 +2830,16 @@ completed Paper approval path unlocks `P08-T13`, then
   `regular` bounds and `split` adjustment. No exchange-calendar dependency or
   trade-grade session claim is allowed.
 - **Account-secret ownership:** the exact setting/environment/file-secret key
-  is `ROBINHOOD_READ_ACCOUNT_NUMBER`, on the Settings field
-  `robinhood_read_account_number`. Only the Paper runtime's READ_BROKER
-  read-query subcomposition reads it; P05-T4/P05-T5 do not own or receive it,
-  and the poller gets only a narrow query port. P05-T9 reuses P05-T4's public
-  explicit `load_settings(secrets_dir=...)` entry and adds only its own narrow
-  account-field source at the existing file-secret layer; it does not redefine
-  the entry or alter Telegram token loading. No source searches implicitly.
+  is `ROBINHOOD_READ_ACCOUNT_NUMBER`, on the dedicated lazy READ_BROKER field
+  `robinhood_read_account_number`, not global `Settings`. Only the Paper
+  runtime's READ_BROKER read-query subcomposition reads it when an account-bound
+  command runs; P05-T4/P05-T5 do not own or receive it, and the poller gets only
+  a narrow query port. P05-T9 reuses the runner's explicit env-file/secrets-
+  directory inputs and adds only its own narrow lazy account-field loader with
+  explicit > environment > dotenv > exact file-secret > injected YAML
+  precedence; it does not redefine global `load_settings` or alter Telegram
+  token loading. No source searches implicitly, and bad account input cannot
+  block startup or non-account commands.
   The task card fixes the value's
   1–128 visible-ASCII grammar, optional single file-secret LF, rejected
   CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper

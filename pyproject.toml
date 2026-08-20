@@ -91,6 +91,7 @@ ainvest-strategy-conformance = "ainvest.strategy_conformance.cli:main"
 ainvest-paper-flow = "ainvest.orchestrator.cli:main"
 ainvest-robinhood-read = "ainvest.execution.robinhood.cli:main"
 ainvest-telegram-provision = "ainvest.approval.telegram_provisioning:main"
+ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"
 
 [project.entry-points."ainvest.strategies"]
 moving_average = "ainvest.strategies.reference.moving_average.plugin:plugin"

@@ -34,10 +34,12 @@ from ainvest.config.errors import (
 )
 from ainvest.config.settings import (
     AISettings,
+    RobinhoodAccountSecretInvalid,
     Settings,
     TelegramBotSettings,
     TelegramRecipient,
     WebAuthnSettings,
+    load_robinhood_read_account_number,
     load_settings,
 )
 from ainvest.config.yaml import load_yaml_mapping
@@ -50,6 +52,7 @@ __all__ = [
     "ApprovalScope",
     "ConfigError",
     "RiskLimitsDocument",
+    "RobinhoodAccountSecretInvalid",
     "Settings",
     "StrategiesDocument",
     "TelegramBotSettings",
@@ -57,6 +60,7 @@ __all__ = [
     "TelegramTransport",
     "TradingMode",
     "WebAuthnSettings",
+    "load_robinhood_read_account_number",
     "load_settings",
     "load_yaml_mapping",
 ]
