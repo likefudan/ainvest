@@ -379,6 +379,54 @@ def test_account_secret_failure_precedes_gateway_open() -> None:
     assert opened is False
 
 
+def test_account_secret_wrapper_is_revealed_only_at_named_call(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    lifecycle: list[str] = []
+
+    class TrackedSecret(SecretStr):
+        def get_secret_value(self) -> str:
+            lifecycle.append("reveal")
+            return super().get_secret_value()
+
+    account = TrackedSecret(ACCOUNT)
+
+    def load_account() -> SecretStr:
+        lifecycle.append("load_wrapper")
+        return account
+
+    class Service:
+        def __init__(self, client: object, *, clock: object) -> None:
+            del client, clock
+
+        async def portfolio(self, account_number: str) -> DisplaySuccess:
+            lifecycle.append("portfolio_call")
+            assert account_number == ACCOUNT
+            return _success()
+
+    class Gateway:
+        async def __aenter__(self) -> SimpleNamespace:
+            lifecycle.append("gateway_enter")
+            return SimpleNamespace(client=object())
+
+        async def __aexit__(self, *args: object) -> None:
+            lifecycle.append("gateway_exit")
+
+    monkeypatch.setattr(query_module, "RobinhoodDisplayService", Service)
+    executor = ReadGatewayQueryExecutor(
+        load_account,
+        gateway_factory=cast(GatewayContextFactory, Gateway),
+    )
+    asyncio.run(executor.execute(parse_telegram_query("/portfolio")))
+    assert lifecycle == [
+        "load_wrapper",
+        "gateway_enter",
+        "reveal",
+        "portfolio_call",
+        "gateway_exit",
+    ]
+
+
 def test_invalid_lazy_account_does_not_block_status_or_nonaccount_reads(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:

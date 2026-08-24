@@ -34,6 +34,12 @@ from ainvest.schemas.orders import OrderProposal, order_proposal_example
 from ainvest.schemas.risk import RiskDecision, RiskOutcome
 
 TOKEN_VALUE = "eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHh4eHg"
+MANAGED_REQUEST_TIMEOUTS = {
+    "connect_timeout": 5.0,
+    "read_timeout": 5.0,
+    "write_timeout": 5.0,
+    "pool_timeout": 5.0,
+}
 
 
 @dataclass
@@ -711,7 +717,8 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
     events: list[str] = []
 
     class Request:
-        def __init__(self) -> None:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == MANAGED_REQUEST_TIMEOUTS
             self.index = events.count("request_created")
             events.append("request_created")
 
@@ -728,16 +735,13 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
             Bot.instances += 1
 
         async def initialize(self) -> None:
-            events.append("initialize")
+            events.append("initialize_get_me")
+            self.bot = SimpleNamespace(id=9001)
 
         async def shutdown(self) -> None:
             events.append("shutdown")
             await self.request.shutdown()
             await self.get_updates_request.shutdown()
-
-        async def get_me(self, **kwargs: object) -> SimpleNamespace:
-            events.append("get_me")
-            return SimpleNamespace(id=9001)
 
         async def get_updates(self, **kwargs: object) -> tuple[object, ...]:
             events.append("get_updates")
@@ -786,8 +790,7 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
     assert events == [
         "request_created",
         "request_created",
-        "initialize",
-        "get_me",
+        "initialize_get_me",
         "get_updates",
         "send_message",
         "shutdown",
@@ -797,17 +800,25 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
 
 
 @pytest.mark.unit
-@pytest.mark.parametrize("failure", [RuntimeError("startup"), asyncio.CancelledError()])
+@pytest.mark.parametrize(
+    ("failure", "expected_type"),
+    [
+        (RuntimeError("startup"), TelegramTransportRejected),
+        (asyncio.CancelledError(), asyncio.CancelledError),
+    ],
+)
 def test_managed_https_transport_partial_startup_closes_both_requests_once(
     monkeypatch: pytest.MonkeyPatch,
     failure: BaseException,
+    expected_type: type[BaseException],
 ) -> None:
     shutdowns: list[int] = []
 
     class Request:
         next_index = 0
 
-        def __init__(self) -> None:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == MANAGED_REQUEST_TIMEOUTS
             self.index = Request.next_index
             Request.next_index += 1
 
@@ -835,9 +846,72 @@ def test_managed_https_transport_partial_startup_closes_both_requests_once(
         async with TelegramHttpsTransport("synthetic-token"):
             raise AssertionError("unreachable")
 
-    with pytest.raises(type(failure)):
+    with pytest.raises(expected_type):
         asyncio.run(run())
     assert sorted(shutdowns) == [0, 1]
+
+
+@pytest.mark.unit
+@pytest.mark.parametrize("second_succeeds", [True, False])
+def test_managed_https_transport_bounds_transient_initialize_to_two_fresh_clients(
+    monkeypatch: pytest.MonkeyPatch,
+    second_succeeds: bool,
+) -> None:
+    shutdowns: list[int] = []
+    initializes: list[int] = []
+
+    class Request:
+        next_index = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == MANAGED_REQUEST_TIMEOUTS
+            self.index = Request.next_index
+            Request.next_index += 1
+
+        async def shutdown(self) -> None:
+            shutdowns.append(self.index)
+
+    class Bot:
+        next_index = 0
+
+        def __init__(self, **kwargs: object) -> None:
+            self.index = Bot.next_index
+            Bot.next_index += 1
+            self.requests = (
+                cast(Request, kwargs["request"]),
+                cast(Request, kwargs["get_updates_request"]),
+            )
+
+        async def initialize(self) -> None:
+            initializes.append(self.index)
+            if self.index == 0 or not second_succeeds:
+                raise FakeProviderError.TimedOut("synthetic timeout")
+            self.bot = SimpleNamespace(id=9001)
+
+        async def shutdown(self) -> None:
+            await asyncio.gather(*(request.shutdown() for request in self.requests))
+
+    telegram = SimpleNamespace(
+        Bot=Bot,
+        request=SimpleNamespace(HTTPXRequest=Request),
+    )
+    monkeypatch.setattr(
+        telegram_module,
+        "_telegram_modules",
+        lambda: (telegram, FakeProviderError),
+    )
+
+    async def run() -> None:
+        async with TelegramHttpsTransport("synthetic-token") as transport:
+            assert (await transport.get_me("synthetic-token", timeout_seconds=5.0)).id == 9001
+
+    if second_succeeds:
+        asyncio.run(run())
+    else:
+        with pytest.raises(TelegramValidationTimeout):
+            asyncio.run(TelegramHttpsTransport("synthetic-token").__aenter__())
+    assert initializes == [0, 1]
+    assert sorted(shutdowns) == [0, 1, 2, 3]
 
 
 @pytest.mark.unit
@@ -855,7 +929,8 @@ def test_managed_https_transport_constructor_failure_closes_created_requests(
     class Request:
         next_index = 0
 
-        def __init__(self) -> None:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == MANAGED_REQUEST_TIMEOUTS
             self.index = Request.next_index
             Request.next_index += 1
             if fail_at == "second_request" and self.index == 1:
@@ -886,34 +961,52 @@ def test_managed_https_transport_constructor_failure_closes_created_requests(
 
 
 @pytest.mark.unit
-def test_managed_https_transport_uses_locked_ptb_bot_request_shape(
+def test_managed_https_transport_uses_locked_ptb_bounded_identity_retry_and_cache(
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     telegram = pytest.importorskip(
         "telegram",
         reason="requires the locked optional approval runtime",
     )
-    lifecycle: list[str] = []
+    request_kwargs: list[dict[str, object]] = []
+    requests: list[object] = []
+    original_request = telegram.request.HTTPXRequest
 
-    async def initialize(bot: object) -> None:
-        lifecycle.append("initialize")
+    def request_factory(**kwargs: object) -> object:
+        request_kwargs.append(kwargs)
+        request = original_request(**kwargs)
+        requests.append(request)
+        return request
 
-    async def shutdown(bot: object) -> None:
-        lifecycle.append("shutdown")
+    network_get_me_calls: list[dict[str, object]] = []
+    effects: list[object] = [
+        telegram.error.TimedOut("synthetic first-attempt timeout"),
+        {"id": 9001, "first_name": "synthetic", "is_bot": True},
+    ]
 
-    monkeypatch.setattr(telegram.Bot, "initialize", initialize)
-    monkeypatch.setattr(telegram.Bot, "shutdown", shutdown)
+    async def provider_post(bot: object, endpoint: str, **kwargs: object) -> object:
+        del bot
+        assert endpoint == "getMe"
+        network_get_me_calls.append(kwargs)
+        effect = effects.pop(0)
+        if isinstance(effect, BaseException):
+            raise effect
+        return effect
+
+    monkeypatch.setattr(telegram.request, "HTTPXRequest", request_factory)
+    monkeypatch.setattr(telegram.Bot, "_post", provider_post)
 
     async def run() -> None:
         transport = TelegramHttpsTransport("900000001:" + "A" * 35)
         async with transport:
-            assert transport._bot is not None
-            assert type(transport._request).__name__ == "HTTPXRequest"
-            assert type(transport._get_updates_request).__name__ == "HTTPXRequest"
+            assert (await transport.get_me("900000001:" + "A" * 35, timeout_seconds=5.0)).id == 9001
 
     asyncio.run(run())
     assert telegram.__version__ == "22.8"
-    assert lifecycle == ["initialize", "shutdown"]
+    assert len(network_get_me_calls) == 2
+    assert request_kwargs == [MANAGED_REQUEST_TIMEOUTS] * 4
+    assert len(requests) == 4
+    assert all(cast(Any, request)._client.is_closed for request in requests)
 
 
 @pytest.mark.unit
@@ -923,6 +1016,9 @@ def test_managed_https_transport_body_cancellation_shuts_down_once(
     lifecycle: list[str] = []
 
     class Request:
+        def __init__(self, **kwargs: object) -> None:
+            assert kwargs == MANAGED_REQUEST_TIMEOUTS
+
         async def shutdown(self) -> None:
             lifecycle.append("request_shutdown")
 
@@ -939,6 +1035,7 @@ def test_managed_https_transport_body_cancellation_shuts_down_once(
 
         async def initialize(self) -> None:
             lifecycle.append("initialize")
+            self.bot = SimpleNamespace(id=9001)
 
         async def shutdown(self) -> None:
             lifecycle.append("shutdown")

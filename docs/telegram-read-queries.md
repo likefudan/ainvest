@@ -25,10 +25,15 @@ creates or migrates it. SIGINT and SIGTERM stop polling, finish bounded cleanup,
 release the polling lease, and close the database engine. Live trading mode is
 rejected.
 
-The long-running process initializes one `python-telegram-bot` Bot and its two
-HTTP clients, then reuses that same client for Bot identity, polling, and reply
-delivery. Normal stop, startup failure, polling failure, and cancellation close
-the owned clients exactly once.
+Startup makes at most two bounded `python-telegram-bot` initialization attempts,
+using a fresh Bot and two fresh HTTP clients after a transient first failure.
+Each client fixes its connect/read/write/pool defaults at five seconds, so the
+`getMe` performed by `Bot.initialize()` is one of at most two bounded network
+identity calls. Failed-attempt clients close before retry. On success, the
+runner caches the initialized Bot's `User`; P05-T5 validates the exact configured
+Bot ID from that cache without another network call. The one successful Bot is
+then reused for polling and reply delivery. Normal stop, startup failure,
+polling failure, and cancellation close every owned client exactly once.
 
 The selected Telegram Bot must be enabled with its exact Bot ID, token, and at
 least one bound numeric `(user_id, private_chat_id)` pair. P05-T5 silently
@@ -47,8 +52,10 @@ file-secret:
 The file contains 1–128 visible ASCII characters, optionally followed by one
 LF. CRLF, whitespace, controls, extra lines, invalid UTF-8, symlinks, and
 oversized values are rejected. The chat cannot provide or select this value.
-It is revealed only inside the named account-bound display call and never
-appears in a reply, log, database row, snapshot, or error.
+The redacted `SecretStr` wrapper is retained through gateway startup. Plaintext
+is revealed only in the argument expression of the exact named account-bound
+display call, with no caller-local plaintext reference before or after that
+await, and never appears in a reply, log, database row, snapshot, or error.
 
 Account configuration is resolved lazily and independently from global startup
 configuration. Its precedence is explicit value, environment, dotenv, exact

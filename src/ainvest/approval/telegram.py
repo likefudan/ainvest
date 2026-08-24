@@ -198,6 +198,7 @@ class TelegramHttpsTransport:
         "_bot",
         "_error",
         "_get_updates_request",
+        "_identity",
         "_managed_token",
         "_request",
     )
@@ -206,6 +207,7 @@ class TelegramHttpsTransport:
         self._managed_token = managed_token
         self._bot: Any | None = None
         self._error: Any | None = None
+        self._identity: TelegramBotIdentity | None = None
         self._request: Any | None = None
         self._get_updates_request: Any | None = None
 
@@ -213,31 +215,48 @@ class TelegramHttpsTransport:
         if self._managed_token is None or self._bot is not None:
             raise TelegramTransportRejected
         telegram, error = _telegram_modules()
-        requests: list[Any] = []
-        try:
-            request = telegram.request.HTTPXRequest()
-            requests.append(request)
-            get_updates_request = telegram.request.HTTPXRequest()
-            requests.append(get_updates_request)
-            bot = telegram.Bot(
-                token=self._managed_token,
-                request=request,
-                get_updates_request=get_updates_request,
-            )
-        except Exception:
-            await _shutdown_requests(*requests)
-            raise TelegramTransportRejected from None
-        self._bot = bot
-        self._error = error
-        self._request = request
-        self._get_updates_request = get_updates_request
-        try:
-            await bot.initialize()
-        except BaseException:
-            await _shutdown_requests(request, get_updates_request)
-            self._clear_managed()
-            raise
-        return self
+        for attempt in range(2):
+            requests: list[Any] = []
+            try:
+                request = telegram.request.HTTPXRequest(
+                    connect_timeout=5.0,
+                    read_timeout=5.0,
+                    write_timeout=5.0,
+                    pool_timeout=5.0,
+                )
+                requests.append(request)
+                get_updates_request = telegram.request.HTTPXRequest(
+                    connect_timeout=5.0,
+                    read_timeout=5.0,
+                    write_timeout=5.0,
+                    pool_timeout=5.0,
+                )
+                requests.append(get_updates_request)
+                bot = telegram.Bot(
+                    token=self._managed_token,
+                    request=request,
+                    get_updates_request=get_updates_request,
+                )
+                await bot.initialize()
+                identity = TelegramBotIdentity.model_validate({"id": getattr(bot.bot, "id", None)})
+            except BaseException as exc:
+                await _shutdown_requests(*requests)
+                if isinstance(exc, asyncio.CancelledError):
+                    raise
+                if not isinstance(exc, Exception):
+                    raise
+                if _is_transient_validation_failure(exc, error):
+                    if attempt == 0:
+                        continue
+                    raise TelegramValidationTimeout from None
+                raise TelegramTransportRejected from None
+            self._bot = bot
+            self._error = error
+            self._identity = identity
+            self._request = request
+            self._get_updates_request = get_updates_request
+            return self
+        raise TelegramValidationTimeout
 
     async def __aexit__(
         self,
@@ -255,6 +274,7 @@ class TelegramHttpsTransport:
     def _clear_managed(self) -> None:
         self._bot = None
         self._error = None
+        self._identity = None
         self._request = None
         self._get_updates_request = None
 
@@ -271,6 +291,10 @@ class TelegramHttpsTransport:
         return self._bot, telegram, self._error
 
     async def get_me(self, token: str, *, timeout_seconds: float) -> TelegramBotIdentity:
+        if self._bot is not None:
+            if token != self._managed_token or self._identity is None:
+                raise TelegramTransportRejected
+            return self._identity
         try:
             bot, _, error = self._client(token)
             result = await bot.get_me(
@@ -656,12 +680,24 @@ def _failure(
 def _is_definitive_send_rejection(exc: Exception, error_module: Any) -> bool:
     """True only for Telegram responses proving the send was rejected."""
     types: list[type[Exception]] = []
-    for name in ("BadRequest", "Forbidden", "InvalidToken"):
+    for name in ("BadRequest", "Forbidden", "InvalidToken", "Conflict"):
         candidate = getattr(error_module, name, None)
         if isinstance(candidate, type) and issubclass(candidate, Exception):
             types.append(candidate)
     definitive_types = tuple(types)
     return bool(definitive_types) and isinstance(exc, definitive_types)
+
+
+def _is_transient_validation_failure(exc: Exception, error_module: Any) -> bool:
+    """Identify bounded identity failures that permit one fresh-client retry."""
+    if _is_definitive_send_rejection(exc, error_module):
+        return False
+    types: list[type[Exception]] = [TimeoutError]
+    for name in ("TimedOut", "NetworkError"):
+        candidate = getattr(error_module, name, None)
+        if isinstance(candidate, type) and issubclass(candidate, Exception):
+            types.append(candidate)
+    return isinstance(exc, tuple(types))
 
 
 async def _shutdown_requests(*requests: Any) -> None:

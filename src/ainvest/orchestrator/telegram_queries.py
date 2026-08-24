@@ -475,7 +475,7 @@ class ReadGatewayQueryExecutor:
         service: RobinhoodDisplayService,
         query: TelegramQuery,
         *,
-        account: str | None,
+        account: SecretStr | None,
     ) -> DisplaySuccess:
         command = query.command
         if command is TelegramQueryCommand.RH_STATUS:
@@ -484,22 +484,24 @@ class ReadGatewayQueryExecutor:
             return await service.accounts()
         if command is TelegramQueryCommand.PORTFOLIO:
             assert account is not None
-            return await service.portfolio(account)
+            return await service.portfolio(account.get_secret_value())
         if command is TelegramQueryCommand.POSITIONS:
             assert account is not None
-            return await service.positions(account)
+            return await service.positions(account.get_secret_value())
         if command is TelegramQueryCommand.ORDERS:
             assert query.order_view is not None
             filters = {} if not query.symbols else {"symbol": query.symbols[0]}
             assert account is not None
-            return await service.orders(account, view=query.order_view, filters=filters)
+            return await service.orders(
+                account.get_secret_value(), view=query.order_view, filters=filters
+            )
         if command is TelegramQueryCommand.QUOTES:
             return await service.quotes(query.symbols)
         if command is TelegramQueryCommand.PRICEBOOK:
             return await service.price_book(query.symbols)
         if command is TelegramQueryCommand.TRADABILITY:
             assert account is not None
-            return await service.tradability(account, query.symbols)
+            return await service.tradability(account.get_secret_value(), query.symbols)
         if command is TelegramQueryCommand.HISTORY:
             assert query.history_start is not None
             assert query.history_end is not None
@@ -524,7 +526,7 @@ class ReadGatewayQueryExecutor:
             )
         raise TelegramQueryInternalError
 
-    def _account(self) -> str:
+    def _account(self) -> SecretStr:
         try:
             account = self._account_loader()
         except RobinhoodAccountSecretInvalid:
@@ -533,7 +535,7 @@ class ReadGatewayQueryExecutor:
             raise AccountSecretInvalid from None
         if account is None:
             raise AccountSecretMissing
-        return account.get_secret_value()
+        return account
 
 
 @dataclass(slots=True)

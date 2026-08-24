@@ -1495,9 +1495,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   persist” means no database, cache, audit event, query record, snapshot, log,
   metric, trace, exception, Telegram message, or provider-result copy. The
   READ_BROKER subcomposition may retain only its redacted wrapper for its process
-  lifetime. Reveal plaintext inside the named account-bound display call only,
-  do not cache or return it, and release the local reference immediately after
-  that call (while acknowledging Python cannot guarantee memory zeroization).
+  lifetime and through gateway startup. Reveal plaintext only in the argument
+  expression of the exact named account-bound display call, do not assign it to
+  a caller-local variable, cache, or return it, and retain no caller-local
+  plaintext reference after that await (while acknowledging Python cannot
+  guarantee memory zeroization).
   The chat can neither supply nor select the value. Missing or invalid
   configuration maps respectively to `account_secret_missing` or
   `account_secret_invalid` before the gateway opens for `/portfolio`,
@@ -1650,9 +1652,15 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `load_settings`, require Paper/non-live mode and a complete selected Bot,
   require an existing migrated regular SQLite database without creating or
   migrating it, build the existing engine/session factory and P05-T5
-  `TelegramLongPoller`, initialize one runner-owned `TelegramHttpsTransport`
-  and its two HTTP clients once, reuse that same Bot for identity, ingress, and
-  action-free replies through `TelegramHttpsUpdateTransport`, and install
+  `TelegramLongPoller`, and initialize one runner-owned
+  `TelegramHttpsTransport`. Its managed startup owns the existing maximum of
+  two bounded network `getMe` attempts: every fresh Bot/two-client attempt fixes
+  connect/read/write/pool defaults at 5.0 seconds, a transient first
+  `Bot.initialize()` failure closes both clients before one fresh retry, and
+  every second failure or cancellation closes all created clients. After
+  success, cache the initialized Bot's typed `User` identity so P05-T5 exact-ID
+  validation makes no additional network call; reuse that same successful Bot
+  for ingress and action-free replies through `TelegramHttpsUpdateTransport`, and install
   SIGINT/SIGTERM shutdown through `AsyncioTelegramPollingControl`. A public
   async runner in `orchestrator/telegram_queries.py` accepts these typed
   dependencies for deterministic tests. `/help`, invalid input, rate rejection,
@@ -1702,8 +1710,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   ID or secret reference in replies/logs/errors/snapshots; omission markers and
   ASCII JSON escaping of Unicode format/bidi/control/separator text;
   non-comparable units; managed Bot startup/normal stop/fatal failure/
-  cancellation cleanup and one shared client across identity, polling, and
-  send; parked callback retry with no terminal row/digest/offset movement; and
+  cancellation cleanup, at most two 5-second-default network identity calls,
+  cached P05-T5 identity validation with no third call, and one successful
+  shared client across polling and send; account-wrapper reveal ordering around
+  gateway entry and the named call; parked callback retry with no terminal
+  row/digest/offset movement; and
   structural proof that the adapter
   cannot reach generic invoke, mutations, trading, Paper, Strategy, Sizer,
   Risk, a model/prompt, or a fallback provider. Use fake Telegram and gateway

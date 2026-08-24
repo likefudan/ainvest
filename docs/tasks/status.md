@@ -2801,9 +2801,13 @@ completed Paper approval path unlocks `P08-T13`, then
   `--env-file PATH` and `--secrets-dir PATH`. It uses `load_settings`, requires
   Paper/non-live mode and complete selected Bot config, opens an existing
   migrated regular SQLite database without schema creation, builds the existing
-  engine/session factory, `TelegramLongPoller`, one lifecycle-managed shared
-  HTTPS Bot/two-client transport reused for identity/update/plain-send, and an
-  `AsyncioTelegramPollingControl` wired to SIGINT/SIGTERM.
+  engine/session factory, `TelegramLongPoller`, and one lifecycle-managed HTTPS
+  Bot/two-client transport. Managed startup makes at most two network identity
+  calls through fresh clients with 5.0-second connect/read/write/pool defaults;
+  a transient first initialize failure closes before one retry, and every final
+  failure/cancellation cleans up. It caches the successful Bot `User`, so P05-T5
+  exact-ID validation adds no network call, then reuses that Bot for update and
+  plain-send. An `AsyncioTelegramPollingControl` is wired to SIGINT/SIGTERM.
   The public async runner accepts typed injected equivalents for tests. Help,
   invalid/rate-exhausted input, and account-secret failure happen before lazy
   gateway open. Every other admitted update owns one 12-second
@@ -2839,7 +2843,9 @@ completed Paper approval path unlocks `P08-T13`, then
   explicit > environment > dotenv > exact file-secret > injected YAML
   precedence; it does not redefine global `load_settings` or alter Telegram
   token loading. No source searches implicitly, and bad account input cannot
-  block startup or non-account commands.
+  block startup or non-account commands. The redacted wrapper survives gateway
+  startup; plaintext exists only as the exact named display-call argument
+  expression, never as a caller-local value before or after that await.
   The task card fixes the value's
   1–128 visible-ASCII grammar, optional single file-secret LF, rejected
   CRLF/whitespace/newlines, authorized at-rest storage, redacted process wrapper
