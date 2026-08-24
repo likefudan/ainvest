@@ -106,7 +106,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P06-T0` v0.3 refresh and the display-only lane are merged; Part 2 remains blocked only on canonical identity, account binding, and session evidence) |
 | Telegram Bot environment provisioning | Batch F add-on | `P05-T10` after merged `P05-T4` → `P05-T5` | `complete (merged)` through #135/#136; real staging/production validation remains owner-assisted and pending under proposed `DEC-010` |
-| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | `claimed/planning` on `agent/p05-t9-claim`; no implementation started |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | `complete (merged)` through #138/#139; real individual reads, Bot validation, and end-to-end Telegram evidence remain owner-assisted under proposed `DEC-010` |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -183,8 +183,10 @@ executable pin. Owner-assisted v0.3 status now reports ready; individual real
 reads remain later owner-assisted validation.
 `P05-T10` claim and implementation squash-merged in
 [#135](https://github.com/likefudan/ainvest/pull/135) and
-[#136](https://github.com/likefudan/ainvest/pull/136). `P05-T9` is now claimed
-for planning only; no implementation has started. Later candidates
+[#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim and
+implementation then squash-merged in [#138](https://github.com/likefudan/ainvest/pull/138)
+and [#139](https://github.com/likefudan/ainvest/pull/139), after the #140 pip
+security prerequisite and a final post-rebase review. Later candidates
 enter the merge queue only after their recorded dependencies are on `main`.
 The coordinator may reorder independent ready branches to reduce conflicts,
 but may not bypass the
@@ -559,16 +561,15 @@ Shared-surface ownership for this claim is exclusive:
 The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T4` pause on 2026-08-12; that notification/config task is now merged.
 `P05-T5` is merged with long polling and durable inbound deduplication.
-`P05-T10` provisioning/validation is merged, and P05-T9 is claimed for planning
-only with no implementation started. The original
+`P05-T10` provisioning/validation and P05-T9 Telegram display-only reads are
+merged. The original
 `P06-T0` adapter, runtime-dependency, hardening, and narrow `v0.3.0` pin
 refresh are merged and complete. No P06-T0 maintenance scope is active.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
-merged. P05-T9 is now the claimed planning task for the Telegram read-only
-display adapter; its
-implementation depends on the display projection plus merged `P05-T4`,
-`P05-T5`, and `P05-T10`. This claim starts no implementation or unrelated task
-chain.
+merged. Real individual Robinhood reads, P05-T10 real Bot
+provisioning/validation, and end-to-end Telegram reads are the remaining
+owner-assisted evidence under proposed `DEC-010`; no successor feature is
+claimed here.
 
 ##### Execution envelope: P08-T4
 
@@ -795,7 +796,7 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   Telegram, or Paper-promotion implementations.
 - **Status/owner:** `merged` / `completed` —
   `p06_t0_rh_mcp_v030_pin_refresh`. This completion record claims no new work;
-  P05-T10 is also merged and P05-T9 is now claimed for planning only.
+  P05-T10 and P05-T9 are also merged.
 - **Claim:** [#126](https://github.com/likefudan/ainvest/pull/126) was
   independently reviewed and squash-merged as
   `3d3f25ef8e7e2833aa70b62546a07fdbd46c71f3`.
@@ -894,12 +895,11 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   third-party hardening.
 - **Handoff and live validation:** the implementation completed latest-main
   rebase, independent functionality/readability review, remediation, required
-  checks, and squash merge. P05-T10 provisioning is now also merged; P05-T9 is
-  claimed for planning only and must use its own post-claim latest-main
-  rebase/review/squash workflow. Owner-assisted `rh-mcp v0.3.0 status` reports
-  ready; individual real read validation remains later owner-assisted evidence,
-  does not block offline implementation, and must not put credentials or
-  account data in Git, PRs, logs, or chat.
+  checks, and squash merge. P05-T10 provisioning and P05-T9 Telegram
+  display-only reads are also merged. Owner-assisted `rh-mcp v0.3.0 status`
+  reports ready; individual real reads, real Bot validation, and end-to-end
+  Telegram reads remain owner-assisted evidence and must not put credentials
+  or account data in Git, PRs, logs, or chat.
 - **Verification evidence:** the lock resolves
   166 packages and `lock-check` passes; hash-verifying `broker-install` installs
   `rh-mcp` `0.3.0`, and the PEP 610 probe verifies wheel digest
@@ -1431,12 +1431,11 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   instrument identity, (2) verified Agentic-account binding, and (3) verified
   US regular-session evidence. No
   Part 1 value may be promoted into Paper, Strategy, Sizer, or Risk.
-- **Next work:** P05-T10 Telegram Bot-environment provisioning and
-  validation is merged. P05-T9 is claimed for planning only for Telegram
-  read-only queries. It builds on the reusable display
-  service and merged P05-T4/P05-T5/P05-T10 boundaries. After this claim merges,
-  implementation starts its own latest-main rebase, independent review,
-  checks, and squash-merge workflow.
+- **Next work:** P05-T10 Telegram Bot-environment provisioning and P05-T9
+  Telegram display-only reads are merged. The next priority-lane evidence is
+  owner-assisted: individual real Robinhood reads, real staging/production Bot
+  provision/validation, and end-to-end Telegram reads under proposed
+  `DEC-010`. No successor feature is claimed by this completion update.
   The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
@@ -2020,12 +2019,11 @@ be started for it. On 2026-08-12 the owner explicitly lifted the separate
 `P05-T4` pause and authorized the serial Telegram transport chain to begin with
 that task only. Now that the `P06-T2` Part 1 display-only CLI, the
 `P05-T4`/`P05-T5` transport, and P05-T10 provisioning/validation boundary are
-merged, P05-T9 is claimed for planning only and no implementation has started.
-It must not wait for P06-T2
-Part 2 or mix the read surface with Paper promotion, Telegram approval, a
-non-trading mutation, or a trading capability. This separate claim must merge
-before P05-T9 implementation can begin from latest `main` and follow its own
-independent-review, checks, and squash-merge workflow.
+merged, P05-T9 is also complete and merged. It remains separate from P06-T2
+Part 2, Paper promotion, Telegram approval, non-trading mutations, and trading
+capabilities. Real individual reads, real Bot provisioning/validation, and the
+end-to-end Telegram read path now wait on owner-assisted evidence under
+proposed `DEC-010`.
 The unrelated `P04-T2` pause remains in force.
 
 #### Research track — `P04-T0` through `P04-T12`
@@ -2069,13 +2067,13 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged `P05-T4`, `P05-T5`, `P01-T4`, `P02-T6`; accepted `DEC-005`; real owner validation remains pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `claimed/planning` on `agent/p05-t9-claim` / `.worktrees/p05-t9-claim`, immutable base `24d49c7e2817aa7884a3e86abdefc30aefade5cf` | merged `P06-T2` Part 1, `P05-T4`, `P05-T5`, `P05-T10`, and current v0.3.0 P06-T0 pins; owner status reports ready and individual real reads remain later owner-assisted validation | docs-only claim; implementation reserved for `agent/p05-t9` / `.worktrees/p05-t9` from post-claim latest `main`; no implementation started |
+| `P05-T9` | `merged` / `completed` ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`) | merged `P06-T2` Part 1, `P05-T4`, `P05-T5`, `P05-T10`, and current v0.3.0 P06-T0 pins; owner status is ready | completed display-only Telegram adapter; real individual reads, real Bot validation, and end-to-end Telegram evidence remain owner-assisted under proposed `DEC-010` |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4`, `P05-T5`, and
-`P05-T10` are complete. This tracker update claims P05-T9 planning only and
-starts no implementation. `P05-T6` follows `P05-T1`.
+`P05-T10` and `P05-T9` are complete. This tracker update claims no successor
+implementation. `P05-T6` follows `P05-T1`.
 `P05-T9` is a display-only add-on, not a Gate 3 dependency and not an approval
-path; it is claimed for planning only and implementation has not started. The
+path; its offline implementation is complete. The
 completed Paper approval path unlocks `P08-T13`, then
 `P05-T8`.
 
@@ -2085,8 +2083,8 @@ completed Paper approval path unlocks `P08-T13`, then
 - **Status/owner:** `merged` — implementation owner
   `p05_t4_telegram_notifications`. The owner explicitly lifted the prior pause
   on 2026-08-12. This completed only `P05-T4`; the separate `P05-T5` work
-  below is now merged. P05-T10 provisioning is also merged; P05-T9 is now
-  claimed for planning only.
+  below is now merged. P05-T10 provisioning and P05-T9 Telegram display-only
+  reads are also merged.
 - **Claim branch/worktree/base:** `agent/p05-t4-claim` /
   `.worktrees/p05-t4-claim`, based on immutable `main`
   `e605558bbae6d71e66f01551192b964f23334094`. After this tracker claim is
@@ -2321,10 +2319,9 @@ completed Paper approval path unlocks `P08-T13`, then
   Until then the real adapter stays disabled and real `getMe`/private-message
   validation is unverified. This does not block deterministic offline
   implementation, review, or merge.
-- **Serial handoff:** `P05-T4`, `P05-T5`, and P05-T10 are complete. P05-T9 is
-  claimed for planning only; implementation has not started and requires the
-  full post-claim latest-main rebase, independent-review, checks, and
-  squash-merge workflow.
+- **Serial handoff:** `P05-T4`, `P05-T5`, P05-T10, and P05-T9 are complete.
+  Real staging/production Bot and end-to-end read validation remains
+  owner-assisted under proposed `DEC-010`.
 
 ##### Execution envelope: P05-T5
 
@@ -2595,10 +2592,8 @@ completed Paper approval path unlocks `P08-T13`, then
   proposal mutation, audit/outbox business event, broker/Paper/Robinhood call,
   model/prompt, webhook server, new dependency, or live capability. This
   implementation merged only after the latest-main/review/checks workflow
-  completed. P05-T10 provisioning/validation is merged. P05-T9 is now claimed
-  for planning only; after this claim merges, implementation must begin from
-  latest `main` and repeat the full independent-review, checks, and
-  squash-merge workflow.
+  completed. P05-T10 provisioning/validation and P05-T9 Telegram display-only
+  reads are merged.
 
 ##### Completion envelope: P05-T10
 
@@ -2695,31 +2690,66 @@ completed Paper approval path unlocks `P08-T13`, then
   tokens, expected Bot IDs, and bound numeric recipient pairs remain pending
   owner-assisted environment evidence under proposed `DEC-010`. This is not a
   code blocker and `DEC-010` remains proposed.
-- **Serial handoff:** P05-T9's separate docs-only planning claim is now active.
-  No implementation has started. After the claim squash-merges, implementation
-  requires latest-main rebase, independent review, passing checks, and squash
-  merge.
+- **Serial handoff:** P05-T9's separate claim and implementation are merged.
+  The remaining real Bot and end-to-end validation is owner-assisted and does
+  not reopen the completed offline task.
 
-##### Claim and execution envelope: P05-T9
+##### Completion envelope: P05-T9
 
 - **Title/status:** Expose Display-Only Robinhood Queries in Telegram —
-  `claimed/planning`; this record changes planning and tracker state only.
+  `merged` / `completed`; this completion record claims no successor work.
   [#119](https://github.com/likefudan/ainvest/pull/119) assigned the unique task
   ID; it did not claim or implement the task.
-- **Claim branch/worktree/base:** `agent/p05-t9-claim` /
-  `.worktrees/p05-t9-claim`, based on immutable latest `main`
-  `24d49c7e2817aa7884a3e86abdefc30aefade5cf`. The reserved implementation is
-  `agent/p05-t9` / `.worktrees/p05-t9`; create it only after this claim
-  squash-merges, from the then-latest `main`, and record that exact immutable
-  base before code changes.
-- **Serial unlock:** merged `P06-T2` Part 1, `P05-T4`, and `P05-T5` satisfy the
+- **Claim and implementation:** the docs claim used historical
+  `agent/p05-t9-claim` / `.worktrees/p05-t9-claim` from immutable base
+  `24d49c7e2817aa7884a3e86abdefc30aefade5cf` and squash-merged in
+  [#138](https://github.com/likefudan/ainvest/pull/138) as
+  `c40b82486a85867742a2f8fbfb516057b4130db5`. Implementation used historical
+  `agent/p05-t9` / `.worktrees/p05-t9`; after review it rebased onto the
+  independently approved pip prerequisite [#140](https://github.com/likefudan/ainvest/pull/140),
+  squash `a6bcf1a711e95abfac7e605d5ccb9a6f395ae4cc`, and squash-merged in
+  [#139](https://github.com/likefudan/ainvest/pull/139) as
+  `67821569ba90884c522e8fb7efc341e24f597a3e`.
+- **Claim review evidence:** [first review](https://github.com/likefudan/ainvest/pull/138#issuecomment-5358099207),
+  [remediation](https://github.com/likefudan/ainvest/pull/138#issuecomment-5358262728),
+  and [approval](https://github.com/likefudan/ainvest/pull/138#issuecomment-5358305214)
+  bind the final claim contract to its approved exact head before squash.
+- **Implementation review and rebase evidence:** [first functionality,
+  security, and readability review](https://github.com/likefudan/ainvest/pull/139#issuecomment-5359059326),
+  [first remediation](https://github.com/likefudan/ainvest/pull/139#issuecomment-5362069806),
+  [second review](https://github.com/likefudan/ainvest/pull/139#issuecomment-5362168823),
+  [second remediation](https://github.com/likefudan/ainvest/pull/139#issuecomment-5402855806),
+  and [third-round approval](https://github.com/likefudan/ainvest/pull/139#issuecomment-5402886436)
+  closed the implementation findings. The separate pip security prerequisite
+  received [independent approval](https://github.com/likefudan/ainvest/pull/140#issuecomment-5402956106)
+  and squash-merged before the implementation branch was
+  [rebased and reverified](https://github.com/likefudan/ainvest/pull/139#issuecomment-5402994569).
+  The [final post-rebase independent approval](https://github.com/likefudan/ainvest/pull/139#issuecomment-5403012527)
+  verified range-diff equivalence, exact base/head, required green CI, and no
+  P05-T9 semantic drift.
+- **Post-rebase verification:** the canonical focused suite passed 302 tests
+  plus one explicit optional-runtime skip; the locked PTB/broker focused suite
+  passed 303. Unit passed 1,523 plus one skip, contract 203, integration 53,
+  and combined verify 1,779 plus one skip, with 87.30% coverage. Ruff/format,
+  mypy across 259 source files, lock-check, dependency audit, `git diff
+  --check`, scope, secret, architecture, readability, and duplicate-helper
+  checks passed. Exact-head Verify, Dependency audit, Secret scan, SAST, and
+  CodeQL were green before squash merge.
+- **Owner-assisted validation and next priority:** `rh-mcp v0.3.0 status` is
+  already verified `ready=true`. Individual real Robinhood reads, real P05-T10
+  staging/production Bot provision and validation, and end-to-end Telegram
+  reads remain owner-assisted evidence under proposed `DEC-010`. They are not
+  incomplete offline code, and this tracker cleanup does not claim another
+  feature while that evidence is unavailable.
+- **Dependency history:** merged `P06-T2` Part 1, `P05-T4`, and `P05-T5`
+  satisfied the
   existing dependencies, and P05-T10 is merged. Real staging/production Bot
   values and validation remain owner-assisted and pending under proposed
-  `DEC-010`, which keeps real Telegram integration disabled but does not block
-  deterministic offline implementation. Owner-assisted `rh-mcp v0.3.0 status`
+  `DEC-010`, which keeps real Telegram integration disabled but did not block
+  the completed deterministic offline implementation. Owner-assisted `rh-mcp v0.3.0 status`
   is verified `ready=true` against manifest version `2026.08.12` and digest
   `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`;
-  individual real reads may be validated later and are not an offline
+  individual real reads may be validated later and were not an offline
   implementation prerequisite. `P05-T9` is a display-only add-on and
   is not required by Gate 3 or `P06-T2` Part 2.
 - **Architecture correction:** `approval -> execution` is forbidden by the
