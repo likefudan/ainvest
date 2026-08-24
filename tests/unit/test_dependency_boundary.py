@@ -221,12 +221,13 @@ def test_the_broker_extra_declares_exactly_the_pinned_wheel(
 def test_console_scripts_are_narrow_and_additive(
     pyproject: dict[str, Any],
 ) -> None:
-    """The read CLI gets one entry point and does not replace existing tools."""
+    """Each narrow executable gets one entry point without replacing existing tools."""
     assert pyproject["project"]["scripts"] == {
         "ainvest-strategy-conformance": "ainvest.strategy_conformance.cli:main",
         "ainvest-paper-flow": "ainvest.orchestrator.cli:main",
         "ainvest-robinhood-read": "ainvest.execution.robinhood.cli:main",
         "ainvest-telegram-provision": "ainvest.approval.telegram_provisioning:main",
+        "ainvest-telegram-read": "ainvest.orchestrator.telegram_queries:main",
     }
 
 

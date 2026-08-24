@@ -11,6 +11,14 @@ from ainvest.orchestrator.approval_stub import (
 )
 from ainvest.orchestrator.fixtures import make_paper_flow_config
 from ainvest.orchestrator.paper_loop import PaperFlowConfig, run_paper_flow
+from ainvest.orchestrator.telegram_queries import (
+    TelegramQuery,
+    TelegramQueryCommand,
+    TelegramQueryError,
+    TelegramQueryHandler,
+    parse_telegram_query,
+    run_telegram_read,
+)
 from ainvest.orchestrator.types import (
     DEFAULT_AS_OF,
     PaperFlowResult,
@@ -25,8 +33,14 @@ __all__ = [
     "PaperFlowResult",
     "PaperFlowTerminal",
     "StepRecord",
+    "TelegramQuery",
+    "TelegramQueryCommand",
+    "TelegramQueryError",
+    "TelegramQueryHandler",
     "consume_challenge",
     "create_challenge",
     "make_paper_flow_config",
+    "parse_telegram_query",
     "run_paper_flow",
+    "run_telegram_read",
 ]
