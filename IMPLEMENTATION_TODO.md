@@ -211,9 +211,10 @@ Primary parallelization opportunities:
   `b72104232947472346dd7978b8652672125a3dca` and
   [#143](https://github.com/likefudan/ainvest/pull/143) as
   `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is now the single
-  executable dependency authority. Owner-assisted `rh-mcp v0.3.3`
-  `auth-status`/`status`, representative real reads, and Telegram end-to-end
-  display remain later validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  executable dependency authority. Owner-assisted validation on 2026-08-26
+  verified `rh-mcp v0.3.3` `auth-status`/`status`, the staging Bot, and
+  Telegram status/accounts/quote display. Production Bot validation and the
+  claimed account-bound/history follow-ups remain. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
   [#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim
@@ -227,10 +228,10 @@ Primary parallelization opportunities:
   [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` then
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
-  long polling and durable inbound deduplication. Real individual Robinhood
-  reads, real P05-T10 Bot provisioning/validation, and end-to-end Telegram
-  reads remain owner-assisted validation under proposed `DEC-010`; they are
-  not unfinished P05-T9 code.
+  long polling and durable inbound deduplication. Staging Bot provisioning and
+  end-to-end status/accounts/quote reads are verified. Production Bot
+  validation, secure account binding, and bounded history display remain
+  owner-assisted follow-up evidence under proposed `DEC-010`.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1096,9 +1097,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   independently reviewed implementation squash-merged in
   [#136](https://github.com/likefudan/ainvest/pull/136) as `69e8831`.
   P05-T9's separate claim and implementation are now merged through #138/#139.
-  Owner-assisted validation with real staging and
-  production Bots remains pending deployment evidence under proposed
-  `DEC-010`; it was not an offline implementation or CI blocker.
+  Owner-assisted staging Bot provisioning and validation succeeded on
+  2026-08-26. Production Bot validation remains pending deployment evidence
+  under proposed `DEC-010`; it was not an offline implementation or CI blocker.
 - **Dependencies:** merged P05-T4, P05-T5, P01-T4, and P02-T6; accepted
   `DEC-005`; and the staging/production identity shape proposed in `DEC-010`.
   This card does not accept `DEC-010` or invent any owner-controlled token or
@@ -1320,9 +1321,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   database/filesystem fence. Focused tests, `./scripts/dev unit`,
   `./scripts/dev contract`,
   `./scripts/dev integration`, `git diff --check`, and `./scripts/dev verify`
-  pass. Owner-assisted real staging/production validation is recorded
-  separately and may remain pending under proposed `DEC-010` after offline
-  implementation merge.
+  pass. Owner-assisted staging validation is recorded separately as verified;
+  production validation remains pending under proposed `DEC-010`.
 
 ### P05-T9 — Expose Display-Only Robinhood Queries in Telegram
 
@@ -1355,7 +1355,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   Owner-assisted validation on 2026-08-26 subsequently proved the pinned
   `v0.3.3` gateway ready and the Telegram `/rh_status`, `/accounts`, and
   `/quotes AAPL` paths successful. It also exposed a bounded-output defect:
-  `/history AAPL 1d` returned sanitized `result_too_large`. The narrow history
+  `/history AAPL 1d` completed its gateway read and normalization, but the
+  local Telegram post-render reply exceeded 3,500 code points and was replaced
+  with sanitized `result_too_large`. The narrow history
   interval maintenance contract below is therefore `in_progress` as a new
   independently reviewed follow-up; it does not reopen any other P05-T9
   behavior.
@@ -1862,11 +1864,20 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   selected environment's `ainvest-telegram-read` process through the external
   process manager; the explicit acknowledgement is the authoritative boundary.
   For `provision` and `disable`, wait a fixed bounded period for any old P05-T5
-  lease, then reuse the existing payload-free maintenance-lease coordination
-  and reverify ownership immediately before every filesystem mutation. Do not
-  create another lease/table or infer that an idle lease alone proves the
-  process stopped. `validate` is read-only and requires neither the stop
-  acknowledgement nor database mutation.
+  lease, then reuse the public
+  `ainvest.approval.telegram_maintenance.TelegramPollingMaintenanceLease` and
+  reverify ownership immediately before every filesystem mutation. Extract the
+  current private P05-T10 `_MaintenanceLease` and its policy into that module as
+  `TelegramPollingMaintenanceLease` and
+  `TelegramMaintenanceLeasePolicy`; P05-T10 must import and use this same
+  implementation while retaining its existing public `LeasePolicy`
+  compatibility name and exact four commands. Do not duplicate or import the
+  old private logic. The public lease remains best-effort database coordination,
+  not a filesystem fence. It reuses the existing P05-T5 poll-state repository
+  and table unchanged: no migration, schema, table, or payload column is
+  authorized. Do not infer that an idle lease alone proves the process stopped.
+  `validate` is read-only and requires neither the stop acknowledgement nor
+  database mutation.
 - **Sanitized CLI and lifecycle:** stdout contains one compact fixed-shape JSON
   success record with only `command`, `environment`, and `status`; stderr uses
   stable value-free error codes and never provider message text, arguments,
@@ -1881,13 +1892,23 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   console entry in `pyproject.toml`; the strict mode/source change in
   `src/ainvest/config/settings.py` and narrow export changes in
   `src/ainvest/config/__init__.py`; new
+  `src/ainvest/approval/telegram_maintenance.py`; narrow extraction/import and
+  compatibility-export changes in
+  `src/ainvest/approval/telegram_provisioning.py` and
+  `src/ainvest/approval/__init__.py`; new
+  `tests/unit/approval/test_telegram_maintenance.py` plus narrow updates to
+  `tests/unit/approval/test_telegram_provisioning.py`; new
   `tests/unit/orchestrator/test_robinhood_account_provisioning.py`; narrow
   additions to `tests/unit/config/test_settings.py`,
   `tests/unit/test_dependency_boundary.py`, and
   `tests/unit/architecture/test_package_boundaries.py`; and
   `docs/robinhood-account-binding.md`, `docs/telegram-read-queries.md`, and
   `.env.example` only to replace the old env/dotenv precedence guidance with
-  the file-only operator workflow. P05-T10, P05-T5 ingress, P06 read client,
+  the file-only operator workflow. The source tightening is wholly contained
+  in the allowed config loader; P05-T11 neither needs nor may edit
+  `src/ainvest/orchestrator/telegram_queries.py`. Apart from the exact public
+  lease extraction above, P05-T10 and its command behavior are read-only.
+  P05-T5 ingress, P06 read client,
   gateway composition, mappers/display service, dependencies/lock, schemas,
   migrations, and every other production path are read-only. Any required
   expansion stops for coordinator approval.
@@ -1996,8 +2017,9 @@ consumable release artifact.
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
   `v0.3.3` is the current executable dependency authority; `v0.2.0` is
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
-  v0.3.3 status remains pending; individual real reads, real Bot validation, and
-  end-to-end Telegram reads remain owner-assisted validation.
+  v0.3.3 status, staging Bot validation, and status/accounts/quote reads are
+  verified as of 2026-08-26; production Bot validation and the claimed
+  account-bound/history follow-ups remain owner-assisted.
 - **Current maintenance implementation:** the executable pin refresh from
   `v0.3.0` to the public `v0.3.3` release completed under the exact execution
   envelope in `docs/tasks/status.md`. Claim
@@ -2649,8 +2671,8 @@ line.
    dependency authority.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
-   values stay manual, and owner-assisted staging/production validation remains
-   pending under proposed `DEC-010` after the deterministic offline merge.
+   values stay manual. Staging validation succeeded on 2026-08-26; production
+   validation remains pending under proposed `DEC-010`.
 3. `P05-T9` Telegram display-only queries are merged through #138/#139.
    Owner-assisted v0.3.3 auth/readiness, staging Bot provisioning, and
    Telegram status/accounts/quote paths are verified. Its claimed history
