@@ -1450,7 +1450,8 @@ invoke only its existing 10 named read operations. Its serial merge order is:
 - **Status/owner:** `in_review` / `p06_t0_rh_mcp_v033_pin_refresh`. Claim
   [#142](https://github.com/likefudan/ainvest/pull/142) squash-merged as
   `b72104232947472346dd7978b8652672125a3dca`; the separate implementation
-  changes the executable pin only when independently reviewed and merged.
+  [#143](https://github.com/likefudan/ainvest/pull/143) is Draft and changes
+  the executable pin only when independently reviewed and merged.
 - **Branch/worktree/base:** `agent/rh-mcp-v033-pin` /
   `.worktrees/rh-mcp-v033-pin`, based on exact claim squash
   `b72104232947472346dd7978b8652672125a3dca`.
