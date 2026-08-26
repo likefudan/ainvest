@@ -114,8 +114,8 @@ automatically.
 ## Current real-provider readiness
 
 Offline fixture, contract, and integration tests do not require credentials or
-network access. Ainvest pins the independently reviewed `rh-mcp` `v0.3.0`
-artifact and its 54-entry `2026.08.12` manifest. Owner-assisted validation of
+network access. Ainvest pins the independently audited `rh-mcp` `v0.3.3`
+artifact and its 54-entry `2026.08.22` manifest. Owner-assisted validation of
 the installed artifact against the current live provider surface remains
 pending and is not an offline test blocker. Never bypass or special-case a
 not-ready result: any future artifact, manifest, schema, classification, or

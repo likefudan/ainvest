@@ -26,7 +26,7 @@ from ainvest.execution.robinhood.pins import (
 )
 from ainvest.execution.robinhood.read_client import GatewayPort, RobinhoodReadClient
 
-FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.0"
+FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.3"
 SCHEMA_DIGEST: Final = f"sha256:{'3' * 64}"
 RESULT_DIGEST: Final = f"sha256:{'4' * 64}"
 OBSERVED_AT: Final = "2026-08-08T15:00:02Z"

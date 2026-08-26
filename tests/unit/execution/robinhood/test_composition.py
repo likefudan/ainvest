@@ -1,7 +1,7 @@
 """`open_read_gateway`: the only place the recomputed pin is consumed.
 
 `tests/contract/execution/test_rh_mcp_manifest_contract.py` proves
-``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.3.0` manifest.
+``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.3.3` manifest.
 That proof is worth nothing if the runtime path passes a different value to
 ``GatewayConfig``, and until this file existed nothing executed that path:
 replacing the pin at the call site with sixty-four zeroes left the whole suite
@@ -39,7 +39,7 @@ import pytest
 
 # The installed wheel, imported here so the assertions below compare against
 # `rh-mcp`'s own objects rather than against a description of them. `rh-mcp`
-# `v0.3.0` ships no `py.typed`, so mypy sees these as untyped; the adapter's
+# `v0.3.3` ships no `py.typed`, so mypy sees these as untyped; the adapter's
 # typed boundary is `PublishedSurface`, not these modules.
 import rh_mcp.config  # type: ignore[import-untyped]
 import rh_mcp.gateway  # type: ignore[import-untyped]
@@ -139,7 +139,7 @@ def test_the_gateway_is_configured_with_the_recomputed_pin() -> None:
     # the call site reads would still pass if both moved together, which is
     # precisely the mutation this file exists to catch.
     assert surface.configs[0]["expected_manifest_digest"] == (
-        "sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f"
+        "sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc"
     )
 
 

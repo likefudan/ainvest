@@ -3,7 +3,7 @@
 P06-T0 only. The gateway itself — OAuth, DCR, PKCE, refresh, the credential
 store protocol, private MCP SDK v2 transport, session lifecycle, bounded
 pagination, tool discovery, the reviewed capability manifest and its digests,
-and default-deny enforcement — is owned by `rh-mcp` and pinned at `v0.3.0`.
+and default-deny enforcement — is owned by `rh-mcp` and pinned at `v0.3.3`.
 This package pins that release, verifies it, narrows it to a read projection,
 and hands validated payloads to P06-T1.
 """

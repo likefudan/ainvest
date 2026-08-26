@@ -71,7 +71,7 @@ External data
 30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 32. The pinned `rh-mcp` manifest must match its independently reviewed exact
-    capability sets and `mutates` flags. The current executable `v0.3.0`
+    capability sets and `mutates` flags. The current executable `v0.3.3`
     artifact has 35 reads, 11 explicitly reviewed non-trading
     mutations, and 8 denied trading capabilities across 54 entries; the
     additional read does not widen ainvest's
@@ -105,7 +105,7 @@ External data
   [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Non-Trading Gateway.
   `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
   ainvest consumes only its pinned, SDK-neutral capability/result contract.
-  The pinned `v0.3.0` surface is 35 reads plus 11 non-trading mutations, while
+  The pinned `v0.3.3` surface is 35 reads plus 11 non-trading mutations, while
   ainvest exposes only its existing 10-operation named read projection. All 8
   trading capabilities and every unknown capability are denied.
 - Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
@@ -205,12 +205,12 @@ Primary parallelization opportunities:
   display-only priority lane through `P06-T2` Part 1 is merged. The narrow
   `P06-T0` runtime refresh to reviewed `rh-mcp` `v0.3.0` also merged through
   [#126](https://github.com/likefudan/ainvest/pull/126) and
-  [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
-  current executable dependency authority. A narrow `v0.3.3` maintenance
-  refresh is now claimed under P06-T0 but remains non-executable until its
-  separate implementation is independently reviewed and squash-merged.
-  Owner-assisted `rh-mcp v0.3.0`
-  status validation reports ready; individual real reads remain later
+  [#127](https://github.com/likefudan/ainvest/pull/127). The narrow `v0.3.3`
+  maintenance claim merged through
+  [#142](https://github.com/likefudan/ainvest/pull/142); its separate
+  implementation is in review and becomes the executable dependency authority
+  only when squash-merged. Owner-assisted `rh-mcp v0.3.3` status and individual
+  real reads remain later
   owner-assisted validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
@@ -1355,10 +1355,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
-  `v0.3.0` release is merged and is the current executable authority.
-  Owner-assisted `rh-mcp v0.3.0 status` is verified `ready=true` against
-  manifest version `2026.08.12` and digest
-  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`.
+  `v0.3.3` release is in review and becomes the executable authority only when
+  squash-merged. Owner-assisted `rh-mcp v0.3.3 status` remains pending against
+  manifest version `2026.08.22` and digest
+  `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
   Individual real reads may remain owner-assisted until after the offline
   merge and do not authorize credentials, network calls, or account data in
   implementation or CI.
@@ -1681,7 +1681,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   and account-secret validation happen before lazy gateway open. Every other
   admitted command opens one per-update `open_read_gateway()` context; that
   existing ainvest context constructs pinned `GatewayConfig`, opens the actual
-  `rh-mcp v0.3.0` async context, verifies the read projection and readiness,
+  `rh-mcp v0.3.3` async context, verifies the read projection and readiness,
   yields `RobinhoodReadClient`, and closes the provider session on context exit.
   The handler builds `RobinhoodDisplayService` inside that scope and performs
   exactly one named call. On normal stop, fatal startup/polling failure, or
@@ -1780,7 +1780,7 @@ envelope.
 
 Its OAuth credential is itself trading-capable, so the real boundary is the
 reviewed, digest-pinned manifest — not a token scope, and not the word
-"read-only". The pinned `v0.3.0` manifest allows exactly 35 `mutates=false`
+"read-only". The pinned `v0.3.3` manifest allows exactly 35 `mutates=false`
 reads and 11 reviewed `mutates=true` watchlist/saved-scan mutations, and
 permanently denies 8 order-placement, cancellation, option-exercise, and
 order-review capabilities. Ainvest exposes only the pre-existing 10-operation
@@ -1797,7 +1797,7 @@ requires its own explicitly named task card and tracker entry.
 The gateway likewise does not strip **provider-controlled instructional
 prose**. Provider `guide`, tool descriptions, and schema descriptions ride
 inside result envelopes and inside the reviewed manifest itself. `rh-mcp`
-never executes them, but it hands them to us verbatim, and the `v0.3.0` review
+never executes them, but it hands them to us verbatim, and the `v0.3.3` audit
 records
 discarding them as an ainvest consumer requirement. Treat that text as
 untrusted data across all of Phase 06: it must not reach a model prompt,
@@ -1807,7 +1807,7 @@ P06-T0 was blocked until that implementation had an independently reviewed
 tagged SemVer release, an immutable artifact with source provenance and an
 artifact digest/checksum, and a committed full-manifest digest. Reviewed
 `rh-mcp` `v0.2.0` satisfied the original integration. Reviewed and publicly
-verified `v0.3.0` now satisfies the maintenance-refresh prerequisite; its exact
+verified `v0.3.3` now satisfies the maintenance-refresh prerequisite; its exact
 tag, commit, artifacts, provenance, manifest, envelope, and review evidence are
 recorded under "Current executable dependency pin" in
 `docs/tasks/status.md`. The prior pin remains separately recorded as historical
@@ -1823,11 +1823,11 @@ consumable release artifact.
 - **Maintenance completion:** the original adapter/runtime/hardening work and
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
-  `v0.3.0` is the current executable dependency authority; `v0.2.0` is
+  `v0.3.3` is the current executable dependency authority; `v0.2.0` is
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
-  v0.3 status reports ready; individual real reads, real Bot validation, and
+  v0.3.3 status remains pending; individual real reads, real Bot validation, and
   end-to-end Telegram reads remain owner-assisted validation.
-- **Next maintenance claim:** refresh the executable pin from `v0.3.0` to the
+- **Current maintenance implementation:** refresh the executable pin from `v0.3.0` to the
   public `v0.3.3` release under the exact execution envelope in
   `docs/tasks/status.md` and Draft claim
   [#142](https://github.com/likefudan/ainvest/pull/142). The owner explicitly directed ainvest to use the
@@ -1841,8 +1841,8 @@ consumable release artifact.
   Their exact-artifact and manual future-schema-review controls remain binding,
   alongside the separate consumer requirements for public-only imports,
   provider-prose discard, the ten-read projection, and owner-assisted real
-  validation. The Draft claim still requires normal independent review, and
-  both claim and implementation may have no unresolved P0-P3 finding at merge.
+  validation. The implementation still requires normal independent review, and
+  the implementation may have no unresolved P0-P3 finding at merge.
   The accepted P2 residuals count as resolved only while every recorded control
   is satisfied; a control violation or new finding blocks merge.
   `v0.3.3` changes no runtime Python module under `src/rh_mcp` other than its
@@ -1860,7 +1860,7 @@ consumable release artifact.
   digest/checksum, committed reviewed capability manifest, and full-manifest
   digest recorded in `docs/tasks/status.md`. The core dependency was satisfied
   by reviewed `v0.2.0`; the maintenance dependency is now satisfied by
-  reviewed and publicly verified `v0.3.0`. Take every current executable value
+  reviewed and publicly verified `v0.3.3`. Take every current executable value
   from "Current executable dependency pin" in `docs/tasks/status.md`. Do not
   infer a pin
   from package version or transcribe one from release prose or a changelog;
@@ -2010,7 +2010,7 @@ consumable release artifact.
 - **Dependencies:** Part 1 depends on P06-T0, completed P06-T1 normalization,
   P03-T16, and P08-T0. Part 2 additionally requires trustworthy canonical
   instrument identity, verified Agentic-account binding, and regular-session
-  evidence. The current `rh-mcp` `v0.3.0` pin supplies the reviewed provider
+  evidence. The current `rh-mcp` `v0.3.3` pin supplies the reviewed provider
   surface but does not supply those three promotion prerequisites or promote
   display data into Paper.
 - **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
@@ -2467,14 +2467,14 @@ line.
    step in this display-only lane is complete, and `P06-T0`, `P06-T1`, and
    `P06-T2` Part 1 are merged. The narrow `P06-T0` maintenance refresh to
    independently reviewed `v0.3.0` also merged through #126/#127 without
-   reopening the adapter or normalization scope; `v0.3.0` is the current
+   reopening the adapter or normalization scope; `v0.3.3` is the current
    executable dependency authority.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
    values stay manual, and owner-assisted staging/production validation remains
    pending under proposed `DEC-010` after the deterministic offline merge.
 3. `P05-T9` Telegram display-only queries are complete and merged through
-   #138/#139. Owner-assisted v0.3 status reports ready; individual real
+   #138/#139. Owner-assisted v0.3.3 status remains pending; individual real
    Robinhood reads, real P05-T10 staging/production Bot provision/validation,
    and end-to-end Telegram reads remain the next priority-lane evidence under
    proposed `DEC-010`.
