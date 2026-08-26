@@ -1,12 +1,12 @@
 """Pinned identity of the external `rh-mcp` Non-Trading Gateway (P06-T0).
 
 Every current value here is transcribed from **one** authority: the
-``Current executable dependency pin: likefudan/rh-mcp v0.3.0`` subsection of
+``Current executable dependency pin: likefudan/rh-mcp v0.3.3`` subsection of
 `docs/tasks/status.md`. Nothing here is inferred from a package version or
 release prose: the tagged source, public artifacts, and artifact-shipped
 manifest were independently verified. The historical
 :data:`REJECTED_CHANGELOG_MANIFEST_DIGEST` remains a regression for an earlier
-``v0.2.0`` documentation mismatch; it is not a candidate ``v0.3.0`` value.
+``v0.2.0`` documentation mismatch; it is not a candidate ``v0.3.3`` value.
 
 Two pins answer different questions and move independently: the package
 version says *which code*, the full-manifest digest says *which permission
@@ -18,7 +18,7 @@ read-only projection** — ``RobinhoodGateway.invoke()`` accepts any *allowed*
 capability, including the 11 approved non-trading mutations — so narrowing to
 reads is ainvest adapter code (`IMPLEMENTATION_TODO.md` rules 20 and 32).
 ``tests/contract/execution/test_rh_mcp_manifest_contract.py`` recomputes the
-full-manifest digest from the committed ``v0.3.0`` manifest with an
+full-manifest digest from the committed ``v0.3.3`` manifest with an
 independent ``rh-canon-1`` implementation and compares every name set below
 against that manifest, so these are checked values rather than prose.
 """
@@ -36,22 +36,22 @@ from typing import Final
 RH_MCP_DISTRIBUTION: Final = "rh-mcp"
 
 #: Annotated tag of the reviewed release. Never a branch or a mutable tag.
-PINNED_RELEASE_TAG: Final = "v0.3.0"
+PINNED_RELEASE_TAG: Final = "v0.3.3"
 
 #: ``Version:`` recorded in the wheel's ``METADATA``.
-PINNED_PACKAGE_VERSION: Final = "0.3.0"
+PINNED_PACKAGE_VERSION: Final = "0.3.3"
 
 #: Source provenance only. A source commit is evidence, never the consumable
 #: dependency — the consumable dependency is the release artifact below.
-PINNED_SOURCE_COMMIT: Final = "078b1e6cc8bce050dfbdd59446162d489cf57b06"
+PINNED_SOURCE_COMMIT: Final = "68830c28db67632044f078c78b364622d9b66e16"
 
-PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.3.0-py3-none-any.whl"
-PINNED_WHEEL_SHA256: Final = "1dbd512c51e6bc0f5a90626d5a562ca4d79f3b6c5cb1ee24be9c1af24045b76e"
-PINNED_WHEEL_SIZE_BYTES: Final = 202_632
+PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.3.3-py3-none-any.whl"
+PINNED_WHEEL_SHA256: Final = "b32eea3844cb1f4a80404f969eca5102ec727d1900227c199d03817463124040"
+PINNED_WHEEL_SIZE_BYTES: Final = 208_920
 
-PINNED_SDIST_FILENAME: Final = "rh_mcp-0.3.0.tar.gz"
-PINNED_SDIST_SHA256: Final = "0b1945f8de11cdef126aef6959a7e0ffabbf957399675ee227a012b8e2aafd12"
-PINNED_SDIST_SIZE_BYTES: Final = 430_872
+PINNED_SDIST_FILENAME: Final = "rh_mcp-0.3.3.tar.gz"
+PINNED_SDIST_SHA256: Final = "c61ff3365279825a4ca7c39dd1b9ba0039db69a66c653c3c10c32e8d5a8247b4"
+PINNED_SDIST_SIZE_BYTES: Final = 483_685
 
 # ---------------------------------------------------------------------------
 # Reviewed capability manifest (verified at readiness) and result envelope
@@ -61,14 +61,14 @@ PINNED_MANIFEST_FORMAT_VERSION: Final = "1.2"
 PINNED_CANONICALIZATION_VERSION: Final = "rh-canon-1"
 PINNED_DIGEST_ALGORITHM: Final = "sha256"
 
-PINNED_MANIFEST_VERSION: Final = "2026.08.12"
+PINNED_MANIFEST_VERSION: Final = "2026.08.22"
 SUPPORTED_MANIFEST_VERSIONS: Final[frozenset[str]] = frozenset({PINNED_MANIFEST_VERSION})
 
 EXPECTED_MANIFEST_DIGEST: Final = (
-    "sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f"
+    "sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc"
 )
 PINNED_PROVIDER_SURFACE_DIGEST: Final = (
-    "sha256:ba3ccf94184110b0bf82219163706e9f8f32481a621add69f21f9bad82db46b4"
+    "sha256:3e3f1d3e3e63bef64a2270d9cd238e12c78b247e82c4e717fa3302b0e9e970f8"
 )
 
 #: The digest `rh-mcp`'s changelog prints beside manifest ``2026.08.03.1``.

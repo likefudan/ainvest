@@ -1,4 +1,4 @@
-"""The P06-T1 part 1 fixtures conform to the pinned rh-mcp v0.3.0 schemas."""
+"""The P06-T1 part 1 fixtures conform to the pinned rh-mcp v0.3.3 schemas."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Final
 import pytest
 from jsonschema import Draft202012Validator
 
-ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.0"
+ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.3"
 MANIFEST: Final = ROOT / "read-manifest.json"
 FIXTURES: Final = ROOT / "p06-t1-part1"
 CAPABILITIES: Final = (
@@ -46,7 +46,7 @@ def test_contract_covers_exactly_the_claimed_part1_capabilities() -> None:
 
 
 @pytest.mark.contract
-def test_accounts_fixture_exercises_the_v030_limited_margin_value() -> None:
+def test_accounts_fixture_exercises_the_limited_margin_value() -> None:
     """The migrated fixture guards the account-schema drift found in review."""
     manifest = _document(MANIFEST)
     entry = next(item for item in manifest["entries"] if item.get("capability") == "get_accounts")

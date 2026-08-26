@@ -1,7 +1,7 @@
 """Cross-repository contract: the pins are recomputed, never transcribed.
 
 `src/ainvest/execution/robinhood/pins.py` states the identity of the reviewed
-`rh-mcp` `v0.3.0` permission set. Until this module existed those constants
+`rh-mcp` `v0.3.3` permission set. Until this module existed those constants
 were prose: a reviewer demonstrated that swapping ``EXPECTED_MANIFEST_DIGEST``
 for the wrong-but-plausible digest `rh-mcp`'s changelog prints, *and* changing
 the capability split, left ainvest's entire suite green. Nothing executable
@@ -11,13 +11,13 @@ This file closes that. It does not import `rh_mcp` — the dependency is out of
 scope for `P06-T0` and importing the package would only prove that `rh-mcp`
 agrees with itself. Instead it implements `rh-canon-1` **from the written
 specification** in `rh-mcp` `canonical.py`'s module docstring and `DESIGN.md`
-§6, then recomputes the full-manifest digest of the committed `v0.3.0`
+§6, then recomputes the full-manifest digest of the committed `v0.3.3`
 manifest and compares it to the pin. Two independent implementations landing
 on the same 64 hex characters is evidence; one implementation agreeing with
 itself is not.
 
 The fixture is byte-identical to
-``git show v0.3.0:src/rh_mcp/manifests/read-manifest.json`` and
+``git show v0.3.3:src/rh_mcp/manifests/read-manifest.json`` and
 :func:`test_the_committed_fixture_is_the_reviewed_artifact` keeps it that way
 by re-deriving its digest rather than trusting the filename.
 """
@@ -36,7 +36,7 @@ import pytest
 from ainvest.execution.robinhood import pins
 
 MANIFEST_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.0" / "read-manifest.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.3" / "read-manifest.json"
 )
 DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
@@ -252,7 +252,7 @@ def test_the_historical_rejected_digest_is_not_this_manifests_digest(
 
     Its ``[0.1.0]`` and ``[0.2.0]`` entries both show ``sha256:49b7218…``
     beside manifest version ``2026.08.03.1``. That value remains named as a
-    regression, but it does not belong to the independently reviewed v0.3.0
+    regression, but it does not belong to the independently reviewed v0.3.3
     artifact and can never become its accepted full-manifest digest.
     """
     # Widened to `str` deliberately. Both pins are `Final` literals, so mypy
@@ -320,6 +320,58 @@ def test_every_denied_capability_is_a_mutation(manifest: dict[str, Any]) -> None
     assert all(e["mutates"] for e in denied_entries)
 
 
+@pytest.mark.contract
+def test_approved_mutation_top_level_inputs_are_the_reviewed_shapes(
+    manifest: dict[str, Any],
+) -> None:
+    """Freeze the exact v0.3.3 write envelope without making it callable.
+
+    These literals pin every approved non-trading mutation's top-level
+    property and required sets. ``additionalProperties=false`` prevents an
+    unreviewed top-level argument; the adapter still exposes reads only.
+    """
+    expected = {
+        "add_option_to_watchlist": ({"option_ids", "position_type"}, {"option_ids"}),
+        "add_to_watchlist": (
+            {"currency_pair_ids", "index_ids", "list_id", "symbols"},
+            {"list_id"},
+        ),
+        "create_scan": ({"columns", "filters", "preset", "scan_id", "title"}, set()),
+        "create_watchlist": (
+            {"display_description", "display_name", "icon_emoji"},
+            {"display_name"},
+        ),
+        "follow_watchlist": ({"list_id"}, {"list_id"}),
+        "remove_from_watchlist": (
+            {"currency_pair_ids", "index_ids", "list_id", "symbols"},
+            {"list_id"},
+        ),
+        "remove_option_from_watchlist": ({"option_ids", "position_type"}, {"option_ids"}),
+        "unfollow_watchlist": ({"list_id"}, {"list_id"}),
+        "update_scan_config": (
+            {"columns", "scan_id", "sorting_column", "sorting_direction"},
+            {"scan_id"},
+        ),
+        "update_scan_filters": ({"filters", "scan_id"}, {"scan_id", "filters"}),
+        "update_watchlist": (
+            {"display_description", "display_name", "icon_emoji", "list_id"},
+            {"list_id"},
+        ),
+    }
+    entries = {
+        entry["capability"]: entry
+        for entry in manifest["entries"]
+        if entry["disposition"] == "allowed" and entry["mutates"] is True
+    }
+
+    assert set(entries) == set(expected) == pins.APPROVED_NON_TRADING_MUTATIONS
+    for capability, (properties, required) in expected.items():
+        schema = entries[capability]["input_schema"]
+        assert set(schema["properties"]) == properties
+        assert set(schema.get("required", [])) == required
+        assert schema["additionalProperties"] is False
+
+
 # ---------------------------------------------------------------------------
 # The ainvest read projection — the narrowing `rh-mcp` does not do for us
 # ---------------------------------------------------------------------------
@@ -378,7 +430,7 @@ def test_read_capability_wire_names_are_pinned_as_literals() -> None:
 
 @pytest.mark.contract
 def test_limited_margin_upgrade_read_is_reviewed_but_not_projected() -> None:
-    """The v0.3.0 manifest expansion must not widen ainvest's public reads."""
+    """The reviewed manifest expansion must not widen ainvest's public reads."""
     capability = "get_limited_margin_upgrade_info"
     projection = {member.value for member in pins.ReadCapability}
 

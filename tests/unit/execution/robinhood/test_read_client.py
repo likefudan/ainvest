@@ -163,7 +163,7 @@ def test_read_projection_is_a_strict_subset_of_the_35_and_touches_no_mutation() 
 
 @pytest.mark.unit
 def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
-    """v0.3.0 reviews the provider tool without making it callable here."""
+    """v0.3.3 reviews the provider tool without making it callable here."""
     capability = "get_limited_margin_upgrade_info"
 
     assert capability in MANIFEST_READ_CAPABILITIES
