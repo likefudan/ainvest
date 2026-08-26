@@ -1836,9 +1836,15 @@ consumable release artifact.
   an external released-artifact approval. A separate exact-artifact
   [audit](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419106779)
   returns `APPROVED_FOR_AINVEST_PIN_WITH_CONDITIONS` with no P0/P1; its P2
-  release-governance and future-schema-review conditions remain binding.
-  The Draft claim still requires normal independent review, and the later
-  implementation must have no unresolved P0-P3 finding before merge.
+  release-governance and future-schema-widening residuals are owner-accepted
+  risk decisions for this exact artifact rather than unresolved pin blockers.
+  Their exact-artifact and manual future-schema-review controls remain binding,
+  alongside the separate consumer requirements for public-only imports,
+  provider-prose discard, the ten-read projection, and owner-assisted real
+  validation. The Draft claim still requires normal independent review, and
+  both claim and implementation may have no unresolved P0-P3 finding at merge.
+  The accepted P2 residuals count as resolved only while every recorded control
+  is satisfied; a control violation or new finding blocks merge.
   `v0.3.3` changes no runtime Python module under `src/rh_mcp` other than its
   manifest JSON; capability names, the 35/11/8 split, dispositions, `mutates`
   flags, and ainvest's existing ten named reads stay fixed. Implementation is

@@ -564,12 +564,14 @@ The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T10` provisioning/validation and P05-T9 Telegram display-only reads are
 merged. The original
 `P06-T0` adapter, runtime-dependency, hardening, and narrow `v0.3.0` pin
-refresh are merged and complete. No P06-T0 maintenance scope is active.
+refresh are merged and complete; `v0.3.0` remains the sole executable
+authority. Draft claim [#142](https://github.com/likefudan/ainvest/pull/142)
+now owns the next narrow P06-T0 maintenance scope for `v0.3.3`; it changes no
+executable pin and claims no unrelated successor feature.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
 merged. Real individual Robinhood reads, P05-T10 real Bot
 provisioning/validation, and end-to-end Telegram reads are the remaining
-owner-assisted evidence under proposed `DEC-010`; no successor feature is
-claimed here.
+owner-assisted evidence under proposed `DEC-010`.
 
 ##### Execution envelope: P08-T4
 
@@ -1435,7 +1437,8 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   Telegram display-only reads are merged. The next priority-lane evidence is
   owner-assisted: individual real Robinhood reads, real staging/production Bot
   provision/validation, and end-to-end Telegram reads under proposed
-  `DEC-010`. No successor feature is claimed by this completion update.
+  `DEC-010`. This P06-T2 completion update itself claims no successor feature;
+  the separate P06-T0 `v0.3.3` maintenance claim follows immediately below.
   The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
@@ -1471,14 +1474,20 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   binds the public wheel, sdist, tag target, source, attestations, independently
   rebuilt artifacts, and shipped manifest and returns
   `APPROVED_FOR_AINVEST_PIN_WITH_CONDITIONS`. It found no P0 or P1. Its P2
-  conditions are recorded here as implementation requirements: use the exact
-  artifact/hash/digest evidence rather than unsupported release-governance
-  prose, and manually review substantive schema changes on every future
+  release-governance and future-schema-widening residuals are risk decisions
+  explicitly accepted by the owner for this exact artifact, not unresolved
+  findings that block this pin. Their controls remain binding: use the exact
+  artifact, source, attestation, and manifest hashes rather than unsupported
+  governance prose, and manually review substantive schema changes on every future
   provider refresh because nested mutation constraints and uniform read
-  property sets are not independently pinned. P3 residuals preserve the exact
-  hash/digest pin, public-only imports, and provider-prose discard. This
-  artifact audit is attached; the Draft claim itself still requires the normal
-  independent claim review before it becomes ready.
+  property sets are not independently pinned. Separate consumer requirements
+  preserve exact hash/digest verification, public-only imports, provider-prose
+  discard, the ten-read projection, and owner-assisted real validation. The
+  Draft claim itself still requires normal independent review before it becomes
+  ready. That review and the later implementation review may have no unresolved
+  P0-P3 finding at merge: the two documented P2 residuals above count as
+  resolved owner risk decisions only while every listed control is satisfied;
+  any control violation or new finding remains merge-blocking.
 - **Candidate release identity (not executable yet):** annotated tag object
   `617b6db3b740bb69c4b93e2e92c17e2fc87a4b03` peels to source commit
   `68830c28db67632044f078c78b364622d9b66e16`; the non-draft,
