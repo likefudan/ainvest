@@ -211,9 +211,10 @@ Primary parallelization opportunities:
   `b72104232947472346dd7978b8652672125a3dca` and
   [#143](https://github.com/likefudan/ainvest/pull/143) as
   `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is now the single
-  executable dependency authority. Owner-assisted `rh-mcp v0.3.3`
-  `auth-status`/`status`, representative real reads, and Telegram end-to-end
-  display remain later validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  executable dependency authority. Owner-assisted validation on 2026-08-26
+  verified `rh-mcp v0.3.3` `auth-status`/`status`, the staging Bot, and
+  Telegram status/accounts/quote display. Production Bot validation and the
+  claimed account-bound/history follow-ups remain. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
   [#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim
@@ -227,10 +228,10 @@ Primary parallelization opportunities:
   [#121](https://github.com/likefudan/ainvest/pull/121). `P05-T5` then
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
-  long polling and durable inbound deduplication. Real individual Robinhood
-  reads, real P05-T10 Bot provisioning/validation, and end-to-end Telegram
-  reads remain owner-assisted validation under proposed `DEC-010`; they are
-  not unfinished P05-T9 code.
+  long polling and durable inbound deduplication. Staging Bot provisioning and
+  end-to-end status/accounts/quote reads are verified. Production Bot
+  validation, secure account binding, and bounded history display remain
+  owner-assisted follow-up evidence under proposed `DEC-010`.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -244,7 +245,7 @@ Primary parallelization opportunities:
 | Phase 02 | Schemas, database, audit, and workflow state | P02-T0 through P02-T10 |
 | Phase 03 | Strategies, sizing, risk, deterministic Paper loop, Gate 1 | P03-T0 through P03-T17 |
 | Phase 04 | Data, Research Agent, backtesting, Gate 2 | P04-T0 through P04-T12 |
-| Phase 05 | Telegram Paper approval, environment provisioning, read-only queries, deferred live approval preparation, Gate 3 | P05-T0 through P05-T10 |
+| Phase 05 | Telegram Paper approval, environment provisioning, read-only queries, secure read-account binding, deferred live approval preparation, Gate 3 | P05-T0 through P05-T11 |
 | Phase 06 | Official Robinhood MCP read path and Gate 4 | P06-T0 through P06-T3 |
 | Phase 07 | Controlled live execution, cancellation, reconciliation, and Gate 5 | P07-T0 through P07-T6 |
 | Phase 08 | Parallel runtime, observability, security, documentation, and test assurance | P08-T0 through P08-T15 |
@@ -272,6 +273,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 | P05-T0 through P05-T8 | §3.4–§3.5, §5.5, §7, §15 Phase 3 |
 | P05-T9 | §3.2–§3.5, §5.1, §5.5, §7, §11, §14.3, §16–§17 |
 | P05-T10 | §3.4–§3.5, §5.5, §7, §11, §14.3, §16–§17 |
+| P05-T11 | §3.2–§3.5, §5.1, §5.5–§5.6, §7, §11, §14.3, §16–§17 |
 | P06-T0 through P06-T3 | §5.1, §5.6, §10.1, §15 Phase 4 |
 | P07-T0 through P07-T6 | §3.3–§3.5, §5.6–§5.7, §8, §14.4, §15 Phase 5 |
 | P08-T0 through P08-T15 | §3.5–§3.6, §5.7, §9, §11–§14 |
@@ -1095,9 +1097,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   independently reviewed implementation squash-merged in
   [#136](https://github.com/likefudan/ainvest/pull/136) as `69e8831`.
   P05-T9's separate claim and implementation are now merged through #138/#139.
-  Owner-assisted validation with real staging and
-  production Bots remains pending deployment evidence under proposed
-  `DEC-010`; it was not an offline implementation or CI blocker.
+  Owner-assisted staging Bot provisioning and validation succeeded on
+  2026-08-26. Production Bot validation remains pending deployment evidence
+  under proposed `DEC-010`; it was not an offline implementation or CI blocker.
 - **Dependencies:** merged P05-T4, P05-T5, P01-T4, and P02-T6; accepted
   `DEC-005`; and the staging/production identity shape proposed in `DEC-010`.
   This card does not accept `DEC-010` or invent any owner-controlled token or
@@ -1319,9 +1321,8 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   database/filesystem fence. Focused tests, `./scripts/dev unit`,
   `./scripts/dev contract`,
   `./scripts/dev integration`, `git diff --check`, and `./scripts/dev verify`
-  pass. Owner-assisted real staging/production validation is recorded
-  separately and may remain pending under proposed `DEC-010` after offline
-  implementation merge.
+  pass. Owner-assisted staging validation is recorded separately as verified;
+  production validation remains pending under proposed `DEC-010`.
 
 ### P05-T9 — Expose Display-Only Robinhood Queries in Telegram
 
@@ -1351,6 +1352,15 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   tests plus one skip, 203 contract tests, 53 integration tests, and 1,779
   combined tests plus one skip, with 87.30% coverage and mypy clean across 259
   source files; all required CI jobs passed.
+  Owner-assisted validation on 2026-08-26 subsequently proved the pinned
+  `v0.3.3` gateway ready and the Telegram `/rh_status`, `/accounts`, and
+  `/quotes AAPL` paths successful. It also exposed a bounded-output defect:
+  `/history AAPL 1d` completed its gateway read and normalization, but the
+  local Telegram post-render reply exceeded 3,500 code points and was replaced
+  with sanitized `result_too_large`. The narrow history
+  interval maintenance contract below is therefore `in_progress` as a new
+  independently reviewed follow-up; it does not reopen any other P05-T9
+  behavior.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1358,12 +1368,14 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
   `v0.3.3` release squash-merged in #143 and is the executable authority.
-  Owner-assisted `rh-mcp v0.3.3 auth-status` and `status` remain pending against
+  Owner-assisted `rh-mcp v0.3.3 auth-status` and `status` are verified against
   manifest version `2026.08.22` and digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
-  Representative account, portfolio, quote, and historical CLI reads and
-  Telegram end-to-end display remain owner-assisted; they do not authorize
-  credentials, network calls, or account data in implementation or CI.
+  Sanitized Telegram evidence verifies status, account eligibility, and a
+  representative quote. Historical display is pending the sizing follow-up,
+  and portfolio display is pending P05-T11 account binding. These observations
+  do not authorize credentials, public network calls, or account data in
+  implementation or CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
   `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
@@ -1432,17 +1444,33 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
   | Token | Fixed duration | `HistoricalInterval` | `HistoricalBounds` | `AdjustmentType` |
   |---|---:|---|---|---|
-  | `1d` | 24 hours | `5minute` | `regular` | `split` |
-  | `5d` | 120 hours | `30minute` | `regular` | `split` |
-  | `1m` | 30 × 24 hours | `hour` | `regular` | `split` |
-  | `3m` | 90 × 24 hours | `day` | `regular` | `split` |
-  | `1y` | 365 × 24 hours | `day` | `regular` | `split` |
+  | `1d` | 24 hours | `30minute` | `regular` | `split` |
+  | `5d` | 120 hours | `day` | `regular` | `split` |
+  | `1m` | 30 × 24 hours | `week` | `regular` | `split` |
+  | `3m` | 90 × 24 hours | `week` | `regular` | `split` |
+  | `1y` | 365 × 24 hours | `month` | `regular` | `split` |
 
   The current `RobinhoodDisplayService.historicals` method and pinned read
   schema support all five named interval values plus explicit `start_time`,
   `end_time`, `bounds`, and `adjustment_type`; no mapper or provider-surface
   expansion is scheduled by this card. Because session evidence remains
   unverified, these windows are never usable for trading.
+
+- **History sizing maintenance boundary:** change only the five interval values
+  in the table above. Preserve the exact rolling durations, the captured-once
+  UTC clock calculation, RFC 3339 bounds, `bounds="regular"`,
+  `adjustment_type="split"`, one named display/gateway call, one render, and at
+  most one Telegram send attempt. A successful normalized historical response
+  must be rendered in full: do not truncate bars, split a response, paginate,
+  perform a second provider call, or silently drop normalized fields. The
+  existing general `result_too_large` fallback remains mandatory for any other
+  genuinely oversized success envelope. Add realistic handler-level fixtures
+  for every window whose full normalized reply is at most 3,500 Unicode code
+  points, and assert exactly one gateway call and one send. Retain a separate
+  deliberately oversized fixture proving the bounded sanitized fallback,
+  still with one gateway call and one send. No change to the gateway,
+  normalization, Telegram authorization, rate/deadline, account-secret,
+  command grammar, or error wire is permitted.
 
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has verified the environment-specific Bot,
@@ -1752,6 +1780,168 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `./scripts/dev contract`, `./scripts/dev integration`, `git diff --check`,
   and `./scripts/dev verify` pass.
 
+### P05-T11 — Provision and Validate the Robinhood Read-Account Binding
+
+- **Objective:** give the trusted local operator one reusable fail-closed way
+  to discover, install, validate, rotate, and disable the exact Agentic account
+  reference consumed by P05-T9 account-bound display commands, without ever
+  exposing the reference or widening the read gateway.
+- **Status and scheduling:** `in_progress` only as a docs claim. Owner-assisted
+  validation on 2026-08-26 proved `rh-mcp v0.3.3` ready and `/accounts`
+  successful, while `/portfolio` returned sanitized
+  `account_secret_missing`. Implementation starts only after this claim is
+  independently reviewed and squash-merged. It may run in parallel with the
+  P05-T9 history-sizing follow-up on disjoint production/test paths, but the
+  two PRs rebase, enter independent review, and squash-merge serially.
+- **Dependencies:** merged P05-T9, P05-T10, P05-T5, P06-T0, P06-T1, and P06-T2
+  Part 1; the current pinned `rh-mcp v0.3.3` manifest and named read projection;
+  accepted `DEC-005`; and the owner-controlled staging/production shape in
+  proposed `DEC-010`. Real credentials and account data are required only for
+  owner-assisted validation after the deterministic offline merge.
+- **Dedicated entry point and exact commands:** add
+  `ainvest-robinhood-account =
+  "ainvest.orchestrator.robinhood_account_provisioning:main"`. It has exactly
+  `provision`, `validate`, and `disable` subcommands and must not be added to or
+  imported by P05-T10's `ainvest-telegram-provision` utility, whose exact four
+  Bot commands remain unchanged. Every subcommand requires explicit
+  `--environment staging|production`, `--env-file PATH`, and
+  `--secrets-dir PATH`. State-changing `provision` and `disable` additionally
+  require `--database PATH` and `--confirm-poller-stopped`. No account value,
+  tool/capability name, token, credential, or provider result may be accepted
+  through argv, stdin, a prompt, environment, dotenv, YAML, Telegram, or the
+  database.
+- **One public read for discovery/validation:** after pinned artifact,
+  projection, and readiness verification, use only `open_read_gateway()` and
+  its named `RobinhoodReadClient.read_accounts()` operation. Make exactly one
+  `get_accounts` call per `provision` or `validate`; never use generic
+  `invoke`, import `rh_mcp` or `mcp` directly, or access a private transport,
+  session, credential store, mutation, or trading capability. Parse only the
+  bounded validated result envelope inside this narrow utility. Require the
+  account list to contain exactly one record whose `agentic_allowed` value is
+  the strict boolean `true`; zero, multiple, malformed, missing, inactive,
+  deactivated, or permanently deactivated candidates fail closed. Extract
+  only that row's exact `account_number`, require 1–128 visible ASCII bytes
+  (`0x21`–`0x7e`), and discard all other provider fields. Never print, return,
+  log, serialize, persist, snapshot, or place the raw result or account value
+  in an exception. `validate` compares the installed secret to that one
+  discovered value without disclosing either and returns only a sanitized
+  verdict.
+- **File-secret-only authority:** the sole production source is
+  `<explicit-secrets-dir>/ROBINHOOD_READ_ACCOUNT_NUMBER`. P05-T11 deliberately
+  supersedes P05-T9's earlier production allowance for explicit values,
+  environment, dotenv, and injected YAML precedence: after this task merges,
+  the Telegram runner and utility accept no value-source precedence at all,
+  only the exact file in the explicitly selected directory. Before gateway
+  access or file mutation, reject any ASCII-case variant of
+  `ROBINHOOD_READ_ACCOUNT_NUMBER` or `robinhood_read_account_number` present in
+  the process environment or explicit dotenv document, without reading the
+  value into an error. Test-only dependency injection may use a synthetic
+  redacted wrapper; it is not a production source. Keep the key out of global
+  `Settings`, and do not add a `SecretId`, secret manager, implicit directory
+  search, or fallback path.
+- **Secure storage and loader:** install the discovered value plus exactly one
+  LF using a same-directory atomic no-overwrite operation. Create all temporary
+  and final files with no-follow semantics; require the directory and target to
+  resolve as intended; reject symlinks and non-regular files; flush file and
+  directory metadata; and leave the final owner-only regular file at exact
+  mode `0600`. Temporary names, failures, and test diagnostics contain no
+  secret bytes. Tighten the existing READ_BROKER loader to require exact mode
+  `0600` in addition to its current no-follow regular-file, bounded binary
+  read, strict UTF-8/visible-ASCII, one-terminal-LF, and no-strip rules. A
+  missing file remains `account_secret_missing`; wrong mode or any other
+  invalid file remains `account_secret_invalid` before gateway open.
+- **Existing target, rotation, and disable semantics:** `provision` installs
+  only when the exact target is absent; it never overwrites an existing path,
+  even when the discovered value compares equal. `validate` never writes.
+  First-release rotation is the explicit, fail-closed sequence `disable` then
+  `provision` while the reader remains stopped; there is no implicit rotation
+  and no fourth subcommand. `disable` removes only the exact target after all
+  path and quiescence checks, performs no provider call, and reports an absent
+  target as sanitized idempotent success. It refuses symlinks and non-regular
+  targets. No command edits the Telegram `.env`, Bot secret, database payload,
+  or provider state.
+- **Poller quiescence and database coordination:** the operator first stops the
+  selected environment's `ainvest-telegram-read` process through the external
+  process manager; the explicit acknowledgement is the authoritative boundary.
+  For `provision` and `disable`, wait a fixed bounded period for any old P05-T5
+  lease, then reuse the public
+  `ainvest.approval.telegram_maintenance.TelegramPollingMaintenanceLease` and
+  reverify ownership immediately before every filesystem mutation. Extract the
+  current private P05-T10 `_MaintenanceLease` and its policy into that module as
+  `TelegramPollingMaintenanceLease` and
+  `TelegramMaintenanceLeasePolicy`; P05-T10 must import and use this same
+  implementation while retaining its existing public `LeasePolicy`
+  compatibility name and exact four commands. Do not duplicate or import the
+  old private logic. The public lease remains best-effort database coordination,
+  not a filesystem fence. It reuses the existing P05-T5 poll-state repository
+  and table unchanged: no migration, schema, table, or payload column is
+  authorized. Do not infer that an idle lease alone proves the process stopped.
+  `validate` is read-only and requires neither the stop acknowledgement nor
+  database mutation.
+- **Sanitized CLI and lifecycle:** stdout contains one compact fixed-shape JSON
+  success record with only `command`, `environment`, and `status`; stderr uses
+  stable value-free error codes and never provider message text, arguments,
+  paths, tracebacks, or account/result data. Bound gateway startup/read/close,
+  close exactly once on success, failure, timeout, or cancellation, and never
+  retry a provider call automatically. Do not emit account fingerprints,
+  suffixes, lengths, hashes, digests, or candidate counts that could become an
+  identifier.
+- **Architecture and allowed paths:** put the sole composition in new
+  `src/ainvest/orchestrator/robinhood_account_provisioning.py`; optional narrow
+  exports may touch `src/ainvest/orchestrator/__init__.py`. Allow only the exact
+  console entry in `pyproject.toml`; the strict mode/source change in
+  `src/ainvest/config/settings.py` and narrow export changes in
+  `src/ainvest/config/__init__.py`; new
+  `src/ainvest/approval/telegram_maintenance.py`; narrow extraction/import and
+  compatibility-export changes in
+  `src/ainvest/approval/telegram_provisioning.py` and
+  `src/ainvest/approval/__init__.py`; new
+  `tests/unit/approval/test_telegram_maintenance.py` plus narrow updates to
+  `tests/unit/approval/test_telegram_provisioning.py`; new
+  `tests/unit/orchestrator/test_robinhood_account_provisioning.py`; narrow
+  additions to `tests/unit/config/test_settings.py`,
+  `tests/unit/test_dependency_boundary.py`, and
+  `tests/unit/architecture/test_package_boundaries.py`; and
+  `docs/robinhood-account-binding.md`, `docs/telegram-read-queries.md`, and
+  `.env.example` only to replace the old env/dotenv precedence guidance with
+  the file-only operator workflow. The source tightening is wholly contained
+  in the allowed config loader; P05-T11 neither needs nor may edit
+  `src/ainvest/orchestrator/telegram_queries.py`. Apart from the exact public
+  lease extraction above, P05-T10 and its command behavior are read-only.
+  P05-T5 ingress, P06 read client,
+  gateway composition, mappers/display service, dependencies/lock, schemas,
+  migrations, and every other production path are read-only. Any required
+  expansion stops for coordinator approval.
+- **Required tests:** use only deterministic fake named gateways and synthetic
+  account strings. Cover zero/one/multiple Agentic candidates; strict boolean,
+  state/deactivation, account grammar, malformed/oversized envelopes, pinned
+  readiness/artifact failures, timeout/cancellation/close, and exactly one
+  named read. Prove no raw result or account value reaches stdout, stderr,
+  exceptions, logs, snapshots, database, or repr. Cover missing/existing,
+  symlink/non-regular, race/no-overwrite, atomic-write failure, exact LF, exact
+  `0600`, wrong mode, directory/file fsync, disable idempotence, and explicit
+  disable-then-provision rotation. Reject every account-bearing argv, ambient
+  environment, dotenv case variant, YAML/implicit path, chat, and database
+  route; retain P05-T9 missing/invalid error behavior and non-account command
+  independence. Prove the dependency graph has no `approval -> execution`,
+  generic invoke, private `rh_mcp`, MCP SDK, mutation/trading, approval, Paper,
+  Strategy, Sizer, Risk, or fallback-provider path. Add one composition test
+  that uses the real strict loader and fake gateway but no public network.
+- **Owner-assisted acceptance:** after independent review and squash merge, the
+  owner stops the staging poller, runs `provision`, then `validate`, restarts
+  the poller, and verifies `/portfolio` and one other account-bound read return
+  sanitized display envelopes. Share only fixed-shape command results and
+  redacted display output. Do not paste account numbers, credentials, raw
+  provider results, or secret-file contents. Production remains separately
+  owner-controlled.
+- **Acceptance criteria:** a unique active Agentic account can be bound and
+  validated without manual account copying or disclosure; every ambiguous,
+  insecure, stale, or drifted condition fails closed; account-bound Telegram
+  reads work after restart while all mutations, trading, and account disclosure
+  remain unreachable. Focused tests plus `./scripts/dev unit`,
+  `./scripts/dev contract`, `./scripts/dev integration`, `git diff --check`,
+  and `./scripts/dev verify` pass.
+
 ---
 
 ## 9. Phase 06 — Official Robinhood MCP Non-Trading Integration
@@ -1827,8 +2017,9 @@ consumable release artifact.
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
   `v0.3.3` is the current executable dependency authority; `v0.2.0` is
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
-  v0.3.3 status remains pending; individual real reads, real Bot validation, and
-  end-to-end Telegram reads remain owner-assisted validation.
+  v0.3.3 status, staging Bot validation, and status/accounts/quote reads are
+  verified as of 2026-08-26; production Bot validation and the claimed
+  account-bound/history follow-ups remain owner-assisted.
 - **Current maintenance implementation:** the executable pin refresh from
   `v0.3.0` to the public `v0.3.3` release completed under the exact execution
   envelope in `docs/tasks/status.md`. Claim
@@ -2480,15 +2671,13 @@ line.
    dependency authority.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
-   values stay manual, and owner-assisted staging/production validation remains
-   pending under proposed `DEC-010` after the deterministic offline merge.
-3. `P05-T9` Telegram display-only queries are complete and merged through
-   #138/#139. Owner-assisted v0.3.3 `auth-status` and exact-manifest `status`
-   remain pending; representative account, portfolio, quote, and historical
-   reads through the ainvest CLI, real P05-T10 staging/production Bot
-   provision/validation, and end-to-end Telegram reads remain the next
-   priority-lane evidence under
-   proposed `DEC-010`.
+   values stay manual. Staging validation succeeded on 2026-08-26; production
+   validation remains pending under proposed `DEC-010`.
+3. `P05-T9` Telegram display-only queries are merged through #138/#139.
+   Owner-assisted v0.3.3 auth/readiness, staging Bot provisioning, and
+   Telegram status/accounts/quote paths are verified. Its claimed history
+   sizing follow-up and P05-T11 account binding own the two remaining sanitized
+   validation failures; production evidence remains under proposed `DEC-010`.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 4. Supply and independently review canonical identity, Agentic-account
