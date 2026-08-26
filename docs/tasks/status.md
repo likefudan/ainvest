@@ -741,7 +741,7 @@ owner-assisted evidence under proposed `DEC-010`.
 
 This lane provides an early, useful Robinhood result without claiming Gate 4
 or enabling any trading capability. The external gateway's OAuth credential is
-trading-capable. The candidate `v0.3.3` artifact pins exactly 35
+trading-capable. The current `v0.3.3` artifact pins exactly 35
 `mutates=false` reads and 11 reviewed `mutates=true` watchlist/saved-scan
 mutations and permanently denies 8 trading capabilities. Ainvest continues to
 invoke only its existing 10 named read operations. Its serial merge order is:
@@ -759,8 +759,8 @@ invoke only its existing 10 named read operations. Its serial merge order is:
    digest. A source commit may be provenance evidence but cannot substitute for
    the consumable release artifact. For the completed refresh, this step is the
    **Current executable dependency pin: `likefudan/rh-mcp` `v0.3.3`** subsection
-   below; it is the source for the implementation under review. The separate
-   `v0.3.0` and `v0.2.0` subsections are historical evidence only after merge.
+   below; it is the source for the merged implementation. The separate
+   `v0.3.0` and `v0.2.0` subsections are historical evidence only.
 4. `P06-T0` composes a thin adapter over the pinned SDK-neutral gateway
    contract. Deployment/startup verifies the installed release/artifact pins;
    readiness verifies manifest version and full-manifest digest, while every
@@ -1480,6 +1480,13 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   implementation received independent exact-head
   [approval](https://github.com/likefudan/ainvest/pull/143#issuecomment-5425013975)
   with no material P0-P2 finding before #143 merged.
+- **Tracker cleanup remediation scope:** independent review of tracker PR #144
+  found stale merge-state clauses in the security evidence mirrors. The narrow
+  remediation therefore expands this docs-only cleanup from
+  `IMPLEMENTATION_TODO.md` and `docs/tasks/status.md` to only the matching
+  merge-state clauses in `docs/security/control-matrix.md` and
+  `docs/security/control-evidence.json`; their `partial` states and pending
+  owner, P06-T2 Part 2, and P-GATEWAY-PROSE evidence remain unchanged.
 - **Owner governance decision:** on 2026-08-25 the owner explicitly directed
   ainvest to **use the latest `rh-mcp` release**, accepting the documented
   release-governance residual for `v0.3.3`: its committed dossier is an
@@ -2087,7 +2094,7 @@ excludes the contents of a result envelope's `data`. It also records that
   release, an immutable consumable artifact with source provenance and artifact
   digest/checksum, a committed reviewed capability manifest and full-manifest
   digest, and an ainvest tracker record of those exact values — is satisfied by
-  the historical `v0.2.0` record and the candidate v0.3.3 pin above. The v0.2.0
+  the historical `v0.2.0` record and the current v0.3.3 pin above. The v0.2.0
   subsection is authority for the completed historical delivery only; current
   executable values come from **Current executable dependency pin:
   `likefudan/rh-mcp` `v0.3.3`**. Do not re-derive a pin from `rh-mcp` release

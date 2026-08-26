@@ -1357,13 +1357,13 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
-  `v0.3.3` release is in review and becomes the executable authority only when
-  squash-merged. Owner-assisted `rh-mcp v0.3.3 status` remains pending against
+  `v0.3.3` release squash-merged in #143 and is the executable authority.
+  Owner-assisted `rh-mcp v0.3.3 auth-status` and `status` remain pending against
   manifest version `2026.08.22` and digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
-  Individual real reads may remain owner-assisted until after the offline
-  merge and do not authorize credentials, network calls, or account data in
-  implementation or CI.
+  Representative account, portfolio, quote, and historical CLI reads and
+  Telegram end-to-end display remain owner-assisted; they do not authorize
+  credentials, network calls, or account data in implementation or CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
   `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
