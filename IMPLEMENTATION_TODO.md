@@ -206,7 +206,10 @@ Primary parallelization opportunities:
   `P06-T0` runtime refresh to reviewed `rh-mcp` `v0.3.0` also merged through
   [#126](https://github.com/likefudan/ainvest/pull/126) and
   [#127](https://github.com/likefudan/ainvest/pull/127); `v0.3.0` is the
-  current executable dependency authority. Owner-assisted `rh-mcp v0.3.0`
+  current executable dependency authority. A narrow `v0.3.3` maintenance
+  refresh is now claimed under P06-T0 but remains non-executable until its
+  separate implementation is independently reviewed and squash-merged.
+  Owner-assisted `rh-mcp v0.3.0`
   status validation reports ready; individual real reads remain later
   owner-assisted validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
@@ -1824,6 +1827,23 @@ consumable release artifact.
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
   v0.3 status reports ready; individual real reads, real Bot validation, and
   end-to-end Telegram reads remain owner-assisted validation.
+- **Next maintenance claim:** refresh the executable pin from `v0.3.0` to the
+  public `v0.3.3` release under the exact execution envelope in
+  `docs/tasks/status.md`. The owner explicitly directed ainvest to use the
+  latest release and accepted the documented governance residual that
+  `v0.3.3`'s committed review is an in-project pre-release source review, not
+  an external released-artifact approval. Exact released-artifact review
+  evidence must still be attached before the Draft claim becomes ready and
+  must have no unresolved P0-P3 finding before implementation merges.
+  `v0.3.3` changes no runtime Python module under `src/rh_mcp` other than its
+  manifest JSON; capability names, the 35/11/8 split, dispositions, `mutates`
+  flags, and ainvest's existing ten named reads stay fixed. Implementation is
+  limited to exact dependency/artifact/manifest pins, the one fixture-lineage
+  move and manifest replacement, literal current-version assertions, and
+  current-authority documentation. Payload fixtures, mappers, read models,
+  public methods, display/CLI behavior, Telegram composition, and gateway
+  lifecycle do not change. Preserve compatible locked transitive versions;
+  do not bundle unrelated `mcp`, `httpx2`, or other upgrades.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
