@@ -206,12 +206,14 @@ Primary parallelization opportunities:
   `P06-T0` runtime refresh to reviewed `rh-mcp` `v0.3.0` also merged through
   [#126](https://github.com/likefudan/ainvest/pull/126) and
   [#127](https://github.com/likefudan/ainvest/pull/127). The narrow `v0.3.3`
-  maintenance claim merged through
-  [#142](https://github.com/likefudan/ainvest/pull/142); its separate
-  implementation is in review and becomes the executable dependency authority
-  only when squash-merged. Owner-assisted `rh-mcp v0.3.3` status and individual
-  real reads remain later
-  owner-assisted validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  maintenance claim and independently reviewed implementation squash-merged
+  through [#142](https://github.com/likefudan/ainvest/pull/142) as
+  `b72104232947472346dd7978b8652672125a3dca` and
+  [#143](https://github.com/likefudan/ainvest/pull/143) as
+  `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is now the single
+  executable dependency authority. Owner-assisted `rh-mcp v0.3.3`
+  `auth-status`/`status`, representative real reads, and Telegram end-to-end
+  display remain later validation. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
   [#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim
@@ -1355,13 +1357,13 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
-  `v0.3.3` release is in review and becomes the executable authority only when
-  squash-merged. Owner-assisted `rh-mcp v0.3.3 status` remains pending against
+  `v0.3.3` release squash-merged in #143 and is the executable authority.
+  Owner-assisted `rh-mcp v0.3.3 auth-status` and `status` remain pending against
   manifest version `2026.08.22` and digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
-  Individual real reads may remain owner-assisted until after the offline
-  merge and do not authorize credentials, network calls, or account data in
-  implementation or CI.
+  Representative account, portfolio, quote, and historical CLI reads and
+  Telegram end-to-end display remain owner-assisted; they do not authorize
+  credentials, network calls, or account data in implementation or CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
   `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
@@ -1827,10 +1829,16 @@ consumable release artifact.
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
   v0.3.3 status remains pending; individual real reads, real Bot validation, and
   end-to-end Telegram reads remain owner-assisted validation.
-- **Current maintenance implementation:** refresh the executable pin from `v0.3.0` to the
-  public `v0.3.3` release under the exact execution envelope in
-  `docs/tasks/status.md` and Draft claim
-  [#142](https://github.com/likefudan/ainvest/pull/142). The owner explicitly directed ainvest to use the
+- **Current maintenance implementation:** the executable pin refresh from
+  `v0.3.0` to the public `v0.3.3` release completed under the exact execution
+  envelope in `docs/tasks/status.md`. Claim
+  [#142](https://github.com/likefudan/ainvest/pull/142) squash-merged as
+  `b72104232947472346dd7978b8652672125a3dca`; independently reviewed
+  implementation [#143](https://github.com/likefudan/ainvest/pull/143)
+  received exact-head
+  [approval](https://github.com/likefudan/ainvest/pull/143#issuecomment-5425013975)
+  and squash-merged as `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`.
+  The owner explicitly directed ainvest to use the
   latest release and accepted the documented governance residual that
   `v0.3.3`'s committed review is an in-project pre-release source review, not
   an external released-artifact approval. A separate exact-artifact
@@ -1841,8 +1849,8 @@ consumable release artifact.
   Their exact-artifact and manual future-schema-review controls remain binding,
   alongside the separate consumer requirements for public-only imports,
   provider-prose discard, the ten-read projection, and owner-assisted real
-  validation. The implementation still requires normal independent review, and
-  the implementation may have no unresolved P0-P3 finding at merge.
+  validation. Independent review approved the exact implementation head with
+  no material P0-P2 finding before merge.
   The accepted P2 residuals count as resolved only while every recorded control
   is satisfied; a control violation or new finding blocks merge.
   `v0.3.3` changes no runtime Python module under `src/rh_mcp` other than its
@@ -2466,17 +2474,20 @@ line.
    is a display-only Non-Trading Preview, not a gate acceptance. Every original
    step in this display-only lane is complete, and `P06-T0`, `P06-T1`, and
    `P06-T2` Part 1 are merged. The narrow `P06-T0` maintenance refresh to
-   independently reviewed `v0.3.0` also merged through #126/#127 without
-   reopening the adapter or normalization scope; `v0.3.3` is the current
-   executable dependency authority.
+   independently reviewed `v0.3.0` merged through #126/#127 without reopening
+   the adapter or normalization scope; the subsequent `v0.3.3` claim and pin
+   implementation merged through #142/#143. `v0.3.3` is the current executable
+   dependency authority.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
    values stay manual, and owner-assisted staging/production validation remains
    pending under proposed `DEC-010` after the deterministic offline merge.
 3. `P05-T9` Telegram display-only queries are complete and merged through
-   #138/#139. Owner-assisted v0.3.3 status remains pending; individual real
-   Robinhood reads, real P05-T10 staging/production Bot provision/validation,
-   and end-to-end Telegram reads remain the next priority-lane evidence under
+   #138/#139. Owner-assisted v0.3.3 `auth-status` and exact-manifest `status`
+   remain pending; representative account, portfolio, quote, and historical
+   reads through the ainvest CLI, real P05-T10 staging/production Bot
+   provision/validation, and end-to-end Telegram reads remain the next
+   priority-lane evidence under
    proposed `DEC-010`.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.

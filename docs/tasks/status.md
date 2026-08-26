@@ -5,7 +5,7 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-08-20
+Last updated: 2026-08-26
 
 ## Status vocabulary
 
@@ -159,9 +159,10 @@ the **Robinhood Non-Trading Preview** queue are therefore done:
 `likefudan/rh-mcp` published
 the independently reviewed tagged SemVer release `v0.2.0` with an immutable
 artifact, whose original integration evidence remains in the priority lane's
-**Historical external dependency pin** subsection. The candidate executable
-`v0.3.3` artifact evidence is recorded under **Current executable dependency
-pin** and becomes authoritative only when its implementation squash-merges.
+**Historical external dependency pin** subsection. The executable `v0.3.3`
+artifact evidence is recorded under **Current executable dependency pin** and
+is authoritative after the independently reviewed implementation
+squash-merged in #143.
 The narrow `P06-T0` hardening follow-up also
 merged in [#107](https://github.com/likefudan/ainvest/pull/107), completing
 `P06-T0`; `P06-T1` integration Part 1 merged in
@@ -179,10 +180,14 @@ and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
 long polling and durable deduplication. The independently reviewed `rh-mcp`
 `v0.3.0` claim and implementation squash-merged in
 [#126](https://github.com/likefudan/ainvest/pull/126) and
-[#127](https://github.com/likefudan/ainvest/pull/127). The v0.3.3 claim merged
-in [#142](https://github.com/likefudan/ainvest/pull/142), and its separate
-implementation is in review. Owner-assisted v0.3.3 status and individual real
-reads remain pending validation.
+[#127](https://github.com/likefudan/ainvest/pull/127). The v0.3.3 claim and
+independently reviewed implementation squash-merged in
+[#142](https://github.com/likefudan/ainvest/pull/142) as
+`b72104232947472346dd7978b8652672125a3dca` and
+[#143](https://github.com/likefudan/ainvest/pull/143) as
+`8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`. Owner-assisted v0.3.3
+`auth-status`/`status`, representative real reads, and Telegram end-to-end
+display remain pending validation.
 `P05-T10` claim and implementation squash-merged in
 [#135](https://github.com/likefudan/ainvest/pull/135) and
 [#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim and
@@ -565,11 +570,13 @@ The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T5` is merged with long polling and durable inbound deduplication.
 `P05-T10` provisioning/validation and P05-T9 Telegram display-only reads are
 merged. The original
-`P06-T0` adapter, runtime-dependency, hardening, and narrow `v0.3.0` pin
-refresh are merged and complete. Claim
-[#142](https://github.com/likefudan/ainvest/pull/142) is merged; its narrow
-P06-T0 `v0.3.3` pin implementation is now `in_review`. `v0.3.0` remains the
-sole executable authority on `main` until that implementation squash-merges.
+`P06-T0` adapter, runtime dependency, hardening, and narrow `v0.3.0` and
+`v0.3.3` pin refreshes are merged and complete. Claim
+[#142](https://github.com/likefudan/ainvest/pull/142) and independently
+reviewed implementation [#143](https://github.com/likefudan/ainvest/pull/143)
+squash-merged as `b72104232947472346dd7978b8652672125a3dca` and
+`8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is the sole executable
+authority on `main`.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
 merged. Real individual Robinhood reads, P05-T10 real Bot
 provisioning/validation, and end-to-end Telegram reads are the remaining
@@ -734,7 +741,7 @@ owner-assisted evidence under proposed `DEC-010`.
 
 This lane provides an early, useful Robinhood result without claiming Gate 4
 or enabling any trading capability. The external gateway's OAuth credential is
-trading-capable. The candidate `v0.3.3` artifact pins exactly 35
+trading-capable. The current `v0.3.3` artifact pins exactly 35
 `mutates=false` reads and 11 reviewed `mutates=true` watchlist/saved-scan
 mutations and permanently denies 8 trading capabilities. Ainvest continues to
 invoke only its existing 10 named read operations. Its serial merge order is:
@@ -752,8 +759,8 @@ invoke only its existing 10 named read operations. Its serial merge order is:
    digest. A source commit may be provenance evidence but cannot substitute for
    the consumable release artifact. For the completed refresh, this step is the
    **Current executable dependency pin: `likefudan/rh-mcp` `v0.3.3`** subsection
-   below; it is the source for the implementation under review. The separate
-   `v0.3.0` and `v0.2.0` subsections are historical evidence only after merge.
+   below; it is the source for the merged implementation. The separate
+   `v0.3.0` and `v0.2.0` subsections are historical evidence only.
 4. `P06-T0` composes a thin adapter over the pinned SDK-neutral gateway
    contract. Deployment/startup verifies the installed release/artifact pins;
    readiness verifies manifest version and full-manifest digest, while every
@@ -788,7 +795,7 @@ invoke only its existing 10 named read operations. Its serial merge order is:
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (audited `v0.3.3` released; tagged commit `68830c28db67632044f078c78b364622d9b66e16`) | `v0.2.0` and `v0.3.0` integration history remains recorded; the exact v0.3.3 artifact audit is permanent evidence on #142 | This is a cross-repository prerequisite, not an ainvest task completion claim; the consumable dependency is the immutable release artifact, never a source commit |
-| `P06-T0` | `in_review`; `v0.3.3` becomes current executable authority on merge | Existing adapter dependencies are satisfied; exact `v0.3.3` release/artifact/manifest evidence is recorded below | Core adapter/runtime/hardening merged in #104/#105/#107; v0.3.0 refresh merged in #126/#127; v0.3.3 claim merged in #142 and its separate implementation is under independent review |
+| `P06-T0` | `merged` / `completed`; `v0.3.3` is the current executable authority | Existing adapter dependencies are satisfied; exact `v0.3.3` release/artifact/manifest evidence is recorded below | Core adapter/runtime/hardening merged in #104/#105/#107; v0.3.0 refresh merged in #126/#127; v0.3.3 claim and independently reviewed implementation merged in #142/#143 as `b72104232947472346dd7978b8652672125a3dca` / `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d` |
 | `P06-T1` | `merged` — complete for honest pinned-surface display normalization | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 merged via [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284` |
 | `P06-T2` | `in_progress` — Part 1 display-only CLI merged; Part 2 blocked on promotion evidence | Part 1 dependencies satisfied; Part 2 now needs only trustworthy canonical identity, verified Agentic-account binding, and verified regular-session evidence | Part 1 claim [#116](https://github.com/likefudan/ainvest/pull/116), squash `73e89594d0a4a2bd59aef00ecf30938ea99e18b9`; implementation [#117](https://github.com/likefudan/ainvest/pull/117), squash `a1f788b6ae506a2daad49a054a56ad1036447761`. The v0.3 pin prerequisite is merged, but it supplies none of the remaining three promotion prerequisites; do not claim Part 2 until each is contract-tested |
 
@@ -1440,27 +1447,46 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   owner-assisted: individual real Robinhood reads, real staging/production Bot
   provision/validation, and end-to-end Telegram reads under proposed
   `DEC-010`. This P06-T2 completion update itself claims no successor feature;
-  the separate P06-T0 `v0.3.3` maintenance claim follows immediately below.
+  the completed P06-T0 `v0.3.3` maintenance record follows immediately below.
   The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
 
-##### In-review maintenance: P06-T0 `rh-mcp` `v0.3.3` pin refresh
+##### Completion envelope: P06-T0 `rh-mcp` `v0.3.3` pin refresh
 
-- **Status/owner:** `in_review` / `p06_t0_rh_mcp_v033_pin_refresh`. Claim
+- **Status/owner:** `merged` / `completed` —
+  `p06_t0_rh_mcp_v033_pin_refresh`. Claim
   [#142](https://github.com/likefudan/ainvest/pull/142) squash-merged as
   `b72104232947472346dd7978b8652672125a3dca`; the separate implementation
-  [#143](https://github.com/likefudan/ainvest/pull/143) is Draft and changes
-  the executable pin only when independently reviewed and merged.
-- **Branch/worktree/base:** `agent/rh-mcp-v033-pin` /
+  [#143](https://github.com/likefudan/ainvest/pull/143) independently reviewed
+  and squash-merged as `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`.
+- **Historical branch/worktree/base:** `agent/rh-mcp-v033-pin` /
   `.worktrees/rh-mcp-v033-pin`, based on exact claim squash
   `b72104232947472346dd7978b8652672125a3dca`.
-- **Task identity and merge order:** narrow maintenance under existing
+- **Task identity and merge order:** this was narrow maintenance under existing
   `P06-T0`, not a new task ID and not a reopening of P06-T1, P06-T2, P05-T9,
-  or P05-T10. Merge this claim first; then create a separate implementation
-  branch from the claim's squash commit, rebase it onto latest `main`, obtain
-  independent functionality/readability review of the exact final head, and
-  squash-merge serially.
+  or P05-T10. The claim merged first; the implementation then started from the
+  claim squash, obtained independent functionality/readability review of exact
+  head `519610eed54f63c4a271f203b75c5b3467bd5aa2`, and squash-merged serially.
+- **Review and remediation chain:** the exact released-artifact
+  [audit](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419106779)
+  approved the pin with the two controlled P2 residuals recorded below. The
+  independent claim review then posted two P2
+  [findings](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419133948),
+  exact-head [remediation](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419183622)
+  resolved both, and independent
+  [approval](https://github.com/likefudan/ainvest/pull/142#issuecomment-5422801658)
+  confirmed no material P0-P2 finding remained before #142 merged. The
+  implementation received independent exact-head
+  [approval](https://github.com/likefudan/ainvest/pull/143#issuecomment-5425013975)
+  with no material P0-P2 finding before #143 merged.
+- **Tracker cleanup remediation scope:** independent review of tracker PR #144
+  found stale merge-state clauses in the security evidence mirrors. The narrow
+  remediation therefore expands this docs-only cleanup from
+  `IMPLEMENTATION_TODO.md` and `docs/tasks/status.md` to only the matching
+  merge-state clauses in `docs/security/control-matrix.md` and
+  `docs/security/control-evidence.json`; their `partial` states and pending
+  owner, P06-T2 Part 2, and P-GATEWAY-PROSE evidence remain unchanged.
 - **Owner governance decision:** on 2026-08-25 the owner explicitly directed
   ainvest to **use the latest `rh-mcp` release**, accepting the documented
   release-governance residual for `v0.3.3`: its committed dossier is an
@@ -1484,18 +1510,17 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   property sets are not independently pinned. Separate consumer requirements
   preserve exact hash/digest verification, public-only imports, provider-prose
   discard, the ten-read projection, and owner-assisted real validation. The
-  Draft claim itself still requires normal independent review before it becomes
-  ready. That review and the later implementation review may have no unresolved
-  P0-P3 finding at merge: the two documented P2 residuals above count as
+  claim review and implementation review permitted no unresolved P0-P3 finding
+  at merge. The two documented P2 residuals above count as
   resolved owner risk decisions only while every listed control is satisfied;
   any control violation or new finding remains merge-blocking.
-- **Candidate release identity (not executable yet):** annotated tag object
+- **Current release identity:** annotated tag object
   `617b6db3b740bb69c4b93e2e92c17e2fc87a4b03` peels to source commit
   `68830c28db67632044f078c78b364622d9b66e16`; the non-draft,
   non-prerelease [v0.3.3 release](https://github.com/likefudan/rh-mcp/releases/tag/v0.3.3)
   was published `2026-08-25T23:38:10Z`. Package metadata records `0.3.3` and
   `Requires-Python >=3.12`, `mcp>=2,<3`, and `httpx2>=2.5,<3`.
-- **Candidate artifact identity:** wheel
+- **Current artifact identity:** wheel
   `rh_mcp-0.3.3-py3-none-any.whl`, SHA-256
   `b32eea3844cb1f4a80404f969eca5102ec727d1900227c199d03817463124040`,
   size `208920`; sdist `rh_mcp-0.3.3.tar.gz`, SHA-256
@@ -1503,7 +1528,7 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   size `483685`. GitHub artifact attestations bind both public assets to
   `refs/tags/v0.3.3`, source commit `68830c28db67632044f078c78b364622d9b66e16`,
   and the repository release workflow.
-- **Candidate manifest identity:** format `1.2`, canonicalization
+- **Current manifest identity:** format `1.2`, canonicalization
   `rh-canon-1`, digest algorithm `sha256`, manifest version `2026.08.22`,
   provider-surface digest
   `sha256:3e3f1d3e3e63bef64a2270d9cd238e12c78b247e82c4e717fa3302b0e9e970f8`,
@@ -1566,28 +1591,31 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   no content edit. The lock diff changes only the root broker reference and
   direct `rh-mcp` entry from 0.3.0 to 0.3.3; no `mcp`, `httpx2`, or transitive
   package moved. Focused Robinhood/dependency/display/Telegram tests passed
-  520/520. `./scripts/dev verify` passed: mypy was clean across 259 source
+  520/520; the independent review expanded that focused verification to
+  566/566. `./scripts/dev verify` passed: mypy was clean across 259 source
   files; unit 1,523 passed with one documented optional-runtime skip; contract
   204 passed; integration 53 passed; aggregate 1,780 passed with the same skip
   and 87.30% branch coverage. The full locked dependency audit found no known
   vulnerability; its expected URL-requirement line cannot map `rh-mcp` to an
-  index version. Independent implementation review and owner-assisted real
-  validation remain pending.
-- **Owner-assisted validation after offline merge:** `rh-mcp status` must
-  report `ready=true` for manifest `2026.08.22` and full digest
+  index version. Independent review approved exact implementation head
+  `519610eed54f63c4a271f203b75c5b3467bd5aa2` with no material P0-P2 finding;
+  Verify, Secret scan, Dependency audit, SAST, and CodeQL were all green before
+  squash merge. Owner-assisted real validation remains pending.
+- **Owner-assisted validation after offline merge:** `rh-mcp auth-status` must
+  confirm the intended authorization without exposing credentials, and
+  `rh-mcp status` must report `ready=true` for manifest `2026.08.22` and full digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
-  Then exercise representative individual reads through the ainvest CLI and
-  staging Telegram display path without placing credentials, account numbers,
-  or provider payloads in Git, PRs, logs, or chat. Real Bot provisioning and
+  Then exercise representative account, portfolio, quote, and historical reads
+  through the ainvest CLI and staging Telegram display path without placing
+  credentials, account numbers, or provider payloads in Git, PRs, logs, or
+  chat. Real Bot provisioning and
   end-to-end evidence remain owner-assisted under proposed `DEC-010`; they do
   not block the offline pin implementation.
 
 ##### Current executable dependency pin: `likefudan/rh-mcp` `v0.3.3`
 
 This is the single executable authority encoded by this P06-T0 maintenance
-implementation. Until its independently reviewed implementation PR is
-squash-merged, `main` continues to execute v0.3.0 and this section describes
-the candidate post-merge authority. The exact released artifact audit is
+implementation and merged on `main` through #143. The exact released artifact audit is
 permanent evidence on [#142](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419106779).
 
 **Release and source identity**
@@ -2066,7 +2094,7 @@ excludes the contents of a result envelope's `data`. It also records that
   release, an immutable consumable artifact with source provenance and artifact
   digest/checksum, a committed reviewed capability manifest and full-manifest
   digest, and an ainvest tracker record of those exact values — is satisfied by
-  the historical `v0.2.0` record and the candidate v0.3.3 pin above. The v0.2.0
+  the historical `v0.2.0` record and the current v0.3.3 pin above. The v0.2.0
   subsection is authority for the completed historical delivery only; current
   executable values come from **Current executable dependency pin:
   `likefudan/rh-mcp` `v0.3.3`**. Do not re-derive a pin from `rh-mcp` release
@@ -2268,7 +2296,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged `P05-T4`, `P05-T5`, `P01-T4`, `P02-T6`; accepted `DEC-005`; real owner validation remains pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `merged` / `completed` ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`) | merged `P06-T2` Part 1, `P05-T4`, `P05-T5`, `P05-T10`; the v0.3.3 P06-T0 pin is in review and owner status remains pending | completed display-only Telegram adapter; real individual reads, real Bot validation, and end-to-end Telegram evidence remain owner-assisted under proposed `DEC-010` |
+| `P05-T9` | `merged` / `completed` ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`) | merged `P06-T2` Part 1, `P05-T4`, `P05-T5`, `P05-T10`, and the v0.3.3 P06-T0 pin; owner validation remains pending | completed display-only Telegram adapter; v0.3.3 auth/status, representative real reads, real Bot validation, and end-to-end Telegram evidence remain owner-assisted under proposed `DEC-010` |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4`, `P05-T5`, and
 `P05-T10` and `P05-T9` are complete. This tracker update claims no successor
