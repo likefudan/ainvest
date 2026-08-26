@@ -287,11 +287,11 @@ OutcomeSink = Callable[[str, bool], None]
 
 
 _HISTORY_WINDOWS: Final[dict[str, tuple[timedelta, HistoricalInterval]]] = {
-    "1d": (timedelta(hours=24), HistoricalInterval.MINUTE_5),
-    "5d": (timedelta(hours=120), HistoricalInterval.MINUTE_30),
-    "1m": (timedelta(hours=720), HistoricalInterval.HOUR),
-    "3m": (timedelta(hours=2_160), HistoricalInterval.DAY),
-    "1y": (timedelta(hours=8_760), HistoricalInterval.DAY),
+    "1d": (timedelta(hours=24), HistoricalInterval.MINUTE_30),
+    "5d": (timedelta(hours=120), HistoricalInterval.DAY),
+    "1m": (timedelta(hours=720), HistoricalInterval.WEEK),
+    "3m": (timedelta(hours=2_160), HistoricalInterval.WEEK),
+    "1y": (timedelta(hours=8_760), HistoricalInterval.MONTH),
 }
 _ACCOUNT_COMMANDS: Final[frozenset[TelegramQueryCommand]] = frozenset(
     {

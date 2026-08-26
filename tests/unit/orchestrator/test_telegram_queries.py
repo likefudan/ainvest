@@ -6,6 +6,7 @@ import asyncio
 import json
 import sqlite3
 from datetime import UTC, datetime, timedelta, timezone
+from decimal import Decimal
 from pathlib import Path
 from types import SimpleNamespace
 from typing import Any, cast
@@ -24,12 +25,23 @@ from ainvest.approval.telegram_updates import (
 from ainvest.config import RobinhoodAccountSecretInvalid
 from ainvest.execution.robinhood.display import (
     AdjustmentType,
+    DisplayCommand,
+    DisplayLimitations,
     DisplaySuccess,
     RobinhoodDisplayService,
 )
 from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErrorCode
 from ainvest.execution.robinhood.mappers import MappingErrorCode, RobinhoodMappingError
-from ainvest.execution.robinhood.read_models import HistoricalBounds, HistoricalInterval
+from ainvest.execution.robinhood.read_models import (
+    HistoricalBarRead,
+    HistoricalBounds,
+    HistoricalInterval,
+    HistoricalSeriesRead,
+    HistoricalSession,
+    HistoricalsRead,
+    PartialInstrumentReference,
+    RobinhoodReadEvidence,
+)
 from ainvest.orchestrator.telegram_queries import (
     AccountSecretInvalid,
     AccountSecretMissing,
@@ -41,6 +53,7 @@ from ainvest.orchestrator.telegram_queries import (
     TelegramQueryInputError,
     parse_telegram_query,
 )
+from ainvest.schemas.common import Provenance
 
 TOKEN = "900000001:" + "A" * 35
 ACCOUNT = "synthetic-account-reference"
@@ -49,6 +62,62 @@ NOW = datetime(2026, 3, 8, 10, 30, 45, 987654, tzinfo=timezone(timedelta(hours=-
 
 def _success() -> DisplaySuccess:
     return RobinhoodDisplayService(SimpleNamespace()).status()  # type: ignore[arg-type]
+
+
+def _historicals_success(
+    interval: HistoricalInterval,
+    *,
+    bar_count: int,
+) -> DisplaySuccess:
+    observed_at = NOW.astimezone(UTC).replace(microsecond=0)
+    step = {
+        HistoricalInterval.MINUTE_30: timedelta(minutes=30),
+        HistoricalInterval.DAY: timedelta(days=1),
+        HistoricalInterval.WEEK: timedelta(days=7),
+        HistoricalInterval.MONTH: timedelta(days=30),
+    }[interval]
+    bars = tuple(
+        HistoricalBarRead(
+            begins_at=observed_at - step * (bar_count - index),
+            open=Decimal("210.10"),
+            high=Decimal("212.25"),
+            low=Decimal("209.75"),
+            close=Decimal("211.80"),
+            volume=Decimal("1250000"),
+            session=HistoricalSession.REGULAR,
+            interpolated=False,
+        )
+        for index in range(bar_count)
+    )
+    return DisplaySuccess(
+        command=DisplayCommand.HISTORICALS,
+        limitations=DisplayLimitations(
+            usable_for_trading=False,
+            identity="partial_or_unverified",
+            account_binding="not_applicable",
+            session_evidence="unverified",
+        ),
+        data=HistoricalsRead(
+            series=(
+                HistoricalSeriesRead(
+                    instrument=PartialInstrumentReference(symbol="AAPL"),
+                    interval=interval,
+                    bounds=HistoricalBounds.REGULAR,
+                    bars=bars,
+                ),
+            ),
+            evidence=RobinhoodReadEvidence(
+                provenance=Provenance(
+                    source="robinhood_mcp",
+                    observed_at=observed_at,
+                    received_at=observed_at,
+                ),
+                manifest_digest=f"sha256:{'a' * 64}",
+                schema_digest=f"sha256:{'b' * 64}",
+                result_digest=f"sha256:{'c' * 64}",
+            ),
+        ),
+    )
 
 
 def _update(text: str, *, update_id: int = 1, user_id: int = 101) -> AuthorizedTextUpdate:
@@ -161,11 +230,11 @@ def test_invalid_grammar_is_fixed_and_never_echoes_input(text: str) -> None:
 @pytest.mark.parametrize(
     ("window", "hours", "interval"),
     [
-        ("1d", 24, HistoricalInterval.MINUTE_5),
-        ("5d", 120, HistoricalInterval.MINUTE_30),
-        ("1m", 720, HistoricalInterval.HOUR),
-        ("3m", 2_160, HistoricalInterval.DAY),
-        ("1y", 8_760, HistoricalInterval.DAY),
+        ("1d", 24, HistoricalInterval.MINUTE_30),
+        ("5d", 120, HistoricalInterval.DAY),
+        ("1m", 720, HistoricalInterval.WEEK),
+        ("3m", 2_160, HistoricalInterval.WEEK),
+        ("1y", 8_760, HistoricalInterval.MONTH),
     ],
 )
 def test_history_windows_capture_clock_once_and_map_exactly(
@@ -300,7 +369,7 @@ def test_executor_uses_one_named_display_call_and_closes_gateway(
         assert calls[0][2] == {
             "start_time": "2026-03-07T17:30:45Z",
             "end_time": "2026-03-08T17:30:45Z",
-            "interval": HistoricalInterval.MINUTE_5,
+            "interval": HistoricalInterval.MINUTE_30,
             "bounds": HistoricalBounds.REGULAR,
             "adjustment_type": AdjustmentType.SPLIT,
         }
@@ -309,11 +378,11 @@ def test_executor_uses_one_named_display_call_and_closes_gateway(
 @pytest.mark.parametrize(
     ("window", "expected_start", "interval"),
     [
-        ("1d", "2026-03-07T17:30:45Z", HistoricalInterval.MINUTE_5),
-        ("5d", "2026-03-03T17:30:45Z", HistoricalInterval.MINUTE_30),
-        ("1m", "2026-02-06T17:30:45Z", HistoricalInterval.HOUR),
-        ("3m", "2025-12-08T17:30:45Z", HistoricalInterval.DAY),
-        ("1y", "2025-03-08T17:30:45Z", HistoricalInterval.DAY),
+        ("1d", "2026-03-07T17:30:45Z", HistoricalInterval.MINUTE_30),
+        ("5d", "2026-03-03T17:30:45Z", HistoricalInterval.DAY),
+        ("1m", "2026-02-06T17:30:45Z", HistoricalInterval.WEEK),
+        ("3m", "2025-12-08T17:30:45Z", HistoricalInterval.WEEK),
+        ("1y", "2025-03-08T17:30:45Z", HistoricalInterval.MONTH),
     ],
 )
 def test_executor_passes_each_history_window_as_one_exact_argument_dictionary(
@@ -542,6 +611,80 @@ def test_help_is_static_and_never_opens_gateway() -> None:
 
 
 @pytest.mark.parametrize(
+    ("window", "interval", "bar_count"),
+    [
+        ("1d", HistoricalInterval.MINUTE_30, 13),
+        ("5d", HistoricalInterval.DAY, 5),
+        ("1m", HistoricalInterval.WEEK, 5),
+        ("3m", HistoricalInterval.WEEK, 13),
+        ("1y", HistoricalInterval.MONTH, 12),
+    ],
+)
+def test_each_history_window_sends_one_complete_bounded_normalized_response(
+    monkeypatch: pytest.MonkeyPatch,
+    window: str,
+    interval: HistoricalInterval,
+    bar_count: int,
+) -> None:
+    lifecycle: list[str] = []
+    named_calls: list[dict[str, object]] = []
+    rendered_successes: list[DisplaySuccess] = []
+    render_success = query_module._render_success
+
+    def render_once(success: DisplaySuccess) -> str | None:
+        rendered_successes.append(success)
+        return render_success(success)
+
+    def fail_account_load() -> None:
+        raise AssertionError("history requested an account")
+
+    class Service:
+        def __init__(self, client: object, *, clock: object) -> None:
+            del client, clock
+
+        async def historicals(
+            self,
+            symbols: object,
+            **arguments: object,
+        ) -> DisplaySuccess:
+            assert symbols == ("AAPL",)
+            named_calls.append(arguments)
+            return _historicals_success(interval, bar_count=bar_count)
+
+    class Gateway:
+        async def __aenter__(self) -> SimpleNamespace:
+            lifecycle.append("enter")
+            return SimpleNamespace(client=object())
+
+        async def __aexit__(self, *args: object) -> None:
+            lifecycle.append("exit")
+
+    monkeypatch.setattr(query_module, "RobinhoodDisplayService", Service)
+    monkeypatch.setattr(query_module, "_render_success", render_once)
+    executor = ReadGatewayQueryExecutor(
+        fail_account_load,
+        gateway_factory=cast(GatewayContextFactory, Gateway),
+    )
+    transport = FakeReplyTransport()
+
+    result = asyncio.run(_handler(transport, executor).handle(_update(f"/history AAPL {window}")))
+
+    assert result is TelegramHandlerDisposition.TERMINAL_HANDLED
+    assert lifecycle == ["enter", "exit"]
+    assert len(named_calls) == 1
+    assert named_calls[0]["interval"] is interval
+    assert named_calls[0]["bounds"] is HistoricalBounds.REGULAR
+    assert named_calls[0]["adjustment_type"] is AdjustmentType.SPLIT
+    assert len(rendered_successes) == 1
+    assert len(transport.calls) == 1
+    message = transport.calls[0][2]
+    assert len(message) <= query_module.TELEGRAM_QUERY_MESSAGE_LIMIT
+    wire = _wire(transport)
+    assert wire == rendered_successes[0].model_dump(mode="json")
+    assert len(wire["data"]["series"][0]["bars"]) == bar_count
+
+
+@pytest.mark.parametrize(
     ("effect", "code", "retryable"),
     [
         (AccountSecretMissing(), "account_secret_missing", False),
@@ -742,8 +885,11 @@ def test_oversize_success_becomes_one_bounded_error(
 ) -> None:
     monkeypatch.setattr(query_module, "_render_success", lambda success: "x" * 3_501)
     transport = FakeReplyTransport()
-    asyncio.run(_handler(transport, FakeExecutor()).handle(_update("/rh_status")))
+    executor = FakeExecutor()
+    asyncio.run(_handler(transport, executor).handle(_update("/rh_status")))
     wire = _wire(transport)
+    assert len(executor.calls) == 1
+    assert len(transport.calls) == 1
     assert wire["error"] == {"code": "result_too_large", "retryable": False}
     assert len(transport.calls[0][2]) <= 3_500
 
