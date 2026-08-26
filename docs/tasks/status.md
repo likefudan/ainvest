@@ -564,12 +564,14 @@ The owner pause on `P04-T2` remains in force. The owner explicitly lifted the
 `P05-T10` provisioning/validation and P05-T9 Telegram display-only reads are
 merged. The original
 `P06-T0` adapter, runtime-dependency, hardening, and narrow `v0.3.0` pin
-refresh are merged and complete. No P06-T0 maintenance scope is active.
+refresh are merged and complete; `v0.3.0` remains the sole executable
+authority. Draft claim [#142](https://github.com/likefudan/ainvest/pull/142)
+now owns the next narrow P06-T0 maintenance scope for `v0.3.3`; it changes no
+executable pin and claims no unrelated successor feature.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
 merged. Real individual Robinhood reads, P05-T10 real Bot
 provisioning/validation, and end-to-end Telegram reads are the remaining
-owner-assisted evidence under proposed `DEC-010`; no successor feature is
-claimed here.
+owner-assisted evidence under proposed `DEC-010`.
 
 ##### Execution envelope: P08-T4
 
@@ -1435,10 +1437,136 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   Telegram display-only reads are merged. The next priority-lane evidence is
   owner-assisted: individual real Robinhood reads, real staging/production Bot
   provision/validation, and end-to-end Telegram reads under proposed
-  `DEC-010`. No successor feature is claimed by this completion update.
+  `DEC-010`. This P06-T2 completion update itself claims no successor feature;
+  the separate P06-T0 `v0.3.3` maintenance claim follows immediately below.
   The slice remains
   display-only and separate from Telegram approval, Paper promotion, all 11
   non-trading mutations, and all 8 trading capabilities.
+
+##### Claimed maintenance: P06-T0 `rh-mcp` `v0.3.3` pin refresh
+
+- **Status/owner:** `claimed` / `planning` —
+  `p06_t0_rh_mcp_v033_pin_refresh` in Draft claim
+  [#142](https://github.com/likefudan/ainvest/pull/142). This claim does not change the
+  executable dependency: `v0.3.0` remains the sole current authority until a
+  separately rebased, independently reviewed implementation PR is
+  squash-merged.
+- **Branch/worktree/base:** `agent/rh-mcp-v033-claim` /
+  `.worktrees/rh-mcp-v033-claim`, based on immutable `main`
+  `c1883a8047e1728e30cec45261c3265234362802`.
+- **Task identity and merge order:** narrow maintenance under existing
+  `P06-T0`, not a new task ID and not a reopening of P06-T1, P06-T2, P05-T9,
+  or P05-T10. Merge this claim first; then create a separate implementation
+  branch from the claim's squash commit, rebase it onto latest `main`, obtain
+  independent functionality/readability review of the exact final head, and
+  squash-merge serially.
+- **Owner governance decision:** on 2026-08-25 the owner explicitly directed
+  ainvest to **use the latest `rh-mcp` release**, accepting the documented
+  release-governance residual for `v0.3.3`: its committed dossier is an
+  in-project source review, binds pre-release commit `ce8f839660040a2fed543525f01fb2f54e732aa4`
+  and digest `sha256:2ea0954b4a52d9469837bc2b167904ab871de893475e68b43dc2a8fb02e7f886`,
+  and explicitly does not call itself an external released-artifact approval.
+  The final release is one corrected rationale and manifest digest later.
+  This owner decision accepts that residual; it does not relabel the internal
+  dossier.
+- **Exact released-artifact audit:** a separate audit subagent's
+  [permanent evidence](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419106779)
+  binds the public wheel, sdist, tag target, source, attestations, independently
+  rebuilt artifacts, and shipped manifest and returns
+  `APPROVED_FOR_AINVEST_PIN_WITH_CONDITIONS`. It found no P0 or P1. Its P2
+  release-governance and future-schema-widening residuals are risk decisions
+  explicitly accepted by the owner for this exact artifact, not unresolved
+  findings that block this pin. Their controls remain binding: use the exact
+  artifact, source, attestation, and manifest hashes rather than unsupported
+  governance prose, and manually review substantive schema changes on every future
+  provider refresh because nested mutation constraints and uniform read
+  property sets are not independently pinned. Separate consumer requirements
+  preserve exact hash/digest verification, public-only imports, provider-prose
+  discard, the ten-read projection, and owner-assisted real validation. The
+  Draft claim itself still requires normal independent review before it becomes
+  ready. That review and the later implementation review may have no unresolved
+  P0-P3 finding at merge: the two documented P2 residuals above count as
+  resolved owner risk decisions only while every listed control is satisfied;
+  any control violation or new finding remains merge-blocking.
+- **Candidate release identity (not executable yet):** annotated tag object
+  `617b6db3b740bb69c4b93e2e92c17e2fc87a4b03` peels to source commit
+  `68830c28db67632044f078c78b364622d9b66e16`; the non-draft,
+  non-prerelease [v0.3.3 release](https://github.com/likefudan/rh-mcp/releases/tag/v0.3.3)
+  was published `2026-08-25T23:38:10Z`. Package metadata records `0.3.3` and
+  `Requires-Python >=3.12`, `mcp>=2,<3`, and `httpx2>=2.5,<3`.
+- **Candidate artifact identity:** wheel
+  `rh_mcp-0.3.3-py3-none-any.whl`, SHA-256
+  `b32eea3844cb1f4a80404f969eca5102ec727d1900227c199d03817463124040`,
+  size `208920`; sdist `rh_mcp-0.3.3.tar.gz`, SHA-256
+  `c61ff3365279825a4ca7c39dd1b9ba0039db69a66c653c3c10c32e8d5a8247b4`,
+  size `483685`. GitHub artifact attestations bind both public assets to
+  `refs/tags/v0.3.3`, source commit `68830c28db67632044f078c78b364622d9b66e16`,
+  and the repository release workflow.
+- **Candidate manifest identity:** format `1.2`, canonicalization
+  `rh-canon-1`, digest algorithm `sha256`, manifest version `2026.08.22`,
+  provider-surface digest
+  `sha256:3e3f1d3e3e63bef64a2270d9cd238e12c78b247e82c4e717fa3302b0e9e970f8`,
+  full-manifest digest
+  `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`,
+  and result-envelope version `1.0`. The tag and wheel carry the same manifest.
+- **Reviewed impact to freeze:** there are still exactly 54 capabilities:
+  35 allowed reads, 11 allowed non-trading mutations, and 8 denied trading
+  capabilities. No capability name, disposition, `mutates` value, or
+  provider-tool name changed from `v0.3.0`; ainvest's exact 10-member
+  `ReadCapability` projection therefore stays unchanged. Under `src/rh_mcp`,
+  only the manifest JSON changed. Input schemas moved only for the allowed
+  mutations `create_scan` and `update_scan_config`; output schemas moved for
+  seven capabilities. Of ainvest's ten projected reads, only `get_accounts`
+  has a new output-schema digest, caused solely by provider `guide.description`
+  prose; its data properties and required set are unchanged. All eleven
+  committed P06-T1 payload fixtures validate unchanged against the `v0.3.3`
+  output schemas. Provider guide/schema/description/rationale text remains
+  untrusted and discarded.
+- **Allowed implementation paths:** `pyproject.toml`, `uv.lock`;
+  `src/ainvest/execution/robinhood/pins.py`; current-release-only docstrings in
+  `src/ainvest/execution/robinhood/{__init__,composition,prose}.py`; the
+  existing Robinhood artifact/composition/read/prose/display unit tests,
+  manifest and P06-T1 mapping contract tests, display integration test, and
+  `tests/unit/test_dependency_boundary.py`; the single
+  `tests/fixtures/rh_mcp/` lineage; `IMPLEMENTATION_TODO.md`,
+  `docs/tasks/status.md`, `docs/development.md`,
+  `docs/robinhood-read-cli.md`, and only current-release records in
+  `docs/security/{control-matrix.md,control-evidence.json}`. Narrow the actual
+  diff further when a path has no stale executable reference. Historical
+  `v0.2.0` and `v0.3.0` evidence remains historical and must not be rewritten.
+- **Required implementation:** update the exact release/source/artifact/
+  manifest/surface pins; repoint the broker-extra direct wheel URL and hash;
+  refresh only the `rh-mcp` direct lock entry and corresponding root metadata;
+  retain the currently resolved compatible transitive versions. Move the one
+  fixture tree from `v0.3.0` to `v0.3.3`, replace `read-manifest.json` with the
+  byte-exact artifact-shipped manifest, and update executable fixture paths and
+  literal pin assertions. Do not change payload fixture bytes, mappers, read
+  models, named adapter methods, display output, CLI grammar, Telegram runner,
+  or gateway lifecycle unless a focused test proves the frozen impact analysis
+  false and the coordinator records a scope expansion.
+- **Required verification:** verify public hashes/sizes and attestations;
+  independently recompute the full-manifest digest and exact 35/11/8 sets;
+  assert the unchanged ten-operation projection and eleven-mutation input
+  property/required sets; validate every migrated payload fixture against the
+  new schema. Run broker install/provenance, lock check, dependency boundary
+  and audit; focused artifact, published-surface, composition, read-client,
+  prose, mapper, display, CLI, Telegram-query and Telegram-polling lifecycle
+  tests; all unit, contract, and integration suites; `git diff --check`; and
+  `./scripts/dev verify`. The dependency refresh must not introduce an
+  unrelated `mcp`, `httpx2`, or other package upgrade.
+- **Forbidden scope:** no new capability or generic `invoke`, no mutation or
+  trading use, no OAuth/credential/account-secret change, no mapper/model/
+  display/Telegram feature work, no Paper promotion, no canonical identity,
+  account-binding, or regular-session claim, no dependency-range widening,
+  and no speculative third-party hardening.
+- **Owner-assisted validation after offline merge:** `rh-mcp status` must
+  report `ready=true` for manifest `2026.08.22` and full digest
+  `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
+  Then exercise representative individual reads through the ainvest CLI and
+  staging Telegram display path without placing credentials, account numbers,
+  or provider payloads in Git, PRs, logs, or chat. Real Bot provisioning and
+  end-to-end evidence remain owner-assisted under proposed `DEC-010`; they do
+  not block the offline pin implementation.
 
 ##### Current executable dependency pin: `likefudan/rh-mcp` `v0.3.0`
 
