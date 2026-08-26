@@ -1443,7 +1443,8 @@ invoke only its existing 10 named read operations. Its serial merge order is:
 ##### Claimed maintenance: P06-T0 `rh-mcp` `v0.3.3` pin refresh
 
 - **Status/owner:** `claimed` / `planning` —
-  `p06_t0_rh_mcp_v033_pin_refresh`. This Draft claim does not change the
+  `p06_t0_rh_mcp_v033_pin_refresh` in Draft claim
+  [#142](https://github.com/likefudan/ainvest/pull/142). This claim does not change the
   executable dependency: `v0.3.0` remains the sole current authority until a
   separately rebased, independently reviewed implementation PR is
   squash-merged.
@@ -1464,10 +1465,20 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   and explicitly does not call itself an external released-artifact approval.
   The final release is one corrected rationale and manifest digest later.
   This owner decision accepts that residual; it does not relabel the internal
-  dossier. Independent review evidence for the exact released wheel, sdist,
-  tag, source commit, and shipped manifest must be attached to this claim
-  before it leaves Draft and must have no unresolved P0-P3 finding before the
-  implementation may merge.
+  dossier.
+- **Exact released-artifact audit:** a separate audit subagent's
+  [permanent evidence](https://github.com/likefudan/ainvest/pull/142#issuecomment-5419106779)
+  binds the public wheel, sdist, tag target, source, attestations, independently
+  rebuilt artifacts, and shipped manifest and returns
+  `APPROVED_FOR_AINVEST_PIN_WITH_CONDITIONS`. It found no P0 or P1. Its P2
+  conditions are recorded here as implementation requirements: use the exact
+  artifact/hash/digest evidence rather than unsupported release-governance
+  prose, and manually review substantive schema changes on every future
+  provider refresh because nested mutation constraints and uniform read
+  property sets are not independently pinned. P3 residuals preserve the exact
+  hash/digest pin, public-only imports, and provider-prose discard. This
+  artifact audit is attached; the Draft claim itself still requires the normal
+  independent claim review before it becomes ready.
 - **Candidate release identity (not executable yet):** annotated tag object
   `617b6db3b740bb69c4b93e2e92c17e2fc87a4b03` peels to source commit
   `68830c28db67632044f078c78b364622d9b66e16`; the non-draft,
