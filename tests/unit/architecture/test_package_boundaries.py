@@ -99,6 +99,31 @@ def test_telegram_query_execution_bridge_exists_only_in_orchestrator() -> None:
 
 
 @pytest.mark.unit
+def test_account_provisioning_uses_only_public_named_read_gateway() -> None:
+    """P05-T11 composes in orchestrator without widening approval or provider access."""
+    module = AINVEST_ROOT / "orchestrator" / "robinhood_account_provisioning.py"
+    source = module.read_text(encoding="utf-8")
+    imports = {
+        name
+        for name, _ in extract_module_imports(
+            source,
+            source_path=module,
+            current_package="ainvest.orchestrator",
+        )
+    }
+    assert "ainvest.execution.robinhood" in imports
+    assert not any(name == "rh_mcp" or name.startswith("rh_mcp.") for name in imports)
+    assert not any(name == "mcp" or name.startswith("mcp.") for name in imports)
+    assert ".invoke(" not in source
+    assert ".read_accounts(" in source
+
+    approval_sources = "\n".join(
+        path.read_text(encoding="utf-8") for path in (AINVEST_ROOT / "approval").glob("*.py")
+    )
+    assert "ainvest.execution" not in approval_sources
+
+
+@pytest.mark.unit
 def test_production_packages_have_no_import_cycles() -> None:
     """Boundary packages under ``src/ainvest`` must not form import cycles."""
     edges = collect_import_edges(AINVEST_ROOT)

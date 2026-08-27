@@ -30,6 +30,11 @@ from ainvest.approval.telegram import (
     TelegramNotificationRequest,
     TelegramNotificationSender,
 )
+from ainvest.approval.telegram_maintenance import (
+    TelegramMaintenanceLeaseError,
+    TelegramMaintenanceLeasePolicy,
+    TelegramPollingMaintenanceLease,
+)
 from ainvest.approval.telegram_updates import (
     AsyncioTelegramPollingControl,
     AuthorizedCallbackUpdate,
@@ -85,12 +90,15 @@ __all__ = [
     "TelegramIdentityTransport",
     "TelegramIgnoredReason",
     "TelegramLongPoller",
+    "TelegramMaintenanceLeaseError",
+    "TelegramMaintenanceLeasePolicy",
     "TelegramNotificationCategory",
     "TelegramNotificationOutcome",
     "TelegramNotificationRequest",
     "TelegramNotificationSender",
     "TelegramPollingControl",
     "TelegramPollingFatal",
+    "TelegramPollingMaintenanceLease",
     "TelegramProviderRateLimited",
     "TelegramProviderTransient",
     "TelegramProviderUpdate",

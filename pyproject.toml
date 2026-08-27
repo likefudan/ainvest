@@ -91,6 +91,7 @@ default-groups = ["dev", "test"]
 ainvest-strategy-conformance = "ainvest.strategy_conformance.cli:main"
 ainvest-paper-flow = "ainvest.orchestrator.cli:main"
 ainvest-robinhood-read = "ainvest.execution.robinhood.cli:main"
+ainvest-robinhood-account = "ainvest.orchestrator.robinhood_account_provisioning:main"
 ainvest-telegram-provision = "ainvest.approval.telegram_provisioning:main"
 ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"
 

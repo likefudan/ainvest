@@ -49,21 +49,26 @@ file-secret:
 <secrets-dir>/ROBINHOOD_READ_ACCOUNT_NUMBER
 ```
 
-The file contains 1–128 visible ASCII characters, optionally followed by one
-LF. CRLF, whitespace, controls, extra lines, invalid UTF-8, symlinks, and
-oversized values are rejected. The chat cannot provide or select this value.
+Provision it with the dedicated `ainvest-robinhood-account` workflow in
+[`robinhood-account-binding.md`](robinhood-account-binding.md). The file must
+be an owner-only regular file at exact mode `0600` and contains 1–128 visible
+ASCII characters, optionally followed by one LF. CRLF, whitespace, controls,
+extra lines, invalid UTF-8, symlinks, case-variant filenames, insecure modes,
+and oversized values are rejected. The chat cannot provide or select this value.
 The redacted `SecretStr` wrapper is retained through gateway startup. Plaintext
 is revealed only in the argument expression of the exact named account-bound
 display call, with no caller-local plaintext reference before or after that
 await, and never appears in a reply, log, database row, snapshot, or error.
 
 Account configuration is resolved lazily and independently from global startup
-configuration. Its precedence is explicit value, environment, dotenv, exact
-file secret, then an injected YAML value. Missing and invalid sources become
-the fixed `account_secret_missing` and `account_secret_invalid` replies only
-for the four account-bound commands. They cannot block `/help`, `/rh_status`,
-`/accounts`, `/quotes`, `/pricebook`, `/history`, `/fundamentals`, or
-`/financials` and cannot open the gateway for an account-bound command.
+configuration, from only that exact file in the explicitly supplied secrets
+directory. Account-value routes through explicit values, environment, dotenv,
+YAML, argv, chat, or SQLite are not precedence layers and fail closed. Missing
+and invalid file configuration become the fixed `account_secret_missing` and
+`account_secret_invalid` replies only for the four account-bound commands.
+They cannot block `/help`, `/rh_status`, `/accounts`, `/quotes`, `/pricebook`,
+`/history`, `/fundamentals`, or `/financials` and cannot open the gateway for
+an account-bound command.
 
 ## Exact commands
 
