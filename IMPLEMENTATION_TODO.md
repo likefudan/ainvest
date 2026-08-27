@@ -1358,9 +1358,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `/history AAPL 1d` completed its gateway read and normalization, but the
   local Telegram post-render reply exceeded 3,500 code points and was replaced
   with sanitized `result_too_large`. The narrow history
-  interval maintenance contract below is therefore `in_progress` as a new
-  independently reviewed follow-up; it does not reopen any other P05-T9
-  behavior.
+  interval maintenance contract below is therefore `in_progress` on
+  `agent/p05-t9-history-sizing` as a new independently reviewed follow-up; it
+  does not reopen any other P05-T9 behavior.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1471,6 +1471,26 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   still with one gateway call and one send. No change to the gateway,
   normalization, Telegram authorization, rate/deadline, account-secret,
   command grammar, or error wire is permitted.
+
+- **History sizing implementation record:** implementation owner
+  `implement_history_sizing` started from merged-claim base
+  `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1` in the reserved repo-internal
+  worktree/branch, then rebased without conflict onto exact integration base
+  `1a724e2861dc811c6c29717f6157c073bcc516f8` after P05-T11 merged. The
+  implementation changes only the five pinned interval
+  enum values, the Telegram read-query documentation, and the exact unit
+  expectations/handler proofs. Parameterized handler tests use complete
+  normalized one-symbol responses with representative 13/5/5/13/12 bars for
+  `1d`/`5d`/`1m`/`3m`/`1y`; each proves one gateway context, one named display
+  call, one render, one bounded send, and field-for-field JSON equality with
+  the full normalized output. The separate deliberately oversized success test
+  still proves one sanitized `result_too_large` send. Focused tests pass
+  112/112; the combined history/dependency/architecture proof passes 194/194.
+  The post-rebase canonical merge gate passes 1,566 unit tests plus one optional
+  runtime skip, 204 contract tests, 53 integration tests, and 1,823 combined
+  tests plus one skip at 87.23% coverage with strict mypy clean across 263
+  source files. Independent review, required CI, squash merge, and post-merge
+  owner revalidation remain pending; no other P05-T9 surface is reopened.
 
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has verified the environment-specific Bot,

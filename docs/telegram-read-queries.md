@@ -93,6 +93,22 @@ tokens. Symbols are exact uppercase ainvest `Symbol` values. Quoting, flags,
 Bot mentions, free text, duplicate symbols, and extra arguments are rejected.
 `/help` is static and never opens the gateway.
 
+History windows are fixed rolling UTC durations, not exchange-calendar
+periods. Their exact provider intervals are:
+
+| Window | Rolling duration | Interval | Bounds | Adjustment |
+|---|---:|---|---|---|
+| `1d` | 24 hours | `30minute` | `regular` | `split` |
+| `5d` | 120 hours | `day` | `regular` | `split` |
+| `1m` | 720 hours | `week` | `regular` | `split` |
+| `3m` | 2,160 hours | `week` | `regular` | `split` |
+| `1y` | 8,760 hours | `month` | `regular` | `split` |
+
+The complete normalized history response is rendered once and sent once. It
+is never truncated, split, paginated, or followed by another provider read.
+The general bounded `result_too_large` error remains the fail-closed response
+if a successful envelope still exceeds the 3,500-code-point limit.
+
 Each authorized user receives at most six total reply attempts per 60-second
 process-local window, with only one query in flight. Excess updates are silent
 and terminal. The limiter resets on process restart and is abuse control, not

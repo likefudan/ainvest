@@ -106,7 +106,7 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P06-T0` v0.3 refresh and the display-only lane are merged; Part 2 remains blocked only on canonical identity, account binding, and session evidence) |
 | Telegram Bot environment provisioning | Batch F add-on | `P05-T10` after merged `P05-T4` → `P05-T5` | `complete (merged)` through #135/#136; staging is owner-validated, while production remains pending under proposed `DEC-010` |
-| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | core implementation merged through #138/#139; owner validation proved status/accounts/quotes and claimed one narrow history-sizing follow-up |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | core merged through #138/#139; the narrow owner-validated history-sizing follow-up is implemented on its reserved branch and awaits independent review/merge |
 | Robinhood read-account binding | Batch F add-on | `P05-T11` after merged `P05-T9`, `P05-T10`, and `P06-T2` Part 1 | `in_progress` as a docs claim; secure file-only provisioning/validation is the next account-bound display prerequisite |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
@@ -2299,7 +2299,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | core `merged`; history sizing follow-up `in_progress` as a docs claim ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`) | verified v0.3.3 staging status/accounts/quote; 1d read+mapping succeeded but local Telegram post-render exceeded 3,500 | change only the five pinned history intervals and realistic size tests; every other P05-T9 contract remains frozen |
+| `P05-T9` | core `merged`; history sizing follow-up `in_progress` on `agent/p05-t9-history-sizing` ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`) | verified v0.3.3 staging status/accounts/quote; 1d read+mapping succeeded but local Telegram post-render exceeded 3,500 | five pinned intervals and complete normalized all-window handler proofs implemented; independent review, required CI, squash merge, and owner revalidation remain |
 | `P05-T11` | `in_progress` as a docs claim; implementation unassigned until claim merge | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | dedicated file-only read-account provision/validate/disable utility and strict `0600` loader; exact scope is in its execution envelope |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4`, `P05-T5`, and
@@ -3173,11 +3173,14 @@ completed Paper approval path unlocks `P08-T13`, then
 
 ##### Execution envelope: P05-T9 history sizing maintenance
 
-- **Status/owner:** `in_progress` as a reviewed scheduling claim; implementation
-  owner is assigned only after this claim merges.
-- **Implementation branch/worktree/base:** reserve
-  `agent/p05-t9-history-sizing` / `.worktrees/p05-t9-history-sizing`; set its
-  immutable base to this claim's eventual squash commit before any code edit.
+- **Status/owner:** `in_progress`; implementation owner
+  `implement_history_sizing`. Implementation and focused proof are complete;
+  independent review, required CI, squash merge, and owner revalidation remain.
+- **Implementation branch/worktree/base:**
+  `agent/p05-t9-history-sizing` / `.worktrees/p05-t9-history-sizing`, created
+  from merged-claim base `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`
+  before any code edit and rebased without conflict after P05-T11 merged onto
+  exact integration base `1a724e2861dc811c6c29717f6157c073bcc516f8`.
 - **Authority and exact behavior:** `IMPLEMENTATION_TODO.md` P05-T9's history
   sizing maintenance boundary. Preserve rolling durations 24/120/720/2160/8760
   hours and exact UTC RFC 3339 start/end, `regular`, `split`, one named gateway
@@ -3199,6 +3202,20 @@ completed Paper approval path unlocks `P08-T13`, then
   proving one sanitized fallback send. Run focused tests, unit, contract,
   integration, `git diff --check`, secret/scope/stale-reference inspection, and
   `./scripts/dev verify`.
+- **Implementation evidence:** implementation code, tests, and user-facing
+  documentation change only the three authorized paths; this TODO/status pair
+  records the required coordination evidence. The five full normalized handler fixtures contain
+  representative 13/5/5/13/12 bars and prove exact wire equality, at most
+  3,500 code points, one gateway context, one named display call, one render,
+  and one send. The generic 3,501-code-point case remains a separate sanitized
+  `result_too_large` proof with one call and one send. Existing fixed-duration
+  month-end/leap-day/DST tests remain unchanged and passing. Focused tests pass
+  112/112; the combined history/dependency/architecture proof passes 194/194.
+  The post-rebase canonical merge gate passes 1,566 unit tests plus one optional
+  runtime skip, 204 contract tests, 53 integration tests, and 1,823 combined
+  tests plus one skip at 87.23% coverage, with strict mypy clean across 263
+  source files. Immutable-head required CI evidence is recorded on the
+  implementation PR before it can leave Draft.
 
 ##### Execution envelope: P05-T11 read-account binding
 
