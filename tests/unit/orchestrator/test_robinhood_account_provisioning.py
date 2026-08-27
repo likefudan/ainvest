@@ -5,17 +5,23 @@ from __future__ import annotations
 import asyncio
 import io
 import os
+from collections.abc import Coroutine
 from dataclasses import dataclass, field, replace
 from pathlib import Path
-from typing import Any
+from typing import Any, Never
 
 import pytest
 
 import ainvest.orchestrator.robinhood_account_provisioning as provisioning_module
 from ainvest.approval.telegram import TelegramEnvironment
 from ainvest.approval.telegram_maintenance import TelegramMaintenanceLeasePolicy
-from ainvest.db import create_all_tables, create_db_engine
-from ainvest.execution.robinhood import GatewayReadResult
+from ainvest.db import TelegramUpdateRepository, create_all_tables, create_db_engine
+from ainvest.db.session import create_session_factory
+from ainvest.execution.robinhood import (
+    GatewayReadError,
+    GatewayReadErrorCode,
+    GatewayReadResult,
+)
 from ainvest.orchestrator.robinhood_account_provisioning import (
     AccountProvisioningDependencies,
     AccountProvisioningFailure,
@@ -375,6 +381,132 @@ def test_main_invalid_input_has_fixed_json_and_zero_secret_leak(tmp_path: Path) 
     assert stdout.getvalue() == ""
     assert stderr.getvalue() == '{"code":"invalid_cli_input","status":"error"}\n'
     assert ACCOUNT not in stderr.getvalue()
+
+
+def test_main_keyboard_interrupt_has_fixed_json_and_zero_context_leak(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+    env_file = tmp_path / "SENSITIVE-ENV-PATH"
+    secrets_dir = tmp_path / "SENSITIVE-SECRETS-PATH"
+
+    def interrupt_run(coroutine: Coroutine[Any, Any, Any]) -> Never:
+        coroutine.close()
+        raise KeyboardInterrupt(f"{ACCOUNT}:{env_file}:{secrets_dir}")
+
+    monkeypatch.setattr(asyncio, "run", interrupt_run)
+    code = main(
+        [
+            "validate",
+            "--environment",
+            "staging",
+            "--env-file",
+            str(env_file),
+            "--secrets-dir",
+            str(secrets_dir),
+        ],
+        stdout=stdout,
+        stderr=stderr,
+    )
+
+    assert code == 130
+    assert stdout.getvalue() == ""
+    assert stderr.getvalue() == '{"code":"operation_cancelled","status":"error"}\n'
+    rendered = stdout.getvalue() + stderr.getvalue()
+    assert ACCOUNT not in rendered
+    assert str(env_file) not in rendered
+    assert str(secrets_dir) not in rendered
+
+
+def test_main_preserves_system_exit(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    stdout = io.StringIO()
+    stderr = io.StringIO()
+
+    def exit_run(coroutine: Coroutine[Any, Any, Any]) -> Never:
+        coroutine.close()
+        raise SystemExit(23)
+
+    monkeypatch.setattr(asyncio, "run", exit_run)
+    with pytest.raises(SystemExit, match="23"):
+        main(
+            [
+                "validate",
+                "--environment",
+                "staging",
+                "--env-file",
+                str(tmp_path / ".env"),
+                "--secrets-dir",
+                str(tmp_path / "secrets"),
+            ],
+            stdout=stdout,
+            stderr=stderr,
+        )
+    assert stdout.getvalue() == stderr.getvalue() == ""
+
+
+@pytest.mark.parametrize("failure", ["cancelled", "provider"])
+def test_provision_failure_closes_gateway_releases_lease_and_writes_no_file(
+    tmp_path: Path, failure: str
+) -> None:
+    request = _request(tmp_path, "provision")
+
+    @dataclass
+    class LifecycleClient:
+        started: asyncio.Event
+
+        async def read_accounts(self) -> GatewayReadResult:
+            self.started.set()
+            if failure == "provider":
+                raise GatewayReadError(GatewayReadErrorCode.PROVIDER_UNAVAILABLE)
+            await asyncio.Event().wait()
+            raise AssertionError
+
+    @dataclass
+    class LifecycleGateway:
+        client: LifecycleClient
+
+    @dataclass
+    class LifecycleOpener:
+        client: LifecycleClient
+        enters: int = 0
+        exits: int = 0
+
+        def __call__(self) -> LifecycleOpener:
+            return self
+
+        async def __aenter__(self) -> LifecycleGateway:
+            self.enters += 1
+            return LifecycleGateway(self.client)
+
+        async def __aexit__(self, *args: object) -> None:
+            self.exits += 1
+
+    async def run() -> LifecycleOpener:
+        started = asyncio.Event()
+        opener = LifecycleOpener(LifecycleClient(started))
+        task = asyncio.create_task(execute(request, _dependencies(opener)))  # type: ignore[arg-type]
+        await started.wait()
+        if failure == "cancelled":
+            task.cancel()
+            with pytest.raises(asyncio.CancelledError):
+                await task
+        else:
+            with pytest.raises(AccountProvisioningFailure, match="gateway_failed"):
+                await task
+        return opener
+
+    opener = asyncio.run(run())
+    assert opener.enters == opener.exits == 1
+    assert list(request.secrets_dir.iterdir()) == []
+    assert request.database is not None
+    engine = create_db_engine(f"sqlite+pysqlite:///{request.database}")
+    factory = create_session_factory(engine)
+    with factory() as session:
+        state = TelegramUpdateRepository(session).get_state("staging")
+        assert state is not None
+        assert state.lease_owner is None
+    engine.dispose()
 
 
 def test_gateway_timeout_closes_once_and_returns_only_sanitized_code(

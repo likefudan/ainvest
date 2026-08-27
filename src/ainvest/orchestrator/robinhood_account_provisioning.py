@@ -496,6 +496,9 @@ def main(
             + "\n"
         )
         return 2 if exc.code == "invalid_cli_input" else 1
+    except (asyncio.CancelledError, KeyboardInterrupt):
+        stderr.write('{"code":"operation_cancelled","status":"error"}\n')
+        return 130
     except Exception:
         stderr.write('{"code":"internal_error","status":"error"}\n')
         return 1
