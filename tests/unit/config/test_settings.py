@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import os
 from pathlib import Path
 from typing import Any
 
@@ -784,7 +785,9 @@ def test_robinhood_account_exact_file_accepts_visible_ascii_boundaries(
     length: int,
 ) -> None:
     raw = b"A" * length
-    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_bytes(raw + terminal)
+    target = tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER"
+    target.write_bytes(raw + terminal)
+    os.chmod(target, 0o600)
 
     account = load_robinhood_read_account_number(environ={}, env_file=None, secrets_dir=tmp_path)
 
@@ -827,7 +830,9 @@ def test_robinhood_account_exact_file_rejects_every_invalid_shape(
     tmp_path: Path,
     raw: bytes,
 ) -> None:
-    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_bytes(raw)
+    target = tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER"
+    target.write_bytes(raw)
+    os.chmod(target, 0o600)
 
     with pytest.raises(RobinhoodAccountSecretInvalid) as caught:
         load_robinhood_read_account_number(environ={}, env_file=None, secrets_dir=tmp_path)
@@ -852,49 +857,36 @@ def test_robinhood_account_file_rejects_symlink_and_stock_alias_bypass(
         FAKE_ACCOUNT_REFERENCE,
         encoding="utf-8",
     )
-    account = load_robinhood_read_account_number(environ={}, env_file=None, secrets_dir=tmp_path)
-    assert account is None
+    with pytest.raises(RobinhoodAccountSecretInvalid):
+        load_robinhood_read_account_number(environ={}, env_file=None, secrets_dir=tmp_path)
 
 
 @pytest.mark.unit
-def test_robinhood_account_source_precedence_is_exact(tmp_path: Path) -> None:
+def test_robinhood_account_source_is_exact_file_only(tmp_path: Path) -> None:
     secrets_dir = tmp_path / "secrets"
     secrets_dir.mkdir()
-    (secrets_dir / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_text(
+    target = secrets_dir / "ROBINHOOD_READ_ACCOUNT_NUMBER"
+    target.write_text(
         "file-value",
         encoding="utf-8",
     )
+    os.chmod(target, 0o600)
     dotenv = tmp_path / ".env"
     dotenv.write_text("ROBINHOOD_READ_ACCOUNT_NUMBER=dotenv-value\n", encoding="utf-8")
 
-    from_yaml = load_robinhood_read_account_number(
-        environ={}, env_file=None, yaml_value="yaml-value"
-    )
     from_file = load_robinhood_read_account_number(
-        environ={}, env_file=None, secrets_dir=secrets_dir, yaml_value="yaml-value"
-    )
-    from_dotenv = load_robinhood_read_account_number(
-        environ={}, env_file=dotenv, secrets_dir=secrets_dir, yaml_value="yaml-value"
-    )
-    from_env = load_robinhood_read_account_number(
-        environ={"ROBINHOOD_READ_ACCOUNT_NUMBER": "environment-value"},
-        env_file=dotenv,
-        secrets_dir=secrets_dir,
-        yaml_value="yaml-value",
-    )
-    explicit = load_robinhood_read_account_number(
-        environ={"ROBINHOOD_READ_ACCOUNT_NUMBER": "environment-value"},
-        env_file=dotenv,
-        secrets_dir=secrets_dir,
-        yaml_value="yaml-value",
-        explicit=SecretStr("explicit-value"),
+        environ={}, env_file=None, secrets_dir=secrets_dir
     )
 
-    assert from_yaml is not None and from_yaml.get_secret_value() == "yaml-value"
     assert from_file is not None and from_file.get_secret_value() == "file-value"
-    assert from_dotenv is not None and from_dotenv.get_secret_value() == "dotenv-value"
-    assert from_env is not None and from_env.get_secret_value() == "environment-value"
-    assert explicit is not None and explicit.get_secret_value() == "explicit-value"
+    with pytest.raises(RobinhoodAccountSecretInvalid):
+        load_robinhood_read_account_number(environ={}, env_file=dotenv, secrets_dir=secrets_dir)
+    with pytest.raises(RobinhoodAccountSecretInvalid):
+        load_robinhood_read_account_number(
+            environ={"robinhood_read_account_number": "environment-value"},
+            env_file=None,
+            secrets_dir=secrets_dir,
+        )
 
 
 @pytest.mark.unit
@@ -902,7 +894,7 @@ def test_robinhood_account_source_precedence_is_exact(tmp_path: Path) -> None:
     "value",
     ["", " leading", "trailing ", "value\tpart", "value\npart", "é", "A" * 129],
 )
-def test_robinhood_account_environment_value_is_never_trimmed_or_normalized(
+def test_robinhood_account_environment_value_is_always_rejected(
     value: str,
 ) -> None:
     with pytest.raises(RobinhoodAccountSecretInvalid):
@@ -922,6 +914,7 @@ def test_robinhood_account_empty_dotenv_is_invalid_and_cannot_fall_back(
         FAKE_ACCOUNT_REFERENCE,
         encoding="utf-8",
     )
+    os.chmod(secrets_dir / "ROBINHOOD_READ_ACCOUNT_NUMBER", 0o600)
     dotenv = tmp_path / ".env"
     dotenv.write_text("ROBINHOOD_READ_ACCOUNT_NUMBER=\n", encoding="utf-8")
 
@@ -968,9 +961,11 @@ def test_unrelated_empty_environment_and_dotenv_values_keep_stock_ignore_behavio
 
 @pytest.mark.unit
 def test_robinhood_account_never_uses_implicit_secret_path(tmp_path: Path) -> None:
-    (tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER").write_text(
+    target = tmp_path / "ROBINHOOD_READ_ACCOUNT_NUMBER"
+    target.write_text(
         FAKE_ACCOUNT_REFERENCE,
         encoding="utf-8",
     )
+    os.chmod(target, 0o600)
     account = load_robinhood_read_account_number(environ={}, env_file=None)
     assert account is None

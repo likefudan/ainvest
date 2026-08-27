@@ -9,7 +9,6 @@ from __future__ import annotations
 
 import argparse
 import asyncio
-import contextlib
 import getpass
 import importlib
 import io
@@ -21,10 +20,9 @@ import sys
 import tempfile
 import warnings
 from collections.abc import Awaitable, Callable, Sequence
-from dataclasses import dataclass
-from datetime import UTC, datetime, timedelta
+from dataclasses import dataclass, field
+from datetime import UTC, datetime
 from pathlib import Path
-from types import TracebackType
 from typing import Any, Final, Never, Protocol, TextIO, cast
 
 from dotenv.parser import parse_stream
@@ -32,22 +30,23 @@ from pydantic import BaseModel, ConfigDict, Field, SecretStr, StrictInt, Validat
 from sqlalchemy.orm import Session, sessionmaker
 
 from ainvest.approval.telegram import TelegramBotIdentity, TelegramChatIdentity, TelegramEnvironment
+from ainvest.approval.telegram_maintenance import (
+    TelegramMaintenanceLeaseError,
+    TelegramMaintenanceLeasePolicy,
+    TelegramPollingMaintenanceLease,
+)
 from ainvest.config import Settings, TelegramBotSettings, load_settings
 from ainvest.config.settings import (
     MAX_TELEGRAM_TOKEN_FILE_BYTES,
     TELEGRAM_BOT_TOKEN_FILENAMES,
     TELEGRAM_BOT_TOKEN_PATTERN,
 )
-from ainvest.db import TelegramPollState, TelegramUpdateRepository, create_db_engine
+from ainvest.db import create_db_engine
 
 _INT64_MAX: Final[int] = 2**63 - 1
 _PROVIDER_TIMEOUT_SECONDS: Final[float] = 5.0
 _DISCOVERY_TIMEOUT_SECONDS: Final[int] = 5
 _DISCOVERY_LIMIT: Final[int] = 100
-_LEASE_SECONDS: Final[float] = 75.0
-_LEASE_HEARTBEAT_SECONDS: Final[float] = 20.0
-_LEASE_WAIT_SECONDS: Final[float] = 90.0
-_LEASE_WAIT_POLL_SECONDS: Final[float] = 0.5
 _TOKEN_REMEDIATION: Final[str] = (
     "remove the plaintext Telegram bot-token assignment manually and retry"
 )
@@ -389,12 +388,7 @@ class ProvisioningResult:
         )
 
 
-@dataclass(frozen=True, slots=True)
-class LeasePolicy:
-    wait_seconds: float = _LEASE_WAIT_SECONDS
-    lease_seconds: float = _LEASE_SECONDS
-    heartbeat_seconds: float = _LEASE_HEARTBEAT_SECONDS
-    poll_seconds: float = _LEASE_WAIT_POLL_SECONDS
+LeasePolicy = TelegramMaintenanceLeasePolicy
 
 
 @dataclass(frozen=True, slots=True)
@@ -404,161 +398,7 @@ class RuntimeDependencies:
     candidate_selector: CandidateSelector
     clock: Callable[[], datetime] = lambda: datetime.now(UTC)
     sleep: Callable[[float], Awaitable[None]] = asyncio.sleep
-    lease_policy: LeasePolicy = LeasePolicy()
-
-
-class _MaintenanceLease:
-    """Best-effort P05-T5 lease coordination; never a filesystem fence."""
-
-    def __init__(
-        self,
-        factory: sessionmaker[Session],
-        environment: TelegramEnvironment,
-        *,
-        clock: Callable[[], datetime],
-        sleep: Callable[[float], Awaitable[None]],
-        policy: LeasePolicy,
-    ) -> None:
-        self._factory = factory
-        self._environment = environment.value
-        self._clock = clock
-        self._sleep = sleep
-        self._policy = policy
-        self._owner = f"provision-{secrets.token_hex(16)}"
-        self._state: TelegramPollState | None = None
-        self._initial_offset: int | None = None
-        self._failed = False
-        self._lock = asyncio.Lock()
-        self._heartbeat: asyncio.Task[None] | None = None
-
-    async def __aenter__(self) -> _MaintenanceLease:
-        await self._acquire()
-        self._heartbeat = asyncio.create_task(self._heartbeat_loop())
-        return self
-
-    async def __aexit__(
-        self,
-        exc_type: type[BaseException] | None,
-        exc: BaseException | None,
-        traceback: TracebackType | None,
-    ) -> None:
-        del exc_type, exc, traceback
-        if self._heartbeat is not None:
-            self._heartbeat.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await self._heartbeat
-        async with self._lock:
-            state = self._state
-            if state is None:
-                return
-            try:
-                with self._factory.begin() as session:
-                    repository = TelegramUpdateRepository(session)
-                    current = repository.get_state(self._environment)
-                    self._assert_offset(current)
-                    if current is not None and (
-                        current.lease_owner == self._owner
-                        and current.lease_epoch == state.lease_epoch
-                    ):
-                        released = repository.release_lease(
-                            self._environment,
-                            owner=self._owner,
-                            epoch=state.lease_epoch,
-                            version=current.version,
-                        )
-                        if released:
-                            self._assert_offset(repository.get_state(self._environment))
-            except ProvisioningFailure:
-                raise
-            except Exception:
-                # Release is best effort; expiry is the recovery mechanism.
-                return
-
-    async def verify_before_write(self) -> None:
-        """Detect an already-visible loss; this cannot fence ``os.replace``."""
-        async with self._lock:
-            if self._failed or self._state is None:
-                raise ProvisioningFailure("maintenance_lease_lost")
-            self._renew_locked()
-
-    async def _acquire(self) -> None:
-        deadline = self._clock() + timedelta(seconds=self._policy.wait_seconds)
-        first = True
-        while first or self._clock() < deadline:
-            first = False
-            now = self._clock()
-            try:
-                with self._factory.begin() as session:
-                    repository = TelegramUpdateRepository(session)
-                    before = repository.get_state(self._environment)
-                    if self._initial_offset is None and before is not None:
-                        self._initial_offset = before.next_offset
-                    state = repository.acquire_lease(
-                        self._environment,
-                        owner=self._owner,
-                        now=now,
-                        expires_at=now + timedelta(seconds=self._policy.lease_seconds),
-                    )
-                    if state is not None:
-                        if self._initial_offset is None:
-                            self._initial_offset = 0
-                        self._assert_offset(state)
-                        self._state = state
-                        return
-            except ProvisioningFailure:
-                raise
-            except Exception:
-                raise ProvisioningFailure("maintenance_database_failed") from None
-            if self._clock() >= deadline:
-                break
-            await self._sleep(self._policy.poll_seconds)
-        raise ProvisioningFailure("maintenance_lease_busy")
-
-    def _renew_locked(self) -> None:
-        state = self._state
-        if state is None:
-            self._failed = True
-            raise ProvisioningFailure("maintenance_lease_lost")
-        now = self._clock()
-        try:
-            with self._factory.begin() as session:
-                repository = TelegramUpdateRepository(session)
-                renewed = repository.renew_lease(
-                    self._environment,
-                    owner=self._owner,
-                    epoch=state.lease_epoch,
-                    version=state.version,
-                    now=now,
-                    expires_at=now + timedelta(seconds=self._policy.lease_seconds),
-                )
-                self._assert_offset(renewed)
-        except ProvisioningFailure:
-            self._failed = True
-            raise
-        except Exception:
-            self._failed = True
-            raise ProvisioningFailure("maintenance_database_failed") from None
-        if renewed is None:
-            self._failed = True
-            raise ProvisioningFailure("maintenance_lease_lost")
-        self._state = renewed
-
-    async def _heartbeat_loop(self) -> None:
-        while True:
-            await self._sleep(self._policy.heartbeat_seconds)
-            async with self._lock:
-                if self._failed:
-                    return
-                try:
-                    self._renew_locked()
-                except ProvisioningFailure:
-                    return
-
-    def _assert_offset(self, state: TelegramPollState | None) -> None:
-        if state is None or self._initial_offset is None:
-            return
-        if state.next_offset != self._initial_offset:
-            raise ProvisioningFailure("poll_offset_changed")
+    lease_policy: LeasePolicy = field(default_factory=LeasePolicy)
 
 
 @dataclass(frozen=True, slots=True)
@@ -856,24 +696,30 @@ async def execute(
     elif request.command == "rotate-token":
         pending_token = dependencies.token_reader.read("New Telegram Bot token: ")
     factory = _database_factory(request.database)
-    async with _MaintenanceLease(
-        factory,
-        request.environment,
-        clock=dependencies.clock,
-        sleep=dependencies.sleep,
-        policy=dependencies.lease_policy,
-    ) as lease:
-        if request.command == "disable":
-            values = {"ENABLED": "false"}
-            await lease.verify_before_write()
-            _atomic_replace(request.env_file, document.rendered(request.environment, values))
-            return ProvisioningResult(request.command, request.environment)
-        if request.command == "add":
-            assert pending_token is not None
-            return await _add(request, document, settings, lease, dependencies, pending_token)
-        if request.command == "rotate-token":
-            assert pending_token is not None
-            return await _rotate(request, document, settings, lease, dependencies, pending_token)
+    try:
+        async with TelegramPollingMaintenanceLease(
+            factory,
+            request.environment,
+            clock=dependencies.clock,
+            sleep=dependencies.sleep,
+            policy=dependencies.lease_policy,
+            owner_prefix="provision",
+        ) as lease:
+            if request.command == "disable":
+                values = {"ENABLED": "false"}
+                await lease.verify_before_write()
+                _atomic_replace(request.env_file, document.rendered(request.environment, values))
+                return ProvisioningResult(request.command, request.environment)
+            if request.command == "add":
+                assert pending_token is not None
+                return await _add(request, document, settings, lease, dependencies, pending_token)
+            if request.command == "rotate-token":
+                assert pending_token is not None
+                return await _rotate(
+                    request, document, settings, lease, dependencies, pending_token
+                )
+    except TelegramMaintenanceLeaseError as exc:
+        raise ProvisioningFailure(exc.code) from None
     raise ProvisioningFailure("invalid_command")
 
 
@@ -910,7 +756,7 @@ async def _add(
     request: ProvisioningRequest,
     document: _EnvDocument,
     settings: Settings,
-    lease: _MaintenanceLease,
+    lease: TelegramPollingMaintenanceLease,
     dependencies: RuntimeDependencies,
     token_secret: SecretStr,
 ) -> ProvisioningResult:
@@ -972,7 +818,7 @@ async def _rotate(
     request: ProvisioningRequest,
     document: _EnvDocument,
     settings: Settings,
-    lease: _MaintenanceLease,
+    lease: TelegramPollingMaintenanceLease,
     dependencies: RuntimeDependencies,
     new_token_secret: SecretStr,
 ) -> ProvisioningResult:

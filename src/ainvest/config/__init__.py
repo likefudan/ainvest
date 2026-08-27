@@ -41,6 +41,7 @@ from ainvest.config.settings import (
     WebAuthnSettings,
     load_robinhood_read_account_number,
     load_settings,
+    reject_robinhood_read_account_value_sources,
 )
 from ainvest.config.yaml import load_yaml_mapping
 
@@ -63,4 +64,5 @@ __all__ = [
     "load_robinhood_read_account_number",
     "load_settings",
     "load_yaml_mapping",
+    "reject_robinhood_read_account_value_sources",
 ]

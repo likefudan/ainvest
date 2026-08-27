@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import io
 import os
 import re
 import stat
@@ -12,6 +13,7 @@ from pathlib import Path
 from typing import Any, Final, Literal, Self
 from urllib.parse import urlsplit
 
+from dotenv.parser import parse_stream
 from pydantic import (
     AliasChoices,
     BaseModel,
@@ -25,8 +27,6 @@ from pydantic import (
 from pydantic.fields import FieldInfo
 from pydantic_settings import (
     BaseSettings,
-    DotEnvSettingsSource,
-    EnvSettingsSource,
     PydanticBaseSettingsSource,
     SecretsSettingsSource,
     SettingsConfigDict,
@@ -67,10 +67,6 @@ _RP_ID_PATTERN: Final[re.Pattern[str]] = re.compile(
 
 _YAML_SETTINGS_DATA: ContextVar[Mapping[str, Any] | None] = ContextVar(
     "ainvest_yaml_settings_data",
-    default=None,
-)
-_ROBINHOOD_ACCOUNT_YAML_VALUE: ContextVar[object | None] = ContextVar(
-    "ainvest_robinhood_account_yaml_value",
     default=None,
 )
 
@@ -366,7 +362,7 @@ class _TelegramTokenFileSecretSource(PydanticBaseSettingsSource):
 
 
 class _RobinhoodAccountFileSecretSource(PydanticBaseSettingsSource):
-    """Load only the exact P05-T9 account reference from an explicit directory."""
+    """Load only the exact P05-T11 owner-only account secret."""
 
     def __init__(self, settings_cls: type[BaseSettings], secrets_dir: object) -> None:
         super().__init__(settings_cls)
@@ -380,31 +376,64 @@ class _RobinhoodAccountFileSecretSource(PydanticBaseSettingsSource):
         if self._secrets_dir is None or isinstance(self._secrets_dir, (list, tuple, set)):
             return {}
         directory = Path(self._secrets_dir)  # type: ignore[arg-type]
+        directory_descriptor = -1
+        descriptor = -1
         try:
-            if not directory.exists() or not directory.is_dir():
+            try:
+                directory_metadata = directory.lstat()
+            except FileNotFoundError:
                 return {}
-            entries = {entry.name: entry for entry in directory.iterdir()}
-            path = entries.get(ROBINHOOD_READ_ACCOUNT_FILENAME)
-            if path is None:
-                return {}
+            if stat.S_ISLNK(directory_metadata.st_mode) or not stat.S_ISDIR(
+                directory_metadata.st_mode
+            ):
+                raise SettingsError("Robinhood account secrets directory is invalid")
             no_follow = getattr(os, "O_NOFOLLOW", None)
             nonblock = getattr(os, "O_NONBLOCK", None)
-            if no_follow is None or nonblock is None:
+            directory_only = getattr(os, "O_DIRECTORY", None)
+            if no_follow is None or nonblock is None or directory_only is None:
                 raise SettingsError("Secure Robinhood account file open is unavailable")
-            descriptor = os.open(path, os.O_RDONLY | no_follow | nonblock)
+            directory_descriptor = os.open(directory, os.O_RDONLY | no_follow | directory_only)
+            opened_directory = os.fstat(directory_descriptor)
+            if (
+                opened_directory.st_dev != directory_metadata.st_dev
+                or opened_directory.st_ino != directory_metadata.st_ino
+            ):
+                raise SettingsError("Robinhood account secrets directory changed")
+            entries = os.listdir(directory_descriptor)
+            account_entries = [
+                entry
+                for entry in entries
+                if entry.casefold() == ROBINHOOD_READ_ACCOUNT_FILENAME.casefold()
+            ]
+            if not account_entries:
+                return {}
+            if account_entries != [ROBINHOOD_READ_ACCOUNT_FILENAME]:
+                raise SettingsError("Robinhood account secret filename is invalid")
             try:
-                metadata = os.fstat(descriptor)
-                if not stat.S_ISREG(metadata.st_mode):
-                    raise SettingsError("Robinhood account secret must be a regular file")
-                if metadata.st_size > MAX_ROBINHOOD_ACCOUNT_FILE_BYTES:
-                    raise SettingsError("Invalid Robinhood account file secret")
-                raw = os.read(descriptor, MAX_ROBINHOOD_ACCOUNT_FILE_BYTES)
-                if len(raw) != metadata.st_size:
-                    raise SettingsError("Robinhood account file changed while reading")
-            finally:
-                os.close(descriptor)
+                descriptor = os.open(
+                    ROBINHOOD_READ_ACCOUNT_FILENAME,
+                    os.O_RDONLY | no_follow | nonblock,
+                    dir_fd=directory_descriptor,
+                )
+            except FileNotFoundError:
+                return {}
+            metadata = os.fstat(descriptor)
+            if not stat.S_ISREG(metadata.st_mode):
+                raise SettingsError("Robinhood account secret must be a regular file")
+            if stat.S_IMODE(metadata.st_mode) != 0o600 or metadata.st_uid != os.getuid():
+                raise SettingsError("Robinhood account secret permissions are invalid")
+            if metadata.st_size > MAX_ROBINHOOD_ACCOUNT_FILE_BYTES:
+                raise SettingsError("Invalid Robinhood account file secret")
+            raw = os.read(descriptor, MAX_ROBINHOOD_ACCOUNT_FILE_BYTES)
+            if len(raw) != metadata.st_size:
+                raise SettingsError("Robinhood account file changed while reading")
         except (OSError, SettingsError):
             raise SettingsError("Unable to read Robinhood account file secret") from None
+        finally:
+            if descriptor >= 0:
+                os.close(descriptor)
+            if directory_descriptor >= 0:
+                os.close(directory_descriptor)
         try:
             value = raw.decode("utf-8")
         except UnicodeDecodeError:
@@ -414,16 +443,6 @@ class _RobinhoodAccountFileSecretSource(PydanticBaseSettingsSource):
         if _ROBINHOOD_ACCOUNT_PATTERN.fullmatch(value) is None:
             raise SettingsError("Invalid Robinhood account file secret")
         return {ROBINHOOD_READ_ACCOUNT_FILENAME: value}
-
-
-class _RobinhoodAccountYamlSource(PydanticBaseSettingsSource):
-    def get_field_value(self, field: FieldInfo, field_name: str) -> tuple[Any, str, bool]:
-        del field
-        return _ROBINHOOD_ACCOUNT_YAML_VALUE.get(), field_name, False
-
-    def __call__(self) -> dict[str, Any]:
-        value = _ROBINHOOD_ACCOUNT_YAML_VALUE.get()
-        return {} if value is None else {ROBINHOOD_READ_ACCOUNT_FILENAME: value}
 
 
 class _FilteredAccountDotEnvSource(PydanticBaseSettingsSource):
@@ -452,7 +471,7 @@ class _FilteredAccountDotEnvSource(PydanticBaseSettingsSource):
 
 
 class _RobinhoodReadAccountSettings(BaseSettings):
-    """Dedicated lazy source composition for the READ_BROKER account reference."""
+    """Dedicated lazy, exact-file-only READ_BROKER account reference."""
 
     model_config = SettingsConfigDict(
         env_file=None,
@@ -484,20 +503,12 @@ class _RobinhoodReadAccountSettings(BaseSettings):
         file_secret_settings: PydanticBaseSettingsSource,
     ) -> tuple[PydanticBaseSettingsSource, ...]:
         del cls
+        del init_settings, env_settings, dotenv_settings
         return (
-            init_settings,
-            EnvSettingsSource(settings_cls, env_ignore_empty=False),
-            DotEnvSettingsSource(
-                settings_cls,
-                env_file=getattr(dotenv_settings, "env_file", None),
-                env_file_encoding=getattr(dotenv_settings, "env_file_encoding", None),
-                env_ignore_empty=False,
-            ),
             _RobinhoodAccountFileSecretSource(
                 settings_cls,
                 getattr(file_secret_settings, "secrets_dir", None),
             ),
-            _RobinhoodAccountYamlSource(settings_cls),
         )
 
     @field_validator("robinhood_read_account_number", mode="before")
@@ -514,6 +525,40 @@ class _RobinhoodReadAccountSettings(BaseSettings):
 
 class RobinhoodAccountSecretInvalid(Exception):
     """Sanitized lazy READ_BROKER configuration failure."""
+
+
+def reject_robinhood_read_account_value_sources(
+    *,
+    env_file: Path | str | None,
+    environ: Mapping[str, str] | None = None,
+) -> None:
+    """Reject every legacy env/dotenv account-value route without disclosure."""
+
+    inspected_environ = os.environ if environ is None else environ
+    forbidden = ROBINHOOD_READ_ACCOUNT_FILENAME.casefold()
+    if any(str(key).casefold() == forbidden for key in inspected_environ):
+        raise RobinhoodAccountSecretInvalid from None
+    if env_file is None:
+        return
+    try:
+        path = Path(env_file)
+        try:
+            metadata = path.lstat()
+        except FileNotFoundError:
+            return
+        if stat.S_ISLNK(metadata.st_mode) or not stat.S_ISREG(metadata.st_mode):
+            raise RobinhoodAccountSecretInvalid
+        raw = path.read_bytes()
+        text = raw.decode("utf-8")
+        for binding in parse_stream(io.StringIO(text)):
+            if binding.error:
+                raise RobinhoodAccountSecretInvalid
+            if binding.key is not None and binding.key.casefold() == forbidden:
+                raise RobinhoodAccountSecretInvalid
+    except RobinhoodAccountSecretInvalid:
+        raise
+    except (OSError, UnicodeError):
+        raise RobinhoodAccountSecretInvalid from None
 
 
 class _FilteredStockFileSecretSource(SecretsSettingsSource):
@@ -782,35 +827,22 @@ def load_settings(
 
 def load_robinhood_read_account_number(
     *,
-    explicit: SecretStr | str | None = None,
     env_file: Path | str | None = None,
     secrets_dir: Path | str | None = None,
-    yaml_value: SecretStr | str | None = None,
     environ: Mapping[str, str] | None = None,
 ) -> SecretStr | None:
-    """Resolve the strict account reference only when READ_BROKER needs it."""
+    """Resolve only the exact explicit-directory file for READ_BROKER.
 
-    init_data: dict[str, Any] = {}
-    if explicit is not None:
-        init_data["robinhood_read_account_number"] = explicit
+    Any case variant of the old environment or dotenv source fails closed.
+    There is no implicit ``.env`` or secrets-directory search.
+    """
 
-    def _build(*, dotenv: Path | str | None) -> SecretStr | None:
-        yaml_token = _ROBINHOOD_ACCOUNT_YAML_VALUE.set(yaml_value)
-        try:
-            settings = _RobinhoodReadAccountSettings(  # type: ignore[call-arg]
-                _env_file=dotenv,
-                _secrets_dir=secrets_dir,
-                **init_data,
-            )
-        except (ValidationError, SettingsError):
-            raise RobinhoodAccountSecretInvalid from None
-        finally:
-            _ROBINHOOD_ACCOUNT_YAML_VALUE.reset(yaml_token)
-        return settings.robinhood_read_account_number
-
-    if environ is not None:
-        with _temporary_environ(environ):
-            return _build(dotenv=env_file)
-    if env_file is not None:
-        return _build(dotenv=env_file)
-    return _build(dotenv=".env")
+    reject_robinhood_read_account_value_sources(env_file=env_file, environ=environ)
+    try:
+        settings = _RobinhoodReadAccountSettings(  # type: ignore[call-arg]
+            _env_file=None,
+            _secrets_dir=secrets_dir,
+        )
+    except (ValidationError, SettingsError):
+        raise RobinhoodAccountSecretInvalid from None
+    return settings.robinhood_read_account_number
