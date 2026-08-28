@@ -2574,17 +2574,15 @@ validation remain a separate owner decision under proposed `DEC-010`.
   action is respectively the opaque Paper callback or trusted fixed-origin
   Live link; delivery outcomes are typed and sanitized; and no delivery or
   Telegram response can approve, change state, or trade.
-- **Owner-assisted validation prerequisite, not offline blocker:** after the
-  implementation is reviewed, the owner must create/provide separate real
-  staging and production Bots plus each environment's positive numeric expected
-  Bot ID and bound numeric private `(user_id, private_chat_id)` recipient
-  records, with tokens supplied only through approved secret storage, before
-  environment integration can be accepted under proposed `DEC-010`. These
-  real values are not an offline implementation input and are never added to
-  `.env.example`, snapshots, fixtures, or Git.
-  Until then the real adapter stays disabled and real `getMe`/private-message
-  validation is unverified. This does not block deterministic offline
-  implementation, review, or merge.
+- **Owner-assisted validation prerequisite, not offline blocker:** staging Bot
+  identity, bound private recipient, `getMe`, private-message delivery, and
+  display-only reads are owner-validated. Production still requires its own
+  real Bot, positive numeric expected Bot ID, bound numeric private
+  `(user_id, private_chat_id)` recipient record, and approved secret storage
+  before production integration can be accepted under proposed `DEC-010`.
+  These real values are never added to `.env.example`, snapshots, fixtures, or
+  Git. Production remains disabled; this does not invalidate the completed
+  deterministic offline implementation and staging acceptance.
 - **Serial handoff:** `P05-T4`, `P05-T5`, P05-T10, and P05-T9 are complete.
   Real staging/production Bot and end-to-end read validation remains
   owner-assisted under proposed `DEC-010`.
@@ -3003,19 +3001,20 @@ validation remain a separate owner decision under proposed `DEC-010`.
   CodeQL were green before squash merge.
 - **Owner-assisted validation and next priority:** `rh-mcp v0.3.3`
   auth/readiness, real staging Bot provisioning, and Telegram
-  status/accounts/quote paths are verified. The sanitized history-size and
-  missing-account failures are the two narrow follow-ups claimed below.
+  status/accounts/quote paths are verified. The history-sizing and
+  read-account-binding follow-ups are merged; their explicit staging
+  acceptance sequence is next.
 - **Dependency history:** merged `P06-T2` Part 1, `P05-T4`, and `P05-T5`
   satisfied the
-  existing dependencies, and P05-T10 is merged. Real staging/production Bot
-  values and validation remain owner-assisted and pending under proposed
-  `DEC-010`, which keeps real Telegram integration disabled but did not block
-  the completed deterministic offline implementation. Owner-assisted `rh-mcp v0.3.0 status`
-  is verified `ready=true` against manifest version `2026.08.12` and digest
-  `sha256:403ddc4c8a71bf470da906f572134c7d00684ae23af023e91df1872fc6d71b3f`;
-  individual real reads may be validated later and were not an offline
-  implementation prerequisite. `P05-T9` is a display-only add-on and
-  is not required by Gate 3 or `P06-T2` Part 2.
+  existing dependencies, and P05-T10 is merged. Staging Bot identity and
+  representative reads are verified; production Bot values and validation
+  remain owner-assisted and pending under proposed `DEC-010`. Owner-assisted
+  `rh-mcp v0.3.3 status` is verified `ready=true` against manifest version
+  `2026.08.22` and digest
+  `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
+  Account-bound and bounded-history staging acceptance remains the next owner
+  step. `P05-T9` is a display-only add-on and is not required by Gate 3 or
+  `P06-T2` Part 2.
 - **Architecture correction:** `approval -> execution` is forbidden by the
   repository dependency matrix. The implementation therefore places the sole
   P05-T5-to-P06-T2 composition/handler in new
@@ -3192,22 +3191,20 @@ validation remain a separate owner decision under proposed `DEC-010`.
   returned `account_secret_missing`.
   No token, account number, raw provider result, or other account data is
   copied into this tracker.
-- **Parallel implementation / serial integration:** after this claim
-  squash-merges, independent implementation agents may work concurrently in
-  `.worktrees/p05-t9-history-sizing` and
-  `.worktrees/p05-t11-account-binding` because their allowed production and
-  primary test paths are disjoint. Integrate P05-T9 history sizing first. Then
-  rebase P05-T11 onto latest `main`, rerun its complete verification contract,
-  update its PR, and begin independent review. Each PR requires a reviewer who
-  did not implement it, remediation and re-review to zero actionable findings,
-  green required checks, and a squash merge. Update this tracker only after
-  each merge; no parallel merges.
+- **Completed parallel implementation / serial integration:** the claim
+  squash-merged as `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`.
+  P05-T11 was independently reviewed and squash-merged first as
+  `1a724e2861dc811c6c29717f6157c073bcc516f8`; P05-T9 history sizing then
+  rebased without conflict, reverified, received independent approval, and
+  squash-merged as `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`.
+  This serial integration is complete; no implementation branch remains
+  claimed by this envelope.
 
 ##### Execution envelope: P05-T9 history sizing maintenance
 
-- **Status/owner:** `in_progress`; implementation owner
-  `implement_history_sizing`. Implementation and focused proof are complete;
-  independent review, required CI, squash merge, and owner revalidation remain.
+- **Status/owner:** `merged` / `completed`; implementation owner
+  `implement_history_sizing`. Independent review, required CI, and squash merge
+  are complete; only owner-assisted staging revalidation remains.
 - **Implementation branch/worktree/base:**
   `agent/p05-t9-history-sizing` / `.worktrees/p05-t9-history-sizing`, created
   from merged-claim base `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`
@@ -3246,17 +3243,21 @@ validation remain a separate owner decision under proposed `DEC-010`.
   The post-rebase canonical merge gate passes 1,566 unit tests plus one optional
   runtime skip, 204 contract tests, 53 integration tests, and 1,823 combined
   tests plus one skip at 87.23% coverage, with strict mypy clean across 263
-  source files. Immutable-head required CI evidence is recorded on the
-  implementation PR before it can leave Draft.
+  source files. Immutable-head Verify, Secret scan, Dependency audit, SAST, and
+  CodeQL were green; independent review approved exact head `ac39ea35` with no
+  P0-P2 finding before squash merge as
+  `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`.
 
 ##### Execution envelope: P05-T11 read-account binding
 
-- **Status/owner:** `in_progress` as a reviewed scheduling claim; implementation
-  owner is assigned only after this claim merges.
-- **Implementation branch/worktree/base:** reserve
-  `agent/p05-t11-account-binding` / `.worktrees/p05-t11-account-binding`; set
-  its immutable base to this claim's eventual squash commit before any code
-  edit, then rebase to the merged P05-T9 history commit before review.
+- **Status/owner:** `merged` / `completed`; implementation owner
+  `implement_account_provision`.
+- **Implementation branch/worktree/base:** historical implementation branch
+  `agent/p05-t11-account-provisioning` / worktree
+  `.worktrees/p05-t11-account-provisioning`, created from exact merged-claim
+  base `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`. Independent review and
+  remediation completed before squash merge as
+  `1a724e2861dc811c6c29717f6157c073bcc516f8`.
 - **Authority:** the complete P05-T11 card in `IMPLEMENTATION_TODO.md`. Add only
   dedicated `ainvest-robinhood-account provision|validate|disable` in
   `ainvest.orchestrator.robinhood_account_provisioning`. It uses one pinned
