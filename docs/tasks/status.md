@@ -2584,8 +2584,9 @@ validation remain a separate owner decision under proposed `DEC-010`.
   Git. Production remains disabled; this does not invalidate the completed
   deterministic offline implementation and staging acceptance.
 - **Serial handoff:** `P05-T4`, `P05-T5`, P05-T10, and P05-T9 are complete.
-  Real staging/production Bot and end-to-end read validation remains
-  owner-assisted under proposed `DEC-010`.
+  Production Bot validation remains owner-assisted under proposed `DEC-010`;
+  staging now waits only for the account-bound and bounded-history acceptance
+  sequence recorded below.
 
 ##### Execution envelope: P05-T5
 
