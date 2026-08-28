@@ -214,7 +214,9 @@ Primary parallelization opportunities:
   executable dependency authority. Owner-assisted validation on 2026-08-26
   verified `rh-mcp v0.3.3` `auth-status`/`status`, the staging Bot, and
   Telegram status/accounts/quote display. Production Bot validation and the
-  claimed account-bound/history follow-ups remain. `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
+  owner-assisted account-bound/history acceptance remain; their offline
+  P05-T11 and P05-T9 maintenance implementations are merged through #147/#146.
+  `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
   [#136](https://github.com/likefudan/ainvest/pull/136). The `P05-T9` claim
@@ -230,8 +232,9 @@ Primary parallelization opportunities:
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
   long polling and durable inbound deduplication. Staging Bot provisioning and
   end-to-end status/accounts/quote reads are verified. Production Bot
-  validation, secure account binding, and bounded history display remain
-  owner-assisted follow-up evidence under proposed `DEC-010`.
+  validation remains pending under proposed `DEC-010`; secure account-binding
+  provisioning and bounded history display are implemented and now await the
+  explicit owner-assisted staging acceptance sequence.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1358,9 +1361,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `/history AAPL 1d` completed its gateway read and normalization, but the
   local Telegram post-render reply exceeded 3,500 code points and was replaced
   with sanitized `result_too_large`. The narrow history
-  interval maintenance contract below is therefore `in_progress` on
-  `agent/p05-t9-history-sizing` as a new independently reviewed follow-up; it
-  does not reopen any other P05-T9 behavior.
+  interval maintenance contract below was completed in independently reviewed
+  [#146](https://github.com/likefudan/ainvest/pull/146) and squash-merged as
+  `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`; it did not reopen any other
+  P05-T9 behavior. Owner-assisted post-merge history validation remains.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
@@ -1372,10 +1376,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   manifest version `2026.08.22` and digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
   Sanitized Telegram evidence verifies status, account eligibility, and a
-  representative quote. Historical display is pending the sizing follow-up,
-  and portfolio display is pending P05-T11 account binding. These observations
-  do not authorize credentials, public network calls, or account data in
-  implementation or CI.
+  representative quote. The historical sizing and P05-T11 account-binding
+  implementations are merged; `/history` and account-bound display commands
+  now await owner-assisted staging acceptance. These observations do not
+  authorize credentials, public network calls, or account data in CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
   `DisplaySuccess` consumer in `ainvest.approval` or copy the CLI wire to avoid
@@ -1489,8 +1493,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   The post-rebase canonical merge gate passes 1,566 unit tests plus one optional
   runtime skip, 204 contract tests, 53 integration tests, and 1,823 combined
   tests plus one skip at 87.23% coverage with strict mypy clean across 263
-  source files. Independent review, required CI, squash merge, and post-merge
-  owner revalidation remain pending; no other P05-T9 surface is reopened.
+  source files. Independent review found no P0–P2 findings, exact-head Verify,
+  Secret scan, Dependency audit, SAST, and CodeQL passed, and #146
+  squash-merged as `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`. Only
+  owner-assisted post-merge validation remains; no other P05-T9 surface is
+  reopened.
 
 - **Identity and authorization boundary:** process text only after `P05-T5`
   has verified the environment-specific Bot,
@@ -1806,13 +1813,15 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   to discover, install, validate, rotate, and disable the exact Agentic account
   reference consumed by P05-T9 account-bound display commands, without ever
   exposing the reference or widening the read gateway.
-- **Status and scheduling:** `in_progress` only as a docs claim. Owner-assisted
-  validation on 2026-08-26 proved `rh-mcp v0.3.3` ready and `/accounts`
-  successful, while `/portfolio` returned sanitized
-  `account_secret_missing`. Implementation starts only after this claim is
-  independently reviewed and squash-merged. It may run in parallel with the
-  P05-T9 history-sizing follow-up on disjoint production/test paths, but the
-  two PRs rebase, enter independent review, and squash-merge serially.
+- **Status and scheduling:** `completed/merged` for deterministic offline
+  implementation. Owner-assisted validation on 2026-08-26 proved `rh-mcp
+  v0.3.3` ready and `/accounts` successful, while `/portfolio` returned
+  sanitized `account_secret_missing`. The docs claim squash-merged in
+  [#145](https://github.com/likefudan/ainvest/pull/145) as
+  `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; independently reviewed P05-T11
+  implementation [#147](https://github.com/likefudan/ainvest/pull/147)
+  squash-merged as `1a724e2861dc811c6c29717f6157c073bcc516f8`.
+  Owner-assisted account provisioning and Telegram acceptance remain pending.
 - **Dependencies:** merged P05-T9, P05-T10, P05-T5, P06-T0, P06-T1, and P06-T2
   Part 1; the current pinned `rh-mcp v0.3.3` manifest and named read projection;
   accepted `DEC-005`; and the owner-controlled staging/production shape in
@@ -1954,6 +1963,17 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   redacted display output. Do not paste account numbers, credentials, raw
   provider results, or secret-file contents. Production remains separately
   owner-controlled.
+- **Implementation and review evidence:** initial #147 head
+  `cdbed2d6d35b856e0bccebc449310df2117609c0` received one independent P1
+  cancellation-boundary finding. Remediation head
+  `a771f13d945cc3eefc127bd1a4bc7d926301b32f` added the narrow sanitized
+  cancellation result and lifecycle regressions; independent re-review passed
+  99 focused tests and approved with no remaining P0–P2 finding. The final
+  implementation-focused suite passed 273 tests; canonical verification passed
+  1,561 unit tests plus one optional-runtime skip, 204 contract tests, 53
+  integration tests, and 1,818 aggregate tests plus one skip, with 87.23%
+  coverage and mypy clean across 263 source files. Exact-head Verify, Secret
+  scan, Dependency audit, SAST, and CodeQL passed before squash merge.
 - **Acceptance criteria:** a unique active Agentic account can be bound and
   validated without manual account copying or disclosure; every ambiguous,
   insecure, stale, or drifted condition fails closed; account-bound Telegram
@@ -2038,8 +2058,9 @@ consumable release artifact.
   `v0.3.3` is the current executable dependency authority; `v0.2.0` is
   historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
   v0.3.3 status, staging Bot validation, and status/accounts/quote reads are
-  verified as of 2026-08-26; production Bot validation and the claimed
-  account-bound/history follow-ups remain owner-assisted.
+  verified as of 2026-08-26. P05-T11 account binding and P05-T9 history sizing
+  are merged; their staging acceptance and production Bot validation remain
+  owner-assisted.
 - **Current maintenance implementation:** the executable pin refresh from
   `v0.3.0` to the public `v0.3.3` release completed under the exact execution
   envelope in `docs/tasks/status.md`. Claim
@@ -2655,8 +2676,10 @@ line.
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
   lifted the P05-T4 pause on 2026-08-12; P05-T4 and P05-T5 are now merged.
   P05-T10 Bot-environment provisioning and validation and P05-T9 Telegram
-  display-only reads are merged. Real Bot and end-to-end validation remain
-  owner-assisted under proposed `DEC-010`.
+  display-only reads are merged, including P05-T11 account provisioning and
+  the P05-T9 history maintenance. Production Bot validation remains
+  owner-assisted under proposed `DEC-010`; staging account-bound/history
+  acceptance is the next owner-assisted step.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -2695,9 +2718,10 @@ line.
    validation remains pending under proposed `DEC-010`.
 3. `P05-T9` Telegram display-only queries are merged through #138/#139.
    Owner-assisted v0.3.3 auth/readiness, staging Bot provisioning, and
-   Telegram status/accounts/quote paths are verified. Its claimed history
-   sizing follow-up and P05-T11 account binding own the two remaining sanitized
-   validation failures; production evidence remains under proposed `DEC-010`.
+   Telegram status/accounts/quote paths are verified. The history sizing
+   follow-up and P05-T11 account binding are merged through #146/#147; the
+   owner now performs their staging acceptance sequence. Production Bot
+   evidence remains pending under proposed `DEC-010`.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.
 4. Supply and independently review canonical identity, Agentic-account
