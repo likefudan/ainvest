@@ -267,7 +267,7 @@ def test_the_declared_fragment_is_the_pinned_wheel_digest(
 def test_the_declared_digest_is_the_wheels_and_not_the_sdists() -> None:
     """A pin that is the wrong 64 hex characters is still 64 hex characters.
 
-    `rh-mcp` publishes both a wheel and an sdist for `v0.3.3` and
+    `rh-mcp` publishes both a wheel and an sdist for `v0.4.1` and
     ``docs/tasks/status.md`` records both digests side by side, so pasting the
     neighbouring row is the realistic way to get this wrong. An sdist would
     also be *built* rather than installed, producing a wheel nobody hashed.

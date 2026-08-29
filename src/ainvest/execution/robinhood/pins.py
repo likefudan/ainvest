@@ -1,12 +1,12 @@
 """Pinned identity of the external `rh-mcp` Non-Trading Gateway (P06-T0).
 
 Every current value here is transcribed from **one** authority: the
-``Current executable dependency pin: likefudan/rh-mcp v0.3.3`` subsection of
+``P06-T0 rh-mcp v0.4.1 pin refresh`` execution envelope in
 `docs/tasks/status.md`. Nothing here is inferred from a package version or
 release prose: the tagged source, public artifacts, and artifact-shipped
 manifest were independently verified. The historical
 :data:`REJECTED_CHANGELOG_MANIFEST_DIGEST` remains a regression for an earlier
-``v0.2.0`` documentation mismatch; it is not a candidate ``v0.3.3`` value.
+``v0.2.0`` documentation mismatch; it is not a candidate ``v0.4.1`` value.
 
 Two pins answer different questions and move independently: the package
 version says *which code*, the full-manifest digest says *which permission
@@ -18,7 +18,7 @@ read-only projection** — ``RobinhoodGateway.invoke()`` accepts any *allowed*
 capability, including the 11 approved non-trading mutations — so narrowing to
 reads is ainvest adapter code (`IMPLEMENTATION_TODO.md` rules 20 and 32).
 ``tests/contract/execution/test_rh_mcp_manifest_contract.py`` recomputes the
-full-manifest digest from the committed ``v0.3.3`` manifest with an
+full-manifest digest from the committed ``v0.4.1`` manifest with an
 independent ``rh-canon-1`` implementation and compares every name set below
 against that manifest, so these are checked values rather than prose.
 """
@@ -36,22 +36,22 @@ from typing import Final
 RH_MCP_DISTRIBUTION: Final = "rh-mcp"
 
 #: Annotated tag of the reviewed release. Never a branch or a mutable tag.
-PINNED_RELEASE_TAG: Final = "v0.3.3"
+PINNED_RELEASE_TAG: Final = "v0.4.1"
 
 #: ``Version:`` recorded in the wheel's ``METADATA``.
-PINNED_PACKAGE_VERSION: Final = "0.3.3"
+PINNED_PACKAGE_VERSION: Final = "0.4.1"
 
 #: Source provenance only. A source commit is evidence, never the consumable
 #: dependency — the consumable dependency is the release artifact below.
-PINNED_SOURCE_COMMIT: Final = "68830c28db67632044f078c78b364622d9b66e16"
+PINNED_SOURCE_COMMIT: Final = "6dfe4a77f443515bb93871712affe473ea4a8a9a"
 
-PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.3.3-py3-none-any.whl"
-PINNED_WHEEL_SHA256: Final = "b32eea3844cb1f4a80404f969eca5102ec727d1900227c199d03817463124040"
-PINNED_WHEEL_SIZE_BYTES: Final = 208_920
+PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.4.1-py3-none-any.whl"
+PINNED_WHEEL_SHA256: Final = "0fa13061a3c79c9ab986017280ee8324170f06b8f6754c5e5c279ae1e3de0a69"
+PINNED_WHEEL_SIZE_BYTES: Final = 211_629
 
-PINNED_SDIST_FILENAME: Final = "rh_mcp-0.3.3.tar.gz"
-PINNED_SDIST_SHA256: Final = "c61ff3365279825a4ca7c39dd1b9ba0039db69a66c653c3c10c32e8d5a8247b4"
-PINNED_SDIST_SIZE_BYTES: Final = 483_685
+PINNED_SDIST_FILENAME: Final = "rh_mcp-0.4.1.tar.gz"
+PINNED_SDIST_SHA256: Final = "e9a9a103ffb5f35929a8c2978e0597969a6b1f0d83a55cd4ef8a01be27298503"
+PINNED_SDIST_SIZE_BYTES: Final = 513_482
 
 # ---------------------------------------------------------------------------
 # Reviewed capability manifest (verified at readiness) and result envelope
@@ -61,14 +61,14 @@ PINNED_MANIFEST_FORMAT_VERSION: Final = "1.2"
 PINNED_CANONICALIZATION_VERSION: Final = "rh-canon-1"
 PINNED_DIGEST_ALGORITHM: Final = "sha256"
 
-PINNED_MANIFEST_VERSION: Final = "2026.08.22"
+PINNED_MANIFEST_VERSION: Final = "2026.08.28"
 SUPPORTED_MANIFEST_VERSIONS: Final[frozenset[str]] = frozenset({PINNED_MANIFEST_VERSION})
 
 EXPECTED_MANIFEST_DIGEST: Final = (
-    "sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc"
+    "sha256:fac895203bceae45187d1eca38b79884f15414e2ffeb28930aa588d9ada8d8f1"
 )
 PINNED_PROVIDER_SURFACE_DIGEST: Final = (
-    "sha256:3e3f1d3e3e63bef64a2270d9cd238e12c78b247e82c4e717fa3302b0e9e970f8"
+    "sha256:248d19ef99bd22e0f7608e4e517358a3c83d9fa91f59c9c765c4bf0f750007c3"
 )
 
 #: The digest `rh-mcp`'s changelog prints beside manifest ``2026.08.03.1``.
@@ -113,10 +113,10 @@ READINESS_KEYS: Final[frozenset[str]] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# The reviewed manifest's three dispositions (rule 32: 35 / 11 / 8)
+# The reviewed manifest's three dispositions (rule 32: 36 / 11 / 8)
 # ---------------------------------------------------------------------------
 
-#: The 35 ``allowed`` capabilities with ``mutates=false``.
+#: The 36 ``allowed`` capabilities with ``mutates=false``.
 MANIFEST_READ_CAPABILITIES: Final[frozenset[str]] = frozenset(
     {
         "get_accounts",
@@ -124,6 +124,7 @@ MANIFEST_READ_CAPABILITIES: Final[frozenset[str]] = frozenset(
         "get_earnings_results",
         "get_equity_fundamentals",
         "get_equity_historicals",
+        "get_equity_news",
         "get_equity_orders",
         "get_equity_positions",
         "get_equity_price_book",
@@ -190,17 +191,17 @@ DENIED_TRADING_CAPABILITIES: Final[frozenset[str]] = frozenset(
     }
 )
 
-EXPECTED_READ_CAPABILITY_COUNT: Final = 35
+EXPECTED_READ_CAPABILITY_COUNT: Final = 36
 EXPECTED_APPROVED_MUTATION_COUNT: Final = 11
 EXPECTED_DENIED_CAPABILITY_COUNT: Final = 8
-EXPECTED_MANIFEST_ENTRY_COUNT: Final = 54
+EXPECTED_MANIFEST_ENTRY_COUNT: Final = 55
 
 
 class ReadCapability(StrEnum):
     """The ainvest read projection: the only capabilities this adapter invokes.
 
     A strict subset of :data:`MANIFEST_READ_CAPABILITIES` — the intersection of
-    the manifest's 35 ``mutates=false`` entries with what ainvest actually
+    the manifest's 36 ``mutates=false`` entries with what ainvest actually
     needs for the Non-Trading Preview (`design.md` §5.1: quotes, price book,
     historicals, fundamentals, tradability, and the account/portfolio/position/
     order reads). Membership is closed at import time and each member is

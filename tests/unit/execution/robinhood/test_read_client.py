@@ -139,19 +139,19 @@ def test_unrecognized_failure_fails_closed_and_is_not_retryable(exc: BaseExcepti
 
 
 @pytest.mark.unit
-def test_reviewed_listing_verifies_and_reports_the_35_11_8_split() -> None:
+def test_reviewed_listing_verifies_and_reports_the_36_11_8_split() -> None:
     verification = verify_read_projection(manifest_capabilities())
 
     assert verification.manifest_read_capabilities == MANIFEST_READ_CAPABILITIES
     assert verification.approved_non_trading_mutations == APPROVED_NON_TRADING_MUTATIONS
     assert verification.denied_trading_capabilities == DENIED_TRADING_CAPABILITIES
-    assert len(verification.manifest_read_capabilities) == 35
+    assert len(verification.manifest_read_capabilities) == 36
     assert len(verification.approved_non_trading_mutations) == 11
     assert len(verification.denied_trading_capabilities) == 8
 
 
 @pytest.mark.unit
-def test_read_projection_is_a_strict_subset_of_the_35_and_touches_no_mutation() -> None:
+def test_read_projection_is_a_strict_subset_of_the_36_and_touches_no_mutation() -> None:
     """The projection may only ever narrow, never widen."""
     projection = {member.value for member in ReadCapability}
 
@@ -163,12 +163,22 @@ def test_read_projection_is_a_strict_subset_of_the_35_and_touches_no_mutation() 
 
 @pytest.mark.unit
 def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
-    """v0.3.3 reviews the provider tool without making it callable here."""
+    """v0.4.1 reviews the provider tool without making it callable here."""
     capability = "get_limited_margin_upgrade_info"
 
     assert capability in MANIFEST_READ_CAPABILITIES
     assert capability not in {member.value for member in ReadCapability}
     assert not hasattr(RobinhoodReadClient, "read_limited_margin_upgrade_info")
+
+
+@pytest.mark.unit
+def test_equity_news_read_has_no_adapter_entry_point() -> None:
+    """The sole v0.4.1 provider addition does not widen ainvest's projection."""
+    capability = "get_equity_news"
+
+    assert capability in MANIFEST_READ_CAPABILITIES
+    assert capability not in {member.value for member in ReadCapability}
+    assert not hasattr(RobinhoodReadClient, "read_equity_news")
 
 
 @pytest.mark.unit

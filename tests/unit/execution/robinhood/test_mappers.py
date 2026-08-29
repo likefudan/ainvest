@@ -41,7 +41,7 @@ from ainvest.execution.robinhood.read_models import (
     SessionEvidence,
 )
 
-FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.3.3" / "p06-t1-part1"
+FIXTURES = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.4.1" / "p06-t1-part1"
 PART2_FIXTURES = FIXTURES.parent / "p06-t1-part2"
 OBSERVED_AT = "2026-08-08T15:00:02Z"
 RECEIVED_AT = "2026-08-08T15:00:03Z"
