@@ -9,7 +9,7 @@ this file or anywhere it is used.
 The digests below are fabricated but well-formed. The *pinned* digests — the
 ones a drift would have to defeat — come from
 :mod:`ainvest.execution.robinhood.pins` and are checked against the committed
-`v0.3.3` manifest in ``tests/contract/execution``.
+`v0.4.1` manifest in ``tests/contract/execution``.
 """
 
 from __future__ import annotations
@@ -53,7 +53,7 @@ def manifest_capabilities(
     mutations: frozenset[str] | None = None,
     denied: frozenset[str] | None = None,
 ) -> list[FakeCapability]:
-    """The reviewed `v0.3.3` listing: 35 reads, 11 mutations, 8 denied."""
+    """The reviewed `v0.4.1` listing: 36 reads, 11 mutations, 8 denied."""
     return [
         *(
             FakeCapability(name, read_allowed=True, mutates=False)

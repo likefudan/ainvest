@@ -11,7 +11,7 @@ modules, in exactly one function, and
 ``tests/unit/execution/robinhood/test_published_surface.py`` walks the AST of
 every module in this package to prove it.
 
-Note that ``rh_mcp/__init__.py`` is empty in `v0.3.3` — the published surface
+Note that ``rh_mcp/__init__.py`` is empty in `v0.4.1` — the published surface
 is reached at ``rh_mcp.gateway`` and ``rh_mcp.config``, not re-exported at the
 package root.
 
@@ -62,7 +62,13 @@ class PublishedSurface(Protocol):
     :func:`import_published_surface` has to name an `rh-mcp` symbol.
     """
 
-    def gateway_config(self, *, expected_manifest_digest: str, **options: Any) -> object: ...
+    def gateway_config(
+        self,
+        *,
+        expected_manifest_digest: str,
+        allow_mutations: bool,
+        **options: Any,
+    ) -> object: ...
 
     def open_gateway(self, config: object) -> AbstractAsyncContextManager[GatewayPort]: ...
 
@@ -86,7 +92,7 @@ def import_published_surface() -> PublishedSurface:
     the change is the finding rather than a formality. It used to be
     ``import-not-found`` — mypy could not locate the modules because nothing
     was installed. It is now ``import-untyped``: the modules resolve, and
-    `rh-mcp` `v0.3.3` ships **no** ``py.typed`` marker, so mypy still refuses
+    `rh-mcp` `v0.4.1` ships **no** ``py.typed`` marker, so mypy still refuses
     to read their annotations even though they are written and checked
     upstream under ``strict``. There are no real types to substitute here; the
     typed boundary is :class:`PublishedSurface` and the two adapter methods
@@ -115,9 +121,17 @@ class _RhMcpSurface:
     _gateway_config: Any
     _open_gateway: Any
 
-    def gateway_config(self, *, expected_manifest_digest: str, **options: Any) -> object:
+    def gateway_config(
+        self,
+        *,
+        expected_manifest_digest: str,
+        allow_mutations: bool,
+        **options: Any,
+    ) -> object:
         config: object = self._gateway_config(
-            expected_manifest_digest=expected_manifest_digest, **options
+            expected_manifest_digest=expected_manifest_digest,
+            allow_mutations=allow_mutations,
+            **options,
         )
         return config
 
@@ -137,9 +151,10 @@ async def open_read_gateway(
     """Open a verified ainvest read projection over the pinned gateway.
 
     ``config_options`` is passed through to ``GatewayConfig`` for deployment
-    settings such as mode and credential namespace. It cannot override
-    ``expected_manifest_digest``: that is ainvest's pin, supplied here, and a
-    deployment that could change it could change the permission contract.
+    settings such as mode and credential namespace. It cannot override either
+    ``expected_manifest_digest`` or ``allow_mutations``: those are ainvest's
+    pins, supplied here, and a deployment that could change either could change
+    the permission contract.
 
     No credential, token, or account value is accepted, constructed, or
     logged anywhere on this path. `rh-mcp` owns OAuth, DCR, PKCE, refresh, and
@@ -155,8 +170,17 @@ async def open_read_gateway(
             GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE,
             rejection="expected_manifest_digest_override",
         )
+    if "allow_mutations" in options:
+        raise GatewayReadError(
+            GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE,
+            rejection="allow_mutations_override",
+        )
 
-    config = resolved.gateway_config(expected_manifest_digest=EXPECTED_MANIFEST_DIGEST, **options)
+    config = resolved.gateway_config(
+        expected_manifest_digest=EXPECTED_MANIFEST_DIGEST,
+        allow_mutations=False,
+        **options,
+    )
     async with resolved.open_gateway(config) as gateway:
         client = RobinhoodReadClient(gateway, log_sink=log_sink)
         await client.verify_startup()

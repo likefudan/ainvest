@@ -2123,6 +2123,15 @@ consumable release artifact.
   are frozen by the active execution envelope in `docs/tasks/status.md`.
   Until the separately claimed implementation is reviewed and squash-merged,
   `v0.3.3` remains the only executable dependency authority.
+  The docs-only claim
+  [#149](https://github.com/likefudan/ainvest/pull/149) received an exact
+  released-artifact and consumer-boundary
+  [approval](https://github.com/likefudan/ainvest/pull/149#issuecomment-5465318193)
+  with no P0-P3 finding and squash-merged as
+  `0a38dc02c0f6c02beaaae82a0b99194627d85585`. The separate implementation is
+  now `in_review` on `agent/rh-mcp-v041-pin`; its exact local verification is
+  recorded in `docs/tasks/status.md`. This state does not authorize owner-data
+  validation or make `v0.4.1` executable on `main` before reviewed merge.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact

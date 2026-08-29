@@ -1,7 +1,7 @@
 """`open_read_gateway`: the only place the recomputed pin is consumed.
 
 `tests/contract/execution/test_rh_mcp_manifest_contract.py` proves
-``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.3.3` manifest.
+``EXPECTED_MANIFEST_DIGEST`` is the digest of the reviewed `v0.4.1` manifest.
 That proof is worth nothing if the runtime path passes a different value to
 ``GatewayConfig``, and until this file existed nothing executed that path:
 replacing the pin at the call site with sixty-four zeroes left the whole suite
@@ -39,7 +39,7 @@ import pytest
 
 # The installed wheel, imported here so the assertions below compare against
 # `rh-mcp`'s own objects rather than against a description of them. `rh-mcp`
-# `v0.3.3` ships no `py.typed`, so mypy sees these as untyped; the adapter's
+# `v0.4.1` ships no `py.typed`, so mypy sees these as untyped; the adapter's
 # typed boundary is `PublishedSurface`, not these modules.
 import rh_mcp.config  # type: ignore[import-untyped]
 import rh_mcp.gateway  # type: ignore[import-untyped]
@@ -82,8 +82,18 @@ class FakeSurface:
     opened: list[object] = field(default_factory=list)
     closed: int = 0
 
-    def gateway_config(self, *, expected_manifest_digest: str, **options: Any) -> object:
-        record = {"expected_manifest_digest": expected_manifest_digest, **options}
+    def gateway_config(
+        self,
+        *,
+        expected_manifest_digest: str,
+        allow_mutations: bool,
+        **options: Any,
+    ) -> object:
+        record = {
+            "expected_manifest_digest": expected_manifest_digest,
+            "allow_mutations": allow_mutations,
+            **options,
+        }
         self.configs.append(record)
         return record
 
@@ -139,8 +149,9 @@ def test_the_gateway_is_configured_with_the_recomputed_pin() -> None:
     # the call site reads would still pass if both moved together, which is
     # precisely the mutation this file exists to catch.
     assert surface.configs[0]["expected_manifest_digest"] == (
-        "sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc"
+        "sha256:fac895203bceae45187d1eca38b79884f15414e2ffeb28930aa588d9ada8d8f1"
     )
+    assert surface.configs[0]["allow_mutations"] is False
 
 
 def test_the_configured_pin_is_never_the_changelog_digest() -> None:
@@ -169,6 +180,20 @@ def test_deployment_options_cannot_override_the_pin() -> None:
     assert surface.opened == []
 
 
+@pytest.mark.parametrize("override", [False, True])
+def test_deployment_options_cannot_override_the_mutation_gate(override: bool) -> None:
+    """Even an apparently safe caller value cannot own the security boundary."""
+    surface = FakeSurface()
+
+    with pytest.raises(GatewayReadError) as caught:
+        run(_open(surface=surface, config_options={"allow_mutations": override}))
+
+    assert caught.value.code is GatewayReadErrorCode.DEPENDENCY_UNAVAILABLE
+    assert caught.value.rejection == "allow_mutations_override"
+    assert surface.configs == []
+    assert surface.opened == []
+
+
 def test_other_deployment_options_are_passed_through() -> None:
     """The override guard must reject one key, not disable the parameter."""
     _, surface = run(_open(config_options={"mode": "read_broker", "namespace": "ainvest"}))
@@ -176,6 +201,7 @@ def test_other_deployment_options_are_passed_through() -> None:
     assert surface.configs[0]["mode"] == "read_broker"
     assert surface.configs[0]["namespace"] == "ainvest"
     assert surface.configs[0]["expected_manifest_digest"] == EXPECTED_MANIFEST_DIGEST
+    assert surface.configs[0]["allow_mutations"] is False
 
 
 # ---------------------------------------------------------------------------
@@ -299,11 +325,16 @@ def test_the_installed_gateway_config_takes_the_digest_this_adapter_passes() -> 
     assert "expected_manifest_digest" in parameters
     assert parameters["expected_manifest_digest"].default is inspect.Parameter.empty
     assert parameters["expected_manifest_digest"].kind is not inspect.Parameter.POSITIONAL_ONLY
+    assert "allow_mutations" in parameters
+    assert parameters["allow_mutations"].kind is inspect.Parameter.KEYWORD_ONLY
+    assert parameters["allow_mutations"].default is False
 
     configured = import_published_surface().gateway_config(
-        expected_manifest_digest=EXPECTED_MANIFEST_DIGEST
+        expected_manifest_digest=EXPECTED_MANIFEST_DIGEST,
+        allow_mutations=False,
     )
     assert getattr(configured, "expected_manifest_digest", None) == EXPECTED_MANIFEST_DIGEST
+    assert getattr(configured, "allow_mutations", None) is False
 
 
 def test_the_installed_open_gateway_takes_the_config_as_its_only_argument() -> None:

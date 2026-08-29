@@ -1,7 +1,7 @@
 """Cross-repository contract: the pins are recomputed, never transcribed.
 
 `src/ainvest/execution/robinhood/pins.py` states the identity of the reviewed
-`rh-mcp` `v0.3.3` permission set. Until this module existed those constants
+`rh-mcp` `v0.4.1` permission set. Until this module existed those constants
 were prose: a reviewer demonstrated that swapping ``EXPECTED_MANIFEST_DIGEST``
 for the wrong-but-plausible digest `rh-mcp`'s changelog prints, *and* changing
 the capability split, left ainvest's entire suite green. Nothing executable
@@ -11,13 +11,13 @@ This file closes that. It does not import `rh_mcp` — the dependency is out of
 scope for `P06-T0` and importing the package would only prove that `rh-mcp`
 agrees with itself. Instead it implements `rh-canon-1` **from the written
 specification** in `rh-mcp` `canonical.py`'s module docstring and `DESIGN.md`
-§6, then recomputes the full-manifest digest of the committed `v0.3.3`
+§6, then recomputes the full-manifest digest of the committed `v0.4.1`
 manifest and compares it to the pin. Two independent implementations landing
 on the same 64 hex characters is evidence; one implementation agreeing with
 itself is not.
 
 The fixture is byte-identical to
-``git show v0.3.3:src/rh_mcp/manifests/read-manifest.json`` and
+``git show v0.4.1:src/rh_mcp/manifests/read-manifest.json`` and
 :func:`test_the_committed_fixture_is_the_reviewed_artifact` keeps it that way
 by re-deriving its digest rather than trusting the filename.
 """
@@ -36,7 +36,7 @@ import pytest
 from ainvest.execution.robinhood import pins
 
 MANIFEST_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.3.3" / "read-manifest.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.1" / "read-manifest.json"
 )
 DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
@@ -252,7 +252,7 @@ def test_the_historical_rejected_digest_is_not_this_manifests_digest(
 
     Its ``[0.1.0]`` and ``[0.2.0]`` entries both show ``sha256:49b7218…``
     beside manifest version ``2026.08.03.1``. That value remains named as a
-    regression, but it does not belong to the independently reviewed v0.3.3
+    regression, but it does not belong to the independently reviewed v0.4.1
     artifact and can never become its accepted full-manifest digest.
     """
     # Widened to `str` deliberately. Both pins are `Final` literals, so mypy
@@ -275,7 +275,7 @@ def test_manifest_identity_fields_match_the_pins(manifest: dict[str, Any]) -> No
 
 
 # ---------------------------------------------------------------------------
-# The 35 / 11 / 8 split (IMPLEMENTATION_TODO.md rule 32)
+# The 36 / 11 / 8 split (IMPLEMENTATION_TODO.md rule 32)
 # ---------------------------------------------------------------------------
 
 
@@ -297,7 +297,7 @@ def test_the_three_dispositions_are_the_pinned_name_sets(manifest: dict[str, Any
 
 
 @pytest.mark.contract
-def test_the_split_is_exactly_35_11_8(manifest: dict[str, Any]) -> None:
+def test_the_split_is_exactly_36_11_8(manifest: dict[str, Any]) -> None:
     """Rule 32's arithmetic, checked against the artifact and against itself."""
     reads, mutations, denied = _partition(manifest)
     assert (len(reads), len(mutations), len(denied)) == (
@@ -305,9 +305,9 @@ def test_the_split_is_exactly_35_11_8(manifest: dict[str, Any]) -> None:
         pins.EXPECTED_APPROVED_MUTATION_COUNT,
         pins.EXPECTED_DENIED_CAPABILITY_COUNT,
     )
-    assert (len(reads), len(mutations), len(denied)) == (35, 11, 8)
-    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 54
-    assert len(reads) + len(mutations) + len(denied) == 54
+    assert (len(reads), len(mutations), len(denied)) == (36, 11, 8)
+    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 55
+    assert len(reads) + len(mutations) + len(denied) == 55
     assert reads.isdisjoint(mutations) and reads.isdisjoint(denied)
     assert mutations.isdisjoint(denied)
 
@@ -324,7 +324,7 @@ def test_every_denied_capability_is_a_mutation(manifest: dict[str, Any]) -> None
 def test_approved_mutation_top_level_inputs_are_the_reviewed_shapes(
     manifest: dict[str, Any],
 ) -> None:
-    """Freeze the exact v0.3.3 write envelope without making it callable.
+    """Freeze the exact v0.4.1 write envelope without making it callable.
 
     These literals pin every approved non-trading mutation's top-level
     property and required sets. ``additionalProperties=false`` prevents an
@@ -440,6 +440,17 @@ def test_limited_margin_upgrade_read_is_reviewed_but_not_projected() -> None:
 
 
 @pytest.mark.contract
+def test_equity_news_read_is_reviewed_but_not_projected() -> None:
+    """The sole v0.4.1 addition cannot become a callable ainvest read."""
+    capability = "get_equity_news"
+    projection = {member.value for member in pins.ReadCapability}
+
+    assert capability in pins.MANIFEST_READ_CAPABILITIES
+    assert capability not in projection
+    assert len(projection) == 10
+
+
+@pytest.mark.contract
 def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None:
     """Prevent the reviewed manifest from being described as the public API."""
     design = DESIGN_PATH.read_text(encoding="utf-8")
@@ -447,7 +458,7 @@ def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None
         "### Phase 5\uff1a", maxsplit=1
     )[0]
 
-    assert "manifest 精确允许 35 个读取能力和 11 个非交易 mutation" in phase4
+    assert "manifest 精确允许 36 个读取能力和 11 个非交易 mutation" in phase4
     assert "ainvest 当前只能调用已有 10 个命名读取能力" in phase4
     assert "永久拒绝 8 个交易能力" in phase4
     assert "调用精确批准的 34 个读取能力" not in design
