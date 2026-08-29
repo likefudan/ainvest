@@ -72,12 +72,16 @@ External data
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 32. The pinned `rh-mcp` manifest must match its independently reviewed exact
     capability sets and `mutates` flags. The current executable `v0.3.3`
-    artifact has 35 reads, 11 explicitly reviewed non-trading
-    mutations, and 8 denied trading capabilities across 54 entries; the
-    additional read does not widen ainvest's
-    existing 10-operation `ReadCapability` projection. The boundary is no
-    trading, not no writes. Unknown capabilities and any manifest, schema,
-    disposition, or mutation-classification drift fail closed.
+    artifact remains the sole authority until the separately reviewed
+    `v0.4.1` maintenance implementation merges. The approved `v0.4.1` target
+    has 36 reads, 11 explicitly reviewed non-trading mutations, and 8 denied
+    trading capabilities across 55 entries; its additional
+    `get_equity_news` read must not widen ainvest's existing 10-operation
+    `ReadCapability` projection. Composition must pass the upstream strict
+    mutation gate as `allow_mutations=False` and reject an attempted override.
+    The boundary is no trading, not no writes. Unknown capabilities and any
+    manifest, schema, disposition, or mutation-classification drift fail
+    closed.
 
 ### 1.3 First-Release Non-Goals
 
@@ -105,9 +109,13 @@ External data
   [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Non-Trading Gateway.
   `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
   ainvest consumes only its pinned, SDK-neutral capability/result contract.
-  The pinned `v0.3.3` surface is 35 reads plus 11 non-trading mutations, while
-  ainvest exposes only its existing 10-operation named read projection. All 8
-  trading capabilities and every unknown capability are denied.
+  The current executable `v0.3.3` surface is 35 reads plus 11 non-trading
+  mutations. The approved `v0.4.1` maintenance target is 36 reads plus the
+  same 11 non-trading mutations and 8 denied trading capabilities across 55
+  entries. Its new `get_equity_news` read is reviewed manifest evidence only:
+  ainvest continues to expose exactly its existing 10-operation named read
+  projection, passes `allow_mutations=False`, and rejects any caller override.
+  Every trading and unknown capability remains denied.
 - Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
 - Testing: pytest, Hypothesis, and HTTPX mocks.
 - Logging and monitoring: structlog, OpenTelemetry, and Prometheus.
@@ -2094,6 +2102,27 @@ consumable release artifact.
   public methods, display/CLI behavior, Telegram composition, and gateway
   lifecycle do not change. Preserve compatible locked transitive versions;
   do not bundle unrelated `mcp`, `httpx2`, or other upgrades.
+- **Claimed `v0.4.1` maintenance refresh:** the owner authorized use of the
+  latest released gateway after provider discovery added only
+  `get_equity_news`. The reviewed release target is annotated tag object
+  `a37d1b31d4d60b98034e9aaeecfce4cc3ffd731f`, tagged commit
+  `6dfe4a77f443515bb93871712affe473ea4a8a9a`, manifest version
+  `2026.08.28`, full digest
+  `sha256:fac895203bceae45187d1eca38b79884f15414e2ffeb28930aa588d9ada8d8f1`,
+  and surface digest
+  `sha256:248d19ef99bd22e0f7608e4e517358a3c83d9fa91f59c9c765c4bf0f750007c3`.
+  Its 55 entries are exactly 36 reviewed reads, the unchanged 11 non-trading
+  mutations, and the unchanged 8 denied trading capabilities. The old 54
+  entries are object-identical and only `get_equity_news` is new. Add that
+  capability to the reviewed manifest-read set only; do not add it to
+  `ReadCapability`, a mapper, model, CLI command, display method, or Telegram
+  command. `rh-mcp` `v0.4.0` also introduced the keyword-only strict-boolean
+  `GatewayConfig.allow_mutations` gate. The ainvest composition must pass
+  `False` explicitly and reject `allow_mutations` in caller options before
+  opening the gateway. The exact paths, artifacts, negative scope, and gates
+  are frozen by the active execution envelope in `docs/tasks/status.md`.
+  Until the separately claimed implementation is reviewed and squash-merged,
+  `v0.3.3` remains the only executable dependency authority.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
