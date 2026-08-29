@@ -580,7 +580,12 @@ merged. The original
 reviewed implementation [#143](https://github.com/likefudan/ainvest/pull/143)
 squash-merged as `b72104232947472346dd7978b8652672125a3dca` and
 `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is the sole executable
-authority on `main`.
+authority on `main` until the separately reviewed `v0.4.1` implementation
+merges. A narrow P06-T0 `v0.4.1` pin-refresh claim is active on
+`agent/rh-mcp-v041-claim`; it records the exact release and artifact evidence,
+the 55-entry 36/11/8 manifest, the unchanged ten-read ainvest projection, and
+the mandatory explicit `allow_mutations=False` composition boundary. It does
+not change executable code, dependencies, fixtures, or runtime authority.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
 merged. Owner-assisted staging validation now proves the Bot, gateway status,
 account eligibility, and quote path. P05-T11 secure account binding and the
@@ -1616,6 +1621,94 @@ invoke only its existing 10 named read operations. Its serial merge order is:
   production Bot validation remain owner-assisted under proposed `DEC-010`
   and must not place credentials, account numbers, or provider payloads in Git,
   PRs, logs, or chat.
+
+##### Execution envelope: P06-T0 `rh-mcp` `v0.4.1` pin refresh
+
+- **Title:** Refresh the reviewed external gateway pin from `v0.3.3` to
+  `v0.4.1` without widening ainvest's callable surface.
+- **Status/owner:** `claimed` — `rh_mcp_v041_pin_refresh`; this docs-only claim
+  does not change the executable dependency authority.
+- **Branch/worktree/base:** `agent/rh-mcp-v041-claim` /
+  `.worktrees/rh-mcp-v041-claim` / exact base
+  `e6b66c6c302097b710e93a2f08377e66fd53a373`.
+- **Release authority:** public release
+  <https://github.com/likefudan/rh-mcp/releases/tag/v0.4.1>, annotated tag
+  object `a37d1b31d4d60b98034e9aaeecfce4cc3ffd731f`, tagged commit
+  `6dfe4a77f443515bb93871712affe473ea4a8a9a`, and successful release workflow
+  <https://github.com/likefudan/rh-mcp/actions/runs/33251621363>. The final
+  released source was independently approved after rebase at
+  <https://github.com/likefudan/rh-mcp/pull/58#issuecomment-5462051769>.
+- **Artifact authority:** wheel `rh_mcp-0.4.1-py3-none-any.whl`, SHA-256
+  `0fa13061a3c79c9ab986017280ee8324170f06b8f6754c5e5c279ae1e3de0a69`,
+  size `211629`; sdist `rh_mcp-0.4.1.tar.gz`, SHA-256
+  `e9a9a103ffb5f35929a8c2978e0597969a6b1f0d83a55cd4ef8a01be27298503`,
+  size `513482`. `SHA256SUMS` has SHA-256
+  `5b7653d4d6cca745502043fd63867f0e1756967beb738fd6764e878322d6b6b5`.
+  Consumer-side downloads matched those values and both published artifacts
+  passed GitHub attestation verification. Exact-tag independent rebuilds were
+  byte-identical to the released wheel and sdist.
+- **Reviewed manifest:** format `1.2`, canonicalization `rh-canon-1`, digest
+  algorithm `sha256`, envelope `1.0`, manifest version `2026.08.28`, full
+  digest
+  `sha256:fac895203bceae45187d1eca38b79884f15414e2ffeb28930aa588d9ada8d8f1`,
+  and surface digest
+  `sha256:248d19ef99bd22e0f7608e4e517358a3c83d9fa91f59c9c765c4bf0f750007c3`.
+  Its 55 entries are exactly 36 reads, 11 non-trading mutations, and 8 denied
+  trading capabilities. All 54 `v0.3.3` entries are object-identical;
+  `get_equity_news` is the sole new entry and is reviewed `allowed`,
+  `mutates=false`. It enters `MANIFEST_READ_CAPABILITIES` only. The public
+  `ReadCapability` enum, named client/display/CLI methods, Telegram commands,
+  and model/mapper surface remain exactly the existing ten reads.
+- **Runtime integration boundary:** `v0.4.0` added a keyword-only strict-bool
+  `GatewayConfig.allow_mutations` with a fail-closed default. Composition must
+  pass `allow_mutations=False` explicitly and reject either
+  `expected_manifest_digest` or `allow_mutations` in caller-supplied options
+  before gateway construction. Tests must prove the installed `v0.4.1`
+  signature, the false runtime value, rejection of both false and true caller
+  overrides, and no mutation invocation path. Provider news prose and article
+  text remain untrusted manifest evidence and cannot reach a model, CLI,
+  Telegram, logs, or another sink because news is outside the ten-read
+  projection.
+- **Allowed implementation paths:** `pyproject.toml`; `uv.lock` limited to the
+  root broker reference and direct `rh-mcp` artifact entry;
+  `src/ainvest/execution/robinhood/{pins,composition}.py`; a mechanical
+  `tests/fixtures/rh_mcp/v0.3.3/**` to `v0.4.1/**` lineage move with all eleven
+  payload fixtures byte-identical and only `read-manifest.json` replaced from
+  the wheel; narrow current-literal and contract changes in existing
+  `tests/unit/execution/robinhood/test_{artifact,composition,published_surface,read_client,prose,display,cli}.py`,
+  `tests/unit/orchestrator/test_telegram_queries.py`,
+  `tests/unit/test_dependency_boundary.py`,
+  `tests/contract/execution/test_rh_mcp_{manifest,part1_mapping,part2_mapping}_contract.py`,
+  `tests/contract/execution/test_robinhood_display_contract.py`, and
+  `tests/integration/execution/robinhood/test_display_cli.py`; plus
+  `docs/{development,robinhood-read-cli,telegram-read-queries}.md`,
+  `docs/security/{control-matrix.md,control-evidence.json}`,
+  `IMPLEMENTATION_TODO.md`, and this tracker. Any additional path requires a
+  coordinator-recorded scope expansion before editing.
+- **Forbidden scope:** no news feature or generic invocation, no mapper/model/
+  display/CLI/Telegram command or public named-method addition, no mutation or
+  trading use, no OAuth/credential/account-binding/poller/gateway-lifecycle/
+  database/migration/schema/approval change, no provider call with owner data,
+  no CI change, and no unrelated dependency or transitive upgrade. Preserve
+  the existing compatible `mcp`, `httpx2`, and other locked versions.
+- **Required verification:** independently verify tag, release, hashes, sizes,
+  attestations, rebuilds, and wheel-manifest bytes; recompute both manifest
+  digests and exact 36/11/8 sets; prove old 54 entries unchanged, news absent
+  from the ten-read projection, all eleven migrated payloads byte-identical
+  and schema-valid, strict mutation-gate composition, provider-prose discard,
+  PEP 610 artifact provenance, root/direct-only lock delta, no vulnerabilities,
+  dependency direction, and no secret-shaped data. Run the focused artifact,
+  composition, manifest, mapping, display, CLI, Telegram query/poller, and
+  dependency tests; all unit, contract, and integration suites;
+  `git diff --check`; and `./scripts/dev verify`. A fresh independent reviewer
+  must approve the exact implementation head with all required CI green before
+  serial squash merge.
+- **Serial and owner handoff:** `v0.3.3` remains the sole executable authority
+  until the separately claimed implementation is reviewed and merged. Only
+  after that merge may owner-assisted staging rerun `rh-mcp auth-status` and
+  `status`, secure account provision/validate, poller restart, bounded history,
+  and account-bound Telegram reads. No credential, account number, raw provider
+  payload, or secret-derived value may enter Git, PR evidence, logs, or chat.
 
 ##### Current executable dependency pin: `likefudan/rh-mcp` `v0.3.3`
 
