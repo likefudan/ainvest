@@ -71,13 +71,14 @@ External data
 30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 32. The pinned `rh-mcp` manifest must match its independently reviewed exact
-    capability sets and `mutates` flags. The current executable `v0.3.3`
+    capability sets and `mutates` flags. The current executable `v0.4.1`
     artifact remains the sole authority until the separately reviewed
-    `v0.4.1` maintenance implementation merges. The approved `v0.4.1` target
-    has 36 reads, 11 explicitly reviewed non-trading mutations, and 8 denied
-    trading capabilities across 55 entries; its additional
-    `get_equity_news` read must not widen ainvest's existing 10-operation
-    `ReadCapability` projection. Composition must pass the upstream strict
+    `v0.4.2` maintenance implementation merges. The approved `v0.4.2` target
+    has 36 reads, 11 explicitly reviewed non-trading mutations, 8 denied
+    trading capabilities, and 4 denied non-mutating SEC capabilities across
+    59 entries. The SEC capabilities are provider-surface evidence only and
+    must not widen ainvest's existing 10-operation `ReadCapability`
+    projection. Composition must pass the upstream strict
     mutation gate as `allow_mutations=False` and reject an attempted override.
     The boundary is no trading, not no writes. Unknown capabilities and any
     manifest, schema, disposition, or mutation-classification drift fail
@@ -109,13 +110,13 @@ External data
   [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Non-Trading Gateway.
   `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
   ainvest consumes only its pinned, SDK-neutral capability/result contract.
-  The current executable `v0.3.3` surface is 35 reads plus 11 non-trading
-  mutations. The approved `v0.4.1` maintenance target is 36 reads plus the
-  same 11 non-trading mutations and 8 denied trading capabilities across 55
-  entries. Its new `get_equity_news` read is reviewed manifest evidence only:
-  ainvest continues to expose exactly its existing 10-operation named read
-  projection, passes `allow_mutations=False`, and rejects any caller override.
-  Every trading and unknown capability remains denied.
+  The current executable `v0.4.1` surface is 36 reads plus 11 non-trading
+  mutations and 8 denied trading capabilities. The approved `v0.4.2`
+  maintenance target additionally records four SEC reads as denied,
+  non-mutating provider surface, for an exact 36/11/8/4 split across 59
+  entries. Ainvest continues to expose exactly its existing 10-operation
+  named read projection, passes `allow_mutations=False`, and rejects any
+  caller override. Every trading, SEC, and unknown capability remains denied.
 - Data: Robinhood MCP capabilities first; SEC EDGAR/EdgarTools for primary filings; GDELT, SEC, and company announcements for news/events; yfinance for optional development/offline use only.
 - Testing: pytest, Hypothesis, and HTTPX mocks.
 - Logging and monitoring: structlog, OpenTelemetry, and Prometheus.
@@ -1379,10 +1380,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
   provisioning/validation contract under `DEC-010`.
   The deliberate ainvest pin update to the separately reviewed `rh-mcp`
-  `v0.3.3` release squash-merged in #143 and is the executable authority.
-  Owner-assisted `rh-mcp v0.3.3 auth-status` and `status` are verified against
-  manifest version `2026.08.22` and digest
-  `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
+  `v0.4.1` release squash-merged in #150 and is the executable authority until
+  the isolated v0.4.2 maintenance implementation merges. Owner-assisted auth
+  remains healthy; status later failed closed on four newly discovered SEC
+  tools, which v0.4.2 records as denied without widening ainvest permissions.
   Sanitized Telegram evidence verifies status, account eligibility, and a
   representative quote. The historical sizing and P05-T11 account-binding
   implementations are merged; `/history` and account-bound display commands
@@ -1831,7 +1832,7 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   squash-merged as `1a724e2861dc811c6c29717f6157c073bcc516f8`.
   Owner-assisted account provisioning and Telegram acceptance remain pending.
 - **Dependencies:** merged P05-T9, P05-T10, P05-T5, P06-T0, P06-T1, and P06-T2
-  Part 1; the current pinned `rh-mcp v0.3.3` manifest and named read projection;
+  Part 1; the current pinned `rh-mcp v0.4.1` manifest and named read projection;
   accepted `DEC-005`; and the owner-controlled staging/production shape in
   proposed `DEC-010`. Real credentials and account data are required only for
   owner-assisted validation after the deterministic offline merge.
@@ -2063,10 +2064,11 @@ consumable release artifact.
 - **Maintenance completion:** the original adapter/runtime/hardening work and
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
-  `v0.3.3` is the current executable dependency authority; `v0.2.0` is
-  historical evidence only. P05-T10 and `P05-T9` are merged. Owner-assisted
-  v0.3.3 status, staging Bot validation, and status/accounts/quote reads are
-  verified as of 2026-08-26. P05-T11 account binding and P05-T9 history sizing
+  `v0.4.1` is the current executable dependency authority; earlier pins are
+  historical evidence only. The separately reviewed v0.4.2 release records
+  four new SEC capabilities as denied and its ainvest pin is in review.
+  P05-T10 and `P05-T9` are merged. Earlier staging Bot validation and
+  status/accounts/quote reads are verified. P05-T11 account binding and P05-T9 history sizing
   are merged; their staging acceptance and production Bot validation remain
   owner-assisted.
 - **Current maintenance implementation:** the executable pin refresh from
@@ -2102,7 +2104,7 @@ consumable release artifact.
   public methods, display/CLI behavior, Telegram composition, and gateway
   lifecycle do not change. Preserve compatible locked transitive versions;
   do not bundle unrelated `mcp`, `httpx2`, or other upgrades.
-- **Claimed `v0.4.1` maintenance refresh:** the owner authorized use of the
+- **Completed `v0.4.1` maintenance refresh:** the owner authorized use of the
   latest released gateway after provider discovery added only
   `get_equity_news`. The reviewed release target is annotated tag object
   `a37d1b31d4d60b98034e9aaeecfce4cc3ffd731f`, tagged commit
@@ -2121,25 +2123,44 @@ consumable release artifact.
   `False` explicitly and reject `allow_mutations` in caller options before
   opening the gateway. The exact paths, artifacts, negative scope, and gates
   are frozen by the active execution envelope in `docs/tasks/status.md`.
-  Until the separately claimed implementation is reviewed and squash-merged,
-  `v0.3.3` remains the only executable dependency authority.
   The docs-only claim
   [#149](https://github.com/likefudan/ainvest/pull/149) received an exact
   released-artifact and consumer-boundary
   [approval](https://github.com/likefudan/ainvest/pull/149#issuecomment-5465318193)
   with no P0-P3 finding and squash-merged as
-  `0a38dc02c0f6c02beaaae82a0b99194627d85585`. The separate implementation is
-  now `in_review` on `agent/rh-mcp-v041-pin`; its exact local verification is
-  recorded in `docs/tasks/status.md`. This state does not authorize owner-data
-  validation or make `v0.4.1` executable on `main` before reviewed merge.
+  `0a38dc02c0f6c02beaaae82a0b99194627d85585`. The separately reviewed
+  implementation [#150](https://github.com/likefudan/ainvest/pull/150) was
+  approved at exact head
+  `9bd7e01cbf18e0c7c45c5a23bf71ec8d17c322d8` and squash-merged as
+  `3d5fe0dfe4335d08730fb788a82d93d31b47688b`; `v0.4.1` is therefore the
+  current executable dependency authority on `main`.
+- **Claimed `v0.4.2` maintenance refresh:** provider discovery added exactly
+  four SEC reads while every prior `v0.4.1` entry remained object-identical.
+  The four new capabilities (`get_sec_filing`, `get_sec_filing_facts`,
+  `get_sec_filing_facts_catalog`, and `get_sec_filing_index`) are recorded as
+  `denied`, `mutates=false`; this acknowledges the full provider surface
+  without granting ainvest permission to invoke them. The reviewed release is
+  annotated tag object `a866c84d854eb477988c6b91efd845fd7684a8e6`, tagged
+  commit `36cd95cae982daefc1914433d23b7c4bdcd153e9`, manifest
+  version `2026.08.30`, full digest
+  `sha256:895dcec0faa7d7c69fbd8ebb5c550faf9e295911a896d4064f5bacc05cfa6766`,
+  and surface digest
+  `sha256:17498a0411466fcfb475e0cfb160f145df38702c2aee13224b0b3ae5340b1e96`.
+  Its 59 entries split exactly 36 allowed reads, 11 allowed non-trading
+  mutations, 8 denied trading capabilities, and 4 denied SEC capabilities.
+  The existing ten-member `ReadCapability` projection, all named methods and
+  sinks, and `allow_mutations=False` remain unchanged. The implementation is
+  isolated on `agent/rh-mcp-v042-pin`; `v0.4.1` remains executable authority
+  until the v0.4.2 pin is independently reviewed and squash-merged.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
   digest/checksum, committed reviewed capability manifest, and full-manifest
   digest recorded in `docs/tasks/status.md`. The core dependency was satisfied
-  by reviewed `v0.2.0`; the maintenance dependency is now satisfied by
-  reviewed and publicly verified `v0.3.3`. Take every current executable value
-  from "Current executable dependency pin" in `docs/tasks/status.md`. Do not
+  by reviewed `v0.2.0`; current executable authority is the reviewed `v0.4.1`
+  artifact, and the separately reviewed/publicly verified `v0.4.2` release is
+  the active maintenance target. Take every implementation value from its
+  exact execution envelope in `docs/tasks/status.md`. Do not
   infer a pin
   from package version or transcribe one from release prose or a changelog;
   verify the tagged and artifact-shipped manifest directly.
@@ -2288,7 +2309,7 @@ consumable release artifact.
 - **Dependencies:** Part 1 depends on P06-T0, completed P06-T1 normalization,
   P03-T16, and P08-T0. Part 2 additionally requires trustworthy canonical
   instrument identity, verified Agentic-account binding, and regular-session
-  evidence. The current `rh-mcp` `v0.3.3` pin supplies the reviewed provider
+  evidence. The current `rh-mcp` `v0.4.1` pin supplies the reviewed provider
   surface but does not supply those three promotion prerequisites or promote
   display data into Paper.
 - **Primary files:** read-only service/CLI entry point, deployment permissions, integration tests.
@@ -2747,9 +2768,9 @@ line.
    step in this display-only lane is complete, and `P06-T0`, `P06-T1`, and
    `P06-T2` Part 1 are merged. The narrow `P06-T0` maintenance refresh to
    independently reviewed `v0.3.0` merged through #126/#127 without reopening
-   the adapter or normalization scope; the subsequent `v0.3.3` claim and pin
-   implementation merged through #142/#143. `v0.3.3` is the current executable
-   dependency authority.
+   the adapter or normalization scope; subsequent reviewed pin updates through
+   `v0.4.1` merged through #142/#143 and #149/#150. `v0.4.1` is the current
+   executable dependency authority until the isolated v0.4.2 refresh merges.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
    values stay manual. Staging validation succeeded on 2026-08-26; production

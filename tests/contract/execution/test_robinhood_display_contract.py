@@ -21,6 +21,7 @@ from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErro
 from ainvest.execution.robinhood.mappers import MappingErrorCode, RobinhoodMappingError
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
 )
 
@@ -180,7 +181,9 @@ def test_service_calls_only_the_ten_named_client_reads() -> None:
     }
     source = DISPLAY_MODULE.read_text(encoding="utf-8") + CLI_MODULE.read_text(encoding="utf-8")
     assert ".invoke(" not in source
-    for capability in APPROVED_NON_TRADING_MUTATIONS | DENIED_TRADING_CAPABILITIES:
+    for capability in (
+        APPROVED_NON_TRADING_MUTATIONS | DENIED_TRADING_CAPABILITIES | DENIED_SEC_CAPABILITIES
+    ):
         assert capability not in source
 
 

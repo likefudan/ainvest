@@ -18,6 +18,7 @@ from ainvest.execution.robinhood import cli
 from ainvest.execution.robinhood.errors import GatewayReadError, GatewayReadErrorCode
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
     MANIFEST_READ_CAPABILITIES,
@@ -26,7 +27,7 @@ from ainvest.execution.robinhood.pins import (
 )
 from ainvest.execution.robinhood.read_client import GatewayPort, RobinhoodReadClient
 
-FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.4.1"
+FIXTURES: Final = Path(__file__).resolve().parents[3] / "fixtures" / "rh_mcp" / "v0.4.2"
 SCHEMA_DIGEST: Final = f"sha256:{'3' * 64}"
 RESULT_DIGEST: Final = f"sha256:{'4' * 64}"
 OBSERVED_AT: Final = "2026-08-08T15:00:02Z"
@@ -46,6 +47,7 @@ def _capabilities() -> list[_Capability]:
         *(_Capability(name, True, False) for name in sorted(MANIFEST_READ_CAPABILITIES)),
         *(_Capability(name, True, True) for name in sorted(APPROVED_NON_TRADING_MUTATIONS)),
         *(_Capability(name, False, True) for name in sorted(DENIED_TRADING_CAPABILITIES)),
+        *(_Capability(name, False, False) for name in sorted(DENIED_SEC_CAPABILITIES)),
     ]
 
 

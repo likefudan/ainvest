@@ -3,7 +3,7 @@
 P06-T0 only. The gateway itself — OAuth, DCR, PKCE, refresh, the credential
 store protocol, private MCP SDK v2 transport, session lifecycle, bounded
 pagination, tool discovery, the reviewed capability manifest and its digests,
-and default-deny enforcement — is owned by `rh-mcp` and pinned at `v0.4.1`.
+and default-deny enforcement — is owned by `rh-mcp` and pinned at `v0.4.2`.
 This package pins that release, verifies it, narrows it to a read projection,
 and hands validated payloads to P06-T1.
 """
@@ -29,6 +29,7 @@ from ainvest.execution.robinhood.errors import (
 )
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
     MANIFEST_READ_CAPABILITIES,
@@ -58,6 +59,7 @@ from ainvest.execution.robinhood.read_client import (
 
 __all__ = [
     "APPROVED_NON_TRADING_MUTATIONS",
+    "DENIED_SEC_CAPABILITIES",
     "DENIED_TRADING_CAPABILITIES",
     "EXPECTED_MANIFEST_DIGEST",
     "MANIFEST_READ_CAPABILITIES",

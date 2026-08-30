@@ -108,10 +108,10 @@ mypy, pytest, and other development tools are intentionally absent from those en
 ### Broker profile
 
 The broker profile installs the independently reviewed, artifact-pinned `rh-mcp` release
-`v0.4.1`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
+`v0.4.2`. It is declared in the `broker` extra as a PEP 508 direct reference to the release
 wheel with a `#sha256=` fragment, not as a version specifier: `rh-mcp` is not published on
 PyPI, so a version specifier would resolve against an index where that name is unregistered
-and therefore claimable. Every pinned value comes from the P06-T0 `rh-mcp` `v0.4.1`
+and therefore claimable. Every pinned value comes from the P06-T0 `rh-mcp` `v0.4.2`
 pin-refresh execution envelope in `docs/tasks/status.md` by way of
 `src/ainvest/execution/robinhood/pins.py`; the recorded `v0.2.0` subsection is retained only as
 historical evidence.
