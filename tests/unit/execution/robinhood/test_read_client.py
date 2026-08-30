@@ -25,6 +25,7 @@ from ainvest.execution.robinhood.errors import (
 )
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
     MANIFEST_READ_CAPABILITIES,
@@ -139,15 +140,17 @@ def test_unrecognized_failure_fails_closed_and_is_not_retryable(exc: BaseExcepti
 
 
 @pytest.mark.unit
-def test_reviewed_listing_verifies_and_reports_the_36_11_8_split() -> None:
+def test_reviewed_listing_verifies_and_reports_the_36_11_8_4_split() -> None:
     verification = verify_read_projection(manifest_capabilities())
 
     assert verification.manifest_read_capabilities == MANIFEST_READ_CAPABILITIES
     assert verification.approved_non_trading_mutations == APPROVED_NON_TRADING_MUTATIONS
     assert verification.denied_trading_capabilities == DENIED_TRADING_CAPABILITIES
+    assert verification.denied_sec_capabilities == DENIED_SEC_CAPABILITIES
     assert len(verification.manifest_read_capabilities) == 36
     assert len(verification.approved_non_trading_mutations) == 11
     assert len(verification.denied_trading_capabilities) == 8
+    assert len(verification.denied_sec_capabilities) == 4
 
 
 @pytest.mark.unit
@@ -159,11 +162,12 @@ def test_read_projection_is_a_strict_subset_of_the_36_and_touches_no_mutation() 
     assert len(projection) == 10
     assert projection.isdisjoint(APPROVED_NON_TRADING_MUTATIONS)
     assert projection.isdisjoint(DENIED_TRADING_CAPABILITIES)
+    assert projection.isdisjoint(DENIED_SEC_CAPABILITIES)
 
 
 @pytest.mark.unit
 def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
-    """v0.4.1 reviews the provider tool without making it callable here."""
+    """v0.4.2 reviews the provider tool without making it callable here."""
     capability = "get_limited_margin_upgrade_info"
 
     assert capability in MANIFEST_READ_CAPABILITIES
@@ -173,12 +177,21 @@ def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
 
 @pytest.mark.unit
 def test_equity_news_read_has_no_adapter_entry_point() -> None:
-    """The sole v0.4.1 provider addition does not widen ainvest's projection."""
+    """The earlier reviewed news read still does not widen the projection."""
     capability = "get_equity_news"
 
     assert capability in MANIFEST_READ_CAPABILITIES
     assert capability not in {member.value for member in ReadCapability}
     assert not hasattr(RobinhoodReadClient, "read_equity_news")
+
+
+@pytest.mark.unit
+def test_denied_sec_capabilities_have_no_adapter_entry_points() -> None:
+    """Recording provider surface cannot create an invocation path."""
+    projection = {member.value for member in ReadCapability}
+    for capability in DENIED_SEC_CAPABILITIES:
+        assert capability not in projection
+        assert not hasattr(RobinhoodReadClient, f"read_{capability.removeprefix('get_')}")
 
 
 @pytest.mark.unit
@@ -238,6 +251,10 @@ def test_allowlisted_capability_flipped_to_denied_fails_closed() -> None:
         ),
         (
             {"denied": DENIED_TRADING_CAPABILITIES - {"place_equity_order"}},
+            ReadRejection.ENTRY_COUNT_MISMATCH,
+        ),
+        (
+            {"denied_sec": DENIED_SEC_CAPABILITIES - {"get_sec_filing"}},
             ReadRejection.ENTRY_COUNT_MISMATCH,
         ),
     ],
@@ -947,6 +964,7 @@ def test_startup_verification_retains_no_manifest_prose() -> None:
             "reads": sorted(startup.projection.manifest_read_capabilities),
             "mutations": sorted(startup.projection.approved_non_trading_mutations),
             "denied": sorted(startup.projection.denied_trading_capabilities),
+            "denied_sec": sorted(startup.projection.denied_sec_capabilities),
             "projection": sorted(startup.projection.ainvest_read_projection),
             "readiness": [
                 startup.readiness.manifest_version,

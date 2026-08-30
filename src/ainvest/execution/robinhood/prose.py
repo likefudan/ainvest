@@ -8,8 +8,8 @@ not execute that prose and does not strip it. It is provider-controlled
 prompt-injection material, and it must not reach a model prompt, Telegram, CLI
 output, or a log.
 
-The delivery path is concrete rather than hypothetical. Every one of the 55
-reviewed ``v0.4.1`` capabilities declares an output schema of the shape
+The delivery path is concrete rather than hypothetical. Every one of the 59
+reviewed ``v0.4.2`` capabilities declares an output schema of the shape
 ``{"data": {...}, "guide": ...}`` with **both** keys ``required``, so every
 successful read carries a provider ``guide`` sibling of its payload; and the
 schemas nested under ``data`` carry ``description`` on individual fields.

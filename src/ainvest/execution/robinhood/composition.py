@@ -11,7 +11,7 @@ modules, in exactly one function, and
 ``tests/unit/execution/robinhood/test_published_surface.py`` walks the AST of
 every module in this package to prove it.
 
-Note that ``rh_mcp/__init__.py`` is empty in `v0.4.1` — the published surface
+Note that ``rh_mcp/__init__.py`` is empty in `v0.4.2` — the published surface
 is reached at ``rh_mcp.gateway`` and ``rh_mcp.config``, not re-exported at the
 package root.
 
@@ -92,7 +92,7 @@ def import_published_surface() -> PublishedSurface:
     the change is the finding rather than a formality. It used to be
     ``import-not-found`` — mypy could not locate the modules because nothing
     was installed. It is now ``import-untyped``: the modules resolve, and
-    `rh-mcp` `v0.4.1` ships **no** ``py.typed`` marker, so mypy still refuses
+    `rh-mcp` `v0.4.2` ships **no** ``py.typed`` marker, so mypy still refuses
     to read their annotations even though they are written and checked
     upstream under ``strict``. There are no real types to substitute here; the
     typed boundary is :class:`PublishedSurface` and the two adapter methods

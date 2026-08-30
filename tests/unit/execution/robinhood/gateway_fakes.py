@@ -9,7 +9,7 @@ this file or anywhere it is used.
 The digests below are fabricated but well-formed. The *pinned* digests — the
 ones a drift would have to defeat — come from
 :mod:`ainvest.execution.robinhood.pins` and are checked against the committed
-`v0.4.1` manifest in ``tests/contract/execution``.
+`v0.4.2` manifest in ``tests/contract/execution``.
 """
 
 from __future__ import annotations
@@ -21,6 +21,7 @@ from typing import Any
 
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
     MANIFEST_READ_CAPABILITIES,
@@ -52,8 +53,9 @@ def manifest_capabilities(
     reads: frozenset[str] | None = None,
     mutations: frozenset[str] | None = None,
     denied: frozenset[str] | None = None,
+    denied_sec: frozenset[str] | None = None,
 ) -> list[FakeCapability]:
-    """The reviewed `v0.4.1` listing: 36 reads, 11 mutations, 8 denied."""
+    """The reviewed `v0.4.2` listing: 36 reads, 11 mutations, 8+4 denied."""
     return [
         *(
             FakeCapability(name, read_allowed=True, mutates=False)
@@ -66,6 +68,10 @@ def manifest_capabilities(
         *(
             FakeCapability(name, read_allowed=False, mutates=True)
             for name in sorted(DENIED_TRADING_CAPABILITIES if denied is None else denied)
+        ),
+        *(
+            FakeCapability(name, read_allowed=False, mutates=False)
+            for name in sorted(DENIED_SEC_CAPABILITIES if denied_sec is None else denied_sec)
         ),
     ]
 

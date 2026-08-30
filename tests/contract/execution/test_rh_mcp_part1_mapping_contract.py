@@ -1,4 +1,4 @@
-"""The P06-T1 part 1 fixtures conform to the pinned rh-mcp v0.4.1 schemas."""
+"""The P06-T1 part 1 fixtures conform to the pinned rh-mcp v0.4.2 schemas."""
 
 from __future__ import annotations
 
@@ -9,7 +9,7 @@ from typing import Any, Final
 import pytest
 from jsonschema import Draft202012Validator
 
-ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.1"
+ROOT: Final = Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.2"
 MANIFEST: Final = ROOT / "read-manifest.json"
 FIXTURES: Final = ROOT / "p06-t1-part1"
 CAPABILITIES: Final = (

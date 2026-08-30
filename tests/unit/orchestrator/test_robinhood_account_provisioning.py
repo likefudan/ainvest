@@ -38,7 +38,7 @@ ACCOUNT = "SYNTHETIC-AGENTIC-ACCOUNT"
 def _result(accounts: object) -> GatewayReadResult:
     return GatewayReadResult(
         capability="get_accounts",
-        manifest_version="2026.08.28",
+        manifest_version="2026.08.30",
         manifest_digest="sha256:" + "1" * 64,
         schema_digest="sha256:" + "2" * 64,
         result_digest="sha256:" + "3" * 64,
