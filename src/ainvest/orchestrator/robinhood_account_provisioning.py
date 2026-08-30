@@ -131,7 +131,7 @@ def _account_secret_from_result(result: GatewayReadResult) -> SecretStr:
     if not isinstance(payload, Mapping) or set(payload) != {"data"}:
         raise AccountProvisioningFailure("account_result_invalid")
     data = payload["data"]
-    if not isinstance(data, Mapping):
+    if not isinstance(data, Mapping) or set(data) != {"accounts"}:
         raise AccountProvisioningFailure("account_result_invalid")
     accounts = data.get("accounts")
     if not isinstance(accounts, list) or len(accounts) > _MAX_ACCOUNTS:

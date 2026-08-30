@@ -193,6 +193,7 @@ def test_candidate_selection_fails_closed(accounts: object, code: str) -> None:
         _result([], capability="get_portfolio"),
         _result([], payload={"accounts": []}),
         _result([], payload={"data": {"accounts": []}, "extra": {}}),
+        _result([], payload={"data": {"accounts": [], "unexpected": {}}}),
         _result([], payload={"data": "not-an-object"}),
     ],
 )
