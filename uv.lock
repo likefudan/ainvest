@@ -700,12 +700,12 @@ wheels = [
 
 [[package]]
 name = "edgartools"
-version = "5.45.1"
+version = "5.53.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "beautifulsoup4" },
     { name = "httpx" },
-    { name = "httpxthrottlecache" },
+    { name = "httpxthrottlecache", extra = ["httpx"] },
     { name = "humanize" },
     { name = "jinja2" },
     { name = "lxml" },
@@ -725,9 +725,9 @@ dependencies = [
     { name = "truststore" },
     { name = "unidecode" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/a9/2e/33208a7a147545c7efa123df99eb1b02862397dfa267b466d5e4e186c759/edgartools-5.45.1.tar.gz", hash = "sha256:e940f48851b2ef4c6d2b6a6efd13342a3bd808b80d1745f96dc8c09faa0c6f62", size = 3074691, upload-time = "2026-08-03T17:31:56.869Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/da/e7/fd8cd5812113c97aa8daefb6dd9d199ed2ca11f665981d82ba17e9be5ce4/edgartools-5.53.0.tar.gz", hash = "sha256:9375663f94c79c031d76a8c43df2b2e0d1d2d53ee985491e4a1b1763ec7dd633", size = 3165794, upload-time = "2026-08-25T20:17:35.901Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/1d/7b/203425ff5388cd2146e4675695cd1f669b34d1e2c02b18a4ed73c56f6b1c/edgartools-5.45.1-py3-none-any.whl", hash = "sha256:184377a0c3f8f26989a8b01b57cb42675cf0fb285a44374cb1b4a335fe1bf9d6", size = 3384059, upload-time = "2026-08-03T17:31:58.711Z" },
+    { url = "https://files.pythonhosted.org/packages/f5/92/97c2d57cf3e07aac53464adc275fdf3a000549fedd2aa4d5a9d8f71da83c/edgartools-5.53.0-py3-none-any.whl", hash = "sha256:a59279b9d0931e0c4a567a8b8c55f79af74fb45ba6386b1cb1b4fe8747cd9097", size = 3470982, upload-time = "2026-08-25T20:17:33.837Z" },
 ]
 
 [[package]]
@@ -971,17 +971,21 @@ wheels = [
 
 [[package]]
 name = "httpxthrottlecache"
-version = "0.3.5"
+version = "0.6.1"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "aiofiles" },
     { name = "filelock" },
-    { name = "httpx" },
     { name = "pyrate-limiter" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/e8/8b/f4bea9e257176d1f6a68ca4db271c3a1edf8a4fa56133baf1cd3ab8d0298/httpxthrottlecache-0.3.5.tar.gz", hash = "sha256:eda3611b9fcbf1e2046191695fb92855f73fc333a7c040d3660aac11b9a60c1f", size = 14571, upload-time = "2026-03-11T17:36:00.957Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/5d/1a/75849d73d510bfcde6b0a9798936af3af8ca1259e5fd9e348bd1f723c6d1/httpxthrottlecache-0.6.1.tar.gz", hash = "sha256:b01f28b6dee5cffec47ada16063568f9651825bb79a26bbfbcd97119b5287e00", size = 15849, upload-time = "2026-08-13T14:03:03.805Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/df/85/834c5837b9da6faa5cf895d448c41afb357c6d6d4d4bff508bb6e1fecab3/httpxthrottlecache-0.3.5-py3-none-any.whl", hash = "sha256:e1f0c8ce043a96d3a88ac518c504ede4c63f1aade12d248f8fec386c662508cd", size = 12953, upload-time = "2026-03-11T17:35:59.596Z" },
+    { url = "https://files.pythonhosted.org/packages/1a/b1/caa609d83a65cb53c60bd91f5562a14fb873befcd53f513447a16764effd/httpxthrottlecache-0.6.1-py3-none-any.whl", hash = "sha256:45387b7b0bf12a687d1a0b4a2c1a5faa7258f587e63caabc64e5486724b7149c", size = 14437, upload-time = "2026-08-13T14:03:02.463Z" },
+]
+
+[package.optional-dependencies]
+httpx = [
+    { name = "httpx" },
 ]
 
 [[package]]
