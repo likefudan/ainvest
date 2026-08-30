@@ -125,10 +125,15 @@ def _database_factory(path: Path) -> sessionmaker[Session]:
 
 
 def _account_secret_from_result(result: GatewayReadResult) -> SecretStr:
-    payload = result.payload
-    if not isinstance(payload, Mapping):
+    if result.capability != "get_accounts":
         raise AccountProvisioningFailure("account_result_invalid")
-    accounts = payload.get("accounts")
+    payload = result.payload
+    if not isinstance(payload, Mapping) or set(payload) != {"data"}:
+        raise AccountProvisioningFailure("account_result_invalid")
+    data = payload["data"]
+    if not isinstance(data, Mapping):
+        raise AccountProvisioningFailure("account_result_invalid")
+    accounts = data.get("accounts")
     if not isinstance(accounts, list) or len(accounts) > _MAX_ACCOUNTS:
         raise AccountProvisioningFailure("account_result_invalid")
 

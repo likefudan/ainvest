@@ -5,7 +5,7 @@ from __future__ import annotations
 import asyncio
 import io
 import os
-from collections.abc import Coroutine
+from collections.abc import Coroutine, Mapping
 from dataclasses import dataclass, field, replace
 from pathlib import Path
 from typing import Any, Never
@@ -35,15 +35,20 @@ from ainvest.orchestrator.robinhood_account_provisioning import (
 ACCOUNT = "SYNTHETIC-AGENTIC-ACCOUNT"
 
 
-def _result(accounts: object) -> GatewayReadResult:
+def _result(
+    accounts: object,
+    *,
+    capability: str = "get_accounts",
+    payload: Mapping[str, Any] | None = None,
+) -> GatewayReadResult:
     return GatewayReadResult(
-        capability="get_accounts",
+        capability=capability,
         manifest_version="2026.08.30",
         manifest_digest="sha256:" + "1" * 64,
         schema_digest="sha256:" + "2" * 64,
         result_digest="sha256:" + "3" * 64,
         observed_at="2026-08-26T00:00:00Z",
-        payload={"accounts": accounts},
+        payload={"data": {"accounts": accounts}} if payload is None else payload,
         warnings=(),
     )
 
@@ -180,6 +185,22 @@ def test_candidate_selection_fails_closed(accounts: object, code: str) -> None:
     rendered = repr(caught.value) + str(caught.value)
     assert ACCOUNT not in rendered
     assert "OTHER" not in rendered
+
+
+@pytest.mark.parametrize(
+    "result",
+    [
+        _result([], capability="get_portfolio"),
+        _result([], payload={"accounts": []}),
+        _result([], payload={"data": {"accounts": []}, "extra": {}}),
+        _result([], payload={"data": "not-an-object"}),
+    ],
+)
+def test_candidate_selection_rejects_wrong_capability_or_envelope_shape(
+    result: GatewayReadResult,
+) -> None:
+    with pytest.raises(AccountProvisioningFailure, match="account_result_invalid"):
+        _account_secret_from_result(result)
 
 
 def test_provision_uses_one_named_read_and_installs_exact_owner_file(tmp_path: Path) -> None:
