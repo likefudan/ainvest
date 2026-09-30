@@ -28,7 +28,7 @@ recorded as conditions of the independently reviewed `rh-mcp` releases:
   *allowed* capability, including the 11 approved non-trading mutations. So
   :func:`verify_read_projection` asserts at startup that every capability in
   the ainvest allowlist is ``allowed`` **and** ``mutates=false``, and that the
-  reviewed manifest still contains exactly 47 allowed and 26 denied entries
+  reviewed manifest still contains exactly 46 allowed and 30 denied entries
   in the exact P06-T0 name sets. A manifest that later reclassifies a capability fails closed
   rather than silently widening the surface.
 * Only `rh-mcp`'s published surface may be imported — never

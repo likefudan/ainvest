@@ -71,11 +71,11 @@ External data
 30. The first release does not modify a live order in place. Any replacement is a cancellation followed by a new proposal, new risk decision, new order hash, and new human approval.
 31. An uncertain cancellation outcome must be reconciled before another cancel attempt. Automatic cancellation by the kill switch is disabled until an explicit owner decision defines its scope and recovery behavior; the default kill switch blocks new submissions and alerts.
 32. The pinned `rh-mcp` manifest must match its independently reviewed exact
-    capability sets and `mutates` flags. The `v0.4.3` maintenance target has
-    73 entries: 36 allowed reads, 11 explicitly reviewed non-trading
+    capability sets and `mutates` flags. The `v0.4.4` maintenance target has
+    76 entries: 35 allowed reads, 11 explicitly reviewed non-trading
     mutations, 10 denied trading capabilities, 4 denied alert mutations,
-    4 denied non-mutating SEC capabilities, and 8 other denied non-mutating
-    crypto/alert capabilities. Every new crypto/alert capability is
+    4 denied non-mutating SEC capabilities, and 12 other denied non-mutating
+    capabilities. Every newly observed capability is
     provider-surface evidence only and must not widen ainvest's existing
     10-operation `ReadCapability` projection. Composition must pass the upstream strict
     mutation gate as `allow_mutations=False` and reject an attempted override.
@@ -109,8 +109,8 @@ External data
   [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) Non-Trading Gateway.
   `rh-mcp` privately owns MCP Python SDK v2 transport and OAuth lifecycle;
   ainvest consumes only its pinned, SDK-neutral capability/result contract.
-  The `v0.4.3` reviewed surface contains 36 allowed reads, 11 allowed
-  non-trading mutations, and 26 denied capabilities across 73 entries.
+  The `v0.4.4` reviewed surface contains 35 allowed reads, 11 allowed
+  non-trading mutations, and 30 denied capabilities across 76 entries.
   Ainvest continues to expose exactly its existing 10-operation
   named read projection, passes `allow_mutations=False`, and rejects any
   caller override. Every trading, SEC, crypto, alert, and unknown capability
@@ -2063,14 +2063,14 @@ consumable release artifact.
 - **Maintenance completion:** the original adapter/runtime/hardening work and
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
-  `v0.4.2` is the current executable dependency authority; earlier pins are
-  historical evidence only. The separately reviewed v0.4.3 release records
-  14 new crypto/alert capabilities as denied and its ainvest pin is in review.
+  `v0.4.3` is the current executable dependency authority; earlier pins are
+  historical evidence only. The reviewed v0.4.4 release removes one
+  unprojected read, records four additions as denied, and its ainvest pin is in review.
   P05-T10 and `P05-T9` are merged. Earlier staging Bot validation and
   status/accounts/quote reads are verified. P05-T11 account binding and P05-T9 history sizing
   are merged; their staging acceptance and production Bot validation remain
   owner-assisted.
-- **Current maintenance implementation:** the executable pin refresh from
+- **Historical `v0.3.3` maintenance implementation:** the executable pin refresh from
   `v0.3.0` to the public `v0.3.3` release completed under the exact execution
   envelope in `docs/tasks/status.md`. Claim
   [#142](https://github.com/likefudan/ainvest/pull/142) squash-merged as
@@ -2151,7 +2151,7 @@ consumable release artifact.
   sinks, and `allow_mutations=False` remain unchanged. Independently reviewed
   implementation #151 squash-merged as
   `1affe5a8603ebd706ca320e46e607a656d9b11af` and made `v0.4.2` executable.
-- **Current `v0.4.3` maintenance refresh:** owner-authorized discovery on
+- **Completed `v0.4.3` maintenance refresh:** owner-authorized discovery on
   2026-09-06 observed a stable 73-tool provider surface twice. Relative to
   `v0.4.2`, all prior 59 entries retain their reviewed decisions; 14 new
   crypto/alert tools are recorded as denied. The denied additions are two
@@ -2172,13 +2172,31 @@ consumable release artifact.
   added. This isolated implementation updates exact pins, the direct lock
   entry, manifest fixture lineage, executable assertions, and current
   authority documentation only.
+- **Current `v0.4.4` maintenance refresh:** the hourly automation was hardened
+  and merged upstream before an owner-authorized discovery observed a stable
+  76-tool surface twice. Relative to `v0.4.3`, the provider withdrew the
+  unprojected `get_equity_news` capability and added four read-shaped tools;
+  all four additions are recorded as `denied`, `mutates=false`, while every
+  retained capability keeps its reviewed decision. The reviewed public release
+  is annotated tag object `772bb6d91140cd48b4f5c5d26774fc630773f337`,
+  tagged commit `e5fdac4e71da916d86b50c1d50efc66096a46242`, manifest
+  version `2026.09.30`, full digest
+  `sha256:b73100b38148174065064f6eced9040833900162de344a6d0eaa4c3bbbfff68d`,
+  and provider-surface digest
+  `sha256:d28615cb6b6889a747d1501bd7ed44af068e05cbd624a7a2a999c7c369704aa3`.
+  The 76 entries split into 35 allowed reads, 11 allowed non-trading
+  mutations, and 30 denied capabilities. Ainvest's ten named reads,
+  `allow_mutations=False`, mappers, displays, CLI, Telegram surface, and 11
+  payload fixtures remain unchanged; only exact pins, the direct lock entry,
+  manifest fixture lineage, executable assertions, and current-authority
+  documentation change.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
   digest/checksum, committed reviewed capability manifest, and full-manifest
   digest recorded in `docs/tasks/status.md`. The core dependency was satisfied
-  by reviewed `v0.2.0`; current executable authority is the reviewed `v0.4.2`
-  artifact, and the separately reviewed/publicly verified `v0.4.3` release is
+  by reviewed `v0.2.0`; current executable authority is the reviewed `v0.4.3`
+  artifact, and the separately reviewed/publicly verified `v0.4.4` release is
   the active maintenance target. Take every implementation value from its
   exact execution envelope in `docs/tasks/status.md`. Do not
   infer a pin

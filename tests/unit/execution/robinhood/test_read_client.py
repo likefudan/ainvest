@@ -149,7 +149,7 @@ def test_reviewed_listing_verifies_and_reports_the_unchanged_public_projection()
     assert verification.approved_non_trading_mutations == APPROVED_NON_TRADING_MUTATIONS
     assert verification.denied_trading_capabilities == DENIED_TRADING_CAPABILITIES
     assert verification.denied_sec_capabilities == DENIED_SEC_CAPABILITIES
-    assert len(verification.manifest_read_capabilities) == 36
+    assert len(verification.manifest_read_capabilities) == 35
     assert len(verification.approved_non_trading_mutations) == 11
     assert len(verification.denied_trading_capabilities) == 10
     assert len(verification.denied_sec_capabilities) == 4
@@ -180,11 +180,11 @@ def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
 
 
 @pytest.mark.unit
-def test_equity_news_read_has_no_adapter_entry_point() -> None:
-    """The earlier reviewed news read still does not widen the projection."""
+def test_provider_withdrawn_equity_news_has_no_adapter_entry_point() -> None:
+    """The removed provider read cannot survive in the adapter projection."""
     capability = "get_equity_news"
 
-    assert capability in MANIFEST_READ_CAPABILITIES
+    assert capability not in MANIFEST_READ_CAPABILITIES
     assert capability not in {member.value for member in ReadCapability}
     assert not hasattr(RobinhoodReadClient, "read_equity_news")
 

@@ -1,7 +1,7 @@
 """Cross-repository contract: the pins are recomputed, never transcribed.
 
 `src/ainvest/execution/robinhood/pins.py` states the identity of the reviewed
-`rh-mcp` `v0.4.3` permission set. Until this module existed those constants
+`rh-mcp` `v0.4.4` permission set. Until this module existed those constants
 were prose: a reviewer demonstrated that swapping ``EXPECTED_MANIFEST_DIGEST``
 for the wrong-but-plausible digest `rh-mcp`'s changelog prints, *and* changing
 the capability split, left ainvest's entire suite green. Nothing executable
@@ -11,13 +11,13 @@ This file closes that. It does not import `rh_mcp` — the dependency is out of
 scope for `P06-T0` and importing the package would only prove that `rh-mcp`
 agrees with itself. Instead it implements `rh-canon-1` **from the written
 specification** in `rh-mcp` `canonical.py`'s module docstring and `DESIGN.md`
-§6, then recomputes the full-manifest digest of the committed `v0.4.3`
+§6, then recomputes the full-manifest digest of the committed `v0.4.4`
 manifest and compares it to the pin. Two independent implementations landing
 on the same 64 hex characters is evidence; one implementation agreeing with
 itself is not.
 
 The fixture is byte-identical to
-``git show v0.4.3:src/rh_mcp/manifests/read-manifest.json`` and
+``git show v0.4.4:src/rh_mcp/manifests/read-manifest.json`` and
 :func:`test_the_committed_fixture_is_the_reviewed_artifact` keeps it that way
 by re-deriving its digest rather than trusting the filename.
 """
@@ -36,7 +36,7 @@ import pytest
 from ainvest.execution.robinhood import pins
 
 MANIFEST_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.3" / "read-manifest.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.4" / "read-manifest.json"
 )
 DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
@@ -252,7 +252,7 @@ def test_the_historical_rejected_digest_is_not_this_manifests_digest(
 
     Its ``[0.1.0]`` and ``[0.2.0]`` entries both show ``sha256:49b7218…``
     beside manifest version ``2026.08.03.1``. That value remains named as a
-    regression, but it does not belong to the independently reviewed v0.4.3
+    regression, but it does not belong to the independently reviewed v0.4.4
     artifact and can never become its accepted full-manifest digest.
     """
     # Widened to `str` deliberately. Both pins are `Final` literals, so mypy
@@ -307,7 +307,7 @@ def test_the_three_dispositions_are_the_pinned_name_sets(manifest: dict[str, Any
 
 
 @pytest.mark.contract
-def test_the_split_is_exactly_36_11_10_4_4_8(manifest: dict[str, Any]) -> None:
+def test_the_split_is_exactly_35_11_10_4_4_12(manifest: dict[str, Any]) -> None:
     """Rule 32's arithmetic, checked against the artifact and against itself."""
     reads, mutations, denied_mutating, denied_non_mutating = _partition(manifest)
     assert (len(reads), len(mutations), len(denied_mutating), len(denied_non_mutating)) == (
@@ -318,13 +318,13 @@ def test_the_split_is_exactly_36_11_10_4_4_8(manifest: dict[str, Any]) -> None:
         + pins.EXPECTED_DENIED_NON_MUTATING_CAPABILITY_COUNT,
     )
     assert (len(reads), len(mutations), len(denied_mutating), len(denied_non_mutating)) == (
-        36,
+        35,
         11,
         14,
-        12,
+        16,
     )
-    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 73
-    assert len(reads) + len(mutations) + len(denied_mutating) + len(denied_non_mutating) == 73
+    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 76
+    assert len(reads) + len(mutations) + len(denied_mutating) + len(denied_non_mutating) == 76
     partitions = (reads, mutations, denied_mutating, denied_non_mutating)
     assert all(
         left.isdisjoint(right) for i, left in enumerate(partitions) for right in partitions[i + 1 :]
@@ -347,7 +347,7 @@ def test_denied_capabilities_keep_their_reviewed_mutation_flags(
 def test_approved_mutation_top_level_inputs_are_the_reviewed_shapes(
     manifest: dict[str, Any],
 ) -> None:
-    """Freeze the exact v0.4.3 allowed-write envelope without making it callable.
+    """Freeze the exact v0.4.4 allowed-write envelope without making it callable.
 
     These literals pin every approved non-trading mutation's top-level
     property and required sets. ``additionalProperties=false`` prevents an
@@ -464,12 +464,12 @@ def test_limited_margin_upgrade_read_is_reviewed_but_not_projected() -> None:
 
 
 @pytest.mark.contract
-def test_equity_news_read_is_reviewed_but_not_projected() -> None:
-    """The earlier reviewed news read remains outside ainvest's projection."""
+def test_provider_withdrawn_equity_news_is_absent_from_the_projection() -> None:
+    """A removed provider tool cannot remain in either reviewed read set."""
     capability = "get_equity_news"
     projection = {member.value for member in pins.ReadCapability}
 
-    assert capability in pins.MANIFEST_READ_CAPABILITIES
+    assert capability not in pins.MANIFEST_READ_CAPABILITIES
     assert capability not in projection
     assert len(projection) == 10
 
@@ -524,7 +524,7 @@ def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None
         "### Phase 5\uff1a", maxsplit=1
     )[0]
 
-    assert "manifest 精确允许 36 个读取能力和 11 个非交易 mutation" in phase4
+    assert "manifest 精确允许 35 个读取能力和 11 个非交易 mutation" in phase4
     assert "ainvest 当前只能调用已有 10 个命名读取能力" in phase4
     assert "永久拒绝 10 个交易能力" in phase4
     assert "调用精确批准的 34 个读取能力" not in design
@@ -571,7 +571,7 @@ def test_the_projection_excludes_every_denied_trading_capability_by_name() -> No
 
 
 @pytest.mark.contract
-def test_the_projection_excludes_every_new_crypto_and_alert_capability() -> None:
+def test_the_projection_excludes_every_new_default_denied_capability() -> None:
     projection = {capability.value for capability in pins.ReadCapability}
     assert {
         "create_alert",
@@ -587,7 +587,11 @@ def test_the_projection_excludes_every_new_crypto_and_alert_capability() -> None
         "get_crypto_positions",
         "get_crypto_quotes",
         "get_currency_pairs",
+        "get_equity_analyst_ratings",
+        "get_politician_trades",
+        "get_scanner_datapoints",
         "preview_crypto_order",
+        "preview_scan",
     } == pins.DENIED_NON_MUTATING_CAPABILITIES
     assert projection.isdisjoint(pins.DENIED_ALERT_MUTATIONS)
     assert projection.isdisjoint(pins.DENIED_NON_MUTATING_CAPABILITIES)

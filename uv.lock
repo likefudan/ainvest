@@ -90,7 +90,7 @@ requires-dist = [
     { name = "pydantic-settings", specifier = ">=2.8,<3" },
     { name = "python-telegram-bot", marker = "extra == 'approval'", specifier = ">=22,<23" },
     { name = "pyyaml", specifier = ">=6,<7" },
-    { name = "rh-mcp", marker = "extra == 'broker'", url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.3/rh_mcp-0.4.3-py3-none-any.whl" },
+    { name = "rh-mcp", marker = "extra == 'broker'", url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.4/rh_mcp-0.4.4-py3-none-any.whl" },
     { name = "sqlalchemy", specifier = ">=2.0,<3" },
     { name = "structlog", specifier = ">=25,<26" },
     { name = "transitions", specifier = ">=0.9,<1" },
@@ -2703,14 +2703,14 @@ wheels = [
 
 [[package]]
 name = "rh-mcp"
-version = "0.4.3"
-source = { url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.3/rh_mcp-0.4.3-py3-none-any.whl" }
+version = "0.4.4"
+source = { url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.4/rh_mcp-0.4.4-py3-none-any.whl" }
 dependencies = [
     { name = "httpx2" },
     { name = "mcp" },
 ]
 wheels = [
-    { url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.3/rh_mcp-0.4.3-py3-none-any.whl", hash = "sha256:3eccbc049aa9fba32d9333291bc434cedee88d0ab69b525a6390472ad5053be4" },
+    { url = "https://github.com/likefudan/rh-mcp/releases/download/v0.4.4/rh_mcp-0.4.4-py3-none-any.whl", hash = "sha256:357851cefd2d181cf45ddcfd07b8b0b166c62c110f0df6647bf2ae09a5680c13" },
 ]
 
 [package.metadata]
