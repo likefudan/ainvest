@@ -43,7 +43,7 @@ def _result(
 ) -> GatewayReadResult:
     return GatewayReadResult(
         capability=capability,
-        manifest_version="2026.09.06",
+        manifest_version="2026.09.30",
         manifest_digest="sha256:" + "1" * 64,
         schema_digest="sha256:" + "2" * 64,
         result_digest="sha256:" + "3" * 64,

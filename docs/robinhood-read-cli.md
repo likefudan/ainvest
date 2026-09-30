@@ -114,9 +114,10 @@ automatically.
 ## Current real-provider readiness
 
 Offline fixture, contract, and integration tests do not require credentials or
-network access. Ainvest pins the independently audited `rh-mcp` `v0.4.3`
-artifact and its 73-entry `2026.09.06` manifest. The 14 added crypto/alert
-tools are known provider surface but remain denied and are not callable from
+network access. Ainvest pins the independently audited `rh-mcp` `v0.4.4`
+artifact and its 76-entry `2026.09.30` manifest. The provider withdrew the
+unprojected equity-news read and added four read-shaped tools; all four are
+known provider surface but remain denied and are not callable from
 ainvest. Owner-assisted validation of
 the installed artifact against the current live provider surface remains
 pending and is not an offline test blocker. Never bypass or special-case a
