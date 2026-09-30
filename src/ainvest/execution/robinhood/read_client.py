@@ -28,8 +28,8 @@ recorded as conditions of the independently reviewed `rh-mcp` releases:
   *allowed* capability, including the 11 approved non-trading mutations. So
   :func:`verify_read_projection` asserts at startup that every capability in
   the ainvest allowlist is ``allowed`` **and** ``mutates=false``, and that the
-  reviewed manifest still splits exactly 36 / 11 / 8 / 4 with the exact names
-  P06-T0 pinned. A manifest that later reclassifies a capability fails closed
+  reviewed manifest still contains exactly 47 allowed and 26 denied entries
+  in the exact P06-T0 name sets. A manifest that later reclassifies a capability fails closed
   rather than silently widening the surface.
 * Only `rh-mcp`'s published surface may be imported — never
   ``rh_mcp.transport._open_provider_session``, ``_PrivateSession``,
@@ -65,6 +65,8 @@ from ainvest.execution.robinhood.errors import (
 )
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_ALERT_MUTATIONS,
+    DENIED_NON_MUTATING_CAPABILITIES,
     DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
@@ -304,12 +306,12 @@ def verify_read_projection(
     """Prove the reviewed manifest still supports the ainvest read projection.
 
     Fails closed on any drift: a changed disposition, a changed ``mutates``
-    flag, an added or removed capability, or a changed 36 / 11 / 8 / 4 split.
+    flag, an added or removed capability, or a changed reviewed name set.
     """
     reads: set[str] = set()
     mutations: set[str] = set()
-    denied_trading: set[str] = set()
-    denied_sec: set[str] = set()
+    denied_mutating: set[str] = set()
+    denied_non_mutating: set[str] = set()
     seen: set[str] = set()
 
     for view in capabilities:
@@ -330,9 +332,9 @@ def verify_read_projection(
             if name in DENIED_TRADING_CAPABILITIES and not mutates:
                 raise _drift(ReadRejection.DENIED_ENTRY_NOT_MUTATING)
             if mutates:
-                denied_trading.add(name)
+                denied_mutating.add(name)
             else:
-                denied_sec.add(name)
+                denied_non_mutating.add(name)
         elif mutates:
             mutations.add(name)
         else:
@@ -359,16 +361,16 @@ def verify_read_projection(
         raise _drift(ReadRejection.READ_SET_MISMATCH)
     if mutations != APPROVED_NON_TRADING_MUTATIONS:
         raise _drift(ReadRejection.MUTATION_SET_MISMATCH)
-    if denied_trading != DENIED_TRADING_CAPABILITIES:
+    if denied_mutating != DENIED_TRADING_CAPABILITIES | DENIED_ALERT_MUTATIONS:
         raise _drift(ReadRejection.DENIED_SET_MISMATCH)
-    if denied_sec != DENIED_SEC_CAPABILITIES:
+    if denied_non_mutating != DENIED_SEC_CAPABILITIES | DENIED_NON_MUTATING_CAPABILITIES:
         raise _drift(ReadRejection.DENIED_SET_MISMATCH)
 
     return ReadProjectionVerification(
         manifest_read_capabilities=frozenset(reads),
         approved_non_trading_mutations=frozenset(mutations),
-        denied_trading_capabilities=frozenset(denied_trading),
-        denied_sec_capabilities=frozenset(denied_sec),
+        denied_trading_capabilities=frozenset(denied_mutating & DENIED_TRADING_CAPABILITIES),
+        denied_sec_capabilities=frozenset(denied_non_mutating & DENIED_SEC_CAPABILITIES),
         ainvest_read_projection=frozenset(member.value for member in ReadCapability),
     )
 

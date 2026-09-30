@@ -1,12 +1,12 @@
 """Pinned identity of the external `rh-mcp` Non-Trading Gateway (P06-T0).
 
 Every current value here is transcribed from **one** authority: the
-``P06-T0 rh-mcp v0.4.2 pin refresh`` execution envelope in
+``P06-T0 rh-mcp v0.4.3 pin refresh`` execution envelope in
 `docs/tasks/status.md`. Nothing here is inferred from a package version or
 release prose: the tagged source, public artifacts, and artifact-shipped
 manifest were independently verified. The historical
 :data:`REJECTED_CHANGELOG_MANIFEST_DIGEST` remains a regression for an earlier
-``v0.2.0`` documentation mismatch; it is not a candidate ``v0.4.2`` value.
+``v0.2.0`` documentation mismatch; it is not a candidate ``v0.4.3`` value.
 
 Two pins answer different questions and move independently: the package
 version says *which code*, the full-manifest digest says *which permission
@@ -18,7 +18,7 @@ read-only projection** — ``RobinhoodGateway.invoke()`` accepts any *allowed*
 capability, including the 11 approved non-trading mutations — so narrowing to
 reads is ainvest adapter code (`IMPLEMENTATION_TODO.md` rules 20 and 32).
 ``tests/contract/execution/test_rh_mcp_manifest_contract.py`` recomputes the
-full-manifest digest from the committed ``v0.4.2`` manifest with an
+full-manifest digest from the committed ``v0.4.3`` manifest with an
 independent ``rh-canon-1`` implementation and compares every name set below
 against that manifest, so these are checked values rather than prose.
 """
@@ -36,22 +36,22 @@ from typing import Final
 RH_MCP_DISTRIBUTION: Final = "rh-mcp"
 
 #: Annotated tag of the reviewed release. Never a branch or a mutable tag.
-PINNED_RELEASE_TAG: Final = "v0.4.2"
+PINNED_RELEASE_TAG: Final = "v0.4.3"
 
 #: ``Version:`` recorded in the wheel's ``METADATA``.
-PINNED_PACKAGE_VERSION: Final = "0.4.2"
+PINNED_PACKAGE_VERSION: Final = "0.4.3"
 
 #: Source provenance only. A source commit is evidence, never the consumable
 #: dependency — the consumable dependency is the release artifact below.
-PINNED_SOURCE_COMMIT: Final = "36cd95cae982daefc1914433d23b7c4bdcd153e9"
+PINNED_SOURCE_COMMIT: Final = "ac07b7edaa19ad3043bb7febcc475a1014252817"
 
-PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.4.2-py3-none-any.whl"
-PINNED_WHEEL_SHA256: Final = "768c1c366275f2643e316d8651c04fa6dee64ffbca6bd9f845d0cbe2b31dca38"
-PINNED_WHEEL_SIZE_BYTES: Final = 217_309
+PINNED_WHEEL_FILENAME: Final = "rh_mcp-0.4.3-py3-none-any.whl"
+PINNED_WHEEL_SHA256: Final = "3eccbc049aa9fba32d9333291bc434cedee88d0ab69b525a6390472ad5053be4"
+PINNED_WHEEL_SIZE_BYTES: Final = 255_714
 
-PINNED_SDIST_FILENAME: Final = "rh_mcp-0.4.2.tar.gz"
-PINNED_SDIST_SHA256: Final = "0d7781f8c3b15a7c7dc907f3d7e90f8afc5dcc57c278ed5c967e290372d6bd48"
-PINNED_SDIST_SIZE_BYTES: Final = 520_659
+PINNED_SDIST_FILENAME: Final = "rh_mcp-0.4.3.tar.gz"
+PINNED_SDIST_SHA256: Final = "d7656ae0973f155d32ea9d441832d12446437d1293940a467b5fa9a30db90429"
+PINNED_SDIST_SIZE_BYTES: Final = 559_348
 
 # ---------------------------------------------------------------------------
 # Reviewed capability manifest (verified at readiness) and result envelope
@@ -61,14 +61,14 @@ PINNED_MANIFEST_FORMAT_VERSION: Final = "1.2"
 PINNED_CANONICALIZATION_VERSION: Final = "rh-canon-1"
 PINNED_DIGEST_ALGORITHM: Final = "sha256"
 
-PINNED_MANIFEST_VERSION: Final = "2026.08.30"
+PINNED_MANIFEST_VERSION: Final = "2026.09.06"
 SUPPORTED_MANIFEST_VERSIONS: Final[frozenset[str]] = frozenset({PINNED_MANIFEST_VERSION})
 
 EXPECTED_MANIFEST_DIGEST: Final = (
-    "sha256:895dcec0faa7d7c69fbd8ebb5c550faf9e295911a896d4064f5bacc05cfa6766"
+    "sha256:83174a2c7446f0cd4d5ab15003bbdb6ebfd9d73cfd35e961537b98d3145ca696"
 )
 PINNED_PROVIDER_SURFACE_DIGEST: Final = (
-    "sha256:17498a0411466fcfb475e0cfb160f145df38702c2aee13224b0b3ae5340b1e96"
+    "sha256:cccffe9fd1fbbe715aa49ba07878e3a807f84323f1cb0d34ba79ba9a592fb5b3"
 )
 
 #: The digest `rh-mcp`'s changelog prints beside manifest ``2026.08.03.1``.
@@ -113,7 +113,7 @@ READINESS_KEYS: Final[frozenset[str]] = frozenset(
 )
 
 # ---------------------------------------------------------------------------
-# The reviewed manifest's four exact sets (rule 32: 36 / 11 / 8 / 4)
+# The reviewed manifest's six exact sets (rule 32: 36 / 11 / 10 / 4 / 4 / 8)
 # ---------------------------------------------------------------------------
 
 #: The 36 ``allowed`` capabilities with ``mutates=false``.
@@ -177,17 +177,30 @@ APPROVED_NON_TRADING_MUTATIONS: Final[frozenset[str]] = frozenset(
     }
 )
 
-#: The 8 ``denied`` trading capabilities. Every one is ``mutates=true``.
+#: The 10 ``denied`` trading capabilities. Every one is ``mutates=true``.
 DENIED_TRADING_CAPABILITIES: Final[frozenset[str]] = frozenset(
     {
+        "cancel_crypto_order",
         "cancel_equity_order",
         "cancel_option_exercise",
         "cancel_option_order",
         "exercise_option",
         "place_equity_order",
+        "place_crypto_order",
         "place_option_order",
         "review_equity_order",
         "review_option_order",
+    }
+)
+
+#: Four denied alert-management mutations. These are not trading operations,
+#: but they remain outside ainvest's read-only projection.
+DENIED_ALERT_MUTATIONS: Final[frozenset[str]] = frozenset(
+    {
+        "create_alert",
+        "delete_alert",
+        "mark_alerts_read",
+        "update_alert",
     }
 )
 
@@ -204,11 +217,29 @@ DENIED_SEC_CAPABILITIES: Final[frozenset[str]] = frozenset(
     }
 )
 
+#: Eight newly observed non-mutating crypto/alert capabilities. ``preview``
+#: is trade-adjacent and all eight remain denied; recording them grants no
+#: adapter method and does not widen :class:`ReadCapability`.
+DENIED_NON_MUTATING_CAPABILITIES: Final[frozenset[str]] = frozenset(
+    {
+        "get_alert_log",
+        "get_alerts",
+        "get_crypto_account_onboarding_info",
+        "get_crypto_orders",
+        "get_crypto_positions",
+        "get_crypto_quotes",
+        "get_currency_pairs",
+        "preview_crypto_order",
+    }
+)
+
 EXPECTED_READ_CAPABILITY_COUNT: Final = 36
 EXPECTED_APPROVED_MUTATION_COUNT: Final = 11
-EXPECTED_DENIED_CAPABILITY_COUNT: Final = 8
+EXPECTED_DENIED_CAPABILITY_COUNT: Final = 10
+EXPECTED_DENIED_ALERT_MUTATION_COUNT: Final = 4
 EXPECTED_DENIED_SEC_CAPABILITY_COUNT: Final = 4
-EXPECTED_MANIFEST_ENTRY_COUNT: Final = 59
+EXPECTED_DENIED_NON_MUTATING_CAPABILITY_COUNT: Final = 8
+EXPECTED_MANIFEST_ENTRY_COUNT: Final = 73
 
 
 class ReadCapability(StrEnum):
@@ -267,10 +298,14 @@ MAX_LOGGED_DURATION_MS: Final = 600_000
 
 __all__ = [
     "APPROVED_NON_TRADING_MUTATIONS",
+    "DENIED_ALERT_MUTATIONS",
+    "DENIED_NON_MUTATING_CAPABILITIES",
     "DENIED_SEC_CAPABILITIES",
     "DENIED_TRADING_CAPABILITIES",
     "EXPECTED_APPROVED_MUTATION_COUNT",
+    "EXPECTED_DENIED_ALERT_MUTATION_COUNT",
     "EXPECTED_DENIED_CAPABILITY_COUNT",
+    "EXPECTED_DENIED_NON_MUTATING_CAPABILITY_COUNT",
     "EXPECTED_DENIED_SEC_CAPABILITY_COUNT",
     "EXPECTED_MANIFEST_DIGEST",
     "EXPECTED_MANIFEST_ENTRY_COUNT",

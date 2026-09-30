@@ -1,7 +1,7 @@
 """Cross-repository contract: the pins are recomputed, never transcribed.
 
 `src/ainvest/execution/robinhood/pins.py` states the identity of the reviewed
-`rh-mcp` `v0.4.2` permission set. Until this module existed those constants
+`rh-mcp` `v0.4.3` permission set. Until this module existed those constants
 were prose: a reviewer demonstrated that swapping ``EXPECTED_MANIFEST_DIGEST``
 for the wrong-but-plausible digest `rh-mcp`'s changelog prints, *and* changing
 the capability split, left ainvest's entire suite green. Nothing executable
@@ -11,13 +11,13 @@ This file closes that. It does not import `rh_mcp` — the dependency is out of
 scope for `P06-T0` and importing the package would only prove that `rh-mcp`
 agrees with itself. Instead it implements `rh-canon-1` **from the written
 specification** in `rh-mcp` `canonical.py`'s module docstring and `DESIGN.md`
-§6, then recomputes the full-manifest digest of the committed `v0.4.2`
+§6, then recomputes the full-manifest digest of the committed `v0.4.3`
 manifest and compares it to the pin. Two independent implementations landing
 on the same 64 hex characters is evidence; one implementation agreeing with
 itself is not.
 
 The fixture is byte-identical to
-``git show v0.4.2:src/rh_mcp/manifests/read-manifest.json`` and
+``git show v0.4.3:src/rh_mcp/manifests/read-manifest.json`` and
 :func:`test_the_committed_fixture_is_the_reviewed_artifact` keeps it that way
 by re-deriving its digest rather than trusting the filename.
 """
@@ -36,7 +36,7 @@ import pytest
 from ainvest.execution.robinhood import pins
 
 MANIFEST_PATH: Final = (
-    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.2" / "read-manifest.json"
+    Path(__file__).resolve().parents[2] / "fixtures" / "rh_mcp" / "v0.4.3" / "read-manifest.json"
 )
 DESIGN_PATH: Final = Path(__file__).resolve().parents[3] / "design.md"
 
@@ -252,7 +252,7 @@ def test_the_historical_rejected_digest_is_not_this_manifests_digest(
 
     Its ``[0.1.0]`` and ``[0.2.0]`` entries both show ``sha256:49b7218…``
     beside manifest version ``2026.08.03.1``. That value remains named as a
-    regression, but it does not belong to the independently reviewed v0.4.2
+    regression, but it does not belong to the independently reviewed v0.4.3
     artifact and can never become its accepted full-manifest digest.
     """
     # Widened to `str` deliberately. Both pins are `Final` literals, so mypy
@@ -275,7 +275,7 @@ def test_manifest_identity_fields_match_the_pins(manifest: dict[str, Any]) -> No
 
 
 # ---------------------------------------------------------------------------
-# The 36 / 11 / 8 / 4 split (IMPLEMENTATION_TODO.md rule 32)
+# The exact 47-allowed / 26-denied split (IMPLEMENTATION_TODO.md rule 32)
 # ---------------------------------------------------------------------------
 
 
@@ -285,44 +285,47 @@ def _partition(
     entries = manifest["entries"]
     reads = {e["capability"] for e in entries if e["disposition"] == "allowed" and not e["mutates"]}
     mutations = {e["capability"] for e in entries if e["disposition"] == "allowed" and e["mutates"]}
-    denied_trading = {
+    denied_mutating = {
         e["capability"] for e in entries if e["disposition"] != "allowed" and e["mutates"] is True
     }
-    denied_sec = {
+    denied_non_mutating = {
         e["capability"] for e in entries if e["disposition"] != "allowed" and e["mutates"] is False
     }
-    return reads, mutations, denied_trading, denied_sec
+    return reads, mutations, denied_mutating, denied_non_mutating
 
 
 @pytest.mark.contract
 def test_the_three_dispositions_are_the_pinned_name_sets(manifest: dict[str, Any]) -> None:
     """Names, not counts. Two capabilities swapping sides keeps every count."""
-    reads, mutations, denied_trading, denied_sec = _partition(manifest)
+    reads, mutations, denied_mutating, denied_non_mutating = _partition(manifest)
     assert reads == pins.MANIFEST_READ_CAPABILITIES
     assert mutations == pins.APPROVED_NON_TRADING_MUTATIONS
-    assert denied_trading == pins.DENIED_TRADING_CAPABILITIES
-    assert denied_sec == pins.DENIED_SEC_CAPABILITIES
+    assert denied_mutating == pins.DENIED_TRADING_CAPABILITIES | pins.DENIED_ALERT_MUTATIONS
+    assert denied_non_mutating == (
+        pins.DENIED_SEC_CAPABILITIES | pins.DENIED_NON_MUTATING_CAPABILITIES
+    )
 
 
 @pytest.mark.contract
-def test_the_split_is_exactly_36_11_8_4(manifest: dict[str, Any]) -> None:
+def test_the_split_is_exactly_36_11_10_4_4_8(manifest: dict[str, Any]) -> None:
     """Rule 32's arithmetic, checked against the artifact and against itself."""
-    reads, mutations, denied_trading, denied_sec = _partition(manifest)
-    assert (len(reads), len(mutations), len(denied_trading), len(denied_sec)) == (
+    reads, mutations, denied_mutating, denied_non_mutating = _partition(manifest)
+    assert (len(reads), len(mutations), len(denied_mutating), len(denied_non_mutating)) == (
         pins.EXPECTED_READ_CAPABILITY_COUNT,
         pins.EXPECTED_APPROVED_MUTATION_COUNT,
-        pins.EXPECTED_DENIED_CAPABILITY_COUNT,
-        pins.EXPECTED_DENIED_SEC_CAPABILITY_COUNT,
+        pins.EXPECTED_DENIED_CAPABILITY_COUNT + pins.EXPECTED_DENIED_ALERT_MUTATION_COUNT,
+        pins.EXPECTED_DENIED_SEC_CAPABILITY_COUNT
+        + pins.EXPECTED_DENIED_NON_MUTATING_CAPABILITY_COUNT,
     )
-    assert (len(reads), len(mutations), len(denied_trading), len(denied_sec)) == (
+    assert (len(reads), len(mutations), len(denied_mutating), len(denied_non_mutating)) == (
         36,
         11,
-        8,
-        4,
+        14,
+        12,
     )
-    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 59
-    assert len(reads) + len(mutations) + len(denied_trading) + len(denied_sec) == 59
-    partitions = (reads, mutations, denied_trading, denied_sec)
+    assert len(manifest["entries"]) == pins.EXPECTED_MANIFEST_ENTRY_COUNT == 73
+    assert len(reads) + len(mutations) + len(denied_mutating) + len(denied_non_mutating) == 73
+    partitions = (reads, mutations, denied_mutating, denied_non_mutating)
     assert all(
         left.isdisjoint(right) for i, left in enumerate(partitions) for right in partitions[i + 1 :]
     )
@@ -332,17 +335,19 @@ def test_the_split_is_exactly_36_11_8_4(manifest: dict[str, Any]) -> None:
 def test_denied_capabilities_keep_their_reviewed_mutation_flags(
     manifest: dict[str, Any],
 ) -> None:
-    """Trading denials mutate; the four separately denied SEC reads do not."""
+    """Every denied entry retains the reviewed mutation flag."""
     entries = {e["capability"]: e for e in manifest["entries"]}
     assert all(entries[name]["mutates"] is True for name in pins.DENIED_TRADING_CAPABILITIES)
+    assert all(entries[name]["mutates"] is True for name in pins.DENIED_ALERT_MUTATIONS)
     assert all(entries[name]["mutates"] is False for name in pins.DENIED_SEC_CAPABILITIES)
+    assert all(entries[name]["mutates"] is False for name in pins.DENIED_NON_MUTATING_CAPABILITIES)
 
 
 @pytest.mark.contract
 def test_approved_mutation_top_level_inputs_are_the_reviewed_shapes(
     manifest: dict[str, Any],
 ) -> None:
-    """Freeze the exact v0.4.2 write envelope without making it callable.
+    """Freeze the exact v0.4.3 allowed-write envelope without making it callable.
 
     These literals pin every approved non-trading mutation's top-level
     property and required sets. ``additionalProperties=false`` prevents an
@@ -406,14 +411,14 @@ def test_the_read_projection_is_a_subset_of_the_manifests_read_capabilities(
     obligation, so the projection is checked against the reviewed artifact
     rather than against another ainvest constant.
     """
-    reads, mutations, denied_trading, denied_sec = _partition(manifest)
+    reads, mutations, denied_mutating, denied_non_mutating = _partition(manifest)
     projection = {capability.value for capability in pins.ReadCapability}
 
     assert projection
     assert projection <= reads
     assert projection.isdisjoint(mutations)
-    assert projection.isdisjoint(denied_trading)
-    assert projection.isdisjoint(denied_sec)
+    assert projection.isdisjoint(denied_mutating)
+    assert projection.isdisjoint(denied_non_mutating)
 
 
 @pytest.mark.contract
@@ -521,7 +526,7 @@ def test_design_phase4_distinguishes_manifest_from_callable_projection() -> None
 
     assert "manifest 精确允许 36 个读取能力和 11 个非交易 mutation" in phase4
     assert "ainvest 当前只能调用已有 10 个命名读取能力" in phase4
-    assert "永久拒绝 8 个交易能力" in phase4
+    assert "永久拒绝 10 个交易能力" in phase4
     assert "调用精确批准的 34 个读取能力" not in design
 
 
@@ -550,14 +555,39 @@ def test_the_projection_excludes_every_approved_mutation_by_name() -> None:
 def test_the_projection_excludes_every_denied_trading_capability_by_name() -> None:
     projection = {capability.value for capability in pins.ReadCapability}
     for denied in (
+        "cancel_crypto_order",
         "cancel_equity_order",
         "cancel_option_exercise",
         "cancel_option_order",
         "exercise_option",
         "place_equity_order",
+        "place_crypto_order",
         "place_option_order",
         "review_equity_order",
         "review_option_order",
     ):
         assert denied in pins.DENIED_TRADING_CAPABILITIES
         assert denied not in projection
+
+
+@pytest.mark.contract
+def test_the_projection_excludes_every_new_crypto_and_alert_capability() -> None:
+    projection = {capability.value for capability in pins.ReadCapability}
+    assert {
+        "create_alert",
+        "delete_alert",
+        "mark_alerts_read",
+        "update_alert",
+    } == pins.DENIED_ALERT_MUTATIONS
+    assert {
+        "get_alert_log",
+        "get_alerts",
+        "get_crypto_account_onboarding_info",
+        "get_crypto_orders",
+        "get_crypto_positions",
+        "get_crypto_quotes",
+        "get_currency_pairs",
+        "preview_crypto_order",
+    } == pins.DENIED_NON_MUTATING_CAPABILITIES
+    assert projection.isdisjoint(pins.DENIED_ALERT_MUTATIONS)
+    assert projection.isdisjoint(pins.DENIED_NON_MUTATING_CAPABILITIES)
