@@ -41,7 +41,7 @@ broker = [
     # direct reference rather than a version specifier, and both halves of it
     # are security properties rather than packaging taste:
     #
-    #  * `rh-mcp` is not published on PyPI. A `rh-mcp==0.4.2` specifier would
+    #  * `rh-mcp` is not published on PyPI. A `rh-mcp==0.4.3` specifier would
     #    resolve against the public index, where that name is unregistered and
     #    therefore claimable by anyone — textbook dependency confusion. Naming
     #    the release asset takes the index out of the trust path entirely.
@@ -50,14 +50,14 @@ broker = [
     #    catch a corrupted one; `tests/unit/test_dependency_boundary.py` binds
     #    it to `pins.PINNED_WHEEL_SHA256` and to `uv.lock` instead.
     #
-    # Both values come from the active P06-T0 v0.4.2 pin-refresh execution
+    # Both values come from the active P06-T0 v0.4.3 pin-refresh execution
     # envelope in `docs/tasks/status.md` by way of
     # `ainvest.execution.robinhood.pins`, which stays the single authority.
     #
     # ainvest still does not depend on or import the MCP SDK. `mcp` and
     # `httpx2` arrive only as rh-mcp's own private transitive dependencies;
     # no `ainvest.*` module imports either, which is asserted by test.
-    "rh-mcp @ https://github.com/likefudan/rh-mcp/releases/download/v0.4.2/rh_mcp-0.4.2-py3-none-any.whl#sha256=768c1c366275f2643e316d8651c04fa6dee64ffbca6bd9f845d0cbe2b31dca38",
+    "rh-mcp @ https://github.com/likefudan/rh-mcp/releases/download/v0.4.3/rh_mcp-0.4.3-py3-none-any.whl#sha256=3eccbc049aa9fba32d9333291bc434cedee88d0ab69b525a6390472ad5053be4",
 ]
 observability = [
     "opentelemetry-api>=1.32,<2",

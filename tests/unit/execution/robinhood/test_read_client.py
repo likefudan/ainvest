@@ -25,6 +25,8 @@ from ainvest.execution.robinhood.errors import (
 )
 from ainvest.execution.robinhood.pins import (
     APPROVED_NON_TRADING_MUTATIONS,
+    DENIED_ALERT_MUTATIONS,
+    DENIED_NON_MUTATING_CAPABILITIES,
     DENIED_SEC_CAPABILITIES,
     DENIED_TRADING_CAPABILITIES,
     EXPECTED_MANIFEST_DIGEST,
@@ -140,7 +142,7 @@ def test_unrecognized_failure_fails_closed_and_is_not_retryable(exc: BaseExcepti
 
 
 @pytest.mark.unit
-def test_reviewed_listing_verifies_and_reports_the_36_11_8_4_split() -> None:
+def test_reviewed_listing_verifies_and_reports_the_unchanged_public_projection() -> None:
     verification = verify_read_projection(manifest_capabilities())
 
     assert verification.manifest_read_capabilities == MANIFEST_READ_CAPABILITIES
@@ -149,7 +151,7 @@ def test_reviewed_listing_verifies_and_reports_the_36_11_8_4_split() -> None:
     assert verification.denied_sec_capabilities == DENIED_SEC_CAPABILITIES
     assert len(verification.manifest_read_capabilities) == 36
     assert len(verification.approved_non_trading_mutations) == 11
-    assert len(verification.denied_trading_capabilities) == 8
+    assert len(verification.denied_trading_capabilities) == 10
     assert len(verification.denied_sec_capabilities) == 4
 
 
@@ -162,12 +164,14 @@ def test_read_projection_is_a_strict_subset_of_the_36_and_touches_no_mutation() 
     assert len(projection) == 10
     assert projection.isdisjoint(APPROVED_NON_TRADING_MUTATIONS)
     assert projection.isdisjoint(DENIED_TRADING_CAPABILITIES)
+    assert projection.isdisjoint(DENIED_ALERT_MUTATIONS)
     assert projection.isdisjoint(DENIED_SEC_CAPABILITIES)
+    assert projection.isdisjoint(DENIED_NON_MUTATING_CAPABILITIES)
 
 
 @pytest.mark.unit
 def test_limited_margin_upgrade_read_has_no_adapter_entry_point() -> None:
-    """v0.4.2 reviews the provider tool without making it callable here."""
+    """The provider tool remains reviewed without becoming callable here."""
     capability = "get_limited_margin_upgrade_info"
 
     assert capability in MANIFEST_READ_CAPABILITIES
@@ -190,6 +194,14 @@ def test_denied_sec_capabilities_have_no_adapter_entry_points() -> None:
     """Recording provider surface cannot create an invocation path."""
     projection = {member.value for member in ReadCapability}
     for capability in DENIED_SEC_CAPABILITIES:
+        assert capability not in projection
+        assert not hasattr(RobinhoodReadClient, f"read_{capability.removeprefix('get_')}")
+
+
+@pytest.mark.unit
+def test_new_crypto_and_alert_capabilities_have_no_adapter_entry_points() -> None:
+    projection = {member.value for member in ReadCapability}
+    for capability in DENIED_ALERT_MUTATIONS | DENIED_NON_MUTATING_CAPABILITIES:
         assert capability not in projection
         assert not hasattr(RobinhoodReadClient, f"read_{capability.removeprefix('get_')}")
 
@@ -254,7 +266,15 @@ def test_allowlisted_capability_flipped_to_denied_fails_closed() -> None:
             ReadRejection.ENTRY_COUNT_MISMATCH,
         ),
         (
+            {"denied_alert": DENIED_ALERT_MUTATIONS - {"create_alert"}},
+            ReadRejection.ENTRY_COUNT_MISMATCH,
+        ),
+        (
             {"denied_sec": DENIED_SEC_CAPABILITIES - {"get_sec_filing"}},
+            ReadRejection.ENTRY_COUNT_MISMATCH,
+        ),
+        (
+            {"denied_non_mutating": DENIED_NON_MUTATING_CAPABILITIES - {"get_crypto_quotes"}},
             ReadRejection.ENTRY_COUNT_MISMATCH,
         ),
     ],
@@ -263,7 +283,7 @@ def test_manifest_count_drift_fails_closed(
     listing_kwargs: dict[str, frozenset[str]],
     expected: ReadRejection,
 ) -> None:
-    """35 / 11 / 8 is executable here, not just recorded in prose."""
+    """Every reviewed set is executable here, not just recorded in prose."""
     with pytest.raises(GatewayReadError) as caught:
         verify_read_projection(manifest_capabilities(**listing_kwargs))
 
@@ -272,7 +292,7 @@ def test_manifest_count_drift_fails_closed(
 
 @pytest.mark.unit
 def test_capability_moved_between_dispositions_fails_closed() -> None:
-    """Entry count stays 54, so only the name sets can catch this."""
+    """Entry count stays 73, so only the name sets can catch this."""
     listing = manifest_capabilities(
         reads=MANIFEST_READ_CAPABILITIES - {"get_watchlists"},
         mutations=APPROVED_NON_TRADING_MUTATIONS | {"get_watchlists"},

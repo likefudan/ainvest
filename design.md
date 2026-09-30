@@ -765,7 +765,7 @@ stateDiagram-v2
 | 数据库 | [SQLAlchemy](https://github.com/sqlalchemy/sqlalchemy) + Alembic | 事务、持久化和迁移 |
 | 调度 | [APScheduler](https://github.com/agronholm/apscheduler) 3.11.x | 4.x 稳定前固定 3.x |
 | 大规模持久工作流 | [Temporal](https://github.com/temporalio/temporal)，可选 | 多进程或长时审批后再引入 |
-| Robinhood Non-Trading Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、具备交易能力的 OAuth credential、36 个读取能力 + 11 个非交易 mutation 的 allowlist/manifest 与 SDK-neutral 协议；永久拒绝 8 个交易能力；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest；ainvest 的公开读取投影仍固定为已有 10 个能力 |
+| Robinhood Non-Trading Gateway | [`likefudan/rh-mcp`](https://github.com/likefudan/rh-mcp) | 独立持有 MCP SDK v2、具备交易能力的 OAuth credential、36 个读取能力 + 11 个非交易 mutation 的 allowlist/manifest 与 SDK-neutral 协议；拒绝其余 26 个已知交易、SEC、crypto 和 alert 能力；ainvest 固定 independently reviewed tagged SemVer release artifact、provenance/artifact digest 和完整 manifest digest；ainvest 的公开读取投影仍固定为已有 10 个能力 |
 | 日志与监控 | structlog、OpenTelemetry、Prometheus | 结构化日志、trace 和指标 |
 | 测试 | pytest、Hypothesis、HTTPX mock | 单元、性质和故障注入测试 |
 
@@ -979,10 +979,10 @@ REQUIRE_COMPLETE_RISK_LIMITS=true
 
 - 连接官方 Trading MCP
 - 读取实时报价、price book、历史行情、基本面、账户、持仓、购买力和订单历史
-- 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；审查 manifest 的允许读取面固定为 36 个能力，ainvest 的命名读取投影仍为已有 10 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation；另外 4 个 SEC 读取能力只作为已知 provider surface 记录并保持 denied
+- 通过 Robinhood Non-Trading Gateway 暴露固定白名单能力和版本化数据；审查 manifest 的允许读取面固定为 36 个能力，ainvest 的命名读取投影仍为已有 10 个能力，非交易写入面仅允许 11 个明确命名的 watchlist/saved-scan mutation；10 个交易能力、4 个 alert mutation、4 个 SEC 读取和 8 个其他 crypto/alert 非写入能力只作为已知 provider surface 记录并保持 denied
 - 将真实组合快照用于 Paper Trading
 
-验收标准：审查 manifest 精确允许 36 个读取能力和 11 个非交易 mutation，并永久拒绝 8 个交易能力和 4 个 SEC 读取能力；ainvest 当前只能调用已有 10 个命名读取能力，不能调用任何非交易 mutation、SEC 能力、交易能力或未知能力，除非后续独立任务明确扩展该投影；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
+验收标准：审查 manifest 精确允许 36 个读取能力和 11 个非交易 mutation，并永久拒绝 10 个交易能力以及其余 16 个已知但未授权的 SEC/crypto/alert 能力；ainvest 当前只能调用已有 10 个命名读取能力，不能调用任何非交易 mutation、SEC、crypto、alert、交易或未知能力，除非后续独立任务明确扩展该投影；实时报价契约满足时间戳、bid/ask、新鲜度和 schema 要求，失败时不会回退到其他行情源。
 
 ### Phase 5：受控实盘
 
