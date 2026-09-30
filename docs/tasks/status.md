@@ -586,17 +586,20 @@ pin-refresh claim
 and squash-merged as `0a38dc02c0f6c02beaaae82a0b99194627d85585`.
 Its separately reviewed implementation [#150](https://github.com/likefudan/ainvest/pull/150)
 squash-merged as `3d5fe0dfe4335d08730fb788a82d93d31b47688b`;
-`v0.4.3` is the current executable authority through independently reviewed
-#154. The `v0.4.4` maintenance implementation is now in review on
-`agent/rh-mcp-v044-pin`. It preserves the same ten-read ainvest projection and
-explicit `allow_mutations=False`, while removing one provider-withdrawn,
-unprojected read and recording four new capabilities as denied surface
-evidence. No owner credential or provider invocation is part of this offline pin update.
+`v0.4.4` is the current executable authority through #155, squash
+`028f6d7e5b0714c885279efc862f872f08a2aba0`. It preserves the same ten-read
+ainvest projection and explicit `allow_mutations=False`, while removing one
+provider-withdrawn, unprojected read and recording four new capabilities as
+denied surface evidence. The installed artifact reports ready against the
+reviewed digest; the installed hourly trigger completed its first correlated
+refresh successfully with no drift review required.
 Both integration parts of `P06-T1` and `P06-T2` Part 1 display-only CLI are
 merged. Owner-assisted staging validation now proves the Bot, gateway status,
 account eligibility, and quote path. P05-T11 secure account binding and the
 P05-T9 history-sizing maintenance are now merged through #147/#146. Their
-staging acceptance is the next owner-assisted sequence; production Bot
+staging account binding has been provisioned and freshly validated against the
+named read. The staging Telegram `/portfolio` and bounded `/history` replies
+still require owner messages from the bound private chat; production Bot
 validation remains pending under proposed `DEC-010`.
 
 ##### Execution envelope: P08-T4
@@ -758,7 +761,7 @@ validation remains pending under proposed `DEC-010`.
 
 This lane provides an early, useful Robinhood result without claiming Gate 4
 or enabling any trading capability. The external gateway's OAuth credential is
-trading-capable. The active `v0.4.4` candidate pins exactly 35 allowed
+trading-capable. The current `v0.4.4` pin contains exactly 35 allowed
 `mutates=false` reads and 11 reviewed `mutates=true` watchlist/saved-scan
 mutations, while denying the remaining 30 capabilities. Those denials include
 10 trading tools and 20 SEC/crypto/alert/scanner/reference tools; none is callable from ainvest.
@@ -814,7 +817,7 @@ serial merge order is:
 |---|---|---|---|
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` (satisfied) | Squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e` |
 | external `rh-mcp` gateway | `merged` (`v0.4.4` released from tagged commit `e5fdac4e71da916d86b50c1d50efc66096a46242`) | Prior integration history remains recorded; the exact v0.4.4 release/artifact/manifest evidence is in the active maintenance envelope | This is a cross-repository prerequisite, not an ainvest task completion claim; the consumable dependency is the immutable release artifact, never a source commit |
-| `P06-T0` | `merged` / `completed`; `v0.4.3` is current executable authority and the `v0.4.4` pin is `in_review` | Existing adapter dependencies are satisfied; v0.4.4 removes one unprojected read and adds four denied non-mutating entries | Core adapter/runtime/hardening merged in #104/#105/#107; reviewed pin refreshes through v0.4.3 are merged; the v0.4.4 implementation stays isolated until green exact-head review and squash merge |
+| `P06-T0` | `merged` / `completed`; `v0.4.4` is current executable authority | Existing adapter dependencies are satisfied; v0.4.4 removes one unprojected read and adds four denied non-mutating entries | Core adapter/runtime/hardening merged in #104/#105/#107; v0.4.4 passed exact-head review and all five CI gates, then squash-merged through #155 as `028f6d7e5b0714c885279efc862f872f08a2aba0` |
 | `P06-T1` | `merged` — complete for honest pinned-surface display normalization | `P06-T0`, `P02-T1`–`P02-T3`, `P02-T6` (satisfied) | Part 1 merged via [#111](https://github.com/likefudan/ainvest/pull/111), squash `65aa82a`; Part 2 merged via [#114](https://github.com/likefudan/ainvest/pull/114), squash `c6fb284` |
 | `P06-T2` | `in_progress` — Part 1 display-only CLI merged; Part 2 blocked on promotion evidence | Part 1 dependencies satisfied; Part 2 now needs only trustworthy canonical identity, verified Agentic-account binding, and verified regular-session evidence | Part 1 claim [#116](https://github.com/likefudan/ainvest/pull/116), squash `73e89594d0a4a2bd59aef00ecf30938ea99e18b9`; implementation [#117](https://github.com/likefudan/ainvest/pull/117), squash `a1f788b6ae506a2daad49a054a56ad1036447761`. The v0.3 pin prerequisite is merged, but it supplies none of the remaining three promotion prerequisites; do not claim Part 2 until each is contract-tested |
 
@@ -1634,8 +1637,9 @@ serial merge order is:
 
 - **Title/status/owner:** refresh the reviewed external gateway pin from
   `v0.4.3` to `v0.4.4` without widening ainvest's callable surface;
-  `in_review` — `rh_mcp_v044_pin_refresh`. `v0.4.3` remains executable
-  authority until this branch passes all gates and squash-merges.
+  `merged` / `completed` — `rh_mcp_v044_pin_refresh`. `v0.4.4` is current
+  executable authority after #155 squash-merged as
+  `028f6d7e5b0714c885279efc862f872f08a2aba0`.
 - **Branch/worktree/base:** `agent/rh-mcp-v044-pin` /
   `.worktrees/rh-mcp-v044-pin` / exact base
   `157edb226d1fa9fd26b76ed32d1425c6fdff62e2`.
@@ -1675,15 +1679,17 @@ serial merge order is:
   optional-runtime skip, 208 contract tests, 53 integration tests, and 1,840
   combined tests plus that skip at 87.25% coverage. Artifact/PEP-610,
   byte-identical public-wheel manifest, manifest digest/set, unchanged payload,
-  prose-discard, diff, scope, and secret checks passed before review.
+  prose-discard, diff, scope, and secret checks passed before review. Exact head
+  `dbd291072a79e41a19adf36494ead16f5c5a5150` received
+  [coordinator approval](https://github.com/likefudan/ainvest/pull/155#issuecomment-5913923670)
+  with Verify, Secret scan, Dependency audit, SAST, and CodeQL all green.
 
 ##### Historical execution envelope: P06-T0 `rh-mcp` `v0.4.3` pin refresh
 
 - **Title/status/owner:** refresh the reviewed external gateway pin from
   `v0.4.2` to `v0.4.3` without widening ainvest's callable surface;
   `merged` / `completed` — `rh_mcp_v043_pin_refresh`. This is retained only as
-  historical implementation evidence; `v0.4.3` is the executable authority
-  until the active `v0.4.4` refresh squash-merges.
+  historical implementation evidence; `v0.4.4` is now the executable authority.
 - **Branch/worktree/base:** `agent/rh-mcp-v043-pin` /
   `.worktrees/rh-mcp-v043-pin` / exact base
   `8207631597a2c59a4a5a882481340229c4f1ed7c` after the independently
@@ -2116,7 +2122,7 @@ schemas and changes fixture data only when required for conformance.
 This subsection preserves the original integration evidence and is not an
 executable or future implementation authority. Current `P06-T0` code on
 `main` takes every pin from **Current executable dependency pin:
-`likefudan/rh-mcp` `v0.4.4`** above after this maintenance branch merges. Every historical value below was
+`likefudan/rh-mcp` `v0.4.4`** above. Every historical value below was
 re-derived on 2026-08-06 from the release artifacts and tagged tree.
 
 **Release identity**
