@@ -2063,9 +2063,11 @@ consumable release artifact.
 - **Maintenance completion:** the original adapter/runtime/hardening work and
   the deliberate `v0.2.0` to independently reviewed `v0.3.0` release,
   artifact, manifest, and fixture pin refresh are merged through #126/#127.
-  `v0.4.3` is the current executable dependency authority; earlier pins are
-  historical evidence only. The reviewed v0.4.4 release removes one
-  unprojected read, records four additions as denied, and its ainvest pin is in review.
+  `v0.4.4` is the current executable dependency authority; earlier pins are
+  historical evidence only. The reviewed release removes one unprojected read
+  and records four additions as denied. Its exact pin passed local and GitHub
+  gates and squash-merged through #155 as
+  `028f6d7e5b0714c885279efc862f872f08a2aba0`.
   P05-T10 and `P05-T9` are merged. Earlier staging Bot validation and
   status/accounts/quote reads are verified. P05-T11 account binding and P05-T9 history sizing
   are merged; their staging acceptance and production Bot validation remain
@@ -2172,7 +2174,7 @@ consumable release artifact.
   added. This isolated implementation updates exact pins, the direct lock
   entry, manifest fixture lineage, executable assertions, and current
   authority documentation only.
-- **Current `v0.4.4` maintenance refresh:** the hourly automation was hardened
+- **Completed `v0.4.4` maintenance refresh:** the hourly automation was hardened
   and merged upstream before an owner-authorized discovery observed a stable
   76-tool surface twice. Relative to `v0.4.3`, the provider withdrew the
   unprojected `get_equity_news` capability and added four read-shaped tools;
@@ -2189,15 +2191,25 @@ consumable release artifact.
   `allow_mutations=False`, mappers, displays, CLI, Telegram surface, and 11
   payload fixtures remain unchanged; only exact pins, the direct lock entry,
   manifest fixture lineage, executable assertions, and current-authority
-  documentation change.
+  documentation change. Ainvest implementation #155 received coordinator
+  exact-head approval after all five GitHub gates passed and squash-merged as
+  `028f6d7e5b0714c885279efc862f872f08a2aba0`. The installed public artifact
+  reports ready against the reviewed digest, the hourly LaunchAgent completed
+  its first UUID-correlated refresh successfully with no review PR required,
+  and staging account binding provision plus validation succeeded without
+  disclosing the account value. A newly published `urllib3` advisory found by
+  the completion CI is closed by a direct dev constraint and lock-only update
+  from `2.7.0` to `2.8.0`; the full dependency audit and canonical gates pass.
+  Telegram `/portfolio` and `/history`
+  acceptance still requires the owner to send those commands from the bound
+  private chat.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in
   P01-T0, and an independently reviewed immutable `rh-mcp` implementation
   artifact from a tagged SemVer release, with its source provenance, artifact
   digest/checksum, committed reviewed capability manifest, and full-manifest
   digest recorded in `docs/tasks/status.md`. The core dependency was satisfied
-  by reviewed `v0.2.0`; current executable authority is the reviewed `v0.4.3`
-  artifact, and the separately reviewed/publicly verified `v0.4.4` release is
-  the active maintenance target. Take every implementation value from its
+  by reviewed `v0.2.0`; current executable authority is the reviewed `v0.4.4`
+  artifact. Take every future implementation value from its
   exact execution envelope in `docs/tasks/status.md`. Do not
   infer a pin
   from package version or transcribe one from release prose or a changelog;
