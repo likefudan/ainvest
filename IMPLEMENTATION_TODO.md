@@ -2197,7 +2197,10 @@ consumable release artifact.
   reports ready against the reviewed digest, the hourly LaunchAgent completed
   its first UUID-correlated refresh successfully with no review PR required,
   and staging account binding provision plus validation succeeded without
-  disclosing the account value. Telegram `/portfolio` and `/history`
+  disclosing the account value. A newly published `urllib3` advisory found by
+  the completion CI is closed by a direct dev constraint and lock-only update
+  from `2.7.0` to `2.8.0`; the full dependency audit and canonical gates pass.
+  Telegram `/portfolio` and `/history`
   acceptance still requires the owner to send those commands from the bound
   private chat.
 - **Dependencies:** P03-T13, P01-T4, P08-T7, the authorization decision in

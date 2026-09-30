@@ -1682,7 +1682,12 @@ serial merge order is:
   prose-discard, diff, scope, and secret checks passed before review. Exact head
   `dbd291072a79e41a19adf36494ead16f5c5a5150` received
   [coordinator approval](https://github.com/likefudan/ainvest/pull/155#issuecomment-5913923670)
-  with Verify, Secret scan, Dependency audit, SAST, and CodeQL all green.
+  with Verify, Secret scan, Dependency audit, SAST, and CodeQL all green. The
+  completion PR then detected newly published `urllib3` advisories against the
+  locked `2.7.0`; the repository-owned dev environment now requires
+  `urllib3>=2.8,<3`, the lock changes only that package to `2.8.0`, dependency
+  audit reports no known vulnerabilities, and the same 1,840-test canonical
+  verification remains green.
 
 ##### Historical execution envelope: P06-T0 `rh-mcp` `v0.4.3` pin refresh
 
