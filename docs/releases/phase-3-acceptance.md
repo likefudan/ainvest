@@ -2,9 +2,9 @@
 
 **Decision / task:** `P05-T8`  
 **Automated gate status:** **passed**  
-**Release acceptance status:** **pending owner-assisted iPhone rehearsal**  
+**Release acceptance status:** **passed**
 **Acceptance candidate date:** 2026-10-01  
-**Acceptance baseline:** `567b72b769d917487be363a3b76f61f48a6a8fd9`
+**Acceptance baseline:** `b2c13a965455a8091b2a62b3a55f09b84955345f`
 
 ## Scope
 
@@ -160,18 +160,17 @@ uv run --extra approval ainvest-gate3-rehearsal \
 
 The command accepts no Bot token or Telegram identity on argv, requires exactly
 one configured staging recipient, rejects non-staging or non-Paper settings,
-and contains no Robinhood/rh-mcp or Live execution path. Until this rehearsal
-is recorded below, the release acceptance status remains pending even though
-the automated gate passes.
+and contains no Robinhood/rh-mcp or Live execution path.
 
 | Evidence item | Result |
 | --- | --- |
 | Environment | staging |
-| Live/write services | must remain disabled |
-| Owner iPhone callback | pending |
-| Telegram approval | pending |
-| Paper fill | pending |
-| Replay creates no second order | pending |
+| Live/write services | disabled; Paper mode only |
+| Owner iPhone callback | passed at 2026-10-01 13:23:34 UTC |
+| Telegram approval | `apev_2dw262rmSX8WgDViHh3btOdh`, `telegram+paper`, `APPROVED` |
+| Paper proposal | `ordp_-FTl6TMTAVPCzLVPgtpasEN6` |
+| Paper fill | `paper_paper_5d1c2d42f134ff1a02f75786368113178d4b23e3`, terminal `FILLED` |
+| Replay creates no second order | passed; `replay_blocked=true` |
 
 ## Defect and sign-off register
 
@@ -182,9 +181,9 @@ the automated gate passes.
 | Telegram path can call Robinhood write client | no |
 | Public approval route exists | no |
 | Automated candidate | pass |
-| Owner-assisted staging rehearsal | pending |
-| Final Gate 3 result | pending |
+| Owner-assisted staging rehearsal | pass |
+| Final Gate 3 result | pass |
 
 No later task may reinterpret this automated candidate as permission to enable
-Live trading. Final acceptance changes only after the staging rehearsal is
-completed and sanitized evidence is committed.
+Live trading. Gate 3 proves only the staging Telegram-to-Paper authority path;
+it grants no Live approval or broker-write capability.
