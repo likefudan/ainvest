@@ -93,7 +93,7 @@ if (
     != TELEGRAM_HANDLER_DEADLINE_SECONDS
 ):
     raise RuntimeError("Telegram query budgets must exactly fill the P05-T5 handler deadline")
-_ALEMBIC_HEAD: Final[str] = "bf42c70e30d1"
+_ALEMBIC_HEAD: Final[str] = "5ce8169131f2"
 _REQUIRED_TABLES: Final[frozenset[str]] = frozenset(
     {"alembic_version", "telegram_poll_states", "telegram_processed_updates"}
 )

@@ -27,11 +27,13 @@ from ainvest.db.errors import (
 from ainvest.db.models import (
     ApprovalChallengeRow,
     ApprovalEventRow,
+    ApprovalOutboxRow,
     AuditEventRow,
     BrokerFillRow,
     BrokerOrderRow,
     OrderProposalRow,
     RiskDecisionRow,
+    TelegramApprovalBindingRow,
     TelegramPollStateRow,
     TelegramProcessedUpdateRow,
 )
@@ -523,6 +525,37 @@ class ApprovalRepository:
             .where(ApprovalEventRow.proposal_id == proposal_id)
             .order_by(ApprovalEventRow.approved_at.asc())
         ).all()
+
+    def get_telegram_binding(self, challenge_id: str) -> TelegramApprovalBindingRow | None:
+        return self._session.scalar(
+            select(TelegramApprovalBindingRow).where(
+                TelegramApprovalBindingRow.challenge_id == challenge_id
+            )
+        )
+
+    def bind_telegram_message(
+        self, fields: dict[str, Any]
+    ) -> tuple[TelegramApprovalBindingRow, bool]:
+        row = TelegramApprovalBindingRow(**fields)
+        return _insert_idempotent(
+            self._session,
+            row,
+            lookup=lambda: self.get_telegram_binding(str(fields["challenge_id"])),
+            conflict_message="telegram approval binding conflict without existing row",
+        )
+
+    def get_outbox_by_event(self, approval_event_id: str) -> ApprovalOutboxRow | None:
+        return self._session.scalar(
+            select(ApprovalOutboxRow).where(
+                ApprovalOutboxRow.approval_event_id == approval_event_id
+            )
+        )
+
+    def add_outbox(self, fields: dict[str, Any]) -> ApprovalOutboxRow:
+        row = ApprovalOutboxRow(**fields)
+        self._session.add(row)
+        self._session.flush()
+        return row
 
     def create_event_idempotent(
         self,

@@ -409,6 +409,35 @@ class TelegramHttpsTransport:
             raise TelegramDeliveryUnknown
         return message_id
 
+    async def answer_callback_query(
+        self,
+        callback_query_id: str,
+        text: str,
+        *,
+        timeout_seconds: float,
+    ) -> None:
+        """Answer one callback through the runner-owned managed Bot."""
+        bot = self._bot
+        error = self._error
+        if bot is None or error is None or self._managed_token is None:
+            raise TelegramTransportRejected
+        try:
+            await bot.answer_callback_query(
+                callback_query_id=callback_query_id,
+                text=text,
+                show_alert=False,
+                read_timeout=timeout_seconds,
+                write_timeout=timeout_seconds,
+                connect_timeout=timeout_seconds,
+                pool_timeout=timeout_seconds,
+            )
+        except asyncio.CancelledError:
+            raise
+        except Exception as exc:
+            if _is_definitive_send_rejection(exc, error):
+                raise TelegramTransportRejected from None
+            raise TelegramDeliveryUnknown from None
+
     async def get_raw_updates(
         self,
         token: str,

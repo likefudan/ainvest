@@ -253,6 +253,77 @@ class ApprovalEventRow(Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersi
     proposal: Mapped[OrderProposalRow] = relationship(back_populates="approval_events")
 
 
+class TelegramApprovalBindingRow(Base):
+    """Server-owned binding between one challenge and its delivered message."""
+
+    __tablename__ = "telegram_approval_bindings"
+    __table_args__ = (
+        UniqueConstraint("challenge_id", name="uq_telegram_approval_bindings_challenge_id"),
+        UniqueConstraint(
+            "environment",
+            "chat_id",
+            "message_id",
+            name="uq_telegram_approval_bindings_message",
+        ),
+        CheckConstraint("environment IN ('staging', 'production')", name="environment"),
+        CheckConstraint("user_id > 0 AND user_id <= 9223372036854775807", name="user_id_range"),
+        CheckConstraint("chat_id > 0 AND chat_id <= 9223372036854775807", name="chat_id_range"),
+        CheckConstraint(
+            "message_id > 0 AND message_id <= 9223372036854775807",
+            name="message_id_range",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    challenge_id: Mapped[str] = mapped_column(
+        String(160),
+        ForeignKey("approval_challenges.challenge_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    proposal_id: Mapped[str] = mapped_column(
+        String(160),
+        ForeignKey("order_proposals.proposal_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    order_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    environment: Mapped[str] = mapped_column(String(16), nullable=False)
+    user_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    chat_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    message_id: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    bound_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+
+
+class ApprovalOutboxRow(Base):
+    """Pending approval event for the later P05-T6 execution handoff."""
+
+    __tablename__ = "approval_outbox"
+    __table_args__ = (
+        UniqueConstraint("outbox_id", name="uq_approval_outbox_outbox_id"),
+        UniqueConstraint("approval_event_id", name="uq_approval_outbox_approval_event_id"),
+        Index("ix_approval_outbox_status_created", "status", "created_at"),
+        CheckConstraint("status IN ('PENDING', 'CONSUMED')", name="status"),
+    )
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    outbox_id: Mapped[str] = mapped_column(String(160), nullable=False)
+    approval_event_id: Mapped[str] = mapped_column(
+        String(160),
+        ForeignKey("approval_events.event_id", ondelete="RESTRICT"),
+        nullable=False,
+    )
+    proposal_id: Mapped[str] = mapped_column(
+        String(160),
+        ForeignKey("order_proposals.proposal_id", ondelete="RESTRICT"),
+        nullable=False,
+        index=True,
+    )
+    order_hash: Mapped[str] = mapped_column(String(71), nullable=False)
+    status: Mapped[str] = mapped_column(String(16), nullable=False, default="PENDING")
+    created_at: Mapped[datetime] = mapped_column(UtcDateTime(), nullable=False)
+    payload_json: Mapped[dict[str, Any]] = mapped_column(JSON, nullable=False)
+
+
 class BrokerOrderRow(
     Base, TimestampMixin, SchemaVersionMixin, CodeConfigVersionMixin, VersionMixin
 ):
@@ -484,6 +555,7 @@ class TelegramProcessedUpdateRow(Base):
 __all__ = [
     "ApprovalChallengeRow",
     "ApprovalEventRow",
+    "ApprovalOutboxRow",
     "AuditEventRow",
     "BrokerFillRow",
     "BrokerOrderRow",
@@ -495,6 +567,7 @@ __all__ = [
     "ResearchRunRow",
     "RiskDecisionRow",
     "StrategyRunRow",
+    "TelegramApprovalBindingRow",
     "TelegramPollStateRow",
     "TelegramProcessedUpdateRow",
     "TradeSignalRow",
