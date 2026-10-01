@@ -2666,7 +2666,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T5` | `merged` ([#123](https://github.com/likefudan/ainvest/pull/123), squash `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`; [#124](https://github.com/likefudan/ainvest/pull/124), squash `aeb402b8140882eaa7e1707ca50521c266949728`) | merged `P05-T4`, `P01-T4`; staging polling/display validated 2026-08-26, production pending under proposed `DEC-010` | completed bounded long poller, typed inbound classification/handler port, durable offset/dedup/fenced-lease persistence, migration, adapter/concurrency/restart tests, and documentation |
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
 | `P05-T6` | `merged` / `completed` (claim [#160](https://github.com/likefudan/ainvest/pull/160), squash `d753135b261282c425ce899b1744e21339e0ab7b`; implementation [#161](https://github.com/likefudan/ainvest/pull/161), squash `be2414a876867f6c9a2081ac0b114d148d774000`) | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | durable Paper outbox consumption, neutral handoff, Orchestrator workflow bridge, fail-closed Live policy, and recovery/concurrency evidence merged |
-| `P05-T8` | `claimed` (2026-10-01) | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` (all satisfied) | exact execution envelope below; `docs/releases/phase-3-acceptance.md`, offline Gate 3 harness, and security evidence |
+| `P05-T8` | `automated candidate complete; owner rehearsal pending` (2026-10-01) | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` (all satisfied) | Gate 3 harness and acceptance record implemented; final acceptance requires the documented staging iPhone-to-Paper rehearsal |
 | `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | staging status/accounts/quote/portfolio and bounded history are verified against current v0.4.4 | full 13-bar `/history AAPL 1d` response delivered once without fallback; every other P05-T9 contract stays frozen |
 | `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | file-only provision and fresh validation succeeded; strict `0600` loader fed a successful sanitized `/portfolio` reply without disclosing the account value |
 
@@ -2682,6 +2682,18 @@ completed Paper approval path unlocks `P08-T13`, then
 `P05-T8`.
 
 ##### Execution envelope: P05-T8 Gate 3 Paper-only secure approval
+
+- **Delivery evidence (2026-10-01):** the self-contained Gate 3 harness
+  composes the real Telegram callback approval transaction, durable handoff,
+  workflow dispatcher, and `PaperBroker`. It proves one private callback makes
+  one Paper fill, replay is effect-free, forged `telegram+live` is rejected
+  before execution, persisted evidence contains no raw nonce/Bot token, and no
+  public route or Robinhood write path exists. The focused evidence slice
+  passed 82 tests; the full gate passed 1604 unit plus one optional-runtime
+  skip, 210 contract, 53 integration, and 1885 aggregate plus one skip at
+  87.17% coverage; strict mypy passed 276 source files. Final task acceptance
+  remains pending only on the documented owner-assisted staging iPhone
+  rehearsal.
 
 - **Owner / branch / base:** root coordinator on `agent/p05-t8-gate3-claim`,
   exact immutable base `eb6e787ba8394bdfe163dca94e249f17d16b7909`
