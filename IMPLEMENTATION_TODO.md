@@ -2197,6 +2197,9 @@ consumable release artifact.
   disclosing the account value. A newly published `urllib3` advisory found by
   the completion CI is closed by a direct dev constraint and lock-only update
   from `2.7.0` to `2.8.0`; the full dependency audit and canonical gates pass.
+  A later audit-database refresh likewise required fixed PyJWT `2.15.1` and
+  virtualenv `21.7.16`; their narrow constraints, necessary lock delta, audit,
+  and the same 1,840-test gate pass before the staging evidence merge.
   Telegram `/portfolio` and `/history`
   acceptance still requires the owner to send those commands from the bound
   private chat.

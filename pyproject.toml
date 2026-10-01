@@ -71,9 +71,11 @@ dev = [
     "pip>=26.2,<27",
     "pip-audit>=2.9,<3",
     "pre-commit>=4.2,<5",
+    "pyjwt>=2.15,<3",
     "ruff>=0.11,<1",
     "types-pyyaml>=6.0.12,<7",
     "urllib3>=2.8,<3",
+    "virtualenv>=21.7.13,<21.8",
 ]
 test = [
     "hypothesis>=6.165.0,<7",

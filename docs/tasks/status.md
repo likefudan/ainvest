@@ -1689,7 +1689,11 @@ serial merge order is:
   locked `2.7.0`; the repository-owned dev environment now requires
   `urllib3>=2.8,<3`, the lock changes only that package to `2.8.0`, dependency
   audit reports no known vulnerabilities, and the same 1,840-test canonical
-  verification remains green.
+  verification remains green. The subsequent staging-validation record then
+  caught newly published PyJWT and virtualenv advisories: direct dev
+  constraints move PyJWT `2.14.0` to `2.15.1` and virtualenv `21.7.0` to fixed
+  `21.7.16` (with its required python-discovery update). Dependency audit again
+  reports no known vulnerabilities and all 1,840 tests remain green.
 
 ##### Historical execution envelope: P06-T0 `rh-mcp` `v0.4.3` pin refresh
 
