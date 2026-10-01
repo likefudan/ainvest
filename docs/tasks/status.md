@@ -2665,15 +2665,15 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T4` | `merged` ([#120](https://github.com/likefudan/ainvest/pull/120), [#121](https://github.com/likefudan/ainvest/pull/121); squash `2dd706980475fd6598f33d21e9c5974515de5629`) | `P05-T0`, `DEC-005` satisfied; staging validated 2026-08-26, production pending under proposed `DEC-010` | completed notification/config adapter, snapshots, fake-transport tests, strict file-secret and fail-closed delivery boundaries |
 | `P05-T5` | `merged` ([#123](https://github.com/likefudan/ainvest/pull/123), squash `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`; [#124](https://github.com/likefudan/ainvest/pull/124), squash `aeb402b8140882eaa7e1707ca50521c266949728`) | merged `P05-T4`, `P01-T4`; staging polling/display validated 2026-08-26, production pending under proposed `DEC-010` | completed bounded long poller, typed inbound classification/handler port, durable offset/dedup/fenced-lease persistence, migration, adapter/concurrency/restart tests, and documentation |
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
-| `P05-T6` | `in_review` (claim [#160](https://github.com/likefudan/ainvest/pull/160), squash `d753135b261282c425ce899b1744e21339e0ab7b`) | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` (all satisfied for Paper) | implementation complete locally; durable outbox consumption, neutral Paper handoff, Orchestrator workflow bridge, authorization, recovery/concurrency evidence await PR/CI |
+| `P05-T6` | `merged` / `completed` (claim [#160](https://github.com/likefudan/ainvest/pull/160), squash `d753135b261282c425ce899b1744e21339e0ab7b`; implementation [#161](https://github.com/likefudan/ainvest/pull/161), squash `be2414a876867f6c9a2081ac0b114d148d774000`) | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | durable Paper outbox consumption, neutral handoff, Orchestrator workflow bridge, fail-closed Live policy, and recovery/concurrency evidence merged |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
 | `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | staging status/accounts/quote/portfolio and bounded history are verified against current v0.4.4 | full 13-bar `/history AAPL 1d` response delivered once without fallback; every other P05-T9 contract stays frozen |
 | `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | file-only provision and fresh validation succeeded; strict `0600` loader fed a successful sanitized `/portfolio` reply without disclosing the account value |
 
 `P05-T1` claim #158 and implementation #159 are merged through exact main
-`bcd72fabc0b864065b768f7106fb5c796f0cd6be`. `P05-T6` claim #160 is merged
-as `d753135b261282c425ce899b1744e21339e0ab7b`, and its implementation is in
-review from that exact base. `P05-T4`, `P05-T5`, and
+`bcd72fabc0b864065b768f7106fb5c796f0cd6be`. `P05-T6` claim #160 and
+implementation #161 are merged through exact main
+`be2414a876867f6c9a2081ac0b114d148d774000`. `P05-T4`, `P05-T5`, and
 `P05-T10`, P05-T9 including its history maintenance, and P05-T11 are complete
 and merged.
 P05-T9/P05-T11 are display-only add-ons, not Gate 3 dependencies or approval
@@ -3825,7 +3825,7 @@ task row is in the cross-cutting table below.
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
-| `P08-T13` | `not_started` | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` | `tests/{integration,faults}/**`; fake external services; test-only hooks coordinated |
+| `P08-T13` | `claimed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | exact execution envelope below; `tests/{integration,faults}/**`, deterministic fake services, fault/concurrency matrix, no production behavior change by default |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. The complete `P06-T0` adapter,
@@ -3843,7 +3843,45 @@ scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
 `docs/testing.md` rows, and may not own an entire test directory. `P08-T4`
 follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
-`P08-T13` waits for the Paper approval implementation.
+`P08-T13` is claimed now that the Paper approval implementation is merged.
+
+##### Execution envelope: P08-T13 fail-closed fault matrix
+
+- **Owner / branch / base:** root coordinator on `agent/p08-t13-claim`, exact
+  immutable base `be2414a876867f6c9a2081ac0b114d148d774000`. After this claim
+  merges, implementation starts from the resulting exact main on
+  `agent/p08-t13-fault-matrix`.
+- **Authority and scope:** implement the complete P08-T13 card against the
+  merged database/workflow, Broker/reconciliation, Telegram approval/polling,
+  strategy-worker, Paper Broker, and P05-T6 outbox boundaries. This task adds
+  assurance only; it grants no new broker, approval, network, or Live ability.
+- **Allowed paths:** new `tests/faults/` conftest plus
+  `test_external_services.py`, `test_telegram_approval.py`,
+  `test_execution.py`, and `test_worker.py`; narrowly extended
+  `tests/integration/{approval,execution,strategies}/**`; task status and direct
+  security-evidence rows. Production edits are forbidden by default. If an
+  existing boundary is not injectable, record the exact minimal test-only hook
+  here before editing it; do not change business behavior or dependencies.
+- **Deterministic fakes:** provide in-process fake market/news, Telegram, and
+  named MCP boundaries using synthetic identities and injected clocks. No
+  internet, real Bot/provider session, account value, credential, or source
+  project file is used. Fakes expose call/effect counters so each test states
+  whether a funds action occurred.
+- **Fault matrix:** cover timeout, connection reset, rate limit, transaction
+  rollback, repeated/out-of-order Telegram update, worker process crash,
+  concurrent approval, duplicate scheduler/command, P05-T6 outbox redelivery,
+  Paper partial fill, unknown submit, and uncertain cancel. Reuse existing
+  component tests as evidence only when the new cross-boundary assertion adds
+  final state, redacted audit/effect evidence, and retry disposition.
+- **Safety assertions:** every injected fault must identify final lifecycle or
+  outbox state, audit/result code, external call count, and funds-effect count.
+  Confirmed negative outcomes are terminal; ambiguous submit/cancel enters
+  reconciliation/manual review and never mints or performs an automatic retry.
+  No Telegram or MCP fault may fall through to a trading-capable path.
+- **Verification:** run the dedicated faults suite, affected integration and
+  concurrency tests, then `./scripts/dev verify`, scope/diff/secret checks, one
+  local review, and required CI. Per owner direction, do not launch repeated
+  independent-agent reviews.
 
 ### Batch D — completed coordination note
 

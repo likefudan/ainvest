@@ -1066,9 +1066,9 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 ### P05-T6 — Hand Off an Approval to Execution Exactly Once
 
 - **Execution status (2026-10-01):** claim #160 squash-merged as
-  `d753135b261282c425ce899b1744e21339e0ab7b`; implementation is in review on
-  `agent/p05-t6-approval-handoff` from that exact main. Implementation remains
-  Paper-only until the separate P05-T2/P05-T3 live dependencies merge.
+  `d753135b261282c425ce899b1744e21339e0ab7b`; implementation #161
+  squash-merged as `be2414a876867f6c9a2081ac0b114d148d774000`. The merged
+  implementation remains Paper-only until P05-T2/P05-T3 merge.
 
 - **Objective:** Convert approval into one consumable execution request, preserve pre-trade risk, and enforce method/scope authorization at the handoff layer.
 - **Dependencies:** P05-T0, P05-T1, P02-T7, P02-T10, and P03-T12. The live branch additionally requires P05-T2 and P05-T3.
@@ -2697,6 +2697,9 @@ Phase 08 is a parallel assurance phase. Its cards support multiple delivery phas
 - **Acceptance criteria:** The matrix maps to design requirements; funds-related modules have a higher branch-coverage target without excluding failure paths.
 
 ### P08-T13 — Add Integration, Concurrency, and Fault-Injection Tests
+
+- **Execution status (2026-10-01):** claimed on `agent/p08-t13-claim` from
+  exact main `be2414a876867f6c9a2081ac0b114d148d774000` after P05-T6 merged.
 
 - **Objective:** Prove network, database, Telegram, and worker failures remain fail closed.
 - **Dependencies:** P02-T6 through P02-T10, P03-T13 through P03-T15, P05-T0, P05-T1, and P05-T4 through P05-T6.
