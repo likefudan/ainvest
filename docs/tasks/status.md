@@ -2726,6 +2726,24 @@ completed Paper approval path unlocks `P08-T13`, then
   Paper fill. A real iPhone-to-staging-Paper rehearsal is recorded separately
   in the acceptance document only after the owner performs it; it cannot
   enable Live and is the sole step that may ultimately require owner input.
+- **Recorded missing seam / follow-up claim (2026-10-01):** after the automated
+  candidate merged in #165, inspection confirmed there is no operator entry
+  point that composes notification send, staging poller, callback approval,
+  durable handoff, and Paper fill. Requiring the owner to assemble internal
+  APIs would be unsafe and non-repeatable. A narrow follow-up is therefore
+  claimed on `agent/p05-t8-rehearsal-claim` from exact main
+  `476044f520be1778c4286e9c9a31b30706b95766`; after this claim merges,
+  implementation continues on `agent/p05-t8-rehearsal-cli`. Authorized paths
+  are `src/ainvest/orchestrator/gate3_rehearsal.py`, its one console-script
+  declaration in `pyproject.toml`, `tests/unit/orchestrator/test_gate3_rehearsal.py`,
+  and the Phase 3 acceptance/status evidence. The command is staging-only,
+  Paper-only, interactive, bounded, one-shot, and fail closed. It accepts
+  explicit env/secrets/database paths but no token or Telegram identity on
+  argv; it loads the existing file-only Bot secret/config, sends one synthetic
+  bounded Paper proposal, owns one fenced poller, accepts only the existing
+  private bound callback, performs one injected Paper fill, emits sanitized
+  IDs/status only, and has no Robinhood/rh-mcp or Live path. Unit tests use
+  fake transports and clocks; no CI test accesses Telegram or real secrets.
 - **Verification:** run the dedicated Gate 3 suite, affected approval,
   polling, handoff, Paper, and P08-T13 suites, then `./scripts/dev verify`,
   scope/diff/secret checks, one local review, and required CI. Per owner
