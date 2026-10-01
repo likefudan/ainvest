@@ -217,12 +217,13 @@ Primary parallelization opportunities:
   through [#142](https://github.com/likefudan/ainvest/pull/142) as
   `b72104232947472346dd7978b8652672125a3dca` and
   [#143](https://github.com/likefudan/ainvest/pull/143) as
-  `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; `v0.3.3` is now the single
-  executable dependency authority. Owner-assisted validation on 2026-08-26
-  verified `rh-mcp v0.3.3` `auth-status`/`status`, the staging Bot, and
-  Telegram status/accounts/quote display. Production Bot validation and the
-  owner-assisted account-bound/history acceptance remain; their offline
-  P05-T11 and P05-T9 maintenance implementations are merged through #147/#146.
+  `8fc77f008041ea9ea130c0d5920ddf26f7b98a6d`; later reviewed refreshes through
+  `v0.4.4` are merged, and `v0.4.4` is now the single executable dependency
+  authority. Owner-assisted validation verifies the staging Bot, gateway
+  readiness, status/accounts/quote display, secure account binding,
+  `/portfolio`, and bounded `/history AAPL 1d`. Production Bot validation
+  remains pending under proposed `DEC-010`; the P05-T11 and P05-T9 maintenance
+  implementations are merged through #147/#146.
   `P06-T0`, `P06-T1`, and `P06-T2` Part 1 are on
   `main`. `P05-T10` claim and implementation are merged through
   [#135](https://github.com/likefudan/ainvest/pull/135) and
@@ -238,10 +239,8 @@ Primary parallelization opportunities:
   squash-merged through [#123](https://github.com/likefudan/ainvest/pull/123)
   and [#124](https://github.com/likefudan/ainvest/pull/124), completing bounded
   long polling and durable inbound deduplication. Staging Bot provisioning and
-  end-to-end status/accounts/quote reads are verified. Production Bot
-  validation remains pending under proposed `DEC-010`; secure account-binding
-  provisioning and bounded history display are implemented and now await the
-  explicit owner-assisted staging acceptance sequence.
+  end-to-end status/accounts/quote/account-bound/history reads are verified.
+  Production Bot validation remains pending under proposed `DEC-010`.
   Gate 2, Gate 3, and complete observability remain prerequisites for `P06-T3`
   / Gate 4, not for the preview.
 - No broker-write code starts before Gates 1–4, security tests, fixed live approval infrastructure, and all live decisions are complete.
@@ -1371,22 +1370,20 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
   interval maintenance contract below was completed in independently reviewed
   [#146](https://github.com/likefudan/ainvest/pull/146) and squash-merged as
   `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`; it did not reopen any other
-  P05-T9 behavior. Owner-assisted post-merge history validation remains.
+  P05-T9 behavior. Owner-assisted post-merge validation now proves the full
+  13-bar `30minute` response is delivered once without the size fallback.
 - **Dependencies:** merged `P06-T2` Part 1 (`RobinhoodDisplayService`, its
   public `DisplaySuccess` envelope, normalized models, and typed
   gateway/mapping exceptions), `P05-T4`, `P05-T5`, `P01-T4`, `P08-T3`,
   `P08-T7`, accepted `DEC-005`, and the merged P05-T10 environment
   provisioning/validation contract under `DEC-010`.
-  The deliberate ainvest pin update through separately reviewed `rh-mcp`
-  `v0.4.2` squash-merged in #151. Owner-assisted auth remains healthy; a later
-  readiness check failed closed on 14 newly discovered crypto/alert tools.
-  The independently reviewed `v0.4.3` release records all 14 as denied without
-  widening ainvest permissions, and this isolated pin refresh makes that exact
-  release the candidate executable authority.
+  The deliberate ainvest pin updates through separately reviewed `rh-mcp`
+  `v0.4.4` are merged, with every newly observed crypto/alert/SEC/scanner tool
+  denied and the named ten-read projection unchanged.
   Sanitized Telegram evidence verifies status, account eligibility, and a
-  representative quote. The historical sizing and P05-T11 account-binding
-  implementations are merged; `/history` and account-bound display commands
-  now await owner-assisted staging acceptance. These observations do not
+  representative quote. The history-sizing and P05-T11 account-binding
+  implementations are merged; owner-assisted staging now also verifies
+  `/portfolio` and the bounded `/history AAPL 1d` response. These observations do not
   authorize credentials, public network calls, or account data in CI.
 - **Architecture and exact implementation paths:** the existing dependency
   matrix forbids `approval -> execution`, so the implementation must not put a
@@ -2069,9 +2066,9 @@ consumable release artifact.
   gates and squash-merged through #155 as
   `028f6d7e5b0714c885279efc862f872f08a2aba0`.
   P05-T10 and `P05-T9` are merged. Earlier staging Bot validation and
-  status/accounts/quote reads are verified. P05-T11 account binding and P05-T9 history sizing
-  are merged; their staging acceptance and production Bot validation remain
-  owner-assisted.
+  status/accounts/quote reads are verified. P05-T11 account binding and P05-T9
+  history sizing are merged and their staging acceptance is complete;
+  production Bot validation remains owner-assisted.
 - **Historical `v0.3.3` maintenance implementation:** the executable pin refresh from
   `v0.3.0` to the public `v0.3.3` release completed under the exact execution
   envelope in `docs/tasks/status.md`. Claim
@@ -2789,7 +2786,7 @@ line.
   display-only reads are merged, including P05-T11 account provisioning and
   the P05-T9 history maintenance. Production Bot validation remains
   owner-assisted under proposed `DEC-010`; staging account-bound/history
-  acceptance is the next owner-assisted step.
+  acceptance is complete.
 - Deferred live approval: P05-T7 -> P08-T14 -> P05-T2 -> P05-T3. This track does not block Phase 06, but must finish before P07-T0.
 - Cross-cutting foundation: P08-T0, P08-T3 through P08-T7, P08-T12 through P08-T14, P08-T8, and P08-T9. Dispatch each card when its listed dependencies are satisfied.
 - Priority lane: after the already merged P04-T0, P05-T0, P08-T0, P08-T3,
@@ -2820,18 +2817,17 @@ line.
    `P06-T2` Part 1 are merged. The narrow `P06-T0` maintenance refresh to
    independently reviewed `v0.3.0` merged through #126/#127 without reopening
    the adapter or normalization scope; subsequent reviewed pin updates through
-   `v0.4.2` merged through #142/#143, #149/#150, and #151. The isolated
-   `v0.4.3` refresh records the latest crypto/alert surface as denied and must
-   pass exact-head independent review before replacing it as authority.
+   `v0.4.4` are merged. The latest provider additions remain denied and
+   `v0.4.4` is current executable authority.
 2. `P05-T10`, the local Bot-environment provisioning and validation utility,
    is complete and merged through #135/#136. BotFather creation and real owner
    values stay manual. Staging validation succeeded on 2026-08-26; production
    validation remains pending under proposed `DEC-010`.
 3. `P05-T9` Telegram display-only queries are merged through #138/#139.
-   Owner-assisted v0.3.3 auth/readiness, staging Bot provisioning, and
-   Telegram status/accounts/quote paths are verified. The history sizing
-   follow-up and P05-T11 account binding are merged through #146/#147; the
-   owner now performs their staging acceptance sequence. Production Bot
+   Owner-assisted auth/readiness, staging Bot provisioning, and Telegram
+   status/accounts/quote paths are verified. The history sizing follow-up and
+   P05-T11 account binding are merged through #146/#147; staging `/portfolio`
+   and bounded `/history AAPL 1d` acceptance succeeds. Production Bot
    evidence remains pending under proposed `DEC-010`.
    Do not combine queries with Telegram
    approval, Paper promotion, non-trading mutations, or trading capabilities.

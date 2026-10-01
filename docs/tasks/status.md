@@ -106,8 +106,8 @@ plan batch complete only when every card in that section has merged.
 | Batch E — Cross-cutting foundation | Batch E | `P08-T0`, `T3`–`T9`, `T12`–`T14` | `in_progress` (`P08-T0`, `P08-T3`, `P08-T4`, `P08-T6`, `P08-T7` merged; remaining work unclaimed) |
 | Robinhood Non-Trading Preview | Batch E/F priority lane | external `rh-mcp` release, `P08-T7`, `P06-T0`–`P06-T2` | `in_progress` (`P06-T0` v0.3 refresh and the display-only lane are merged; Part 2 remains blocked only on canonical identity, account binding, and session evidence) |
 | Telegram Bot environment provisioning | Batch F add-on | `P05-T10` after merged `P05-T4` → `P05-T5` | `complete (merged)` through #135/#136; staging is owner-validated, while production remains pending under proposed `DEC-010` |
-| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | `complete (merged)` through #138/#139 plus history maintenance #146; owner-assisted staging acceptance remains |
-| Robinhood read-account binding | Batch F add-on | `P05-T11` after merged `P05-T9`, `P05-T10`, and `P06-T2` Part 1 | `complete (merged)` through claim #145 and implementation #147; owner-assisted provision/validate and Telegram acceptance remain |
+| Telegram read-only display adapter | Batch F add-on | `P05-T9` after merged `P05-T4` → `P05-T5` → `P05-T10` and merged `P06-T2` Part 1 | `complete (merged)` through #138/#139 plus history maintenance #146; staging status, account-bound display, and bounded history acceptance verified |
+| Robinhood read-account binding | Batch F add-on | `P05-T11` after merged `P05-T9`, `P05-T10`, and `P06-T2` Part 1 | `complete (merged)` through claim #145 and implementation #147; staging provision, fresh validation, and Telegram `/portfolio` acceptance verified |
 
 Do not invent numeric variants such as `1A` or `Batch 1A`.
 
@@ -598,8 +598,9 @@ merged. Owner-assisted staging validation now proves the Bot, gateway status,
 account eligibility, and quote path. P05-T11 secure account binding and the
 P05-T9 history-sizing maintenance are now merged through #147/#146. Their
 staging account binding has been provisioned and freshly validated against the
-named read. The staging Telegram `/portfolio` and bounded `/history` replies
-still require owner messages from the bound private chat; production Bot
+named read. The staging Telegram `/portfolio` reply and full 13-bar
+`/history AAPL 1d` reply both succeeded through the bound private chat;
+production Bot
 validation remains pending under proposed `DEC-010`.
 
 ##### Execution envelope: P08-T4
@@ -1628,8 +1629,9 @@ serial merge order is:
   reported `ready=true` for manifest `2026.08.22` and full digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
   Staging Bot status/accounts/quote display succeeded. The account-binding and
-  bounded-history implementations are merged; their staging acceptance and
-  production Bot validation remain owner-assisted under proposed `DEC-010`
+  bounded-history implementations are merged; staging provision/validation,
+  `/portfolio`, and full bounded `/history AAPL 1d` acceptance now succeed.
+  Production Bot validation remains owner-assisted under proposed `DEC-010`
   and must not place credentials, account numbers, or provider payloads in Git,
   PRs, logs, or chat.
 
@@ -2615,9 +2617,9 @@ that task only. Now that the `P06-T2` Part 1 display-only CLI, the
 merged, the P05-T9 core is also merged. It remains separate from P06-T2
 Part 2, Paper promotion, Telegram approval, non-trading mutations, and trading
 capabilities. Staging Bot/status/accounts/quote validation is verified;
-P05-T11 account binding and P05-T9 history sizing are merged, with their
-staging acceptance still owner-assisted. Production Bot validation remains
-pending under proposed `DEC-010`.
+P05-T11 account binding and P05-T9 history sizing are merged, and their staging
+acceptance is complete. Production Bot validation remains pending under
+proposed `DEC-010`.
 The unrelated `P04-T2` pause remains in force.
 
 #### Research track — `P04-T0` through `P04-T12`
@@ -2661,8 +2663,8 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
 | `P05-T6` | `not_started` | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` | `approval/handoff.py`; workflow/outbox integration; exactly-once and recovery tests |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
-| `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | verified v0.3.3 staging status/accounts/quote; history code is bounded and merged | owner-assisted `/history` acceptance remains; every other P05-T9 contract stays frozen |
-| `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | completed file-only provision/validate/disable utility and strict `0600` loader; owner-assisted acceptance remains |
+| `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | staging status/accounts/quote/portfolio and bounded history are verified against current v0.4.4 | full 13-bar `/history AAPL 1d` response delivered once without fallback; every other P05-T9 contract stays frozen |
+| `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | file-only provision and fresh validation succeeded; strict `0600` loader fed a successful sanitized `/portfolio` reply without disclosing the account value |
 
 `P05-T1` is dependency-ready but remains unclaimed. `P05-T4`, `P05-T5`, and
 `P05-T10`, P05-T9 including its history maintenance, and P05-T11 are complete
@@ -2692,15 +2694,17 @@ tests, 1,566 unit tests plus one optional-runtime skip, 204 contract tests, 53
 integration tests, and 1,823 aggregate tests plus one skip at 87.23% coverage;
 all five required GitHub checks passed.
 
-The next step is owner-assisted staging acceptance, not another code claim.
-The owner stops the staging `ainvest-telegram-read` process, runs the documented
-`ainvest-robinhood-account provision` and `validate` commands, restarts that
-same poller, then verifies `/history AAPL 1d`, `/portfolio`, `/positions`,
-`/orders open`, and `/tradability AAPL`. Only fixed-shape provision/validate
-results and sanitized Telegram display envelopes may be shared. Account
-numbers, credentials, raw provider responses, and secret-file contents must
-never be pasted into issues, logs, or chat. Production Bot provisioning and
-validation remain a separate owner decision under proposed `DEC-010`.
+Owner-assisted staging acceptance is complete: the poller was stopped,
+`ainvest-robinhood-account provision` and fresh `validate` both returned their
+fixed success shapes, the patched locked environment was installed, and the
+same staging poller returned sanitized `/rh_status`, `/portfolio`, and full
+13-bar `/history AAPL 1d` envelopes. This is display acceptance only:
+`account_binding=unverified`, instrument identity remains partial/unverified,
+and session evidence remains unverified, so it does not promote data into
+Paper or trading. Account numbers, credentials, raw provider responses, and
+secret-file contents remain excluded from Git and evidence. Production Bot
+provisioning and validation remain a separate owner decision under proposed
+`DEC-010`.
 
 ##### Execution envelope: P05-T4
 
@@ -2944,8 +2948,7 @@ validation remain a separate owner decision under proposed `DEC-010`.
   deterministic offline implementation and staging acceptance.
 - **Serial handoff:** `P05-T4`, `P05-T5`, P05-T10, and P05-T9 are complete.
   Production Bot validation remains owner-assisted under proposed `DEC-010`;
-  staging now waits only for the account-bound and bounded-history acceptance
-  sequence recorded below.
+  staging account-bound and bounded-history acceptance is complete.
 
 ##### Execution envelope: P05-T5
 
@@ -3315,8 +3318,9 @@ validation remain a separate owner decision under proposed `DEC-010`.
   pending owner-assisted evidence under proposed `DEC-010`; this is not a code
   blocker and `DEC-010` remains proposed.
 - **Serial handoff:** P05-T9's separate claim and implementation are merged.
-  The remaining real Bot and end-to-end validation is owner-assisted and does
-  not reopen the completed offline task.
+  Staging real-Bot end-to-end validation is complete. Production Bot
+  validation remains owner-assisted and does not reopen the completed offline
+  task.
 
 ##### Completion envelope: P05-T9
 
@@ -3359,11 +3363,11 @@ validation remain a separate owner decision under proposed `DEC-010`.
   --check`, scope, secret, architecture, readability, and duplicate-helper
   checks passed. Exact-head Verify, Dependency audit, Secret scan, SAST, and
   CodeQL were green before squash merge.
-- **Owner-assisted validation and next priority:** `rh-mcp v0.3.3`
-  auth/readiness, real staging Bot provisioning, and Telegram
-  status/accounts/quote paths are verified. The history-sizing and
-  read-account-binding follow-ups are merged; their explicit staging
-  acceptance sequence is next.
+- **Owner-assisted validation and next priority:** current `rh-mcp v0.4.4`
+  readiness, real staging Bot provisioning, and Telegram
+  status/accounts/quote/portfolio/history paths are verified. The
+  history-sizing and read-account-binding follow-ups are merged and their
+  explicit staging acceptance sequence is complete.
 - **Dependency history:** merged `P06-T2` Part 1, `P05-T4`, and `P05-T5`
   satisfied the
   existing dependencies, and P05-T10 is merged. Staging Bot identity and
@@ -3372,8 +3376,8 @@ validation remain a separate owner decision under proposed `DEC-010`.
   `rh-mcp v0.3.3 status` is verified `ready=true` against manifest version
   `2026.08.22` and digest
   `sha256:df71febf46c1e594da56f7e0205357af091a5b1fc7726bdf05259cd53f289bdc`.
-  Account-bound and bounded-history staging acceptance remains the next owner
-  step. `P05-T9` is a display-only add-on and is not required by Gate 3 or
+  Current v0.4.4 account-bound and bounded-history staging acceptance is now
+  complete. `P05-T9` is a display-only add-on and is not required by Gate 3 or
   `P06-T2` Part 2.
 - **Architecture correction:** `approval -> execution` is forbidden by the
   repository dependency matrix. The implementation therefore places the sole
@@ -3564,7 +3568,8 @@ validation remain a separate owner decision under proposed `DEC-010`.
 
 - **Status/owner:** `merged` / `completed`; implementation owner
   `implement_history_sizing`. Independent review, required CI, and squash merge
-  are complete; only owner-assisted staging revalidation remains.
+  are complete; owner-assisted staging revalidation now succeeds with 13
+  `30minute` bars in one bounded reply.
 - **Implementation branch/worktree/base:**
   `agent/p05-t9-history-sizing` / `.worktrees/p05-t9-history-sizing`, created
   from merged-claim base `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`
@@ -3657,9 +3662,10 @@ validation remain a separate owner decision under proposed `DEC-010`.
   no disclosure, and no mutation/trading/private transport. Run focused tests,
   unit, contract, integration, `git diff --check`, secret/scope/stale-reference
   inspection, and `./scripts/dev verify`.
-- **Owner handoff:** after merge, the owner stops staging polling, provisions
-  and validates the binding, restarts polling, and verifies `/portfolio` plus
-  one other account-bound command. Only sanitized fixed-shape output is shared.
+- **Owner handoff:** completed. The owner stopped staging polling, provisioned
+  and freshly validated the binding, restarted polling, and verified a
+  sanitized `/portfolio` reply. No account value or raw provider response was
+  recorded.
 
 #### Deferred live approval track
 
