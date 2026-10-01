@@ -551,10 +551,38 @@ class ApprovalRepository:
             )
         )
 
+    def get_outbox(self, outbox_id: str, *, for_update: bool = False) -> ApprovalOutboxRow | None:
+        statement = select(ApprovalOutboxRow).where(ApprovalOutboxRow.outbox_id == outbox_id)
+        if for_update:
+            statement = statement.with_for_update()
+        return self._session.scalar(statement)
+
     def add_outbox(self, fields: dict[str, Any]) -> ApprovalOutboxRow:
         row = ApprovalOutboxRow(**fields)
         self._session.add(row)
         self._session.flush()
+        return row
+
+    def consume_outbox_once(self, outbox_id: str) -> ApprovalOutboxRow:
+        result = cast(
+            CursorResult[Any],
+            self._session.execute(
+                update(ApprovalOutboxRow)
+                .where(
+                    ApprovalOutboxRow.outbox_id == outbox_id,
+                    ApprovalOutboxRow.status == "PENDING",
+                )
+                .values(status="CONSUMED")
+            ),
+        )
+        if result.rowcount != 1:
+            raise ConcurrentModificationError(
+                f"approval outbox {outbox_id} already consumed or missing"
+            )
+        self._session.flush()
+        row = self.get_outbox(outbox_id)
+        if row is None:
+            raise NotFoundError(f"approval outbox {outbox_id} missing after consume")
         return row
 
     def create_event_idempotent(

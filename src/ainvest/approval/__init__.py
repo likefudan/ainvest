@@ -4,6 +4,16 @@ Approval binds a canonical order hash. It sits after risk and before
 execution in the control flow.
 """
 
+from ainvest.approval.handoff import (
+    ApprovalExecutionOutcome,
+    ApprovalExecutionResult,
+    ApprovalHandoffCode,
+    ApprovalHandoffContractError,
+    ApprovalHandoffResult,
+    ApprovalHandoffService,
+    ExecutionHandoffPort,
+    PaperExecutionHandoff,
+)
 from ainvest.approval.order_hash import (
     CANCEL_HASH_FIELDS,
     ORDER_HASH_FIELDS,
@@ -78,15 +88,23 @@ __all__ = [
     "MAX_APPROVAL_TTL",
     "MIN_APPROVAL_TTL",
     "ORDER_HASH_FIELDS",
+    "ApprovalExecutionOutcome",
+    "ApprovalExecutionResult",
+    "ApprovalHandoffCode",
+    "ApprovalHandoffContractError",
+    "ApprovalHandoffResult",
+    "ApprovalHandoffService",
     "ApprovalService",
     "ApprovalServiceError",
     "AsyncioTelegramPollingControl",
     "AuthorizedCallbackUpdate",
     "AuthorizedTelegramUpdate",
     "AuthorizedTextUpdate",
+    "ExecutionHandoffPort",
     "IgnoredTelegramUpdate",
     "IssuedApprovalChallenge",
     "OpaqueApprovalToken",
+    "PaperExecutionHandoff",
     "TelegramApprovalCode",
     "TelegramAuthorizedUpdateHandler",
     "TelegramCallbackAnswerTransport",
