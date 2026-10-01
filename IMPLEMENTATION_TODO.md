@@ -1095,6 +1095,13 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ### P05-T8 — Gate 3: Accept Paper-Only Secure Approval
 
+- **Execution status (2026-10-01):** automated acceptance candidate complete
+  on `agent/p05-t8-gate3-acceptance` from exact main
+  `567b72b769d917487be363a3b76f61f48a6a8fd9`. The offline Gate 3 harness and
+  release record pass; final acceptance remains pending only on the
+  owner-assisted staging iPhone-to-Paper rehearsal recorded in the release
+  document.
+
 - **Objective:** Prove Telegram can approve only the bound Paper proposal and cannot create or reach a live execution request.
 - **Dependencies:** P05-T0, P05-T1, P05-T4 through P05-T6, P08-T6, P08-T7, and P08-T13. P05-T2, P05-T3, and P05-T7 are not required.
 - **Primary file:** `docs/releases/phase-3-acceptance.md`.
