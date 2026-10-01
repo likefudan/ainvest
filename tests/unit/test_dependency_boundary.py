@@ -225,6 +225,7 @@ def test_console_scripts_are_narrow_and_additive(
     assert pyproject["project"]["scripts"] == {
         "ainvest-strategy-conformance": "ainvest.strategy_conformance.cli:main",
         "ainvest-paper-flow": "ainvest.orchestrator.cli:main",
+        "ainvest-gate3-rehearsal": "ainvest.orchestrator.gate3_rehearsal:main",
         "ainvest-robinhood-account": "ainvest.orchestrator.robinhood_account_provisioning:main",
         "ainvest-robinhood-read": "ainvest.execution.robinhood.cli:main",
         "ainvest-telegram-provision": "ainvest.approval.telegram_provisioning:main",
