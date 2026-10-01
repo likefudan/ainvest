@@ -3919,7 +3919,7 @@ task row is in the cross-cutting table below.
 | `P08-T0` | `merged` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `merged` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `merged` ([#86](https://github.com/likefudan/ainvest/pull/86)) | `P08-T3` (satisfied) | `observability/{metrics,tracing,health}.py`; observability tests |
-| `P08-T5` | `in_progress` | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
+| `P08-T5` | `in_review` | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
@@ -3947,19 +3947,23 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T5 funds-safety alerts
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-01. The owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-01. The owner
   authorized proceeding directly and requested no repeated independent-agent
   review loop; root implements and reviews this non-live foundation.
 - **Branch / immutable base:** claim on `agent/p08-t5-alerts-claim` from
   `a0e3027ccbe095b22f32b231811a604451023947`. After the claim merges,
   implementation uses `agent/p08-t5-alerts` from the resulting exact main.
+  Claim merged in #169; implementation base is
+  `af46d1141037053bf978b50bf1c3757ea060f6d2`.
 - **Dependencies:** P08-T4 and P02-T9 are merged. P07-T2 real reconciliation
   event emission/integration remains downstream, not a prerequisite.
 - **Allowed paths:** new `src/ainvest/observability/alerts.py`,
   `tests/unit/observability/test_alerts.py`,
-  `tests/contract/test_funds_safety_alerts.py`,
+  `tests/contract/test_funds_safety_alert_contract.py`,
   `tests/integration/test_funds_safety_alerts.py`,
   `docs/runbooks/incidents/README.md`; coordinator-owned tracker updates only.
+  Root assigned the distinct contract-test filename on 2026-10-01 to avoid
+  duplicate top-level test module names under the existing mypy configuration.
 - **Contract:** provider-neutral versioned state events and notification port;
   deterministic incident deduplication, escalation, acknowledgement and verified
   recovery; explicit delivery outcomes/retries; redacted references, bounded
@@ -3976,6 +3980,26 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   delivery and retry, unauthorized acknowledgement, and secret redaction.
   Run `./scripts/dev setup`, `./scripts/dev verify`, diff/scope/secret review;
   merge only after required current-head CI succeeds.
+- **Implementation / local evidence (2026-10-01):** all eight fault kinds have
+  closed versioned state-event contracts, role ownership, bounded next actions,
+  HMAC-redacted references, deduplication, non-downgrading escalation, authorized
+  acknowledgement and fresh evidence-bearing recovery. Journal-first outbox
+  delivery requires an independent non-Telegram route, persists retry cooldown
+  before external send, and never treats a failed receipt as success. CAS,
+  restart, corrupted checkpoints, stale/conflicting events, capacity backpressure
+  and concurrent duplicates have deterministic coverage. Root reviewed the
+  scoped implementation and fail-closed paths; no independent-agent loop.
+  Canonical setup/verify passed: 1649 unit, 226 contract, 55 integration and
+  1948 aggregate tests; one existing optional Telegram-runtime test skipped
+  (not a live-safety test). Strict mypy passed 282 files; overall branch coverage
+  87.13%, alert module 96%. No dependency/schema migration or runtime change.
+- **Deployment boundary:** P08-T5 implements the generic foundation only. A real
+  independent provider/contact, durable production journal plus exclusive writer
+  lease, authenticated operator adapter, producer replay, scheduler/health and
+  fallback supervision must be composed and validated before runtime use.
+  The durable SQLite test journal is not production code. P07-T2 still owns
+  real reconciliation emission. No live readiness or actual alert delivery
+  is claimed; staging polling and secrets were left untouched.
 
 ##### Execution envelope: P08-T13 fail-closed fault matrix
 
