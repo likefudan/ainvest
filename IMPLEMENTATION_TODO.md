@@ -2698,8 +2698,9 @@ Phase 08 is a parallel assurance phase. Its cards support multiple delivery phas
 
 ### P08-T13 — Add Integration, Concurrency, and Fault-Injection Tests
 
-- **Execution status (2026-10-01):** claimed on `agent/p08-t13-claim` from
-  exact main `be2414a876867f6c9a2081ac0b114d148d774000` after P05-T6 merged.
+- **Execution status (2026-10-01):** completed on `agent/p08-t13-fault-matrix`
+  from exact main `a4a913d698d4e9781f92a3dc62fbc0a98bebe553`; dedicated fault suite,
+  affected integrations, and the full repository gate pass.
 
 - **Objective:** Prove network, database, Telegram, and worker failures remain fail closed.
 - **Dependencies:** P02-T6 through P02-T10, P03-T13 through P03-T15, P05-T0, P05-T1, and P05-T4 through P05-T6.

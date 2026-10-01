@@ -3825,7 +3825,7 @@ task row is in the cross-cutting table below.
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
-| `P08-T13` | `claimed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | exact execution envelope below; `tests/{integration,faults}/**`, deterministic fake services, fault/concurrency matrix, no production behavior change by default |
+| `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
 
 `P08-T0`, `P08-T3`, and `P08-T7` are merged. The complete `P06-T0` adapter,
@@ -3846,6 +3846,16 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 `P08-T13` is claimed now that the Paper approval implementation is merged.
 
 ##### Execution envelope: P08-T13 fail-closed fault matrix
+
+- **Delivery evidence (2026-10-01):** implemented 15 deterministic fault cases
+  under `tests/faults/`. They cover market/news/MCP failures, Telegram rate
+  limiting and repeated out-of-order updates, transaction rollback and outbox
+  redelivery, concurrent approval, duplicate command delivery, partial fill,
+  unknown submit, uncertain cancel, worker timeout, and worker process crash.
+  Every case records final state, audit/result evidence, external call count,
+  and funds effect. The affected integration slice passed 41 tests. The full
+  repository gate passed 1605 unit, 210 contract, 53 integration, and 1883
+  aggregate tests at 87.18% coverage; strict mypy passed 274 source files.
 
 - **Owner / branch / base:** root coordinator on `agent/p08-t13-claim`, exact
   immutable base `be2414a876867f6c9a2081ac0b114d148d774000`. After this claim
