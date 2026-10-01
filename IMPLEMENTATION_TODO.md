@@ -926,10 +926,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ### P05-T1 — Handle Telegram Paper Approval Callbacks
 
-- **Execution status (2026-09-30):** claim #158 squash-merged as
-  `d241d4f2785629305dcb9f101513069d2a5ffe7a`; implementation is in review on
-  `agent/p05-t1-telegram-approval` from that exact main. The implementation
-  remains Paper-only and must merge before `P05-T6` begins.
+- **Execution status (2026-10-01):** claim #158 squash-merged as
+  `d241d4f2785629305dcb9f101513069d2a5ffe7a`; implementation #159
+  squash-merged as `bcd72fabc0b864065b768f7106fb5c796f0cd6be`. The merged
+  implementation remains Paper-only and unlocks `P05-T6`.
 
 - **Objective:** Let an authorized private-chat user approve one specific Paper proposal without creating any live privilege.
 - **Dependencies:** P05-T0, P01-T4, P02-T3, and P02-T4.
@@ -1064,6 +1064,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 - **Acceptance criteria:** Restart, duplicate/out-of-order updates, two pollers, lease takeover during a maximum-duration poll or handler, handler retry/failure, groups, unapproved users, and forged callbacks cannot duplicate, hot-loop, or elevate approval; deterministic injected-time tests prove stale workers never dispatch or commit and the first release needs no public domain.
 
 ### P05-T6 — Hand Off an Approval to Execution Exactly Once
+
+- **Execution status (2026-10-01):** claimed on branch `agent/p05-t6-claim`
+  from exact main `bcd72fabc0b864065b768f7106fb5c796f0cd6be`. Implementation
+  remains Paper-only until the separate P05-T2/P05-T3 live dependencies merge.
 
 - **Objective:** Convert approval into one consumable execution request, preserve pre-trade risk, and enforce method/scope authorization at the handoff layer.
 - **Dependencies:** P05-T0, P05-T1, P02-T7, P02-T10, and P03-T12. The live branch additionally requires P05-T2 and P05-T3.
