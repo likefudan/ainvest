@@ -926,6 +926,11 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ### P05-T1 — Handle Telegram Paper Approval Callbacks
 
+- **Execution status (2026-09-30):** claimed on branch
+  `agent/p05-t1-telegram-approval` from exact main
+  `7c4ffd49d27a3dadee96b13f677539b7a76fbd38`. The implementation remains
+  Paper-only and must merge before `P05-T6` begins.
+
 - **Objective:** Let an authorized private-chat user approve one specific Paper proposal without creating any live privilege.
 - **Dependencies:** P05-T0, P01-T4, P02-T3, and P02-T4.
 - **Primary file:** `src/ainvest/approval/telegram_approval.py`.
