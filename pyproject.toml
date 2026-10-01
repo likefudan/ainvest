@@ -97,6 +97,7 @@ ainvest-robinhood-read = "ainvest.execution.robinhood.cli:main"
 ainvest-robinhood-account = "ainvest.orchestrator.robinhood_account_provisioning:main"
 ainvest-telegram-provision = "ainvest.approval.telegram_provisioning:main"
 ainvest-telegram-read = "ainvest.orchestrator.telegram_queries:main"
+ainvest-gate3-rehearsal = "ainvest.orchestrator.gate3_rehearsal:main"
 
 [project.entry-points."ainvest.strategies"]
 moving_average = "ainvest.strategies.reference.moving_average.plugin:plugin"

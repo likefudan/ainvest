@@ -68,12 +68,13 @@ Observed automated candidate results on 2026-10-01:
 | Gate | Result |
 | --- | --- |
 | Gate 3 evidence slice | 82 passed |
-| Strict mypy | 276 source files passed |
-| Unit | 1604 passed, 1 optional-runtime skip |
+| Rehearsal affected regression slice | 63 passed |
+| Strict mypy | 278 source files passed |
+| Unit | 1610 passed |
 | Contract | 210 passed |
 | Integration | 53 passed |
-| Aggregate | 1885 passed, 1 optional-runtime skip |
-| Branch coverage | 87.17% |
+| Aggregate | 1891 passed |
+| Branch coverage | 86.93% |
 
 ## Threat and misuse matrix
 
@@ -133,21 +134,35 @@ references in that composition.
 
 The automated harness reproduces the exact private callback fields and reaches
 a deterministic Paper fill, but it cannot prove the owner's physical iPhone
-tap or the current external Telegram delivery. Final Gate 3 acceptance needs
-one staging-only rehearsal:
+tap or the current external Telegram delivery. The dedicated one-shot command
+now owns the complete safe composition; the final Gate 3 acceptance needs one
+staging-only run:
 
-1. keep every Live/write service disabled;
-2. start the staging poller against the already provisioned staging Bot;
-3. create one bounded Paper proposal and send its private approval message;
-4. on the bound iPhone account, tap the inline approval button once;
+1. keep every Live/write service disabled and stop the ordinary Telegram read
+   poller so the rehearsal can own its fenced staging poller;
+2. run the command below from the repository root;
+3. on the bound iPhone account, tap the inline approval button once within the
+   bounded timeout;
+4. verify the command reports `terminal=FILLED` and `replay_blocked=true`;
 5. record only sanitized evidence: timestamp, proposal ID, approval event ID,
    Paper broker order ID, terminal `FILLED`, and confirmation that replay made
    no second order; and
 6. never paste the Bot token, raw callback nonce, Telegram numeric identities,
    account value, or provider payload into Git or chat.
 
-Until that rehearsal is recorded below, the release acceptance status remains
-pending even though the automated gate passes.
+```bash
+uv run --extra approval ainvest-gate3-rehearsal \
+  --env-file /Users/kel/.config/ainvest/staging.env \
+  --secrets-dir /Users/kel/.config/ainvest/secrets \
+  --database /Users/kel/.local/share/ainvest/staging.sqlite3 \
+  --confirm-poller-stopped
+```
+
+The command accepts no Bot token or Telegram identity on argv, requires exactly
+one configured staging recipient, rejects non-staging or non-Paper settings,
+and contains no Robinhood/rh-mcp or Live execution path. Until this rehearsal
+is recorded below, the release acceptance status remains pending even though
+the automated gate passes.
 
 | Evidence item | Result |
 | --- | --- |
