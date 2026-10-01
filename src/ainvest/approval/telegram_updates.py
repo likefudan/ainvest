@@ -15,7 +15,7 @@ from collections.abc import Callable, Sequence
 from datetime import UTC, datetime, timedelta
 from enum import StrEnum
 from importlib import import_module
-from typing import Any, Protocol
+from typing import Any, Literal, Protocol
 
 from pydantic import (
     BaseModel,
@@ -126,6 +126,8 @@ class AuthorizedCallbackUpdate(BaseModel):
     sender_user_id: StrictInt = Field(repr=False)
     chat_id: StrictInt = Field(repr=False)
     message_id: StrictInt = Field(repr=False)
+    chat_type: Literal["private"]
+    forwarded: Literal[False]
     callback_query_id: SecretStr = Field(repr=False)
     callback_data: SecretStr = Field(repr=False)
 
@@ -494,6 +496,8 @@ def classify_update(
             sender_user_id=update.sender_user_id,
             chat_id=update.chat_id,
             message_id=update.message_id,
+            chat_type="private",
+            forwarded=False,
             callback_query_id=update.callback_query_id,
             callback_data=update.callback_data,
         )

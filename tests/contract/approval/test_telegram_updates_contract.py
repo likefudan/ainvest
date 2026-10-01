@@ -104,6 +104,8 @@ def test_public_authorized_callback_json_serialization_redacts_secrets() -> None
         sender_user_id=2,
         chat_id=3,
         message_id=4,
+        chat_type="private",
+        forwarded=False,
         callback_query_id=SecretStr("callback-id"),
         callback_data=SecretStr("opaque"),
     )
@@ -113,9 +115,33 @@ def test_public_authorized_callback_json_serialization_redacts_secrets() -> None
         "sender_user_id": 2,
         "chat_id": 3,
         "message_id": 4,
+        "chat_type": "private",
+        "forwarded": False,
         "callback_query_id": "**********",
         "callback_data": "**********",
     }
+
+
+@pytest.mark.contract
+@pytest.mark.parametrize(
+    "changes",
+    ({"chat_type": "group"}, {"forwarded": True}),
+)
+def test_authorized_callback_contract_cannot_represent_unsafe_message_context(
+    changes: dict[str, object],
+) -> None:
+    payload: dict[str, object] = {
+        "environment": TelegramEnvironment.STAGING,
+        "update_id": 1,
+        "sender_user_id": 2,
+        "chat_id": 3,
+        "message_id": 4,
+        "callback_query_id": SecretStr("callback-id"),
+        "callback_data": SecretStr("opaque"),
+    }
+    payload.update(changes)
+    with pytest.raises(ValidationError):
+        AuthorizedCallbackUpdate.model_validate(payload)
 
 
 def test_polling_boundary_does_not_import_business_handlers_or_raw_orm() -> None:

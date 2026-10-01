@@ -2661,7 +2661,7 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | Task | Status | Dependencies / unlock | Allowed implementation scope |
 |---|---|---|---|
 | `P05-T0` | `merged` | `P02-T3`, `P02-T4`, `P02-T6`–`P02-T9` | `approval/{service,tokens}.py`, approval re-exports, `schemas/approval.py`, `db/{repositories,uow}.py`, `tests/unit/approval/test_{approval_service,tokens}.py`; generated ApprovalChallenge schema + manifest only |
-| `P05-T1` | `in_progress` (claimed 2026-09-30) | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` (all satisfied) | exact execution envelope below; Paper-only callback validation, durable message binding, atomic approval/audit/outbox, and tests |
+| `P05-T1` | `in_review` (claim [#158](https://github.com/likefudan/ainvest/pull/158), squash `d241d4f2785629305dcb9f101513069d2a5ffe7a`) | `P05-T0`, `P01-T4`, `P02-T3`, `P02-T4` (all satisfied) | implementation complete locally; Paper-only callback validation, durable message binding, atomic approval/audit/outbox, and tests await PR/CI |
 | `P05-T4` | `merged` ([#120](https://github.com/likefudan/ainvest/pull/120), [#121](https://github.com/likefudan/ainvest/pull/121); squash `2dd706980475fd6598f33d21e9c5974515de5629`) | `P05-T0`, `DEC-005` satisfied; staging validated 2026-08-26, production pending under proposed `DEC-010` | completed notification/config adapter, snapshots, fake-transport tests, strict file-secret and fail-closed delivery boundaries |
 | `P05-T5` | `merged` ([#123](https://github.com/likefudan/ainvest/pull/123), squash `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`; [#124](https://github.com/likefudan/ainvest/pull/124), squash `aeb402b8140882eaa7e1707ca50521c266949728`) | merged `P05-T4`, `P01-T4`; staging polling/display validated 2026-08-26, production pending under proposed `DEC-010` | completed bounded long poller, typed inbound classification/handler port, durable offset/dedup/fenced-lease persistence, migration, adapter/concurrency/restart tests, and documentation |
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
@@ -2670,8 +2670,8 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | staging status/accounts/quote/portfolio and bounded history are verified against current v0.4.4 | full 13-bar `/history AAPL 1d` response delivered once without fallback; every other P05-T9 contract stays frozen |
 | `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | file-only provision and fresh validation succeeded; strict `0600` loader fed a successful sanitized `/portfolio` reply without disclosing the account value |
 
-`P05-T1` is claimed and in progress from exact main
-`7c4ffd49d27a3dadee96b13f677539b7a76fbd38`. `P05-T4`, `P05-T5`, and
+`P05-T1` claim #158 is merged and its implementation is in review from exact
+main `d241d4f2785629305dcb9f101513069d2a5ffe7a`. `P05-T4`, `P05-T5`, and
 `P05-T10`, P05-T9 including its history maintenance, and P05-T11 are complete
 and merged. This tracker cleanup claims no successor implementation; `P05-T6`
 still follows `P05-T1`.
@@ -2684,7 +2684,7 @@ completed Paper approval path unlocks `P08-T13`, then
 
 - **Owner / branch / base:** root coordinator on
   `agent/p05-t1-telegram-approval`, exact immutable base
-  `7c4ffd49d27a3dadee96b13f677539b7a76fbd38`.
+  `d241d4f2785629305dcb9f101513069d2a5ffe7a` after claim #158 merged.
 - **Authority and dependencies:** the complete P05-T1 card, accepted `DEC-005`,
   merged P05-T0 one-time challenges, merged P05-T4 notification delivery, and
   merged P05-T5 typed/private update ingress. Telegram can create only
@@ -2701,6 +2701,11 @@ completed Paper approval path unlocks `P08-T13`, then
   migration/schema assertions, architecture/dependency-boundary assertions,
   and the Telegram approval runbook/current task evidence. Any additional
   shared path must be recorded here before editing.
+- **Recorded narrow scope expansion (2026-09-30):** the new Alembic head also
+  requires updating the existing read-runner's exact migration-head guard in
+  `src/ainvest/orchestrator/telegram_queries.py` and its matching unit/integration
+  fixtures. This is a mechanical current-head update only; no query, gateway,
+  account, rate-limit, or Telegram delivery behavior may change.
 - **Durable binding:** after a successful trusted P05-T4 Paper notification,
   bind the still-PENDING challenge to the exact environment, numeric allowed
   user/private-chat pair, positive original Telegram message ID, proposal, and
@@ -2727,6 +2732,16 @@ completed Paper approval path unlocks `P08-T13`, then
   then publish one Draft implementation PR. Per the owner's current direction,
   review is performed once locally and through required CI rather than repeated
   independent-agent iteration.
+- **Implementation handoff (2026-09-30):** production code and tests are
+  complete across 16 paths. The exact local merge gate passed with 1,589 unit
+  tests plus one documented optional-runtime skip, 210 contract tests, 53
+  integration tests, and 1,852 aggregate tests plus one skip at 87.15% branch
+  coverage; Ruff/format, strict mypy over 265 source files, schema snapshots,
+  lock consistency, migration upgrade/downgrade, diff, scope, and secret scans
+  passed. The implementation adds one Alembic head, durable server-owned
+  delivery bindings, a pending approval outbox, the Paper-only callback
+  handler, managed callback answers, and an explicit SQLite outer-write
+  transaction proven to roll back approval/audit/outbox together.
 
 Completion evidence for these owner-validation follow-ups is immutable. The
 combined claim [#145](https://github.com/likefudan/ainvest/pull/145) records its

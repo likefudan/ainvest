@@ -30,6 +30,12 @@ from ainvest.approval.telegram import (
     TelegramNotificationRequest,
     TelegramNotificationSender,
 )
+from ainvest.approval.telegram_approval import (
+    TelegramApprovalCode,
+    TelegramCallbackAnswerTransport,
+    TelegramPaperApprovalHandler,
+    bind_telegram_approval_delivery,
+)
 from ainvest.approval.telegram_maintenance import (
     TelegramMaintenanceLeaseError,
     TelegramMaintenanceLeasePolicy,
@@ -81,7 +87,9 @@ __all__ = [
     "IgnoredTelegramUpdate",
     "IssuedApprovalChallenge",
     "OpaqueApprovalToken",
+    "TelegramApprovalCode",
     "TelegramAuthorizedUpdateHandler",
+    "TelegramCallbackAnswerTransport",
     "TelegramDeliveryCode",
     "TelegramEnvironment",
     "TelegramHandlerDisposition",
@@ -96,6 +104,7 @@ __all__ = [
     "TelegramNotificationOutcome",
     "TelegramNotificationRequest",
     "TelegramNotificationSender",
+    "TelegramPaperApprovalHandler",
     "TelegramPollingControl",
     "TelegramPollingFatal",
     "TelegramPollingMaintenanceLease",
@@ -105,6 +114,7 @@ __all__ = [
     "TelegramProviderUpdateKind",
     "TelegramUpdateTransport",
     "attach_order_hash",
+    "bind_telegram_approval_delivery",
     "classify_update",
     "compute_cancel_hash",
     "compute_order_hash",

@@ -80,6 +80,20 @@ class UnitOfWork:
             raise RuntimeError("UnitOfWork is not active")
         self.session.rollback()
 
+    def begin_atomic_write(self) -> None:
+        """Materialize the outer write transaction before any nested savepoint.
+
+        SQLite otherwise permits a first SAVEPOINT to become the effective
+        outer transaction, so releasing it can survive a later Session
+        rollback. PostgreSQL begins its real transaction on the first query;
+        only SQLite needs the explicit write boundary.
+        """
+        if self.session is None:
+            raise RuntimeError("UnitOfWork is not active")
+        connection = self.session.connection()
+        if connection.dialect.name == "sqlite":
+            connection.exec_driver_sql("BEGIN IMMEDIATE")
+
     @property
     def proposals_repo(self) -> ProposalRepository:
         if self.proposals is None:

@@ -56,6 +56,7 @@ def test_alembic_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
         "order_proposals",
         "approval_challenges",
         "approval_events",
+        "approval_outbox",
         "broker_orders",
         "broker_fills",
         "cancel_commands",
@@ -64,6 +65,7 @@ def test_alembic_upgrade_downgrade_upgrade(tmp_path: Path) -> None:
         "audit_events",
         "telegram_poll_states",
         "telegram_processed_updates",
+        "telegram_approval_bindings",
         "alembic_version",
     }
     assert expected <= tables

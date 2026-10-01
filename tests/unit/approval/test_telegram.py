@@ -715,6 +715,7 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
     monkeypatch: pytest.MonkeyPatch,
 ) -> None:
     events: list[str] = []
+    answer_calls: list[dict[str, object]] = []
 
     class Request:
         def __init__(self, **kwargs: object) -> None:
@@ -751,6 +752,10 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
             events.append("send_message")
             return SimpleNamespace(message_id=77)
 
+        async def answer_callback_query(self, **kwargs: object) -> None:
+            events.append("answer_callback")
+            answer_calls.append(kwargs)
+
     telegram = SimpleNamespace(
         Bot=Bot,
         request=SimpleNamespace(HTTPXRequest=Request),
@@ -784,6 +789,9 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
                 )
                 == 77
             )
+            await transport.answer_callback_query(
+                "callback-id", "Paper approval recorded.", timeout_seconds=4
+            )
 
     asyncio.run(run())
     assert Bot.instances == 1
@@ -793,9 +801,21 @@ def test_managed_https_transport_initializes_once_reuses_one_bot_and_closes_once
         "initialize_get_me",
         "get_updates",
         "send_message",
+        "answer_callback",
         "shutdown",
         "request_0_shutdown",
         "request_1_shutdown",
+    ]
+    assert answer_calls == [
+        {
+            "callback_query_id": "callback-id",
+            "text": "Paper approval recorded.",
+            "show_alert": False,
+            "read_timeout": 4,
+            "write_timeout": 4,
+            "connect_timeout": 4,
+            "pool_timeout": 4,
+        }
     ]
 
 

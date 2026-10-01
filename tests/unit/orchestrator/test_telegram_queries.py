@@ -755,6 +755,8 @@ def test_callback_is_silent_and_never_queries_or_sends() -> None:
         sender_user_id=101,
         chat_id=201,
         message_id=301,
+        chat_type="private",
+        forwarded=False,
         callback_query_id=SecretStr("callback-id"),
         callback_data=SecretStr("approve"),
     )
@@ -966,7 +968,7 @@ def test_module_has_no_generic_or_trading_surface() -> None:
         assert forbidden not in source
 
 
-def _create_runner_database(path: Path, *, revision: str = "bf42c70e30d1") -> None:
+def _create_runner_database(path: Path, *, revision: str = "5ce8169131f2") -> None:
     with sqlite3.connect(path) as connection:
         connection.execute("CREATE TABLE alembic_version (version_num TEXT NOT NULL)")
         connection.execute("INSERT INTO alembic_version VALUES (?)", (revision,))
