@@ -1065,9 +1065,10 @@ The dispatcher should narrow these ranges to the exact subsections relevant to a
 
 ### P05-T6 — Hand Off an Approval to Execution Exactly Once
 
-- **Execution status (2026-10-01):** claimed on branch `agent/p05-t6-claim`
-  from exact main `bcd72fabc0b864065b768f7106fb5c796f0cd6be`. Implementation
-  remains Paper-only until the separate P05-T2/P05-T3 live dependencies merge.
+- **Execution status (2026-10-01):** claim #160 squash-merged as
+  `d753135b261282c425ce899b1744e21339e0ab7b`; implementation is in review on
+  `agent/p05-t6-approval-handoff` from that exact main. Implementation remains
+  Paper-only until the separate P05-T2/P05-T3 live dependencies merge.
 
 - **Objective:** Convert approval into one consumable execution request, preserve pre-trade risk, and enforce method/scope authorization at the handoff layer.
 - **Dependencies:** P05-T0, P05-T1, P02-T7, P02-T10, and P03-T12. The live branch additionally requires P05-T2 and P05-T3.

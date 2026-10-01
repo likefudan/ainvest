@@ -2665,14 +2665,15 @@ are used until `DEC-010` is accepted and secrets are provisioned outside Git.
 | `P05-T4` | `merged` ([#120](https://github.com/likefudan/ainvest/pull/120), [#121](https://github.com/likefudan/ainvest/pull/121); squash `2dd706980475fd6598f33d21e9c5974515de5629`) | `P05-T0`, `DEC-005` satisfied; staging validated 2026-08-26, production pending under proposed `DEC-010` | completed notification/config adapter, snapshots, fake-transport tests, strict file-secret and fail-closed delivery boundaries |
 | `P05-T5` | `merged` ([#123](https://github.com/likefudan/ainvest/pull/123), squash `f17eda9e948b5c326ae21b17a04ae48d9dab5e55`; [#124](https://github.com/likefudan/ainvest/pull/124), squash `aeb402b8140882eaa7e1707ca50521c266949728`) | merged `P05-T4`, `P01-T4`; staging polling/display validated 2026-08-26, production pending under proposed `DEC-010` | completed bounded long poller, typed inbound classification/handler port, durable offset/dedup/fenced-lease persistence, migration, adapter/concurrency/restart tests, and documentation |
 | `P05-T10` | `merged` / `completed` ([#135](https://github.com/likefudan/ainvest/pull/135), squash `fcb142562a9850adc076c0b07aa7ff19fd423ddf`; [#136](https://github.com/likefudan/ainvest/pull/136), squash `69e883151c6e27fc69120efbf1706bf8257efd39`) | merged dependencies; staging owner validation succeeded 2026-08-26, production pending under proposed `DEC-010` | completed dedicated `ainvest-telegram-provision` add/validate/rotate-token/disable utility across seven authorized paths; deterministic offline tests and CI passed |
-| `P05-T6` | `claimed` (2026-10-01) | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` (all satisfied for Paper) | exact execution envelope below; `approval/handoff.py`, durable outbox consumption, workflow handoff, authorization, recovery/concurrency tests |
+| `P05-T6` | `in_review` (claim [#160](https://github.com/likefudan/ainvest/pull/160), squash `d753135b261282c425ce899b1744e21339e0ab7b`) | `P05-T0`, `P05-T1`, `P02-T7`, `P02-T10`, `P03-T12` (all satisfied for Paper) | implementation complete locally; durable outbox consumption, neutral Paper handoff, Orchestrator workflow bridge, authorization, recovery/concurrency evidence await PR/CI |
 | `P05-T8` | `not_started` | `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6`, `P08-T6`, `P08-T7`, `P08-T13` | `docs/releases/phase-3-acceptance.md`; Gate 3 harness and security evidence |
 | `P05-T9` | `merged` / `completed`, including history maintenance ([#138](https://github.com/likefudan/ainvest/pull/138), squash `c40b82486a85867742a2f8fbfb516057b4130db5`; [#139](https://github.com/likefudan/ainvest/pull/139), squash `67821569ba90884c522e8fb7efc341e24f597a3e`; [#146](https://github.com/likefudan/ainvest/pull/146), squash `6815e7e03a3f2609e70d1e5b7281ff630c38e1be`) | staging status/accounts/quote/portfolio and bounded history are verified against current v0.4.4 | full 13-bar `/history AAPL 1d` response delivered once without fallback; every other P05-T9 contract stays frozen |
 | `P05-T11` | `merged` / `completed` ([#145](https://github.com/likefudan/ainvest/pull/145), squash `fa5e30f356a4082eb7a8b88c7d90ec7b3cbd68b1`; [#147](https://github.com/likefudan/ainvest/pull/147), squash `1a724e2861dc811c6c29717f6157c073bcc516f8`) | merged `P05-T9`, `P05-T10`, `P05-T5`, and `P06-T0`–`P06-T2` Part 1 | file-only provision and fresh validation succeeded; strict `0600` loader fed a successful sanitized `/portfolio` reply without disclosing the account value |
 
 `P05-T1` claim #158 and implementation #159 are merged through exact main
-`bcd72fabc0b864065b768f7106fb5c796f0cd6be`. `P05-T6` is now claimed from
-that exact base. `P05-T4`, `P05-T5`, and
+`bcd72fabc0b864065b768f7106fb5c796f0cd6be`. `P05-T6` claim #160 is merged
+as `d753135b261282c425ce899b1744e21339e0ab7b`, and its implementation is in
+review from that exact base. `P05-T4`, `P05-T5`, and
 `P05-T10`, P05-T9 including its history maintenance, and P05-T11 are complete
 and merged.
 P05-T9/P05-T11 are display-only add-ons, not Gate 3 dependencies or approval
@@ -2745,10 +2746,9 @@ completed Paper approval path unlocks `P08-T13`, then
 
 ##### Execution envelope: P05-T6 exactly-once Paper handoff
 
-- **Owner / branch / base:** root coordinator on `agent/p05-t6-claim`, exact
-  immutable base `bcd72fabc0b864065b768f7106fb5c796f0cd6be`. After this claim
-  merges, implementation starts from that new exact main on
-  `agent/p05-t6-approval-handoff`.
+- **Owner / branch / base:** root coordinator on
+  `agent/p05-t6-approval-handoff`, exact immutable base
+  `d753135b261282c425ce899b1744e21339e0ab7b` after claim #160 merged.
 - **Authority and dependency boundary:** implement the complete P05-T6 card
   using merged P05-T0/P05-T1, P02-T7, P02-T10, and P03-T12 contracts. The
   current delivery is Paper-only under accepted DEC-005. P05-T2/P05-T3 are
@@ -2764,6 +2764,12 @@ completed Paper approval path unlocks `P08-T13`, then
   migration and architecture/dependency assertions, task status, and security
   control evidence directly proved by this task. No real credential, account,
   Bot, Robinhood session, or network call enters fixtures or evidence.
+- **Recorded narrow scope expansion (2026-10-01):** the enforced package matrix
+  forbids `approval -> workflow`. Add only
+  `src/ainvest/orchestrator/approval_handoff.py` as the composition bridge that
+  converts the neutral Paper approval request into the existing
+  `ExecuteOrderCommand` and maps its validated result back. Approval retains no
+  Workflow or Execution import; the bridge contains no broker/risk logic.
 - **Trusted reload and authorization:** consume only a server-owned pending
   outbox row. Reload its approval event and proposal from storage and require
   exact event/proposal/order-hash agreement, `APPROVED`, unexpired immutable
@@ -2789,6 +2795,16 @@ completed Paper approval path unlocks `P08-T13`, then
   `telegram+live`, missing/invalid scope, dispatch contract violations, audit
   redaction, and restart recovery. Run focused tests and `./scripts/dev verify`,
   then one local review plus required CI; no repeated independent-agent review.
+- **Implementation handoff (2026-10-01):** complete locally across eight paths.
+  The exact merge gate passed 1,604 unit tests plus one documented
+  optional-runtime skip, 210 contract tests, 53 integration tests, and 1,867
+  aggregate tests plus one skip at 87.16% coverage. Ruff/format, strict mypy
+  over 269 source files, schema snapshots, architecture/dependency checks, and
+  diff checks passed. The implementation reloads and cross-checks independent
+  indexed columns plus validated payloads, permits only telegram+paper, derives
+  stable command/idempotency/client-order identities, conditionally consumes
+  the durable outbox, audits terminal outcomes, and composes into the existing
+  workflow only through the Orchestrator boundary.
 
 Completion evidence for these owner-validation follow-ups is immutable. The
 combined claim [#145](https://github.com/likefudan/ainvest/pull/145) records its
