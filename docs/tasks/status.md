@@ -3922,7 +3922,7 @@ task row is in the cross-cutting table below.
 | `P08-T5` | `merged` ([#170](https://github.com/likefudan/ainvest/pull/170)) | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
-| `P08-T8` | `in_progress` | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
+| `P08-T8` | `in_review` | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
@@ -3947,12 +3947,14 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-02; owner asked
+- **Owner / status:** root coordinator, `in_review`, 2026-10-02; owner asked
   to continue with the recommended safe Quickstart task. No independent-agent
   review loop, per the owner's standing instruction.
 - **Branch / immutable base:** claim `agent/p08-t8-claim` from
   `6fb5ee4c8d12fe3831797b4f3d829e8429b87571`; implementation
   `agent/p08-t8-quickstart` starts from the exact resulting claim merge.
+  Claim merged in #172; implementation base is
+  `8ae50f31f69af13385acb02d53dddbd8cbbfbfbf`.
 - **Dependencies / scope:** P01-T2 through P01-T4 and P03-T17 are merged.
   Allowed edits: `README.md` and coordinator-owned `docs/tasks/status.md` only.
   Explain architecture/non-goals, current status, installation, fail-closed
@@ -3967,6 +3969,20 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   verify; execute documented demo variants without real tokens; verify migration
   on a new temporary SQLite database only; check local Markdown links and diff.
   Required current-head CI must pass before squash merge.
+- **Implementation evidence:** README now distinguishes the token-free fixture
+  demo, separately configured Telegram Paper approval, display-only Robinhood,
+  alert foundation and unavailable Live. Covers setup, configuration, temporary
+  migration, tests, architecture, non-goals, risks and existing developer/
+  security/incident references; removes the stale Batch C status.
+- **Verification (2026-10-02):** fresh worktree `.venv` created by canonical setup;
+  four documented Paper variants executed with an empty environment except PATH,
+  without real tokens or `.env`: APPROVAL_PENDING, FILLED, APPROVAL_EXPIRED and
+  PARTIALLY_FILLED. Migration on a new temporary SQLite file reached
+  `5ce8169131f2 (head)`; no persistent environment was touched. All relative
+  README links exist and `git diff --check` passed. Canonical verify passed:
+  1649 unit, 226 contract, 55 integration, 1948 aggregate; one existing optional
+  Telegram-runtime skip (not live-safety); mypy 282 files; coverage 87.13%.
+  Root reviewed accuracy, credential handling, approval boundaries and scope.
 
 ##### Execution envelope: P08-T5 funds-safety alerts
 
