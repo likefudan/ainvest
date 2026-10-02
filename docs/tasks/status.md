@@ -3922,7 +3922,7 @@ task row is in the cross-cutting table below.
 | `P08-T5` | `merged` ([#170](https://github.com/likefudan/ainvest/pull/170)) | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
-| `P08-T8` | `in_review` | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
+| `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
 | `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
@@ -3936,7 +3936,7 @@ merged in #117 under the execution envelope above. Its exact 11-command
 display surface remains unusable for trading.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
-closed. `P08-T8` is claimed below; `P08-T9` is dependency-ready but
+closed. `P08-T8` is merged; `P08-T9` is dependency-ready but
 remains unclaimed.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
@@ -3947,7 +3947,7 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-02; owner asked
+- **Owner / status:** root coordinator, `merged`, 2026-10-02; owner asked
   to continue with the recommended safe Quickstart task. No independent-agent
   review loop, per the owner's standing instruction.
 - **Branch / immutable base:** claim `agent/p08-t8-claim` from
@@ -3983,6 +3983,13 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   1649 unit, 226 contract, 55 integration, 1948 aggregate; one existing optional
   Telegram-runtime skip (not live-safety); mypy 282 files; coverage 87.13%.
   Root reviewed accuracy, credential handling, approval boundaries and scope.
+- **Merge evidence:** [#173](https://github.com/likefudan/ainvest/pull/173)
+  squash-merged as `6197f5cf65e3a8cca4de54297be3ee74def1fcc0` after Verify,
+  Secret scan, Dependency audit, SAST and CodeQL passed on exact head
+  `9f6458b786481f4a443117943db9185987f55bfe`. Completion-record branch
+  `agent/p08-t8-complete` starts from the exact implementation merge and edits
+  only this tracker. Next dependency-ready recommendation: P08-T9 external
+  strategy-plugin guide/starter; it remains unclaimed.
 
 ##### Execution envelope: P08-T5 funds-safety alerts
 
