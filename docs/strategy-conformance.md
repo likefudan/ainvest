@@ -1,69 +1,54 @@
-"""Strategy conformance suite for third-party plugin CI (P03-T5).
+# Strategy conformance reference
 
 Independent strategy teams should run this suite in their own CI before
 publishing a plugin. The suite validates hooks, metadata, Strategy API range,
 parameters, signal schemas, determinism, isolation boundaries, and a Paper
 Trading example.
 
-## Install
+For a complete standalone package, external wheel installation, YAML/state
+contract and CI/release procedure, use the
+[strategy plugin developer guide](strategy-plugin-guide.md).
+
+## Install the reviewed host
 
 ```bash
-uv sync --locked
-# or: pip install ainvest
+./scripts/dev setup
 ```
+
+Run this from a reviewed ainvest source checkout, with its committed lock.
+Do not assume `pip install ainvest` selects this repository. The setup wrapper
+also preserves the broker artifact verification required by the local merge gate.
+No provider authorization is needed for conformance.
 
 ## CLI
 
 ```bash
 # Human-readable report on stdout (exit 0 = pass, 1 = fail, 2 = load error)
-uv run ainvest-strategy-conformance --strategy moving_average
+uv run --locked ainvest-strategy-conformance --strategy moving_average \
+  --plugin-id moving_average --plugin-version 1.0.0
 
 # Machine-readable JSON plus human report
-uv run ainvest-strategy-conformance \
+uv run --locked ainvest-strategy-conformance \
   --strategy moving_average \
   --plugin-id moving_average \
   --plugin-version 1.0.0 \
   --json-out conformance-report.json
 
 # Equivalent module form
-uv run python -m ainvest.strategy_conformance --strategy moving_average
+uv run --locked python -m ainvest.strategy_conformance --strategy moving_average \
+  --plugin-id moving_average --plugin-version 1.0.0
 ```
 
-## GitHub Actions example
+## CI
 
-```yaml
-name: Strategy conformance
-on:
-  push:
-  pull_request:
-
-jobs:
-  conformance:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - uses: astral-sh/setup-uv@v5
-      - name: Install ainvest + your plugin
-        run: |
-          uv venv
-          uv pip install "ainvest==0.1.0" .
-      - name: Run strategy conformance
-        run: |
-          uv run ainvest-strategy-conformance \
-            --strategy your_strategy_name \
-            --plugin-id your_plugin_id \
-            --plugin-version 1.0.0 \
-            --json-out conformance-report.json
-      - name: Upload report
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: strategy-conformance-report
-          path: conformance-report.json
-```
-
-Replace `your_strategy_name` / `your_plugin_id` with the values declared by your
-plugin entry point under the `ainvest.strategies` group.
+Use the developer guide's offline external-wheel recipe after provisioning a
+reviewed host checkout and build cache. Pin third-party actions to reviewed
+commit SHAs as in [repository CI](../.github/workflows/ci.yml); do not inject
+trading/API credentials into plugin builds or evaluation. Replace strategy,
+plugin ID and exact version together, matching the installed entry point under
+`ainvest.strategies`. Retain the non-secret JSON report and fail on nonzero exit.
+Discovery imports trusted plugin code before evaluation isolation, so use an
+isolated, secret-free build/test environment and a restricted allowlist.
 
 ## Stable failure codes
 
@@ -89,10 +74,12 @@ JSON (`code` field), for example:
 ## Programmatic API
 
 ```python
-from ainvest.strategies import load_strategy_registry
+from ainvest.strategies import RegistryLoadConfig, load_strategy_registry
 from ainvest.strategy_conformance import run_conformance_suite, report_to_json
 
-definition = load_strategy_registry().get("moving_average")
+definition = load_strategy_registry(
+    RegistryLoadConfig(allowlist={"moving_average": "1.0.0"})
+).get("moving_average")
 report = run_conformance_suite(definition)
 print(report_to_json(report))
 assert report.passed
@@ -100,4 +87,6 @@ assert report.passed
 
 Behavioral and isolation checks execute strategies through
 `evaluate_in_worker` (see `docs/development.md` strategy worker isolation).
-"""
+
+Passing conformance neither enables a strategy instance nor grants any trading
+authority. It does not prove profitability or replace semantic/security review.

@@ -3923,7 +3923,7 @@ task row is in the cross-cutting table below.
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
-| `P08-T9` | `in_progress` | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
+| `P08-T9` | `in_review` | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
@@ -3946,12 +3946,14 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T9 external strategy plugin guide
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-02. Owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-02. Owner
   authorized continued independent progress until an owner-only decision or
   action is needed; no repetitive independent-agent review.
 - **Branch / immutable base:** claim `agent/p08-t9-claim` from
   `ef5b37d15d76967d943224abf80c63ec82a7c840`; implementation branch
   `agent/p08-t9-plugin-guide` starts at the exact resulting claim merge.
+  Claim merged in #175; implementation base is
+  `41d6e7b1d98bbb59cba1d296e789091e8ff44072`.
 - **Dependencies:** P03-T0 through P03-T5 are merged. P08-T8 Quickstart is merged.
 - **Allowed paths:** new `docs/strategy-plugin-guide.md`,
   `examples/strategy-plugin/**`, and
@@ -3971,6 +3973,20 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   Use deterministic temporary installs, canonical setup/verify, failure-path
   template tests, link/scope/secret review and required current-head CI.
   Deferred owner decisions and the P04-T2 owner pause remain unchanged.
+- **Implementation evidence:** standalone Hatchling wheel with explicit API/
+  plugin/strategy identities, strict bounded parameters, deterministic HOLD
+  signals, immutable typed state and disabled YAML. Guide documents build and
+  discovery trust, isolated evaluation, as_of/no-look-ahead rules, installation,
+  allowlists, CI and reviewed upgrades. Existing conformance guide no longer
+  implies public-index host provenance or recommends floating CI actions.
+- **Verification:** copied template outside repository, built/installed wheel
+  offline into a temporary target, proved actual installed entry-point discovery,
+  package/metadata version agreement, disabled YAML, isolated state roundtrip,
+  invalid parameters/state and wrong allowlist rejection, and full conformance.
+  Canonical setup/verify passed: 1649 unit, 226 contract, 58 integration, 1951
+  aggregate; one existing optional Telegram-runtime skip (not live-safety);
+  mypy 283 files; coverage 87.13%. Documentation links and diff checked; root
+  reviewed scope and safety. No operational plugin was installed or enabled.
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
