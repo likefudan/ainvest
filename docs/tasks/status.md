@@ -3919,7 +3919,7 @@ task row is in the cross-cutting table below.
 | `P08-T0` | `merged` | `P01-T4`, `P03-T13` (satisfied) | `runtime.py`, `docs/runtime-modes.md`, `tests/unit/test_runtime.py` |
 | `P08-T3` | `merged` | `P01-T2`, `P02-T8` (satisfied) | observability logging + unit test; Paper-flow correlation test/context hook; assigned dependency/setup files |
 | `P08-T4` | `merged` ([#86](https://github.com/likefudan/ainvest/pull/86)) | `P08-T3` (satisfied) | `observability/{metrics,tracing,health}.py`; observability tests |
-| `P08-T5` | `in_review` | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
+| `P08-T5` | `merged` ([#170](https://github.com/likefudan/ainvest/pull/170)) | `P08-T4`, `P02-T9` (merged) | `observability/alerts.py`, `docs/runbooks/incidents/**`, alert tests; execution envelope below |
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `not_started` | `P01-T2`–`P01-T4`, `P03-T17` | `README.md`; safe Quickstart/Paper demo documentation only |
@@ -3947,7 +3947,7 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T5 funds-safety alerts
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-01. The owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-01. The owner
   authorized proceeding directly and requested no repeated independent-agent
   review loop; root implements and reviews this non-live foundation.
 - **Branch / immutable base:** claim on `agent/p08-t5-alerts-claim` from
@@ -4000,6 +4000,14 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   The durable SQLite test journal is not production code. P07-T2 still owns
   real reconciliation emission. No live readiness or actual alert delivery
   is claimed; staging polling and secrets were left untouched.
+- **Merge evidence:** implementation [#170](https://github.com/likefudan/ainvest/pull/170)
+  squash-merged as `13f92055258b3742e1338ecedac0b82da8658d45` after Verify,
+  Secret scan, Dependency audit, SAST and CodeQL passed on exact head
+  `ef7625936ddc097495d0f0edec263e88a40b60be`. Completion-record branch
+  `agent/p08-t5-complete` starts from that exact implementation merge and changes
+  only this tracker. P08-T8 (safe Quickstart/Paper demo documentation) is the next
+  dependency-ready recommendation; it remains unclaimed. Production alert
+  deployment and deferred owner decisions are not part of this completion.
 
 ##### Execution envelope: P08-T13 fail-closed fault matrix
 
