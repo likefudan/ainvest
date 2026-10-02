@@ -3923,7 +3923,7 @@ task row is in the cross-cutting table below.
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
-| `P08-T9` | `not_started` | `P03-T0`–`P03-T5` | `docs/strategy-plugin-guide.md`, starter template, external-package conformance test |
+| `P08-T9` | `in_progress` | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
@@ -3936,14 +3936,41 @@ merged in #117 under the execution envelope above. Its exact 11-command
 display surface remains unusable for trading.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
-closed. `P08-T8` is merged; `P08-T9` is dependency-ready but
-remains unclaimed.
+closed. `P08-T8` is merged; `P08-T9` is claimed below.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
 `docs/testing.md` rows, and may not own an entire test directory. `P08-T4`
 follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 `P08-T13` is claimed now that the Paper approval implementation is merged.
+
+##### Execution envelope: P08-T9 external strategy plugin guide
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-02. Owner
+  authorized continued independent progress until an owner-only decision or
+  action is needed; no repetitive independent-agent review.
+- **Branch / immutable base:** claim `agent/p08-t9-claim` from
+  `ef5b37d15d76967d943224abf80c63ec82a7c840`; implementation branch
+  `agent/p08-t9-plugin-guide` starts at the exact resulting claim merge.
+- **Dependencies:** P03-T0 through P03-T5 are merged. P08-T8 Quickstart is merged.
+- **Allowed paths:** new `docs/strategy-plugin-guide.md`,
+  `examples/strategy-plugin/**`, and
+  `tests/integration/strategies/test_external_plugin_template.py`; narrowly
+  update `docs/strategy-conformance.md` installation/CI guidance and README's
+  plugin-guide link; coordinator-owned tracker only. No shared runtime,
+  dependency/lock, schema or migration edits.
+- **Delivery:** installable standalone, disabled-by-default HOLD-only teaching
+  plugin; complete metadata/entry point/parameter/state/YAML example; guide for
+  isolated evaluation, deterministic as_of behavior, no-future-data rules,
+  versioning, allowlists, CI, upgrades and common invalid examples. Build a wheel
+  from a copied external template and prove actual installed entry-point
+  discovery, YAML binding and full conformance outside the repository.
+- **Safety / verification:** no selected live strategy, real risk limits,
+  provider credentials, network calls by strategies or broker capabilities.
+  Imports/discovery of plugins are trusted-code execution, not a sandbox.
+  Use deterministic temporary installs, canonical setup/verify, failure-path
+  template tests, link/scope/secret review and required current-head CI.
+  Deferred owner decisions and the P04-T2 owner pause remain unchanged.
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
