@@ -2634,7 +2634,7 @@ preserved as history; this dated resumption supersedes them.
 
 ##### Execution envelope: P04-T2 SEC filing and fundamental adapter
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-03; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-03; owner
   explicitly resumed the paused SEC research chain. Root self-review, no
   repetitive independent review agents.
 - **Branch / immutable base:** resumption/claim `agent/p04-t2-resume` from
@@ -2689,6 +2689,12 @@ preserved as history; this dated resumption supersedes them.
 - **Owner-assisted validation remaining:** provide legitimate contact identity
   outside Git and a verified company/instrument mapping before an actual public
   SEC capture. Synthetic acceptance does not claim real-source validation.
+- **Merge:** #181, squash `efa0d8db58f898e2523d5479bd884e93e16292aa`;
+  Verify, Secret scan, Dependency audit, SAST and CodeQL passed at the merged
+  head. Completion branch `agent/p04-t2-complete` starts at that exact commit;
+  tracker-only update. P04-T3's code dependencies are now satisfied but require
+  a separate claim. Real SEC capture remains disabled pending legitimate
+  contact identity; this is not a new blanket pause on offline research work.
 
 All provider tests use recorded fixtures or deterministic fakes; canonical
 tests must not require public network access. Under `DEC-003`, development data
@@ -2698,7 +2704,7 @@ can never become a live quote fallback.
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
-| `P04-T2` | `in_review` (owner resumed 2026-10-02) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
+| `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
