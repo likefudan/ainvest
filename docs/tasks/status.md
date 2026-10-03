@@ -2612,9 +2612,12 @@ work may start before Gates 1–4 and the later live prerequisites pass.
 Robinhood MCP remains the only live quote source; failure never falls back to
 Alpaca, yfinance, or another provider.
 
-Per owner instruction on 2026-07-29, `P04-T2` remains `not_started`,
-unclaimed, and paused; no background worktree or implementation agent should
-be started for it. On 2026-08-12 the owner explicitly lifted the separate
+Historical pause: per owner instruction on 2026-07-29, `P04-T2` was left
+unclaimed and paused. On 2026-10-02, in direct response to the question whether
+to lift that pause and continue the SEC research chain, the owner said
+“开始”. The pause is now lifted and P04-T2 is claimed below. This is not
+authorization for Live, paid services, guessed contact identity or API budgets.
+On 2026-08-12 the owner explicitly lifted the separate
 `P05-T4` pause and authorized the serial Telegram transport chain to begin with
 that task only. Now that the `P06-T2` Part 1 display-only CLI, the
 `P05-T4`/`P05-T5` transport, and P05-T10 provisioning/validation boundary are
@@ -2624,9 +2627,44 @@ capabilities. Staging Bot/status/accounts/quote validation is verified;
 P05-T11 account binding and P05-T9 history sizing are merged, and their staging
 acceptance is complete. Production Bot validation remains pending under
 proposed `DEC-010`.
-The unrelated `P04-T2` pause remains in force.
+The historical P04-T2 pause references elsewhere in completed envelopes are
+preserved as history; this dated resumption supersedes them.
 
 #### Research track — `P04-T0` through `P04-T12`
+
+##### Execution envelope: P04-T2 SEC filing and fundamental adapter
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-02; owner
+  explicitly resumed the paused SEC research chain. Root self-review, no
+  repetitive independent review agents.
+- **Branch / immutable base:** resumption/claim `agent/p04-t2-resume` from
+  `14de97ba1534af11a47c0dc106bef2d2a0f2b3af`; implementation
+  `agent/p04-t2-sec` starts at the exact resulting claim merge.
+- **Dependencies:** P04-T0 merged; reuse existing filing, reporting-period,
+  evidence, provenance and SEC fundamental observation models.
+- **Allowed paths:** `src/ainvest/data/providers/sec.py`,
+  `tests/unit/data/test_sec_provider.py`, `tests/contract/data/test_sec_provider.py`,
+  `tests/fixtures/sec/**`, `docs/sec-data-adapter.md`; narrow SEC section in
+  `docs/data-adapters.md`; coordinator-owned tracker and only the stale pause
+  statements in `IMPLEMENTATION_TODO.md`. No shared schema/port, dependency/lock,
+  migration, broker, Telegram, staging service or secret changes.
+- **Delivery:** bounded SEC EDGAR public-data transport and deterministic
+  normalization with injected canonical instrument/CIK mapping; 10-K/10-Q/8-K/
+  Form 4 metadata, selected accession-bound XBRL facts with explicit units and
+  reporting periods, cached citation locations, unknown earnings-time certainty.
+  Prefer existing models and optional research dependencies. Distinguish the
+  capture time from the requested knowledge cutoff; no fabricated historic
+  receipt times or annual/quarterly mixing. No live quotes or broker identity
+  inferred from a ticker/CIK.
+- **Safety / verification:** official SEC host allowlist, declared caller contact
+  identity, bounded rate/deadline/body limits and no automatic retry storms;
+  fixed synthetic SEC-shaped fixtures and fake transports only in CI. Preserve
+  source/receipt times in cached observations; reject missing/conflicting units,
+  periods, mappings and future evidence. Run canonical setup/verify and root
+  scope/security review before merge. Actual SEC requests require a legitimate
+  owner-provided contact identity; do not guess or expose it in logs.
+- **Not authorized:** paid data, new accounts, real OpenAI calls/budgets,
+  operational strategy selection, risk limits, remote operator access or Live.
 
 All provider tests use recorded fixtures or deterministic fakes; canonical
 tests must not require public network access. Under `DEC-003`, development data
@@ -2636,7 +2674,7 @@ can never become a live quote fallback.
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
-| `P04-T2` | `not_started` (owner-paused/unclaimed) | `P04-T0` | `data/providers/sec.py`; filing/XBRL fixtures and tests; provider dependency/config changes only when assigned |
+| `P04-T2` | `in_progress` (owner resumed 2026-10-02) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope below |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
