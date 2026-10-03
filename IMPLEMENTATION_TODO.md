@@ -2802,7 +2802,7 @@ line.
 ### Batch E — Parallel Tracks After Gate 1
 
 - Research topology: P04-T0 through P04-T8 -> P04-T9 through P04-T11 ->
-  P04-T12; dispatch is currently paused at P04-T2.
+  P04-T12; the owner resumed dispatch at P04-T2 on 2026-10-02.
 - Paper approval topology: P05-T0 -> P05-T4 -> P05-T5, while P05-T0 -> P05-T1
   -> P05-T6 is a separate branch; both branches join at P05-T8. The owner
   lifted the P05-T4 pause on 2026-08-12; P05-T4 and P05-T5 are now merged.
@@ -2826,9 +2826,9 @@ line.
   squash-merged on 2026-08-12 and `P05-T5` subsequently squash-merged through
   #123/#124; P05-T10 subsequently merged through #135/#136, and P05-T9 through
   #138/#139 after the #140 prerequisite security fix and post-rebase review.
-  By owner
-  instruction, `P04-T2` and its dependent chain remain paused and unclaimed;
-  they may not start until the owner/coordinator explicitly resumes them.
+  The historical owner pause of `P04-T2` and its dependent chain was explicitly
+  lifted on 2026-10-02. Resume serially at P04-T2 under its tracker envelope;
+  downstream tasks still require their own dependencies and scope claims.
 
 ### Batch F — Robinhood Preview First, Gate 4 Later
 
