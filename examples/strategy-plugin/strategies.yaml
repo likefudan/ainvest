@@ -1,0 +1,18 @@
+# Synthetic binding example only. Do not enable without accepted DEC-011/012.
+schema_version: "1"
+strategies:
+  - id: starter_paper_example
+    plugin: starter_hold
+    strategy: starter_hold
+    plugin_version: "0.1.0"
+    enabled: false
+    universe:
+      symbols: [AAPL]
+      timeframe: 1d
+    parameters:
+      ttl_seconds: 1800
+    schedule:
+      run_at: market_close_minus_15m
+    constraints:
+      research_max_age: 30m
+      signal_ttl: 30m

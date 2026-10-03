@@ -1,0 +1,16 @@
+[build-system]
+requires = ["hatchling>=1.27,<2"]
+build-backend = "hatchling.build"
+
+[project]
+name = "ainvest-starter-hold"
+version = "0.1.0"
+description = "Disabled HOLD-only teaching plugin; not an investment strategy"
+requires-python = ">=3.12"
+dependencies = ["ainvest>=0.1,<0.2"]
+
+[project.entry-points."ainvest.strategies"]
+starter_hold = "ainvest_starter.plugin:plugin"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/ainvest_starter"]

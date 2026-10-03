@@ -173,10 +173,11 @@ orders. First-release scope is US-listed stocks/ETFs, with limit orders preferre
   [read-account binding](docs/robinhood-account-binding.md) and optional
   [Telegram query adapter](docs/telegram-read-queries.md). Even `ready=true`
   or `tradable=true` in provider data is not approval or execution authority.
-- **Strategy development:** use the existing [conformance guide](docs/strategy-conformance.md)
-  and [reference plugin](src/ainvest/strategies/reference/moving_average).
-  Follow the checked-out source/development installation above; the separate
-  end-to-end external-plugin starter guide remains P08-T9 work.
+- **Strategy development:** start with the [external plugin developer guide](docs/strategy-plugin-guide.md)
+  and [disabled HOLD-only starter](examples/strategy-plugin), then the
+  [conformance reference](docs/strategy-conformance.md) and
+  [moving-average example](src/ainvest/strategies/reference/moving_average).
+  Plugin installation and passing tests never enable an operational instance.
 - **Operations/security:** review the [threat model](docs/security/threat-model.md),
   [control matrix](docs/security/control-matrix.md), [observability](docs/observability.md),
   and [funds-safety incident runbook](docs/runbooks/incidents/README.md).
