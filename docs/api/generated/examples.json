@@ -1,0 +1,32 @@
+{
+  "WorkflowCommand": {
+    "actor_id": "system",
+    "actor_kind": "system",
+    "causation_id": null,
+    "command_id": "cmd_example0001",
+    "command_type": "SIZE_POSITION",
+    "correlation_id": "corr_example0001",
+    "idempotency_id": "idem_example0001",
+    "input_digest": null,
+    "issued_at": "2026-10-01T12:00:00Z",
+    "portfolio_snapshot_id": null,
+    "schema_version": "1.0",
+    "signal_id": "sig_example0001",
+    "sizing_config_digest": null
+  },
+  "WorkflowEvent": {
+    "candidate_id": "cand_example0001",
+    "causation_id": "cmd_example0001",
+    "correlation_id": "corr_example0001",
+    "event_id": "evt_example0001",
+    "event_type": "POSITION_SIZED",
+    "idempotency_id": "idem_example0001",
+    "occurred_at": "2026-10-01T12:00:01Z",
+    "outcome": "SUCCEEDED",
+    "output_digest": null,
+    "reason": null,
+    "reason_code": null,
+    "schema_version": "1.0",
+    "signal_id": "sig_example0001"
+  }
+}

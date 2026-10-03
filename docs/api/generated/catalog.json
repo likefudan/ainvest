@@ -1,0 +1,279 @@
+{
+  "cancel": {
+    "edges": [
+      [
+        "CANCEL_RECONCILING",
+        "CANCEL_CONFIRMED"
+      ],
+      [
+        "CANCEL_RECONCILING",
+        "CANCEL_MANUAL_REVIEW"
+      ],
+      [
+        "CANCEL_RECONCILING",
+        "CANCEL_NOT_APPLIED"
+      ],
+      [
+        "CANCEL_REQUESTED",
+        "CANCEL_CONFIRMED"
+      ],
+      [
+        "CANCEL_REQUESTED",
+        "CANCEL_REJECTED"
+      ],
+      [
+        "CANCEL_REQUESTED",
+        "CANCEL_UNKNOWN"
+      ],
+      [
+        "CANCEL_UNKNOWN",
+        "CANCEL_RECONCILING"
+      ]
+    ],
+    "recovery_only": {
+      "CANCEL_UNKNOWN": [
+        "CANCEL_RECONCILING"
+      ]
+    },
+    "states": [
+      "CANCEL_CONFIRMED",
+      "CANCEL_MANUAL_REVIEW",
+      "CANCEL_NOT_APPLIED",
+      "CANCEL_RECONCILING",
+      "CANCEL_REJECTED",
+      "CANCEL_REQUESTED",
+      "CANCEL_UNKNOWN"
+    ],
+    "terminal": [
+      "CANCEL_CONFIRMED",
+      "CANCEL_MANUAL_REVIEW",
+      "CANCEL_NOT_APPLIED",
+      "CANCEL_REJECTED"
+    ]
+  },
+  "codes": {
+    "approval_handoff": [
+      "already_consumed",
+      "dispatched",
+      "execution_rejected",
+      "not_found",
+      "policy_rejected",
+      "retry_later"
+    ],
+    "approval_service": [
+      "APPROVAL_ACCOUNT_SCOPE_MISMATCH",
+      "APPROVAL_EVENT_CONFLICT",
+      "CHALLENGE_ALREADY_USED",
+      "CHALLENGE_INTEGRITY_FAILED",
+      "CHALLENGE_NOT_FOUND",
+      "FORBIDDEN_APPROVAL_SCOPE",
+      "INVALID_APPROVAL_DECISION",
+      "INVALID_APPROVAL_EVENT",
+      "INVALID_APPROVAL_TOKEN",
+      "INVALID_APPROVAL_TTL",
+      "PROPOSAL_EXPIRES_TOO_SOON",
+      "PROPOSAL_INTEGRITY_FAILED",
+      "PROPOSAL_NOT_FOUND",
+      "RISK_CANDIDATE_MISMATCH",
+      "RISK_CONFIG_DIGEST_MISMATCH",
+      "RISK_CONFIG_MISMATCH",
+      "RISK_CONTEXT_MISMATCH",
+      "RISK_DECISION_ALREADY_USED",
+      "RISK_DECISION_TIME_MISMATCH",
+      "RISK_INPUT_DIGEST_MISMATCH",
+      "RISK_NOT_APPROVED",
+      "RISK_OUTPUT_INVALID",
+      "RISK_PHASE_MISMATCH",
+      "RISK_PROPOSAL_MISMATCH"
+    ],
+    "broker": [
+      "AUTH",
+      "INVALID_ORDER",
+      "RATE_LIMIT",
+      "REJECTED",
+      "TIMEOUT",
+      "UNKNOWN_OUTCOME"
+    ],
+    "telegram_approval": [
+      "already_used",
+      "approved",
+      "expired",
+      "invalid"
+    ],
+    "workflow_outcome": [
+      "CANCEL_UNKNOWN",
+      "NEEDS_REVIEW",
+      "REJECTED",
+      "SUBMIT_UNKNOWN",
+      "SUCCEEDED",
+      "UNKNOWN"
+    ]
+  },
+  "commands": {
+    "CANCEL_ORDER": {
+      "event": "ORDER_CANCELLED",
+      "model": "CancelOrderCommand",
+      "retry": "BROKER_WRITE"
+    },
+    "CONSUME_APPROVAL": {
+      "event": "APPROVAL_CONSUMED",
+      "model": "ConsumeApprovalCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "CREATE_PROPOSAL": {
+      "event": "PROPOSAL_CREATED",
+      "model": "CreateProposalCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "EVALUATE_RISK": {
+      "event": "RISK_EVALUATED",
+      "model": "EvaluateRiskCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "EVALUATE_STRATEGY": {
+      "event": "STRATEGY_EVALUATED",
+      "model": "EvaluateStrategyCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "EXECUTE_ORDER": {
+      "event": "ORDER_EXECUTED",
+      "model": "ExecuteOrderCommand",
+      "retry": "BROKER_WRITE"
+    },
+    "RECONCILE": {
+      "event": "RECONCILED",
+      "model": "ReconcileCommand",
+      "retry": "READ_ONLY_EXTERNAL"
+    },
+    "REQUEST_APPROVAL": {
+      "event": "APPROVAL_REQUESTED",
+      "model": "RequestApprovalCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "RESOLVE_MANUAL_REVIEW": {
+      "event": "MANUAL_REVIEW_RESOLVED",
+      "model": "ResolveManualReviewCommand",
+      "retry": "PURE_RETRYABLE"
+    },
+    "SIZE_POSITION": {
+      "event": "POSITION_SIZED",
+      "model": "SizePositionCommand",
+      "retry": "PURE_RETRYABLE"
+    }
+  },
+  "order": {
+    "edges": [
+      [
+        "APPROVAL_PENDING",
+        "APPROVAL_EXPIRED"
+      ],
+      [
+        "APPROVAL_PENDING",
+        "APPROVAL_REJECTED"
+      ],
+      [
+        "APPROVAL_PENDING",
+        "APPROVED"
+      ],
+      [
+        "APPROVED",
+        "PRE_TRADE_REJECTED"
+      ],
+      [
+        "APPROVED",
+        "SUBMITTING"
+      ],
+      [
+        "PARTIALLY_FILLED",
+        "CANCELLED"
+      ],
+      [
+        "PARTIALLY_FILLED",
+        "FILLED"
+      ],
+      [
+        "PROPOSAL_CREATED",
+        "APPROVAL_PENDING"
+      ],
+      [
+        "RECONCILING",
+        "MANUAL_REVIEW"
+      ],
+      [
+        "RECONCILING",
+        "SUBMITTED"
+      ],
+      [
+        "SIGNAL_CREATED",
+        "PROPOSAL_CREATED"
+      ],
+      [
+        "SIGNAL_CREATED",
+        "RISK_REJECTED"
+      ],
+      [
+        "SUBMITTED",
+        "CANCELLED"
+      ],
+      [
+        "SUBMITTED",
+        "FILLED"
+      ],
+      [
+        "SUBMITTED",
+        "PARTIALLY_FILLED"
+      ],
+      [
+        "SUBMITTED",
+        "REJECTED"
+      ],
+      [
+        "SUBMITTING",
+        "SUBMITTED"
+      ],
+      [
+        "SUBMITTING",
+        "SUBMIT_UNKNOWN"
+      ],
+      [
+        "SUBMIT_UNKNOWN",
+        "RECONCILING"
+      ]
+    ],
+    "recovery_only": {
+      "SUBMIT_UNKNOWN": [
+        "RECONCILING"
+      ]
+    },
+    "states": [
+      "APPROVAL_EXPIRED",
+      "APPROVAL_PENDING",
+      "APPROVAL_REJECTED",
+      "APPROVED",
+      "CANCELLED",
+      "FILLED",
+      "MANUAL_REVIEW",
+      "PARTIALLY_FILLED",
+      "PRE_TRADE_REJECTED",
+      "PROPOSAL_CREATED",
+      "RECONCILING",
+      "REJECTED",
+      "RISK_REJECTED",
+      "SIGNAL_CREATED",
+      "SUBMITTED",
+      "SUBMITTING",
+      "SUBMIT_UNKNOWN"
+    ],
+    "terminal": [
+      "APPROVAL_EXPIRED",
+      "APPROVAL_REJECTED",
+      "CANCELLED",
+      "FILLED",
+      "MANUAL_REVIEW",
+      "PRE_TRADE_REJECTED",
+      "REJECTED",
+      "RISK_REJECTED"
+    ]
+  },
+  "purpose": "internal data contracts; not HTTP endpoints or execution authorization"
+}

@@ -181,6 +181,9 @@ orders. First-release scope is US-listed stocks/ETFs, with limit orders preferre
 - **Operations/security:** review the [threat model](docs/security/threat-model.md),
   [control matrix](docs/security/control-matrix.md), [observability](docs/observability.md),
   and [funds-safety incident runbook](docs/runbooks/incidents/README.md).
+- **Integration contracts:** use the [schema, state and audit reference](docs/api/README.md)
+  for generated internal message contracts and guarded, redacted query examples;
+  these are not remote execution APIs.
 
 Live is not a quickstart option. It requires completed/reviewed execution and
 reconciliation gates, verified account/instrument/session evidence, owner-set

@@ -1,0 +1,1603 @@
+{
+  "$defs": {
+    "ApprovalConsumedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "approval_event_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Approval Event Id"
+        },
+        "approved": {
+          "title": "Approved",
+          "type": "boolean"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "challenge_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Challenge Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "APPROVAL_CONSUMED",
+          "default": "APPROVAL_CONSUMED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "challenge_id",
+        "proposal_id",
+        "approved"
+      ],
+      "title": "ApprovalConsumedEvent",
+      "type": "object"
+    },
+    "ApprovalRequestedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "challenge_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Challenge Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "APPROVAL_REQUESTED",
+          "default": "APPROVAL_REQUESTED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "challenge_id",
+        "proposal_id"
+      ],
+      "title": "ApprovalRequestedEvent",
+      "type": "object"
+    },
+    "CommandOutcome": {
+      "description": "Coarse business outcome for a dispatched command.",
+      "enum": [
+        "SUCCEEDED",
+        "REJECTED",
+        "NEEDS_REVIEW",
+        "UNKNOWN",
+        "SUBMIT_UNKNOWN",
+        "CANCEL_UNKNOWN"
+      ],
+      "title": "CommandOutcome",
+      "type": "string"
+    },
+    "CommandRejectedEvent": {
+      "additionalProperties": false,
+      "description": "Generic rejection when a handler fails closed before producing a typed result.",
+      "properties": {
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "command_type": {
+          "$ref": "#/$defs/CommandType"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "COMMAND_REJECTED",
+          "default": "COMMAND_REJECTED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Subject Id"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "command_type"
+      ],
+      "title": "CommandRejectedEvent",
+      "type": "object"
+    },
+    "CommandType": {
+      "description": "Stable command type codes for orchestrators, workers, and APIs.",
+      "enum": [
+        "EVALUATE_STRATEGY",
+        "SIZE_POSITION",
+        "EVALUATE_RISK",
+        "CREATE_PROPOSAL",
+        "REQUEST_APPROVAL",
+        "CONSUME_APPROVAL",
+        "EXECUTE_ORDER",
+        "CANCEL_ORDER",
+        "RESOLVE_MANUAL_REVIEW",
+        "RECONCILE"
+      ],
+      "title": "CommandType",
+      "type": "string"
+    },
+    "ManualReviewResolution": {
+      "description": "Operator resolution for ``MANUAL_REVIEW`` order/cancel states.",
+      "enum": [
+        "CONFIRM_SUBMITTED",
+        "CONFIRM_CANCELLED",
+        "CONFIRM_REJECTED",
+        "CONFIRM_NOT_APPLIED",
+        "KEEP_MANUAL_REVIEW"
+      ],
+      "title": "ManualReviewResolution",
+      "type": "string"
+    },
+    "ManualReviewResolvedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "MANUAL_REVIEW_RESOLVED",
+          "default": "MANUAL_REVIEW_RESOLVED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "resolution": {
+          "$ref": "#/$defs/ManualReviewResolution"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "subject_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Subject Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "subject_id",
+        "resolution"
+      ],
+      "title": "ManualReviewResolvedEvent",
+      "type": "object"
+    },
+    "OrderCancelledEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "broker_order_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Broker Order Id",
+          "type": "string"
+        },
+        "cancel_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Cancel Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "ORDER_CANCELLED",
+          "default": "ORDER_CANCELLED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "cancel_id",
+        "proposal_id",
+        "broker_order_id"
+      ],
+      "title": "OrderCancelledEvent",
+      "type": "object"
+    },
+    "OrderExecutedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "broker_order_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 3,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Broker Order Id"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "client_order_id": {
+          "maxLength": 128,
+          "minLength": 3,
+          "title": "Client Order Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "ORDER_EXECUTED",
+          "default": "ORDER_EXECUTED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "proposal_id",
+        "client_order_id"
+      ],
+      "title": "OrderExecutedEvent",
+      "type": "object"
+    },
+    "PositionSizedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "POSITION_SIZED",
+          "default": "POSITION_SIZED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Signal Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "signal_id"
+      ],
+      "title": "PositionSizedEvent",
+      "type": "object"
+    },
+    "ProposalCreatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Candidate Id",
+          "type": "string"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "PROPOSAL_CREATED",
+          "default": "PROPOSAL_CREATED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "order_hash": {
+          "maxLength": 71,
+          "minLength": 71,
+          "pattern": "^sha256:[a-f0-9]{64}$",
+          "title": "Order Hash",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Proposal Id",
+          "type": "string"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "risk_decision_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Risk Decision Id",
+          "type": "string"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "proposal_id",
+        "candidate_id",
+        "risk_decision_id",
+        "order_hash"
+      ],
+      "title": "ProposalCreatedEvent",
+      "type": "object"
+    },
+    "ReconciledEvent": {
+      "additionalProperties": false,
+      "description": "Result stub for reconcile commands (full matching lives in P03-T15).",
+      "properties": {
+        "broker_order_id": {
+          "anyOf": [
+            {
+              "maxLength": 128,
+              "minLength": 3,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Broker Order Id"
+        },
+        "cancel_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Cancel Id"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "RECONCILED",
+          "default": "RECONCILED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposal Id"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "reconciliation_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reconciliation Id"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome"
+      ],
+      "title": "ReconciledEvent",
+      "type": "object"
+    },
+    "RiskEvaluatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "candidate_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Candidate Id"
+        },
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "RISK_EVALUATED",
+          "default": "RISK_EVALUATED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "proposal_id": {
+          "anyOf": [
+            {
+              "maxLength": 160,
+              "minLength": 8,
+              "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Proposal Id"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "risk_decision_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Risk Decision Id",
+          "type": "string"
+        },
+        "risk_outcome": {
+          "$ref": "#/$defs/RiskOutcome"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "risk_decision_id",
+        "risk_outcome"
+      ],
+      "title": "RiskEvaluatedEvent",
+      "type": "object"
+    },
+    "RiskOutcome": {
+      "description": "Aggregated risk decision outcomes.",
+      "enum": [
+        "APPROVED",
+        "NEEDS_REVIEW",
+        "REJECTED"
+      ],
+      "title": "RiskOutcome",
+      "type": "string"
+    },
+    "StrategyEvaluatedEvent": {
+      "additionalProperties": false,
+      "properties": {
+        "causation_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^(cmd|evt|corr)_[A-Za-z0-9_-]{8,128}$",
+          "title": "Causation Id",
+          "type": "string"
+        },
+        "correlation_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^corr_[A-Za-z0-9_-]{8,128}$",
+          "title": "Correlation Id",
+          "type": "string"
+        },
+        "event_id": {
+          "maxLength": 133,
+          "minLength": 12,
+          "pattern": "^evt_[A-Za-z0-9_-]{8,128}$",
+          "title": "Event Id",
+          "type": "string"
+        },
+        "event_type": {
+          "const": "STRATEGY_EVALUATED",
+          "default": "STRATEGY_EVALUATED",
+          "title": "Event Type",
+          "type": "string"
+        },
+        "idempotency_id": {
+          "maxLength": 133,
+          "minLength": 13,
+          "pattern": "^idem_[A-Za-z0-9_-]{8,128}$",
+          "title": "Idempotency Id",
+          "type": "string"
+        },
+        "occurred_at": {
+          "description": "Timezone-aware UTC timestamp serialized with a trailing Z.",
+          "format": "date-time",
+          "pattern": "(?:Z|[+-]\\d{2}:\\d{2})$",
+          "title": "Occurred At",
+          "type": "string"
+        },
+        "outcome": {
+          "$ref": "#/$defs/CommandOutcome"
+        },
+        "output_digest": {
+          "anyOf": [
+            {
+              "maxLength": 71,
+              "minLength": 71,
+              "pattern": "^sha256:[a-f0-9]{64}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Output Digest"
+        },
+        "reason": {
+          "anyOf": [
+            {
+              "maxLength": 512,
+              "minLength": 1,
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason"
+        },
+        "reason_code": {
+          "anyOf": [
+            {
+              "maxLength": 64,
+              "minLength": 2,
+              "pattern": "^[A-Z][A-Z0-9_]{1,63}$",
+              "type": "string"
+            },
+            {
+              "type": "null"
+            }
+          ],
+          "default": null,
+          "title": "Reason Code"
+        },
+        "schema_version": {
+          "const": "1.0",
+          "default": "1.0",
+          "title": "Schema Version",
+          "type": "string"
+        },
+        "signal_ids": {
+          "default": [],
+          "items": {
+            "maxLength": 160,
+            "minLength": 8,
+            "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+            "type": "string"
+          },
+          "title": "Signal Ids",
+          "type": "array"
+        },
+        "strategy_run_id": {
+          "maxLength": 160,
+          "minLength": 8,
+          "pattern": "^[a-z][a-z0-9_]{1,12}_[A-Za-z0-9_-]{4,128}$",
+          "title": "Strategy Run Id",
+          "type": "string"
+        }
+      },
+      "required": [
+        "event_id",
+        "correlation_id",
+        "causation_id",
+        "idempotency_id",
+        "occurred_at",
+        "outcome",
+        "strategy_run_id"
+      ],
+      "title": "StrategyEvaluatedEvent",
+      "type": "object"
+    }
+  },
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "anyOf": [
+    {
+      "$ref": "#/$defs/StrategyEvaluatedEvent"
+    },
+    {
+      "$ref": "#/$defs/PositionSizedEvent"
+    },
+    {
+      "$ref": "#/$defs/RiskEvaluatedEvent"
+    },
+    {
+      "$ref": "#/$defs/ProposalCreatedEvent"
+    },
+    {
+      "$ref": "#/$defs/ApprovalRequestedEvent"
+    },
+    {
+      "$ref": "#/$defs/ApprovalConsumedEvent"
+    },
+    {
+      "$ref": "#/$defs/OrderExecutedEvent"
+    },
+    {
+      "$ref": "#/$defs/OrderCancelledEvent"
+    },
+    {
+      "$ref": "#/$defs/ManualReviewResolvedEvent"
+    },
+    {
+      "$ref": "#/$defs/ReconciledEvent"
+    },
+    {
+      "$ref": "#/$defs/CommandRejectedEvent"
+    }
+  ]
+}
