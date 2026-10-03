@@ -165,6 +165,15 @@ implemented capability, then add provider-specific response-normalization
 tests. Contract tests must never depend on public network availability or real
 credentials.
 
+## SEC primary filing adapter
+
+`SecEdgarAdapter` exposes ordinary fundamentals and cached 10-K/10-Q/8-K/Form 4
+metadata from an explicit SEC capture. It preserves accession-bound citations,
+exact periods/currencies and capture-time provenance, and never supplies live
+quotes or inferred broker identity. `SecFundamentalPage` retains filing fields
+in serialized results. See [SEC adapter scope and activation](sec-data-adapter.md)
+for partial coverage, contact identity, transport limits and deterministic tests.
+
 ## Yahoo development-only adapter
 
 `YahooDevelopmentAdapter` is an optional `yfinance` adapter for local

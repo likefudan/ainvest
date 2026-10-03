@@ -2634,12 +2634,14 @@ preserved as history; this dated resumption supersedes them.
 
 ##### Execution envelope: P04-T2 SEC filing and fundamental adapter
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-02; owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-03; owner
   explicitly resumed the paused SEC research chain. Root self-review, no
   repetitive independent review agents.
 - **Branch / immutable base:** resumption/claim `agent/p04-t2-resume` from
   `14de97ba1534af11a47c0dc106bef2d2a0f2b3af`; implementation
   `agent/p04-t2-sec` starts at the exact resulting claim merge.
+  Claim #180 merged; implementation base is
+  `dcf6a4d914c4d61b8f98783dc500bbf12a49d8b1`.
 - **Dependencies:** P04-T0 merged; reuse existing filing, reporting-period,
   evidence, provenance and SEC fundamental observation models.
 - **Allowed paths:** `src/ainvest/data/providers/sec.py`,
@@ -2665,6 +2667,28 @@ preserved as history; this dated resumption supersedes them.
   owner-provided contact identity; do not guess or expose it in logs.
 - **Not authorized:** paid data, new accounts, real OpenAI calls/budgets,
   operational strategy selection, risk limits, remote operator access or Live.
+- **Implementation:** direct official EDGAR submissions/Company Facts JSON via
+  the existing optional HTTPX dependency; no SDK-global identity, inference,
+  dependency or lock changes. Immutable per-company capture caches metadata and
+  accession references; query cutoffs cannot predate capture. Exact periods,
+  duration/instant context and reporting currencies remain separate; older
+  comparative facts are omitted rather than assigned current filing fiscal
+  labels. All results are explicitly partial, earnings timing unknown.
+  Provider-local `SecFundamentalPage` preserves filing fields during JSON
+  serialization without changing shared schemas/ports.
+- **Verification:** canonical setup/verify passed on 2026-10-03: 1684 unit,
+  244 contract, 67 integration, 2013 aggregate; one pre-existing optional
+  Telegram-runtime skip, no skipped live-safety gate; mypy 288 files; aggregate
+  coverage 87.18%, SEC adapter 89%. Tests cover four forms, exact decimal JSON,
+  accession/context conflicts, missing units/periods, comparative exclusion,
+  currencies, future/naive times, immutable input ownership, bound pagination,
+  explicit identity, fixed hosts, redirects/no retry, typed 403/404/429/errors,
+  timeout sanitization, size bounds, duplicate JSON and rate-wait deadline.
+  Root reviewed scoped changes and documented partial coverage; no real SEC
+  data request, contact identity, staging-service or database change occurred.
+- **Owner-assisted validation remaining:** provide legitimate contact identity
+  outside Git and a verified company/instrument mapping before an actual public
+  SEC capture. Synthetic acceptance does not claim real-source validation.
 
 All provider tests use recorded fixtures or deterministic fakes; canonical
 tests must not require public network access. Under `DEC-003`, development data
@@ -2674,7 +2698,7 @@ can never become a live quote fallback.
 |---|---|---|---|
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
-| `P04-T2` | `in_progress` (owner resumed 2026-10-02) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope below |
+| `P04-T2` | `in_review` (owner resumed 2026-10-02) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
