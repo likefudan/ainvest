@@ -23,10 +23,25 @@ def external_plugin(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Pat
     uv = shutil.which("uv")
     assert uv is not None, "canonical development setup requires uv"
     env = {"PATH": os.environ.get("PATH", os.defpath)}
+    # setup-uv uses a non-default cache on CI. Preserve only cache location
+    # settings for packaging, never the caller's credentials or full environment.
+    packaging_env = env | {
+        key: os.environ[key] for key in ("UV_CACHE_DIR", "XDG_CACHE_HOME") if key in os.environ
+    }
     build = subprocess.run(
-        [uv, "build", "--offline", "--wheel", "--out-dir", str(root / "wheels"), str(source)],
+        [
+            uv,
+            "build",
+            "--offline",
+            "--python",
+            sys.executable,
+            "--wheel",
+            "--out-dir",
+            str(root / "wheels"),
+            str(source),
+        ],
         cwd=root,
-        env=env,
+        env=packaging_env,
         capture_output=True,
         text=True,
         timeout=60,
@@ -49,7 +64,7 @@ def external_plugin(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, Pat
             str(wheel),
         ],
         cwd=root,
-        env=env,
+        env=packaging_env,
         capture_output=True,
         text=True,
         timeout=60,

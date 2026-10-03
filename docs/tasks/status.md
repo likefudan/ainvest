@@ -3987,6 +3987,12 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   aggregate; one existing optional Telegram-runtime skip (not live-safety);
   mypy 283 files; coverage 87.13%. Documentation links and diff checked; root
   reviewed scope and safety. No operational plugin was installed or enabled.
+- **CI portability correction:** #176's first Verify run exposed that the
+  scrubbed packaging environment discarded setup-uv's custom cache location.
+  Packaging now preserves only `UV_CACHE_DIR` / `XDG_CACHE_HOME` and explicitly
+  selects the current Python; worker probes still receive the minimal
+  credential-free environment. Offline mode remains mandatory. Canonical
+  verify passed again with the same 1951 passed / one existing optional skip.
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
