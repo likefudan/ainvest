@@ -3924,7 +3924,7 @@ task row is in the cross-cutting table below.
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
 | `P08-T9` | `merged` ([#176](https://github.com/likefudan/ainvest/pull/176)) | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
-| `P08-T11` | `in_progress` | `P02-T5`, `P02-T10`, `P05-T1` (merged) | generated internal contract reference and guarded redacted audit example; envelope below |
+| `P08-T11` | `in_review` | `P02-T5`, `P02-T10`, `P05-T1` (merged) | generated internal contract reference and guarded redacted audit example; envelope below |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
@@ -3947,11 +3947,13 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T11 integration contracts and audit reference
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-02. Continue
+- **Owner / status:** root coordinator, `in_review`, 2026-10-02. Continue
   independently under the owner's standing authorization; root self-review.
 - **Branch / immutable base:** claim `agent/p08-t11-claim` from
   `086c838e19d167e92a7d72d56f93a711da2db6fa`; implementation
   `agent/p08-t11-api-reference` starts at the exact resulting claim merge.
+  Claim #177 merged; implementation base is
+  `50508ccc2aa21764bc87fa7b61cb65b75e840f70`.
 - **Dependencies:** P02-T5, P02-T10 and P05-T1 are merged. Existing core JSON
   Schema exports and their CI validation remain authoritative.
 - **Allowed paths:** `docs/api/**`, new `scripts/export_api_reference.py`,
@@ -3971,6 +3973,23 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   tests, authorization-denial and redaction failure cases. Only synthetic data;
   no broker writes or real audit exports. DEC-018 remains deferred; P04-T2
   remains owner-paused and P06-T2 Part 2 blocked.
+- **Implementation evidence:** generated Draft 2020-12 command/event schemas,
+  synthetic message pair, exact state/edge/recovery and command retry mapping,
+  approval/Broker code catalog; core schema links rather than duplicate exports.
+  Guide distinguishes structural validation from semantic checks/authorization
+  and explicitly documents the absence of a public HTTP/OpenAPI application.
+  The audit recipe requires an explicit successful injected gate before reads,
+  emits keyed references and whitelisted enums only, and documents its bounded
+  local-use and production-auth limitations.
+- **Verification:** canonical setup/verify passed: 1649 unit, 243 contract,
+  67 integration, 1977 aggregate; one pre-existing optional Telegram-runtime
+  skip, no skipped live-safety gates; strict mypy 285 files; coverage 87.15%.
+  Generated check and missing/changed/extra artifact tests passed; external
+  schema validation covers valid pairs and invalid versions/fields/types/times/
+  IDs. Temporary-database tests cover selector scope, missing records, explicit
+  gate failure/non-boolean decisions, invalid selector/key, redaction and causal
+  linkage. Relative links and scope/diff reviewed by root. No real audit data
+  was read, exported or changed.
 
 ##### Execution envelope: P08-T9 external strategy plugin guide
 
