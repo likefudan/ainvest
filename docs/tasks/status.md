@@ -3923,7 +3923,8 @@ task row is in the cross-cutting table below.
 | `P08-T6` | `merged` ([#88](https://github.com/likefudan/ainvest/pull/88)) | `P01-T1` (satisfied) | `docs/security/control-matrix.md`; security tests and assigned CI scan changes |
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
-| `P08-T9` | `in_review` | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
+| `P08-T9` | `merged` ([#176](https://github.com/likefudan/ainvest/pull/176)) | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
+| `P08-T11` | `in_progress` | `P02-T5`, `P02-T10`, `P05-T1` (merged) | generated internal contract reference and guarded redacted audit example; envelope below |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
@@ -3936,7 +3937,7 @@ merged in #117 under the execution envelope above. Its exact 11-command
 display surface remains unusable for trading.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
-closed. `P08-T8` is merged; `P08-T9` is claimed below.
+closed. `P08-T8` and `P08-T9` are merged; `P08-T11` is claimed below.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
@@ -3944,9 +3945,36 @@ extends; every claim must enumerate its exact test files and matching
 follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 `P08-T13` is claimed now that the Paper approval implementation is merged.
 
+##### Execution envelope: P08-T11 integration contracts and audit reference
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-02. Continue
+  independently under the owner's standing authorization; root self-review.
+- **Branch / immutable base:** claim `agent/p08-t11-claim` from
+  `086c838e19d167e92a7d72d56f93a711da2db6fa`; implementation
+  `agent/p08-t11-api-reference` starts at the exact resulting claim merge.
+- **Dependencies:** P02-T5, P02-T10 and P05-T1 are merged. Existing core JSON
+  Schema exports and their CI validation remain authoritative.
+- **Allowed paths:** `docs/api/**`, new `scripts/export_api_reference.py`,
+  `tests/contract/test_api_reference_docs.py`,
+  `tests/integration/audit/test_documented_timeline.py`; README reference link
+  and coordinator-owned tracker only. No runtime, core schema, dependencies,
+  migration, CI workflow, secrets, provider or staging-service edits.
+- **Delivery:** generated command/event JSON Schemas, state/retry/error-code
+  catalog, compatibility/Decimal/UTC/idempotency guide and a tested redacted
+  audit query example for proposal/correlation selection. No public HTTP
+  application currently exists: document that honestly, with no invented
+  OpenAPI routes or remotely exposed execution commands. Audit example must
+  require an injected authorization gate before queries; it is not a production
+  identity provider or an independently secure endpoint.
+- **Verification / boundaries:** canonical setup/verify, deterministic artifact
+  drift checks, standards-based payload validation, temporary-database query
+  tests, authorization-denial and redaction failure cases. Only synthetic data;
+  no broker writes or real audit exports. DEC-018 remains deferred; P04-T2
+  remains owner-paused and P06-T2 Part 2 blocked.
+
 ##### Execution envelope: P08-T9 external strategy plugin guide
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-02. Owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-02. Owner
   authorized continued independent progress until an owner-only decision or
   action is needed; no repetitive independent-agent review.
 - **Branch / immutable base:** claim `agent/p08-t9-claim` from
@@ -3993,6 +4021,8 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   selects the current Python; worker probes still receive the minimal
   credential-free environment. Offline mode remains mandatory. Canonical
   verify passed again with the same 1951 passed / one existing optional skip.
+- **Merge:** #176, squash `086c838e19d167e92a7d72d56f93a711da2db6fa`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL passed.
 
 ##### Execution envelope: P08-T8 safe Quickstart
 
