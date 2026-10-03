@@ -3924,7 +3924,7 @@ task row is in the cross-cutting table below.
 | `P08-T7` | `merged` ([#82](https://github.com/likefudan/ainvest/pull/82)) | `P01-T4`, `P01-T1` | squash commit `00a274e2ab0d7fabfcf8e9cb7c0ef32f90292b1e`; handoff recorded above |
 | `P08-T8` | `merged` ([#173](https://github.com/likefudan/ainvest/pull/173)) | `P01-T2`–`P01-T4`, `P03-T17` (merged) | `README.md`; safe Quickstart/Paper demo documentation only; envelope below |
 | `P08-T9` | `merged` ([#176](https://github.com/likefudan/ainvest/pull/176)) | `P03-T0`–`P03-T5` (merged) | guide, starter template, external-package conformance test; envelope below |
-| `P08-T11` | `in_review` | `P02-T5`, `P02-T10`, `P05-T1` (merged) | generated internal contract reference and guarded redacted audit example; envelope below |
+| `P08-T11` | `merged` ([#178](https://github.com/likefudan/ainvest/pull/178)) | `P02-T5`, `P02-T10`, `P05-T1` (merged) | generated internal contract reference and guarded redacted audit example; envelope below |
 | `P08-T12` | `not_started` | incremental after each corresponding production card; not claimable as a broad umbrella | Coordinator-assigned, narrowly enumerated test files plus the matching `docs/testing.md` matrix rows only |
 | `P08-T13` | `completed` (2026-10-01) | `P02-T6`–`P02-T10`, `P03-T13`–`P03-T15`, `P05-T0`, `P05-T1`, `P05-T4`–`P05-T6` (all satisfied) | `tests/faults/**`; deterministic external-service, approval, execution, and worker fault/concurrency matrix; no production behavior change |
 | `P08-T14` | `not_started` | `P01-T1`, `P01-T4`, `P02-T8`, `P02-T10`, `P08-T7` | `admin/{auth,service}.py`, privileged API/CLI adapter, `docs/security/operator-access.md`, authorization/audit tests |
@@ -3937,7 +3937,7 @@ merged in #117 under the execution envelope above. Its exact 11-command
 display surface remains unusable for trading.
 `P08-T4`,
 `P04-T1`, and `P08-T6` are merged and their three-task execution claim is
-closed. `P08-T8` and `P08-T9` are merged; `P08-T11` is claimed below.
+closed. `P08-T8`, `P08-T9` and `P08-T11` are merged with evidence below.
 `P08-T12` is
 scheduled incrementally after the production card whose test matrix it
 extends; every claim must enumerate its exact test files and matching
@@ -3947,7 +3947,7 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
 
 ##### Execution envelope: P08-T11 integration contracts and audit reference
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-02. Continue
+- **Owner / status:** root coordinator, `merged`, 2026-10-02. Continue
   independently under the owner's standing authorization; root self-review.
 - **Branch / immutable base:** claim `agent/p08-t11-claim` from
   `086c838e19d167e92a7d72d56f93a711da2db6fa`; implementation
@@ -3990,6 +3990,13 @@ follows `P08-T3`; `P08-T5` follows `P08-T4`; `P08-T14` follows `P08-T7`;
   gate failure/non-boolean decisions, invalid selector/key, redaction and causal
   linkage. Relative links and scope/diff reviewed by root. No real audit data
   was read, exported or changed.
+- **Merge:** #178, squash `6fb53418fc4c9907ec3d2cacfdc0f768464a2554`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL passed.
+  Completion branch `agent/p08-t11-complete` starts at that exact commit and
+  changes only this tracker. Research-chain work still requires the owner to
+  explicitly lift P04-T2's recorded pause; no such lift is inferred from a
+  generic instruction to continue. Remote operator and Live work remain under
+  their separately deferred decisions.
 
 ##### Execution envelope: P08-T9 external strategy plugin guide
 
