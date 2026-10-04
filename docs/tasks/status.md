@@ -103,9 +103,40 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T6 bounded research narrative agent
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+  implementation authorized, root self-review only.
+- **Branch / immutable base:** claim `agent/p04-t6-claim` from
+  `7d89bf1a33c2b460f5b79826c13b55df7f747218`; implementation
+  `agent/p04-t6-research-agent` starts at the exact resulting claim merge.
+- **Authority / dependencies:** P04-T6, DEC-004/009; P04-T5 merged (#192).
+- **Allowed paths:** `src/ainvest/agents/research_agent.py`,
+  `src/ainvest/agents/research_models.py`, `src/ainvest/agents/prompts/**`,
+  `tests/unit/agents/test_research_agent.py`,
+  `tests/integration/test_research_agent_flow.py`,
+  `tests/unit/research_agent_fixtures.py`, `docs/research-agent.md`, narrow
+  link in `docs/research-tools.md`, `pyproject.toml` and `uv.lock` only for
+  existing research SDK test installation, coordinator-owned tracker.
+- **Delivery:** fixed gpt-5.6-sol Responses/Pydantic AI adapter, medium effort,
+  store=false, strict intermediate narrative, fresh context, deterministic
+  named read-only tools, bounded turns/tokens/duration/concurrency, at most
+  one explicitly transient retry and no fallback. Record versions, evidence,
+  request IDs, usage and input/output digests; reject trade instructions,
+  unsupported claims, invalid output, refusal and timeout.
+- **Verification:** offline fake-model and real SDK mock-transport tests,
+  safety/failure/limit/evidence cases; canonical setup/verify/audit and
+  current-head required CI. No credentials or actual API calls in tests.
+- **Owner gate:** DEC-009 remains proposed. Real API activation is disabled;
+  no project/key/budget is invented. This task implements only the library
+  and deterministic offline verification, not operational activation.
+- **Excluded:** shared domain schemas, data/tool-layer rewrites, broker,
+  approval, strategy, staging files/processes/secrets/databases, actual AI
+  calls, packet persistence (P04-T7), model upgrades and live trading.
+
 ## Execution envelope: P04-T5 deterministic research tools
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; owner
   explicitly authorized continuous progress until personal intervention is
   required. Root self-review; no independent review agents.
 - **Branch / immutable base:** claim `agent/p04-t5-claim` from
@@ -152,7 +183,9 @@ Last updated: 2026-09-30
   Canonical setup/verify passed: 1793 unit, 245 contract, 71 integration,
   2127 aggregate; one existing optional Telegram skip, no skipped live-safety
   tests; mypy 312 files, coverage 87.39%. No dependency changes. Root self-review
-  complete; required current-head CI pending. Thread lifetimes still depend on
+  complete. #192 squash `7d89bf1a33c2b460f5b79826c13b55df7f747218`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL passed.
+  Thread lifetimes still depend on
   trusted readers honoring their network timeouts; no operational wiring enabled.
 
 ## Status vocabulary
