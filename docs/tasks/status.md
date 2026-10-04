@@ -105,11 +105,12 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T6 bounded research narrative agent
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `in_review`, 2026-10-04; continuous
   implementation authorized, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t6-claim` from
   `7d89bf1a33c2b460f5b79826c13b55df7f747218`; implementation
   `agent/p04-t6-research-agent` starts at the exact resulting claim merge.
+  Claim #193 merged at `4beb3b9f1917cea8a6e518a169225cb5e5dd9b54`.
 - **Authority / dependencies:** P04-T6, DEC-004/009; P04-T5 merged (#192).
 - **Allowed paths:** `src/ainvest/agents/research_agent.py`,
   `src/ainvest/agents/research_models.py`, `src/ainvest/agents/prompts/**`,
@@ -133,6 +134,26 @@ Last updated: 2026-09-30
 - **Excluded:** shared domain schemas, data/tool-layer rewrites, broker,
   approval, strategy, staging files/processes/secrets/databases, actual AI
   calls, packet persistence (P04-T7), model upgrades and live trading.
+- **Implementation / local evidence:** fixed Responses adapter through the
+  locked Pydantic AI 1.107.1/OpenAI 2.48.0 SDK, strict native narrative and
+  eight strict parameter-free reads, independent attempt context, no built-ins,
+  SDK/validation retries disabled. Adapter accepts only in-memory MockTransport;
+  default real AI remains disabled and no ambient key/configuration is read.
+  One global active run, bounded request/tool/token counts and total deadline,
+  caller-bound history, per-instance run reuse rejection, positively classified
+  network/429 one-time retry, cumulative observed failed/successful usage and
+  conservative unknown-usage handling. Model directions/numeric prose rejected;
+  observations must match returned evidence summaries, hypotheses remain partial.
+  Unknown/unreturned evidence, missing required reads, malformed/refused/incomplete
+  output and unapproved models withhold narrative. Bounded dedicated wrapper
+  executor returns on deadline without joining the asyncio default executor;
+  trusted reader thread-lifetime caveats remain documented.
+  Canonical setup/verify passed: 1815 unit, 245 contract, 83 integration,
+  2161 aggregate; one existing optional Telegram skip, no skipped live-safety
+  tests; mypy 318 files, coverage 87.42%. Existing lock versions unchanged;
+  only development installation metadata for the already locked SDK changed.
+  Root self-review complete; required current-head CI pending. Operational
+  credentials/budget enforcement, activation and packet persistence remain closed.
 
 ## Execution envelope: P04-T5 deterministic research tools
 
