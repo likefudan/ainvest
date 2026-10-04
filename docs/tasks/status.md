@@ -2705,7 +2705,7 @@ can never become a live quote fallback.
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
-| `P04-T3` | `not_started` | `P04-T0`, `P04-T2`, `P03-T10` | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests |
+| `P04-T3` | `in_progress` | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
@@ -2715,6 +2715,40 @@ can never become a live quote fallback.
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
+
+##### Execution envelope: P04-T3 news and market calendar
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-03; owner
+  authorized continuation. Root self-review, no independent review agents.
+- **Branch / immutable base:** claim `agent/p04-t3-claim` from
+  `f6c487ac6e4b2b1c1fc8a6a7998cf85ae784e352`; implementation
+  `agent/p04-t3-news-calendar` begins at the resulting claim merge SHA.
+- **Authority / dependencies:** P04-T3 card; design data-source and calendar
+  sections; DEC-001/003/013; P04-T0, P04-T2 and P03-T10 merged.
+- **Allowed paths:** `src/ainvest/data/providers/news.py`,
+  `src/ainvest/data/calendar.py`, `tests/unit/data/test_news_provider.py`,
+  `tests/unit/data/test_calendar.py`, `tests/contract/data/test_news_calendar.py`,
+  `tests/integration/test_news_calendar.py`, `tests/fixtures/news/**`,
+  `docs/news-calendar-adapters.md`, narrow link in `docs/data-adapters.md`,
+  coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** bounded GDELT discovery capture, explicit company-IR capture
+  normalization and SEC filing projection into the existing NewsEventPort;
+  deterministic deduplication with preserved citations, source licensing and
+  primary/discovery distinctions, no invented symbol/event-time certainty.
+  Implement the existing MarketCalendar protocol using the already locked
+  pandas-market-calendars dependency, with unknown venues/errors failing closed.
+- **Verification:** synthetic fixtures/mock transports only in CI, timezone,
+  DST, holidays, early close, publication/receipt boundaries, deduplication,
+  query-bound pagination, transport limits/errors and risk-port integration;
+  canonical setup/verify plus current-head required CI before squash merge.
+- **Excluded:** shared schemas/ports, dependencies/lock, broker/Telegram,
+  staging processes/databases/secrets, scheduled collection, durable cache,
+  automated retention deletion, paid services, real AI calls or Live activation.
+- **SEC follow-up evidence:** owner supplied a contact identity outside Git;
+  a read-only AAPL smoke test verified SEC company mapping and parsed 743
+  filing records plus the first 100 fundamental observations with continuation.
+  This was an ephemeral research-only capture, not broker identity/tradability
+  proof or persistent ingestion. No contact value is recorded here.
 
 After `P04-T4` merges, the Research Agent chain
 `P04-T5` → `P04-T6` → `P04-T7` → `P04-T8` and the backtest chain
