@@ -67,16 +67,54 @@ class AppliedLimits:
     read_only_workdir: Path | None
 
 
-def _rss_bytes() -> int:
-    """Return approximate current peak RSS in bytes (platform-normalized)."""
-    import resource
+def _linux_peak_rss() -> int:
+    """Read this post-exec address space's peak, not inherited rusage history."""
+    with Path("/proc/self/status").open("rb") as status:
+        body = status.read(65537)
+    if len(body) > 65536:
+        raise ValueError("oversized memory status")
+    fields: dict[bytes, int] = {}
+    for line in body.splitlines():
+        parts = line.split()
+        if not parts or parts[0] not in (b"VmHWM:", b"VmRSS:"):
+            continue
+        if (
+            len(parts) != 3
+            or parts[0] in fields
+            or parts[2] != b"kB"
+            or not parts[1].isdigit()
+            or len(parts[1]) > 16
+        ):
+            raise ValueError("invalid memory accounting")
+        fields[parts[0]] = int(parts[1])
+    peak, current = fields.get(b"VmHWM:", 0), fields.get(b"VmRSS:", 0)
+    if not 0 < current <= peak:
+        raise ValueError("missing or inconsistent memory accounting")
+    return peak * 1024
 
-    usage = resource.getrusage(resource.RUSAGE_SELF).ru_maxrss
-    # Linux reports kilobytes; macOS reports bytes.
-    platform = sys.platform
-    if platform.startswith("linux"):
-        return int(usage) * 1024
-    return int(usage)
+
+def _rss_bytes() -> int:
+    """Return resident high water; unavailable accounting must never mean zero.
+
+    Linux getrusage survives exec and can include the launching parent's peak.
+    /proc/self/status VmHWM belongs to the current address space. If proc is
+    missing/malformed, use conservative lifetime rusage (possible false reject).
+    macOS retains its existing byte-valued rusage accounting.
+    """
+    if sys.platform.startswith("linux"):
+        try:
+            return _linux_peak_rss()
+        except (OSError, ValueError):
+            pass
+    try:
+        import resource
+
+        usage = int(resource.getrusage(resource.RUSAGE_SELF).ru_maxrss)
+        if usage <= 0:
+            raise ValueError("invalid peak")
+        return usage * 1024 if sys.platform.startswith("linux") else usage
+    except (ImportError, ValueError, OverflowError) as exc:
+        raise OSError("memory accounting unavailable") from exc
 
 
 def _set_rlimit(resource_name: str, limit: int) -> bool:
@@ -127,7 +165,9 @@ def start_memory_watchdog(memory_limit_bytes: int | None) -> bool:
                 if _rss_bytes() > limit:
                     os.kill(pid, signal.SIGKILL)
                     return
-            except OSError:
+            except (OSError, ValueError, OverflowError, MemoryError):
+                # Losing measurement cannot silently remove the soft limit.
+                os.kill(pid, signal.SIGKILL)
                 return
             time.sleep(0.02)
 

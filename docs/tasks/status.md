@@ -9,11 +9,13 @@ Last updated: 2026-09-30
 
 ## Execution envelope: strategy worker Linux RSS correction
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
   authorized continuous progress. Root self-review; no review subagents.
 - **Branch / immutable base:** claim `agent/worker-rss-claim` from
   `ba0667f693153f17a221fd3a71e5afcbad8b274d`; implementation
   `agent/worker-rss-fix` starts at the exact claim merge.
+  Claim #186 merged at `bebb56f042a739e82842bb2d46658af1e380b83e`,
+  the exact implementation base.
 - **Authority / dependency:** P03-T4 isolation safety, P04-T3 documented Linux
   composition follow-up; DEC-001/002/003 remain unchanged. P04-T3 merged.
 - **Allowed paths:** `src/ainvest/strategies/worker/isolation.py`,
@@ -31,6 +33,15 @@ Last updated: 2026-09-30
   Tests must not disable or skip live-safety coverage. No new dependencies.
 - **Excluded:** broker, approval, secrets, staging processes, shared schema,
   risk-limit or retention decisions, service deployment and Live activation.
+- **Implementation / local evidence:** bounded Linux VmHWM/VmRSS parsing with
+  unit/duplicate/missing/inconsistent-field validation; conservative rusage
+  fallback; macOS byte accounting unchanged. Unavailable accounting terminates
+  rather than abandoning the watchdog. Limits/cadence/rlimits unchanged.
+  Canonical setup/verify passed: 1738 unit, 245 contract, 69 integration,
+  2070 aggregate; one existing optional Telegram-runtime skip, no skipped
+  live-safety test; mypy 296 files, coverage 87.37%. New live-safety regression
+  launches healthy and oversized workers from a touched 320 MiB parent.
+  Linux-specific success still requires current-head CI; root review complete.
 
 ## Status vocabulary
 
