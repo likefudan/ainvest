@@ -22,6 +22,8 @@ dependencies = [
 
 [project.optional-dependencies]
 research = [
+    "TA-Lib>=0.8.1,<0.9",
+    "numpy>=2,<3",
     "edgartools>=5.45.0,<6",
     "httpx>=0.28,<1",
     "pandas-market-calendars>=5,<6",
@@ -67,6 +69,7 @@ observability = [
 
 [dependency-groups]
 dev = [
+    "TA-Lib>=0.8.1,<0.9",
     "pandas-market-calendars>=5,<6",
     "mypy>=2.3.0,<3",
     "pip>=26.2,<27",
