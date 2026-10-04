@@ -105,7 +105,7 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T5 deterministic research tools
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
   explicitly authorized continuous progress until personal intervention is
   required. Root self-review; no independent review agents.
 - **Branch / immutable base:** claim `agent/p04-t5-claim` from
@@ -116,7 +116,7 @@ Last updated: 2026-09-30
   is `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`, closure #190 is the base above.
 - **Allowed paths:** `src/ainvest/agents/tools/**`,
   `tests/unit/agents/test_research_tools.py`,
-  `tests/integration/test_research_tools.py`, `tests/unit/research_tool_fixtures.py`,
+  `tests/integration/test_research_tools_flow.py`, `tests/unit/research_tool_fixtures.py`,
   `docs/research-tools.md`, narrow link in `docs/research-snapshots.md`, and
   coordinator-owned `docs/tasks/status.md`.
 - **Delivery:** named read-only tools for quote, price book, history, indicators,
@@ -137,6 +137,23 @@ Last updated: 2026-09-30
 - **Excluded:** shared schemas, data adapters, broker, approval, staging,
   secrets, migrations, real AI calls, operational collection/storage activation,
   strategy/risk/retention choices and Live. DEC-009 remains unresolved.
+- **Scope note:** integration uses the `_flow` filename to avoid duplicate
+  test module names under the existing mypy configuration; no package layout
+  or verification configuration changes. Claim #191 merged at
+  `717f52e4ba883bdcb6e4cab86260c07f3fca38c4`, the exact implementation base.
+- **Implementation / evidence:** eight named typed tools, immutable run scope,
+  one worker per run, 1–30 second timeout with late-result rejection, no queued
+  concurrent reads, 32-call/512-evidence/256-KiB limits, structural bounds,
+  source-quality propagation, fixed-model revalidation, future/identity/currency
+  checks and sanitized failures. Decimal concentration has fixed half-even
+  rounding, version/input digest and numeric citations. News source citations
+  and SEC accession locators retained. Per-run evidence resolver rejects invented
+  or unreturned IDs; any failure/partial result prevents complete research.
+  Canonical setup/verify passed: 1793 unit, 245 contract, 71 integration,
+  2127 aggregate; one existing optional Telegram skip, no skipped live-safety
+  tests; mypy 312 files, coverage 87.39%. No dependency changes. Root self-review
+  complete; required current-head CI pending. Thread lifetimes still depend on
+  trusted readers honoring their network timeouts; no operational wiring enabled.
 
 ## Status vocabulary
 
@@ -2838,7 +2855,7 @@ can never become a live quote fallback.
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `merged` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | #189 `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`; bounded persistence and offline replay; envelope above |
-| `P04-T5` | `in_progress` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | `agents/tools/**`; execution envelope above; read-only schemas, bounds, fakes, tests |
+| `P04-T5` | `in_review` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | `agents/tools/**`; execution envelope above; read-only schemas, bounds, fakes, tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
 | `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
 | `P04-T8` | `not_started` | `P04-T6`, `P04-T7` | `tests/evals/research/**`, `scripts/run_research_evals.py`, versioned evaluation fixtures/reports |
