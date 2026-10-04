@@ -73,3 +73,15 @@ The optional research runtime dependency is additionally installed for developme
 so canonical CI tests actual schedules. Tests use synthetic news and mock HTTP;
 no real contact information or external network access is needed. Persistent
 storage, actual IR feed wiring and scheduled collection remain later work.
+
+## Linux process-composition limitation
+
+The first full Linux CI run exposed an interaction with the existing strategy
+worker's peak-RSS watchdog: after pandas is loaded in the test parent, later
+exec'd children can inherit a high-water memory measurement and fail closed
+as OOM even for healthy strategies. Actual calendar/risk tests now run in
+separate subprocesses; malformed schedule tests use lightweight frame doubles.
+All assertions and worker memory limits remain intact. This does not repair
+the worker watchdog: production composition must isolate data/calendar loading
+from the strategy-spawning process until a separately scoped worker fix is
+validated. No combined runtime deployment is claimed here.

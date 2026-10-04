@@ -1,14 +1,16 @@
 """Actual exchange schedules, not synthetic holiday arithmetic."""
 
+import subprocess
+import sys
 from datetime import date, datetime
-from importlib import import_module
 from types import SimpleNamespace
+from typing import ClassVar
 
 import pytest
 
 from ainvest.data import calendar as module
 from ainvest.data.calendar import ExchangeCalendar
-from ainvest.data.calendar_port import MarketCalendar, SessionStatus
+from ainvest.data.calendar_port import SessionStatus
 
 
 @pytest.mark.parametrize(
@@ -30,13 +32,32 @@ from ainvest.data.calendar_port import MarketCalendar, SessionStatus
     ],
 )
 def test_calendar(moment: str, status: str) -> None:
-    calendar = ExchangeCalendar(valid_from=date(2026, 1, 1), valid_through=date(2026, 12, 31))
-    assert isinstance(calendar, MarketCalendar)
-    for venue in ("XNYS", "XNAS"):
-        assert (
-            calendar.session_status(datetime.fromisoformat(moment), exchange=venue).value == status
-        )
-    assert calendar.is_regular_session_open(datetime.fromisoformat(moment)) == (status == "OPEN")
+    # Keep pandas out of the pytest parent: Linux child peak RSS can inherit
+    # the parent's pre-exec high water and trip unrelated strategy watchdogs.
+    subprocess.run(
+        [
+            sys.executable,
+            "-c",
+            """
+import sys
+from datetime import date, datetime
+from ainvest.data.calendar import ExchangeCalendar
+from ainvest.data.calendar_port import MarketCalendar
+calendar = ExchangeCalendar(valid_from=date(2026, 1, 1), valid_through=date(2026, 12, 31))
+assert isinstance(calendar, MarketCalendar)
+moment, status = sys.argv[1:]
+for venue in ('XNYS', 'XNAS'):
+    assert calendar.session_status(datetime.fromisoformat(moment), exchange=venue).value == status
+assert calendar.is_regular_session_open(datetime.fromisoformat(moment)) == (status == 'OPEN')
+""",
+            moment,
+            status,
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+        timeout=20,
+    )
 
 
 def test_unknown_venue_and_bad_bounds() -> None:
@@ -63,7 +84,6 @@ def test_dependency_error_fails_closed(monkeypatch: pytest.MonkeyPatch) -> None:
 
 @pytest.mark.parametrize("damage", ["rows", "interrupt", "reversed", "day", "extended"])
 def test_malformed_schedule_fails_closed(monkeypatch: pytest.MonkeyPatch, damage: str) -> None:
-    pd = import_module("pandas")
     opening, closing = "2026-03-09T13:30:00Z", "2026-03-09T20:00:00Z"
     if damage == "reversed":
         opening, closing = closing, opening
@@ -71,13 +91,28 @@ def test_malformed_schedule_fails_closed(monkeypatch: pytest.MonkeyPatch, damage
         closing = "2026-03-10T20:00:00Z"
     elif damage == "extended":
         closing = "2026-03-09T21:00:00Z"
-    frame = pd.DataFrame(
-        {"market_open": [pd.Timestamp(opening)], "market_close": [pd.Timestamp(closing)]}
-    )
-    if damage == "rows":
-        frame = pd.concat([frame, frame])
-    if damage == "interrupt":
-        frame["interruption_start_1"] = pd.Timestamp("2026-03-09T15:00:00Z")
+
+    class Schedule:
+        empty = False
+        columns = ["interruption_start_1"] if damage == "interrupt" else []
+        iloc: ClassVar[dict[int, dict[str, SimpleNamespace]]] = {
+            0: {
+                "market_open": SimpleNamespace(
+                    to_pydatetime=lambda: datetime.fromisoformat(opening)
+                ),
+                "market_close": SimpleNamespace(
+                    to_pydatetime=lambda: datetime.fromisoformat(closing)
+                ),
+            }
+        }
+
+        def __len__(self) -> int:
+            return 2 if damage == "rows" else 1
+
+        def __getitem__(self, key: str) -> SimpleNamespace:
+            return SimpleNamespace(notna=lambda: SimpleNamespace(any=lambda: True))
+
+    frame = Schedule()
     fake = SimpleNamespace(get_calendar=lambda _: SimpleNamespace(schedule=lambda **_: frame))
     monkeypatch.setattr(module, "import_module", lambda _: fake)
     module._session.cache_clear()

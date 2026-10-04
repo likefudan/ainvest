@@ -2757,7 +2757,8 @@ can never become a live quote fallback.
 - **Implementation / verification:** canonical setup/verify passed: 1720 unit,
   245 contract, 68 integration, 2051 aggregate tests; one existing optional
   Telegram-runtime skip, no skipped live-safety gates. Strict mypy 294 files,
-  aggregate coverage 87.29%. Root scope/security review completed. Lock diff
+  aggregate coverage 87.19% after subprocess isolation (actual schedule assertions
+  still execute; subprocess lines are not counted). Root scope/security review completed. Lock diff
   only adds the existing calendar dependency to development; no version changes.
 - **Boundaries:** GDELT yields bounded discovery records with unknown publication
   time, not invented NewsEventObservation timestamps. IR is explicit captured
@@ -2768,6 +2769,12 @@ can never become a live quote fallback.
   Real offline NYSE/NASDAQ schedules, DST, holidays, early closes, malformed
   schedules and risk-port integration tested. No real news request, scheduled
   collector, persistent cache, macro release calendar, staging change or Live.
+- **CI correction / follow-up:** first Linux aggregate run failed eight existing
+  strategy tests with OOM after pandas loading in the test parent. Real schedule
+  and risk integration checks now execute in subprocesses, retaining assertions
+  without changing strategy memory limits; malformed schedules use lightweight
+  doubles. Existing peak-RSS inheritance behavior remains a separate worker
+  follow-up before combined production composition; documented, not bypassed.
 
 After `P04-T4` merges, the Research Agent chain
 `P04-T5` → `P04-T6` → `P04-T7` → `P04-T8` and the backtest chain
