@@ -67,6 +67,7 @@ observability = [
 
 [dependency-groups]
 dev = [
+    "pandas-market-calendars>=5,<6",
     "mypy>=2.3.0,<3",
     "pip>=26.2,<27",
     "pip-audit>=2.9,<3",

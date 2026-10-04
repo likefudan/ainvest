@@ -2705,7 +2705,7 @@ can never become a live quote fallback.
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
-| `P04-T3` | `in_progress` | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
+| `P04-T3` | `in_review` | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
@@ -2718,11 +2718,13 @@ can never become a live quote fallback.
 
 ##### Execution envelope: P04-T3 news and market calendar
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-03; owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-03; owner
   authorized continuation. Root self-review, no independent review agents.
 - **Branch / immutable base:** claim `agent/p04-t3-claim` from
   `f6c487ac6e4b2b1c1fc8a6a7998cf85ae784e352`; implementation
   `agent/p04-t3-news-calendar` begins at the resulting claim merge SHA.
+  Claim #183 merged at `5045b4fc5250849740d271afafa5758f1010dc6f`,
+  the exact implementation base.
 - **Authority / dependencies:** P04-T3 card; design data-source and calendar
   sections; DEC-001/003/013; P04-T0, P04-T2 and P03-T10 merged.
 - **Allowed paths:** `src/ainvest/data/providers/news.py`,
@@ -2752,6 +2754,27 @@ can never become a live quote fallback.
   filing records plus the first 100 fundamental observations with continuation.
   This was an ephemeral research-only capture, not broker identity/tradability
   proof or persistent ingestion. No contact value is recorded here.
+- **Implementation / verification:** canonical setup/verify passed: 1720 unit,
+  245 contract, 68 integration, 2051 aggregate tests; one existing optional
+  Telegram-runtime skip, no skipped live-safety gates. Strict mypy 294 files,
+  aggregate coverage 87.19% after subprocess isolation (actual schedule assertions
+  still execute; subprocess lines are not counted). Root scope/security review completed. Lock diff
+  only adds the existing calendar dependency to development; no version changes.
+- **Boundaries:** GDELT yields bounded discovery records with unknown publication
+  time, not invented NewsEventObservation timestamps. IR is explicit captured
+  metadata normalization against a caller-reviewed exact host, not a generic
+  crawler or proof of host ownership. SEC filing projection retains accessions.
+  Exact URL or explicit event association deduplicates while retaining all
+  source metadata/citations/restrictions; discovery flags survive serialization.
+  Real offline NYSE/NASDAQ schedules, DST, holidays, early closes, malformed
+  schedules and risk-port integration tested. No real news request, scheduled
+  collector, persistent cache, macro release calendar, staging change or Live.
+- **CI correction / follow-up:** first Linux aggregate run failed eight existing
+  strategy tests with OOM after pandas loading in the test parent. Real schedule
+  and risk integration checks now execute in subprocesses, retaining assertions
+  without changing strategy memory limits; malformed schedules use lightweight
+  doubles. Existing peak-RSS inheritance behavior remains a separate worker
+  follow-up before combined production composition; documented, not bypassed.
 
 After `P04-T4` merges, the Research Agent chain
 `P04-T5` → `P04-T6` → `P04-T7` → `P04-T8` and the backtest chain

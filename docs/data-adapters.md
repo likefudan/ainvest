@@ -1,5 +1,8 @@
 # Data adapter contracts
 
+News discovery, primary-source metadata and the shared regular-session calendar
+are documented in [News and calendar adapters](news-calendar-adapters.md).
+
 `ainvest.data` is the read-only normalization boundary between third-party
 providers and the research, strategy, and risk layers. Provider SDK objects,
 sessions, credentials, response dictionaries, and provider exceptions must not
