@@ -49,7 +49,7 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T4 indicators and bounded snapshots
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; owner
   authorized continuous progress, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t4-claim` from
   `b34865b6e82c77dedb4eb4b89caf1744b8fb1552`; implementation
@@ -94,7 +94,14 @@ Last updated: 2026-09-30
   2112 aggregate; one existing optional Telegram skip, no skipped live-safety
   tests. Mypy 306 files, coverage 87.42%. Dependency audit found no known
   vulnerabilities; direct-URL rh-mcp remains covered by its separate artifact
-  pin checks. Root self-review complete; current-head CI pending.
+  pin checks. Root self-review complete.
+- **Merge evidence:** #189 squash `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`;
+  current-head Verify (Linux), Secret scan, Dependency audit, SAST and CodeQL
+  all passed. Completion branch `agent/p04-t4-complete` starts at this exact
+  merge and changes only this tracker. P04-T5 deterministic read-only tool
+  implementation is the next research task; it requires its own merged claim.
+  Real AI use remains disabled pending DEC-009. Operational storage, retention
+  and recovery objectives remain separate owner/deployment decisions.
 
 ## Status vocabulary
 
@@ -2795,7 +2802,7 @@ can never become a live quote fallback.
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
-| `P04-T4` | `in_review` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; envelope above |
+| `P04-T4` | `merged` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | #189 `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`; bounded persistence and offline replay; envelope above |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
 | `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
