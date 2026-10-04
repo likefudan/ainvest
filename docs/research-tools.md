@@ -1,5 +1,7 @@
 # Deterministic research tools
 
+The offline narrative consumer is described in [research-agent.md](research-agent.md).
+
 `ainvest.agents.tools` exposes eight named operations: quote, price book,
 history, indicators, filings, news, concentration and buying power. Each run
 has a fixed `ToolScope`: run ID, full instrument identity, UTC knowledge cutoff,
