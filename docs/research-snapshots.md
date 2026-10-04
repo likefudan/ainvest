@@ -1,5 +1,8 @@
 # Research snapshots
 
+Named run-scoped reads and numeric evidence are described in
+[Deterministic research tools](research-tools.md).
+
 This library is opt-in, research-only and not connected to staging, Telegram,
 broker execution or scheduled collection. It does not confer verified identity,
 account binding, market-session evidence or trading eligibility.
