@@ -2730,7 +2730,10 @@ can never become a live quote fallback.
   `tests/unit/data/test_calendar.py`, `tests/contract/data/test_news_calendar.py`,
   `tests/integration/test_news_calendar.py`, `tests/fixtures/news/**`,
   `docs/news-calendar-adapters.md`, narrow link in `docs/data-adapters.md`,
-  coordinator-owned `docs/tasks/status.md`.
+  coordinator-owned `docs/tasks/status.md`; narrowly add the existing locked
+  pandas-market-calendars range to development dependencies in `pyproject.toml`
+  and regenerate `uv.lock` so canonical CI tests the actual library (no runtime
+  dependency expansion or unrelated dependency upgrades).
 - **Delivery:** bounded GDELT discovery capture, explicit company-IR capture
   normalization and SEC filing projection into the existing NewsEventPort;
   deterministic deduplication with preserved citations, source licensing and
@@ -2741,7 +2744,7 @@ can never become a live quote fallback.
   DST, holidays, early close, publication/receipt boundaries, deduplication,
   query-bound pagination, transport limits/errors and risk-port integration;
   canonical setup/verify plus current-head required CI before squash merge.
-- **Excluded:** shared schemas/ports, dependencies/lock, broker/Telegram,
+- **Excluded:** shared schemas/ports, unrelated dependencies/lock, broker/Telegram,
   staging processes/databases/secrets, scheduled collection, durable cache,
   automated retention deletion, paid services, real AI calls or Live activation.
 - **SEC follow-up evidence:** owner supplied a contact identity outside Git;
