@@ -7,6 +7,31 @@ not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
 Last updated: 2026-09-30
 
+## Execution envelope: strategy worker Linux RSS correction
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+  authorized continuous progress. Root self-review; no review subagents.
+- **Branch / immutable base:** claim `agent/worker-rss-claim` from
+  `ba0667f693153f17a221fd3a71e5afcbad8b274d`; implementation
+  `agent/worker-rss-fix` starts at the exact claim merge.
+- **Authority / dependency:** P03-T4 isolation safety, P04-T3 documented Linux
+  composition follow-up; DEC-001/002/003 remain unchanged. P04-T3 merged.
+- **Allowed paths:** `src/ainvest/strategies/worker/isolation.py`,
+  `tests/unit/strategies/test_worker_memory.py`,
+  `tests/integration/strategies/test_worker_memory.py`, narrow resolution note
+  in `docs/news-calendar-adapters.md`, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** measure the Linux worker's own post-exec resident memory high
+  water instead of inherited process-lifetime peak accounting. Keep configured
+  memory limits, rlimits, watchdog cadence, environment/network/filesystem
+  isolation and allocation guard intact. Missing/malformed accounting must
+  fail conservatively, never silently disable monitoring.
+- **Verification:** deterministic parser/platform/fallback tests, watchdog
+  over-limit/error tests, Linux parent-memory/exec regression and real oversized
+  worker rejection; canonical setup/verify and current-head required CI.
+  Tests must not disable or skip live-safety coverage. No new dependencies.
+- **Excluded:** broker, approval, secrets, staging processes, shared schema,
+  risk-limit or retention decisions, service deployment and Live activation.
+
 ## Status vocabulary
 
 - `not_started`: unclaimed and no implementation is in progress.
