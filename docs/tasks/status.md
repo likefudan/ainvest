@@ -9,7 +9,7 @@ Last updated: 2026-09-30
 
 ## Execution envelope: strategy worker Linux RSS correction
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; owner
   authorized continuous progress. Root self-review; no review subagents.
 - **Branch / immutable base:** claim `agent/worker-rss-claim` from
   `ba0667f693153f17a221fd3a71e5afcbad8b274d`; implementation
@@ -42,6 +42,43 @@ Last updated: 2026-09-30
   live-safety test; mypy 296 files, coverage 87.37%. New live-safety regression
   launches healthy and oversized workers from a touched 320 MiB parent.
   Linux-specific success still requires current-head CI; root review complete.
+- **Merge evidence:** #187 squash `b34865b6e82c77dedb4eb4b89caf1744b8fb1552`;
+  Verify (including Linux large-parent regression), Secret scan, Dependency
+  audit, SAST and CodeQL all passed. The inherited-peak follow-up is resolved;
+  this does not assert deployment or general kernel sandbox readiness.
+
+## Execution envelope: P04-T4 indicators and bounded snapshots
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+  authorized continuous progress, root self-review only.
+- **Branch / immutable base:** claim `agent/p04-t4-claim` from
+  `b34865b6e82c77dedb4eb4b89caf1744b8fb1552`; implementation
+  `agent/p04-t4-snapshots` begins at the resulting exact claim merge.
+- **Authority / dependencies:** P04-T4 card, research/data design, DEC-003/013;
+  P04-T0 through P04-T3 and P02-T1 merged. Worker RSS follow-up also merged.
+- **Allowed paths:** `src/ainvest/data/{indicators,quality,cache,snapshots}.py`,
+  `tests/unit/data/test_{indicators,quality,cache,snapshots}.py`,
+  `tests/integration/test_research_snapshot.py`, `tests/fixtures/indicators/**`,
+  `docs/research-snapshots.md`, narrow link in `docs/data-adapters.md`,
+  `pyproject.toml` and `uv.lock` only for TA-Lib/numpy research and test
+  dependencies, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** deterministic TA-Lib SMA/RSI/ATR wrapper with fixed warm-up,
+  explicit binary64 technical-calculation boundary and Decimal serialized
+  outputs (never money/order arithmetic); quality checks for stale/future,
+  gapped/duplicate/unordered/mismatched inputs using explicit expected bar
+  timestamps. Versioned snapshot retains provider/instrument/timeframe/
+  adjustment/as_of key, response digests, normalization/calculation versions,
+  source metadata and parameters, and rebuilds a ResearchPacket offline.
+- **Persistence:** opt-in local immutable records, explicit caller-supplied
+  byte/entry quotas, bounded reads, atomic writes, integrity verification,
+  collision/concurrency handling and no overwrite/automatic retention deletion.
+  Tests use temporary directories; no actual operational cache is provisioned.
+- **Verification:** fixed indicator references, warm-up/gap/NaN and metadata
+  failure cases; roundtrip/replay, tamper, quota, traversal/symlink and concurrent
+  writer tests; canonical setup/verify/audit and current-head required CI.
+- **Excluded:** shared schemas, database migrations, broker/Telegram/strategy
+  changes, staging files/processes/secrets, paid data, live AI, automated
+  collection/deletion, owner retention/risk/strategy decisions or Live activation.
 
 ## Status vocabulary
 
@@ -2742,7 +2779,7 @@ can never become a live quote fallback.
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
-| `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
+| `P04-T4` | `in_progress` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; envelope above |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
 | `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
