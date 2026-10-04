@@ -1,5 +1,8 @@
 # Data adapter contracts
 
+Deterministic indicators and opt-in bounded storage are documented in
+[Research snapshots](research-snapshots.md).
+
 News discovery, primary-source metadata and the shared regular-session calendar
 are documented in [News and calendar adapters](news-calendar-adapters.md).
 

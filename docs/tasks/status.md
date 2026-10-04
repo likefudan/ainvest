@@ -49,11 +49,12 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T4 indicators and bounded snapshots
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `in_review`, 2026-10-04; owner
   authorized continuous progress, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t4-claim` from
   `b34865b6e82c77dedb4eb4b89caf1744b8fb1552`; implementation
   `agent/p04-t4-snapshots` begins at the resulting exact claim merge.
+  Claim #188 merged at `ed0828860de19f6cafbc7a839fe659afd0760fd8`.
 - **Authority / dependencies:** P04-T4 card, research/data design, DEC-003/013;
   P04-T0 through P04-T3 and P02-T1 merged. Worker RSS follow-up also merged.
 - **Allowed paths:** `src/ainvest/data/{indicators,quality,cache,snapshots}.py`,
@@ -62,6 +63,9 @@ Last updated: 2026-09-30
   `docs/research-snapshots.md`, narrow link in `docs/data-adapters.md`,
   `pyproject.toml` and `uv.lock` only for TA-Lib/numpy research and test
   dependencies, coordinator-owned `docs/tasks/status.md`.
+- **Narrow scope correction:** `tests/unit/indicator_fixtures.py` shares typed
+  synthetic fixtures using the existing test-helper import path, without
+  changing test or runtime package boundaries.
 - **Delivery:** deterministic TA-Lib SMA/RSI/ATR wrapper with fixed warm-up,
   explicit binary64 technical-calculation boundary and Decimal serialized
   outputs (never money/order arithmetic); quality checks for stale/future,
@@ -79,6 +83,18 @@ Last updated: 2026-09-30
 - **Excluded:** shared schemas, database migrations, broker/Telegram/strategy
   changes, staging files/processes/secrets, paid data, live AI, automated
   collection/deletion, owner retention/risk/strategy decisions or Live activation.
+- **Implementation / local evidence:** TA-Lib 0.8.1 added only to research/test
+  profiles; no unrelated lock upgrades. Fixed references and warm-up, bad-input
+  rejection, versioned source metadata, offline reconstruction and immutable
+  quota-bound POSIX storage implemented. Private permissions, bounded reads,
+  five-second lock deadline, atomic no-overwrite publication, digest/replay
+  validation, collisions, concurrent writers, tamper and failed-write cleanup
+  tested. Synthetic temporary storage only; no operational cache activation.
+  Canonical setup/verify passed: 1779 unit, 245 contract, 70 integration,
+  2112 aggregate; one existing optional Telegram skip, no skipped live-safety
+  tests. Mypy 306 files, coverage 87.42%. Dependency audit found no known
+  vulnerabilities; direct-URL rh-mcp remains covered by its separate artifact
+  pin checks. Root self-review complete; current-head CI pending.
 
 ## Status vocabulary
 
@@ -2779,7 +2795,7 @@ can never become a live quote fallback.
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
-| `P04-T4` | `in_progress` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; envelope above |
+| `P04-T4` | `in_review` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; envelope above |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
 | `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
