@@ -2705,7 +2705,7 @@ can never become a live quote fallback.
 | `P04-T0` | `merged` | `P02-T1`, `P03-T13` | `data/{models,ports,fakes}.py`, data re-exports, `tests/unit/data/test_models.py`, `tests/contract/data/**`, architecture boundary test, `docs/data-adapters.md` |
 | `P04-T1` | `merged` ([#87](https://github.com/likefudan/ainvest/pull/87)) | `P04-T0` (satisfied) | `data/providers/yahoo.py`; Yahoo fixtures/tests; offline-data dependency/config changes only when assigned |
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
-| `P04-T3` | `in_review` | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
+| `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `not_started` | `P04-T0`–`P04-T3`, `P02-T1` | `data/{indicators,quality,cache,snapshots}.py`; bounded persistence changes; unit/integration tests |
 | `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
@@ -2718,7 +2718,7 @@ can never become a live quote fallback.
 
 ##### Execution envelope: P04-T3 news and market calendar
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-03; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-03; owner
   authorized continuation. Root self-review, no independent review agents.
 - **Branch / immutable base:** claim `agent/p04-t3-claim` from
   `f6c487ac6e4b2b1c1fc8a6a7998cf85ae784e352`; implementation
@@ -2775,6 +2775,12 @@ can never become a live quote fallback.
   without changing strategy memory limits; malformed schedules use lightweight
   doubles. Existing peak-RSS inheritance behavior remains a separate worker
   follow-up before combined production composition; documented, not bypassed.
+- **Merge evidence:** #184 squash `efea55c0005d86fad627465b2933af0b6ea83f21`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL all passed
+  after test isolation. Completion branch `agent/p04-t3-complete` starts at that
+  exact merge and changes only this tracker. P04-T4 dependencies are now satisfied;
+  persistence requires its own task claim. The Linux worker follow-up remains
+  required before combined operational composition, not before offline storage work.
 
 After `P04-T4` merges, the Research Agent chain
 `P04-T5` → `P04-T6` → `P04-T7` → `P04-T8` and the backtest chain
