@@ -103,9 +103,47 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T7 evidence-bound research assembly
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+  authorized continuous progress, root self-review only.
+- **Branch / immutable base:** claim `agent/p04-t7-claim` from
+  `066394bd5b866ebb48df3c2ca203762a49897b2a`; implementation
+  `agent/p04-t7-research-builder` starts at the exact resulting claim merge.
+- **Authority / dependencies:** P04-T7; DEC-003/004/009/013/014;
+  P04-T5/T6 and P02-T6/T7/T8 merged. P04-T6 #194 is the base above.
+- **Allowed paths:** `src/ainvest/agents/research_{builder,capture,archive}.py`,
+  narrow capture-only additions in `agents/research_agent.py` and
+  `agents/research_models.py`, `src/ainvest/db/research.py`, narrow repository
+  access in `db/uow.py`, `tests/unit/agents/test_research_builder.py`,
+  `tests/unit/db/test_research_repository.py`,
+  `tests/unit/research_builder_fixtures.py`,
+  `tests/integration/test_research_builder_flow.py`,
+  `docs/research-builder.md`, narrow links/handoff notes in
+  `docs/research-agent.md`, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** bounded immutable captures of actually returned named tool
+  results, digest/run/scope/citation reconciliation and deterministic packet
+  assembly. Financial/technical/portfolio fields come only from typed tools;
+  model contributes cited thesis text only. Rejected/partial/future/stale input
+  cannot be guessed or promoted. Preserve claim-to-evidence mapping and run,
+  tool, prompt/model versions/digests with the final packet for replay.
+- **Persistence:** add an ORM-free domain repository boundary backed by the
+  existing research run/packet rows through UnitOfWork, no migration. Explicit
+  caller-supplied entry/byte quotas, atomic append/idempotency, conflict/tamper
+  checks and no overwrite or automatic deletion. Tests use synthetic temporary
+  or in-memory databases only; no operational persistence is provisioned.
+- **Verification:** fixed synthetic tools/fake model, deterministic roundtrip,
+  forged/cross-run citations, modified tool numbers/digests, stale required
+  quotes, missing/partial inputs, quota/conflict/rollback and replay cases;
+  canonical setup/verify and current-head required CI. No dependencies added.
+- **Excluded:** shared schemas, data adapters, broker/approval/strategy changes,
+  staging files/processes/secrets/databases, actual AI calls, model/settings or
+  permission changes, deployment, owner risk/retention/recovery choices, Live.
+  DEC-009 remains unresolved; offline assembly can continue independently.
+
 ## Execution envelope: P04-T6 bounded research narrative agent
 
-- **Owner / status:** root coordinator, `in_review`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; continuous
   implementation authorized, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t6-claim` from
   `7d89bf1a33c2b460f5b79826c13b55df7f747218`; implementation
@@ -152,7 +190,11 @@ Last updated: 2026-09-30
   2161 aggregate; one existing optional Telegram skip, no skipped live-safety
   tests; mypy 318 files, coverage 87.42%. Existing lock versions unchanged;
   only development installation metadata for the already locked SDK changed.
-  Root self-review complete; required current-head CI pending. Operational
+  Root self-review complete. #194 squash
+  `066394bd5b866ebb48df3c2ca203762a49897b2a`; Verify (Linux), Secret scan,
+  Dependency audit, SAST and CodeQL all passed. Dependency audit found no known
+  vulnerabilities; the direct-URL gateway retains separate artifact-pin proof.
+  Operational
   credentials/budget enforcement, activation and packet persistence remain closed.
 
 ## Execution envelope: P04-T5 deterministic research tools
@@ -2909,9 +2951,9 @@ can never become a live quote fallback.
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `merged` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | #189 `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`; bounded persistence and offline replay; envelope above |
-| `P04-T5` | `in_review` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | `agents/tools/**`; execution envelope above; read-only schemas, bounds, fakes, tests |
-| `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
-| `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
+| `P04-T5` | `merged` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | #192; deterministic read tools; execution envelope above |
+| `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
+| `P04-T7` | `in_progress` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | evidence-bound assembly and bounded research persistence; execution envelope above |
 | `P04-T8` | `not_started` | `P04-T6`, `P04-T7` | `tests/evals/research/**`, `scripts/run_research_evals.py`, versioned evaluation fixtures/reports |
 | `P04-T9` | `not_started` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` | `backtest/runner.py`; replay fixtures and tests |
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
