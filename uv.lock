@@ -57,6 +57,7 @@ research = [
 [package.dev-dependencies]
 dev = [
     { name = "mypy" },
+    { name = "pandas-market-calendars" },
     { name = "pip" },
     { name = "pip-audit" },
     { name = "pre-commit" },
@@ -106,6 +107,7 @@ provides-extras = ["research", "offline-data", "approval", "broker", "observabil
 [package.metadata.requires-dev]
 dev = [
     { name = "mypy", specifier = ">=2.3.0,<3" },
+    { name = "pandas-market-calendars", specifier = ">=5,<6" },
     { name = "pip", specifier = ">=26.2,<27" },
     { name = "pip-audit", specifier = ">=2.9,<3" },
     { name = "pre-commit", specifier = ">=4.2,<5" },
