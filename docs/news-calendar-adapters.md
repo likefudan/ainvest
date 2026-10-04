@@ -81,7 +81,18 @@ worker's peak-RSS watchdog: after pandas is loaded in the test parent, later
 exec'd children can inherit a high-water memory measurement and fail closed
 as OOM even for healthy strategies. Actual calendar/risk tests now run in
 separate subprocesses; malformed schedule tests use lightweight frame doubles.
-All assertions and worker memory limits remain intact. This does not repair
-the worker watchdog: production composition must isolate data/calendar loading
-from the strategy-spawning process until a separately scoped worker fix is
-validated. No combined runtime deployment is claimed here.
+All assertions and worker memory limits remain intact. The separate worker
+correction now reads the Linux address space's own `VmHWM` from bounded
+`/proc/self/status`, with conservative lifetime-rusage fallback if proc is
+unavailable or malformed. If neither counter can be read reliably, the watchdog
+terminates the worker rather than silently abandoning monitoring. macOS units,
+memory limits, hard resource limits and polling cadence are unchanged.
+
+[Linux documents VmHWM as resident high water](https://docs.kernel.org/filesystems/proc.html),
+while [getrusage accounting survives exec](https://man7.org/linux/man-pages/man2/getrusage.2.html).
+The regression launches healthy and genuinely oversized workers from a parent
+holding 320 MiB; healthy execution must succeed and oversized execution must
+still fail. The subprocess calendar tests remain isolated for test hygiene.
+This addresses inherited-memory false positives, not general production sandbox
+hardening: kernel/container limits and deployment verification are still needed.
+No combined runtime deployment is claimed here.
