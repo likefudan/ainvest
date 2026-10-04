@@ -103,6 +103,41 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T5 deterministic research tools
+
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+  explicitly authorized continuous progress until personal intervention is
+  required. Root self-review; no independent review agents.
+- **Branch / immutable base:** claim `agent/p04-t5-claim` from
+  `34a3edfdd2b3e2f416e8a6c3ef7880806a74b21b`; implementation
+  `agent/p04-t5-tools` starts only after this claim merges, at its exact merge.
+- **Authority / dependencies:** design 3, 5.1–5.2, 6, 10.2; DEC-003/004/009;
+  P04-T0 through P04-T4 and P02-T1/T2 are merged. P04-T4 implementation #189
+  is `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`, closure #190 is the base above.
+- **Allowed paths:** `src/ainvest/agents/tools/**`,
+  `tests/unit/agents/test_research_tools.py`,
+  `tests/integration/test_research_tools.py`, `tests/unit/research_tool_fixtures.py`,
+  `docs/research-tools.md`, narrow link in `docs/research-snapshots.md`, and
+  coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** named read-only tools for quote, price book, history, indicators,
+  filings, news, portfolio concentration and buying power; typed bounded inputs
+  and outputs, explicit timeouts, freshness/identity/currency checks, deterministic
+  Decimal portfolio calculations, returned evidence IDs and per-run evidence
+  registry. Errors, timeouts, incomplete/stale data prevent complete results.
+  Provider access uses injected narrow read-only ports only; no raw MCP session,
+  generic capability dispatcher, credentials, fallback provider or broker writes.
+- **Composition boundary:** the library accepts already normalized data ports
+  or immutable captured data. Actual Robinhood composition continues to require
+  the existing reviewed read projection and verified domain evidence; this task
+  must not promote display-only gateway output or invent missing account/session
+  bindings. No runtime service or model adapter is enabled.
+- **Verification:** deterministic synthetic success/failure/timeout/oversize,
+  stale/future/binding/citation cases, no-write surface and offline integration;
+  canonical setup/verify and required current-head CI. No new dependencies.
+- **Excluded:** shared schemas, data adapters, broker, approval, staging,
+  secrets, migrations, real AI calls, operational collection/storage activation,
+  strategy/risk/retention choices and Live. DEC-009 remains unresolved.
+
 ## Status vocabulary
 
 - `not_started`: unclaimed and no implementation is in progress.
@@ -2803,7 +2838,7 @@ can never become a live quote fallback.
 | `P04-T2` | `merged` ([#181](https://github.com/likefudan/ainvest/pull/181)) | `P04-T0` (merged) | SEC provider, bounded fixture/contract tests and documentation; execution envelope above |
 | `P04-T3` | `merged` ([#184](https://github.com/likefudan/ainvest/pull/184)) | `P04-T0`, `P04-T2`, `P03-T10` (merged) | `data/providers/news.py`, `data/calendar.py`; news/calendar fixtures and tests; envelope below |
 | `P04-T4` | `merged` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | #189 `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`; bounded persistence and offline replay; envelope above |
-| `P04-T5` | `not_started` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` | `agents/tools/**`; read-only tool schemas, bounds, fakes, and tests |
+| `P04-T5` | `in_progress` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | `agents/tools/**`; execution envelope above; read-only schemas, bounds, fakes, tests |
 | `P04-T6` | `not_started` | `P04-T5`, `DEC-004`; real calls also require `DEC-009` | `agents/research_agent.py`, `prompts/**`; fake-model tests; research dependency/config changes only when assigned |
 | `P04-T7` | `not_started` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` | `agents/research_builder.py`; bounded research persistence changes; tests |
 | `P04-T8` | `not_started` | `P04-T6`, `P04-T7` | `tests/evals/research/**`, `scripts/run_research_evals.py`, versioned evaluation fixtures/reports |
