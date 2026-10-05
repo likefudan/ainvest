@@ -103,9 +103,40 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T10 costs, adjustments and temporal validation
+
+- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+  offline development authorized, root self-review only.
+- **Branch / immutable base:** claim and implementation branch
+  `agent/p04-t10-cost-validation` starts at P04-T9 #200 squash
+  `09838f6a478b8d0f51b6c234f2928f5e2f3142dc`. Implementation starts only
+  after this tracker-only claim merges; record its exact merge before coding.
+- **Authority / dependency:** P04-T10 and design 14.2; P04-T9 merged.
+- **Allowed paths:** `src/ainvest/backtest/{costs,validation}.py`,
+  `tests/unit/backtest/test_{costs,validation}.py`,
+  `tests/integration/test_backtest_cost_validation.py`,
+  `docs/backtest-validation.md`, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** bounded deterministic hypothetical fills from explicit
+  synthetic costs, adverse spread/slippage, commissions, partial fills and
+  shared volume caps; next-bar timing and conservative limit handling.
+  Explicit raw/adjusted split and dividend accounting without double actions.
+  Rolling train/test splits, knowledge/publication/universe-clock checks,
+  future-suffix invariance evidence and replayable input/config fingerprints.
+- **Qualification:** no actual broker fee assumption, owner policy choice or
+  execution authority; zero-cost configuration only in explicit unit-test mode.
+  Temporal checks validate supplied evidence, not universal proof against
+  hardcoded future data or missing historical universe records.
+- **Verification:** deterministic costs/replay, changed-input conflicts,
+  volume/limit/time boundaries, split/dividend guards, deliberate temporal
+  leakage and incomplete universe rejection, rolling separation; canonical
+  setup/verify/audit and current-head CI. No new dependencies.
+- **Excluded:** existing replay/schema/data/strategy/risk/execution changes,
+  performance reporting (T11), actual AI/broker/network requests, staging
+  env/secrets/DB, service activation and owner DEC-009/011/012/013/014 choices.
+
 ## Execution envelope: P04-T9 point-in-time strategy replay
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; continuous
   offline progress authorized; root self-review, no review agents.
 - **Branch / immutable base:** `agent/p04-t9-claim` starts at the exact #198
   squash merge `0b423e8a843079d18d9aab2ad5391e3ed6c0d9bf`;
@@ -157,6 +188,9 @@ Last updated: 2026-09-30
   known vulnerabilities. Root review complete; current-head CI remains required.
   Existing worker hooks/read-only-workdir are not a new kernel sandbox;
   normalized prefixes do not pretend to be original raw provider wire captures.
+- **Merge evidence:** #200 squash
+  `09838f6a478b8d0f51b6c234f2928f5e2f3142dc`; current-head Verify,
+  Secret scan, Dependency audit, SAST and CodeQL passed.
 
 ## Execution envelope: P04-T8 offline research evaluation and budget boundary
 
@@ -3097,8 +3131,8 @@ can never become a live quote fallback.
 | `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
-| `P04-T9` | `in_progress` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | point-in-time isolated decision replay; execution envelope above |
-| `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
+| `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
+| `P04-T10` | `claimed` | `P04-T9` (merged) | costs/adjustments/temporal validation; execution envelope above |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
 
