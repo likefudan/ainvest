@@ -8,7 +8,9 @@
 **Claim baseline:** #205, `ac693b5eb193ac740c6aafaf678d34aba0a0612e`
 
 This document does not authorize real AI, scheduled Paper, deployment or Live.
-DEC-009 (owner OpenAI project, monthly ceiling and secret reference) is unresolved.
+DEC-009 remains partially unresolved: the owner approved **USD 20 per month**
+on 2026-10-05; the OpenAI project and local secret reference are still pending.
+This records a budget decision, not a configured provider limit or activation.
 Passing fakes establish software invariants, not real-model quality/injection
 resistance or authenticated capture of trading-eligible provider observations.
 
@@ -109,9 +111,11 @@ Current-head CI is required before merge. The implementation PR is the merge rec
 
 The following are not made complete by this offline record:
 
-- Owner establishes an OpenAI API project and **explicit monthly USD ceiling**,
-  with a local secret-file/reference outside Git; never paste the key into chat,
-  logs, a PR, fixture or committed environment file. DEC-009 must be recorded.
+- Owner establishes an OpenAI API project with a local secret-file/reference
+  outside Git; the **USD 20 per month** ceiling is already owner-approved in
+  [DEC-009](../decisions/README.md). Provider limit configuration and application
+  enforcement are not yet verified. Never paste the key into chat, logs, a PR,
+  fixture or committed environment file; full DEC-009 acceptance remains pending.
 - Reviewed durable usage/budget admission and notification wiring, credential
   loading/secret isolation, limits, pause behavior and operational storage.
   The existing process-local guard is not a monthly budget guarantee.
@@ -123,7 +127,8 @@ The following are not made complete by this offline record:
 - Separate owner strategy/risk/retention/recovery choices and deployment gates.
   Gate 3 acceptance does not substitute for this Gate 2 qualification.
 
-The next required human input is the monthly budget and OpenAI project/secret
-reference. Until then, the supported artifact is reusable offline software
+The next required human input is the OpenAI API project identity and local
+secret reference; the monthly budget has been supplied. Until then, the
+supported artifact is reusable offline software
 evidence; **full Gate 2 remains unaccepted**, real AI and scheduled Paper stay off,
 and real-money trading remains unavailable.
