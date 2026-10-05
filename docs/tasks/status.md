@@ -103,9 +103,40 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T12 offline Gate 2 evidence and owner gate
+
+- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+  offline work authorized, root self-review only.
+- **Branch / immutable base:** `agent/p04-t12-claim` starts at #204 squash
+  `ec898c13585adb81b58844a454913ce9653c876d`; implementation
+  `agent/p04-t12-offline-gate` starts only after the exact claim merge.
+- **Authority / dependencies:** P04-T12, design Phase 2, DEC-004/009;
+  P04-T0–T11 software implementations merged. DEC-009 remains proposed.
+- **Allowed paths:** `tests/unit/gate2_fixtures.py`,
+  `tests/integration/test_gate2_research.py`, `scripts/run_gate2_research.py`,
+  `docs/releases/phase-2-acceptance.md`, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** fixed synthetic tool/agent/build/replay/numeric traceability
+  into the existing Gate 1 Paper composition, no approval by default and an
+  explicitly injected test approval only. Retain sanitized provider contract
+  fixture digest/normalization evidence without promoting display-only reads
+  to trading inputs. Existing stale/timeout/injection/unsupported evidence,
+  budget, storage and backtest evidence matrix plus reusable JSON harness.
+- **Qualification:** report offline software success separately from full
+  Gate 2 acceptance/real-model qualification. Fake ports/contract-shaped saved
+  fixtures are not authenticated real provider captures or real-model quality
+  evaluations. Keep full gate, real AI and scheduled Paper disabled pending
+  owner DEC-009 project/budget/secret reference and reviewed operational wiring.
+- **Verification:** complete generated packet trace/replay, Paper pending and
+  explicit test-fill/conservation, unverified read evidence, failed archive
+  withholds packet, temporary quota-bound persistence, CLI and deterministic
+  semantic summary; canonical setup/verify/audit/current-head CI.
+- **Excluded:** all production-code changes, model/prompt/pin/dependency edits,
+  provider/real AI/broker requests, runtime files/DB/secrets/poller, deployment,
+  owner strategy/risk/retention/recovery decisions, full acceptance and Live.
+
 ## Execution envelope: P04-T11 deterministic performance reports
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; continuous
   offline development authorized, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t11-claim` starts at #202
   squash `c4e346582dd0e17d721bc35c13d38d2d675bb8b7`; implementation
@@ -146,6 +177,8 @@ Last updated: 2026-09-30
   audit found no known vulnerabilities (gateway direct URL separately pinned).
   Final explicit metric/annualization/benchmark display metadata passed all 10
   focused tests/type checks. Root review complete; current-head CI required.
+- **Merge evidence:** #204 squash `ec898c13585adb81b58844a454913ce9653c876d`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL passed.
 
 ## Execution envelope: P04-T10 costs, adjustments and temporal validation
 
@@ -3195,8 +3228,8 @@ can never become a live quote fallback.
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
 | `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
 | `P04-T10` | `merged` | `P04-T9` (merged) | #202; costs/adjustments/temporal validation; execution envelope above |
-| `P04-T11` | `in_progress` | `P04-T9`, `P04-T10` (merged) | deterministic performance reporting; execution envelope above |
-| `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
+| `P04-T11` | `merged` | `P04-T9`, `P04-T10` (merged) | #204; deterministic performance reporting; execution envelope above |
+| `P04-T12` | `claimed` (offline evidence only) | all `P04-T0`–`P04-T11` software merged; DEC-009 unresolved | Gate 2 harness/documentation; full qualification remains closed |
 
 ##### Execution envelope: P04-T3 news and market calendar
 
