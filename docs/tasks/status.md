@@ -103,9 +103,46 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T9 point-in-time strategy replay
+
+- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+  offline progress authorized; root self-review, no review agents.
+- **Branch / immutable base:** `agent/p04-t9-claim` starts at the exact #198
+  squash merge `0b423e8a843079d18d9aab2ad5391e3ed6c0d9bf`;
+  `agent/p04-t9-backtest-replay` starts at the resulting exact
+  claim merge. Implementation waits for the merged claim.
+- **Authority / dependencies:** P04-T9; merged P03-T0–T5/T14 and P04-T4;
+  design 14.2 and strategy-context contract. DEC-011/012 remain unselected.
+- **Allowed paths:** `src/ainvest/backtest/{__init__,models,runner}.py`,
+  `tests/unit/backtest/**`, `tests/unit/backtest_fixtures.py`,
+  `tests/integration/test_backtest_replay.py`, `docs/backtest-replay.md`,
+  coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** bounded historical input/schedule contracts and deterministic
+  decision replay. Each cutoff gets only closed bars/quotes/portfolio/state
+  whose knowledge timestamps are available then. Explicit expected grids catch
+  gaps; incomplete/stale input cannot become an executable context. Visible
+  prefix digests/IDs must not depend on unseen future values. Recompute snapshot
+  indicators through the existing deterministic library, then use the existing
+  isolated strategy worker, Position Sizer and complete Risk Engine rules.
+- **Policy / handoff:** caller supplies synthetic historical portfolio, explicit
+  sizing/risk/eligibility/calendar inputs and parameters; no owner strategy or
+  operational risk limits are selected. Worker network/filesystem/resource
+  restrictions stay enabled. Record deterministic context/state/signal/sizing/
+  risk results and versions/digests; runtime duration is not a semantic digest.
+  No execution handle, approval bypass, order submission or persistent writes.
+- **Verification:** identical-context replay/Paper strategy parity, future
+  suffix and late-received-bar invisibility, future state/portfolio rejection,
+  worker failure and stale/gap rejection, deterministic state progression,
+  standard sizing/risk vetoes with synthetic explicit policy; canonical
+  setup/verify, audit and current-head required CI.
+- **Excluded:** existing schema/data/agent/strategy/sizer/risk/broker/approval
+  changes, fill/cost simulation and performance claims (P04-T10/T11), dependencies,
+  real AI/network/brokerage calls, staging/env/secrets/databases, scheduling,
+  accepted owner strategy/risk/retention/recovery policy, deployment and Live.
+
 ## Execution envelope: P04-T8 offline research evaluation and budget boundary
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; continuous
   progress authorized, root self-review only. Implementation began only after
   the claim merged following P04-T7.
 - **Branch / immutable base:** `agent/p04-t8-claim` starts at the exact P04-T7
@@ -159,6 +196,11 @@ Last updated: 2026-09-30
   vulnerabilities. Root self-review complete; current-head CI still required.
   Offline reports hard-code real AI/scheduled Paper ineligible; DEC-009 and
   real-model qualification/durable budget-alert composition remain prerequisites.
+- **Merge evidence:** #198 squash `0b423e8a843079d18d9aab2ad5391e3ed6c0d9bf`;
+  current-head Verify (Linux; includes all 19 evaluation tests), Secret scan,
+  Dependency audit, SAST and CodeQL all passed. Offline scope is complete;
+  real-model full evaluation and owner AI/Paper release qualification remain
+  explicitly unapproved, not inferred from software tests.
 
 ## Execution envelope: P04-T7 evidence-bound research assembly
 
@@ -3036,8 +3078,8 @@ can never become a live quote fallback.
 | `P04-T5` | `merged` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | #192; deterministic read tools; execution envelope above |
 | `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
-| `P04-T8` | `in_progress` | `P04-T6`, `P04-T7` (merged) | offline evaluations and explicit-budget boundary; execution envelope above |
-| `P04-T9` | `not_started` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` | `backtest/runner.py`; replay fixtures and tests |
+| `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
+| `P04-T9` | `claimed` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | point-in-time isolated decision replay; execution envelope above |
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
