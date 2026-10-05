@@ -4,6 +4,9 @@ P04-T7 is an offline library. It does not enable a model, schedule collection,
 provision storage, or alter staging. Real AI remains gated by DEC-009; trading
 and strategy execution are not part of this library.
 
+[Offline evaluations](research-evaluations.md) provide repeatable safety/quality
+reports and a synthetic explicit-budget admission boundary, not release approval.
+
 `build_research_archive(request, agent_result, tools=...)` reconciles run ID,
 instrument/cutoff, request limits, input/prompt/schema/output digests, actually
 returned tool captures and citations. With the originating tool registry it also

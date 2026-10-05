@@ -105,13 +105,15 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T8 offline research evaluation and budget boundary
 
-- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
-  progress authorized, root self-review only. Implementation waits for this
-  claim to merge after P04-T7.
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+  progress authorized, root self-review only. Implementation began only after
+  the claim merged following P04-T7.
 - **Branch / immutable base:** `agent/p04-t8-claim` starts at the exact P04-T7
   #196 squash merge `30e53aa489162092a8f3b9fdc75a95c2451039d8`;
   `agent/p04-t8-research-evals` starts at the resulting
   immutable claim merge. Record both SHAs before implementation.
+  Claim #197 merged at `ab974e03b799cab05926dcbbff3e534a9724c0c4`,
+  the exact implementation base.
 - **Authority / dependencies:** P04-T8; P04-T6/T7; DEC-004/009. Design
   sections 5.2, 10.1 and 14; no model or prompt changes.
 - **Allowed paths:** `src/ainvest/agents/research_{evaluation,budget}.py`,
@@ -142,6 +144,21 @@ Last updated: 2026-09-30
   approval/strategy changes, dependency upgrades, real model calls, runtime
   scheduling, staging env/secrets/databases, financial/retention/recovery policy,
   owner budget acceptance, deployment and Live.
+- **Implementation / local evidence:** twelve versioned synthetic cases exercise
+  real named tools/agent validation/assembly/replay; bounded JSON report and
+  reusable CLI retain exact expected outcomes/codes, metadata, evidence/numeric
+  checks, latency/tokens and explicitly synthetic costs. In-memory explicit
+  budget reservations serialize cooperating callers, reconcile observed use and
+  return sticky pause/alert events on exhaustion, unknown usage or excess. No
+  real pricing, credentials, durable ledger or notification service is selected.
+  Canonical setup/verify passed: 1832 unit, 245 contract, 87 integration,
+  2199 aggregate including offline evaluations; one existing optional Telegram
+  skip, no live-safety skips; mypy 332 files, coverage 87.41%. Final verified
+  coverage accounting and two extra budget-boundary probes passed all 19 focused
+  evaluation tests and type checks. Full locked audit found no known
+  vulnerabilities. Root self-review complete; current-head CI still required.
+  Offline reports hard-code real AI/scheduled Paper ineligible; DEC-009 and
+  real-model qualification/durable budget-alert composition remain prerequisites.
 
 ## Execution envelope: P04-T7 evidence-bound research assembly
 
@@ -3019,7 +3036,7 @@ can never become a live quote fallback.
 | `P04-T5` | `merged` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | #192; deterministic read tools; execution envelope above |
 | `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
-| `P04-T8` | `claimed` | `P04-T6`, `P04-T7` (merged) | offline evaluations and explicit-budget boundary; execution envelope above |
+| `P04-T8` | `in_progress` | `P04-T6`, `P04-T7` (merged) | offline evaluations and explicit-budget boundary; execution envelope above |
 | `P04-T9` | `not_started` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` | `backtest/runner.py`; replay fixtures and tests |
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |

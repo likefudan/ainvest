@@ -1,0 +1,17 @@
+{
+  "suite_version": "research-synthetic-v1",
+  "cases": [
+    {"id": "eval_ordinary", "mode": "ordinary", "status": "complete", "schema": true, "price": "160", "error_code": null},
+    {"id": "eval_conflicting_sources", "mode": "conflicting_sources", "status": "partial", "schema": true, "price": "160", "error_code": null},
+    {"id": "eval_old_news", "mode": "old_news", "status": "partial", "schema": true, "price": "160", "error_code": null},
+    {"id": "eval_missing_filings", "mode": "missing_filings", "status": "partial", "schema": true, "price": "160", "error_code": null},
+    {"id": "eval_extreme_market", "mode": "extreme_market", "status": "complete", "schema": true, "price": "1000000", "error_code": null},
+    {"id": "eval_injection_ignored", "mode": "injection_ignored", "status": "partial", "schema": true, "price": "160", "error_code": null},
+    {"id": "eval_injection_followed", "mode": "injection_followed", "status": "error", "schema": false, "price": null, "error_code": "PROHIBITED_NARRATIVE"},
+    {"id": "eval_forged_evidence", "mode": "forged_evidence", "status": "error", "schema": false, "price": null, "error_code": "UNSUPPORTED_EVIDENCE"},
+    {"id": "eval_unsupported_claim", "mode": "unsupported_claim", "status": "error", "schema": false, "price": null, "error_code": "UNSUPPORTED_CLAIM"},
+    {"id": "eval_numeric_claim", "mode": "numeric_claim", "status": "error", "schema": false, "price": null, "error_code": "PROHIBITED_NARRATIVE"},
+    {"id": "eval_invalid_schema", "mode": "invalid_schema", "status": "error", "schema": false, "price": null, "error_code": "MODEL_FAILED"},
+    {"id": "eval_stale_quote", "mode": "stale_quote", "status": "error", "schema": true, "price": null, "error_code": "REQUIRED_QUOTE_INVALID"}
+  ]
+}
