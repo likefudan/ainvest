@@ -105,11 +105,13 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T11 deterministic performance reports
 
-- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
   offline development authorized, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t11-claim` starts at #202
   squash `c4e346582dd0e17d721bc35c13d38d2d675bb8b7`; implementation
   `agent/p04-t11-reporting` begins only after this tracker-only claim merges.
+  Claim #203 merged at `c89a281c15d21350539c44d9d4d738a2761307b3`;
+  implementation starts at that exact base.
 - **Authority / dependencies:** P04-T11 and design 14.2; T9/T10 merged.
 - **Allowed paths:** `src/ainvest/backtest/reporting.py`,
   `tests/unit/backtest/test_reporting.py`,
@@ -132,6 +134,18 @@ Last updated: 2026-09-30
 - **Excluded:** existing replay/cost/validation/schema/portfolio/strategy/risk/
   execution edits, dependencies, credentials/provider calls, staging runtime,
   storage/deployment, owner policies and Live.
+- **Implementation / local evidence:** pure bounded Decimal NAV report with
+  end-period cash-flow-adjusted gross/net returns, drawdown, sample/explicit
+  annualized volatility, labeled gross turnover and cost. Exact sample/fold
+  endpoints and aligned total-return same-currency benchmarks; unavailable
+  inputs never invent metrics/comparisons. Source/request/report digests and
+  recomputation, fixed disclaimer and disabled execution/scheduling; no NAV
+  feedback loop or provider/owner parameter choice. Canonical setup/verify:
+  1868 unit, 245 contract, 90 integration, 2240 aggregate; one existing optional
+  Telegram skip, no live-safety skips; mypy 346 files, coverage 87.51%; locked
+  audit found no known vulnerabilities (gateway direct URL separately pinned).
+  Final explicit metric/annualization/benchmark display metadata passed all 10
+  focused tests/type checks. Root review complete; current-head CI required.
 
 ## Execution envelope: P04-T10 costs, adjustments and temporal validation
 
@@ -3181,7 +3195,7 @@ can never become a live quote fallback.
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
 | `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
 | `P04-T10` | `merged` | `P04-T9` (merged) | #202; costs/adjustments/temporal validation; execution envelope above |
-| `P04-T11` | `claimed` | `P04-T9`, `P04-T10` (merged) | deterministic performance reporting; execution envelope above |
+| `P04-T11` | `in_progress` | `P04-T9`, `P04-T10` (merged) | deterministic performance reporting; execution envelope above |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
 
 ##### Execution envelope: P04-T3 news and market calendar
