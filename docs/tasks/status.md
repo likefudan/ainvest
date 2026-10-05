@@ -103,9 +103,39 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T11 deterministic performance reports
+
+- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+  offline development authorized, root self-review only.
+- **Branch / immutable base:** claim `agent/p04-t11-claim` starts at #202
+  squash `c4e346582dd0e17d721bc35c13d38d2d675bb8b7`; implementation
+  `agent/p04-t11-reporting` begins only after this tracker-only claim merges.
+- **Authority / dependencies:** P04-T11 and design 14.2; T9/T10 merged.
+- **Allowed paths:** `src/ainvest/backtest/reporting.py`,
+  `tests/unit/backtest/test_reporting.py`,
+  `tests/integration/test_backtest_reporting.py`, `docs/backtest-reporting.md`,
+  coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** bounded caller-supplied gross/net NAV and explicit end-period
+  external cash flows, period returns/volatility/drawdown, explicit turnover/cost
+  convention, optional aligned benchmark and exact in/out-of-sample intervals.
+  Versioned deterministic Decimal calculation module is the equivalent metrics
+  implementation; no new reporting dependency. Explicit cadence/annualization
+  only, no invented comparison for missing benchmark or interval.
+  Retain code/config/strategy/data/cost/validation fingerprints and historical
+  results disclaimer. Reject malformed/boundary/tampered inputs and replay.
+- **Qualification:** reporting validates supplied NAV/accounting metadata; it
+  does not fabricate a cost-fed portfolio feedback loop, approve strategy/risk
+  parameters, authorize Paper scheduling or predict returns.
+- **Verification:** fixed numeric gross/net/cash-flow references, deterministic
+  roundtrip/recomputation, drawdown/volatility/turnover, absent/misaligned
+  benchmark/interval and fold-boundary tests; canonical setup/verify/audit/CI.
+- **Excluded:** existing replay/cost/validation/schema/portfolio/strategy/risk/
+  execution edits, dependencies, credentials/provider calls, staging runtime,
+  storage/deployment, owner policies and Live.
+
 ## Execution envelope: P04-T10 costs, adjustments and temporal validation
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; continuous
   offline development authorized, root self-review only.
 - **Branch / immutable base:** claim branch
   `agent/p04-t10-cost-validation` starts at P04-T9 #200 squash
@@ -149,6 +179,8 @@ Last updated: 2026-09-30
   coverage 87.44%. Locked audit found no known vulnerabilities (direct-URL
   rh-mcp remains separately artifact-pin verified). Root review complete;
   current-head CI remains required before merge.
+- **Merge evidence:** #202 squash `c4e346582dd0e17d721bc35c13d38d2d675bb8b7`;
+  current-head Verify, Secret scan, Dependency audit, SAST and CodeQL passed.
 
 ## Execution envelope: P04-T9 point-in-time strategy replay
 
@@ -3148,8 +3180,8 @@ can never become a live quote fallback.
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
 | `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
-| `P04-T10` | `in_progress` | `P04-T9` (merged) | costs/adjustments/temporal validation; execution envelope above |
-| `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
+| `P04-T10` | `merged` | `P04-T9` (merged) | #202; costs/adjustments/temporal validation; execution envelope above |
+| `P04-T11` | `claimed` | `P04-T9`, `P04-T10` (merged) | deterministic performance reporting; execution envelope above |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
 
 ##### Execution envelope: P04-T3 news and market calendar
