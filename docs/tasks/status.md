@@ -105,12 +105,14 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T9 point-in-time strategy replay
 
-- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
   offline progress authorized; root self-review, no review agents.
 - **Branch / immutable base:** `agent/p04-t9-claim` starts at the exact #198
   squash merge `0b423e8a843079d18d9aab2ad5391e3ed6c0d9bf`;
   `agent/p04-t9-backtest-replay` starts at the resulting exact
-  claim merge. Implementation waits for the merged claim.
+  claim merge. Implementation began after the claim merged.
+  Claim #199 merged at `98dddf4832b2fe19ba09b5ebdd25a5f578f725eb`,
+  the exact implementation base.
 - **Authority / dependencies:** P04-T9; merged P03-T0–T5/T14 and P04-T4;
   design 14.2 and strategy-context contract. DEC-011/012 remain unselected.
 - **Allowed paths:** `src/ainvest/backtest/{__init__,models,runner}.py`,
@@ -139,6 +141,22 @@ Last updated: 2026-09-30
   changes, fill/cost simulation and performance claims (P04-T10/T11), dependencies,
   real AI/network/brokerage calls, staging/env/secrets/databases, scheduling,
   accepted owner strategy/risk/retention/recovery policy, deployment and Live.
+- **Implementation / local evidence:** bounded explicit closed/received-at raw
+  historical contracts and ordered point-in-time schedule; known-prefix-only
+  indicators/strategy context, full artifact identity separately retained.
+  Existing isolated worker/Position Sizer/Risk Engine (complete standard rule
+  list in proposal phase), validated state and worker metadata/digest binding;
+  mandatory isolation, single active replay, total deadline and output bounds.
+  Retains indicator library versions and local calendar horizon/config/version
+  fingerprint, deterministic semantic results without runtime latency. No fill,
+  order approval/execution, storage or owner policy selection. Canonical
+  setup/verify passed: 1843 unit, 245 contract, 88 integration, 2213 aggregate;
+  one existing optional Telegram-runtime skip, no live-safety skips; mypy 338
+  files, coverage 87.33%. Final local-calendar fingerprint and regression tests
+  passed all 13 focused replay tests/type checks. Full locked audit found no
+  known vulnerabilities. Root review complete; current-head CI remains required.
+  Existing worker hooks/read-only-workdir are not a new kernel sandbox;
+  normalized prefixes do not pretend to be original raw provider wire captures.
 
 ## Execution envelope: P04-T8 offline research evaluation and budget boundary
 
@@ -3079,7 +3097,7 @@ can never become a live quote fallback.
 | `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
-| `P04-T9` | `claimed` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | point-in-time isolated decision replay; execution envelope above |
+| `P04-T9` | `in_progress` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | point-in-time isolated decision replay; execution envelope above |
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
