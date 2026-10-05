@@ -17,6 +17,13 @@ and never establishes a provider network connection. Existing locked versions
 are also installed in development for unskipped SDK contract tests; core-only
 deployments still need no research SDK.
 
+The offline constructor supplies explicit empty admin/organization/project/webhook
+selectors and a fixed URL/key, so SDK environment fallbacks are not used. The
+locked SDK otherwise reads `OPENAI_CUSTOM_HEADERS` unconditionally; if that
+variable is present the adapter returns `OFFLINE_CONFIG_UNSAFE` before constructing
+the SDK, without reading its value or changing the process environment. This
+presence check is repeated at invocation, not only when creating the adapter.
+
 ## Independent context and read boundary
 
 Each attempt constructs a new Pydantic AI agent with no message history,
@@ -84,6 +91,11 @@ complete result. Invalid/refused output is not logged. These records are returne
 in memory only; durable storage/evidence assembly belongs to P04-T7. Financial
 reservation, monthly budget enforcement and actual API activation remain closed
 until DEC-009 and a separately reviewed operational composition exist.
+
+Agent results now include bounded immutable JSON captures of returned named
+tools, including earlier captures when a later model call fails. Failed model
+narrative and its citation list remain withheld. [Research assembly](research-builder.md)
+validates these captures and can archive both successful and failed runs.
 
 Offline tests cover fixed wire settings, fresh context, no additional tools,
 same-run evidence, unsupported claims, trade/numeric prose, refusal, invalid
