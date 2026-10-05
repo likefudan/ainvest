@@ -4,6 +4,7 @@ from typing import Annotated, Literal, Self
 
 from pydantic import Field, StringConstraints, model_validator
 
+from ainvest.agents.research_capture import CapturedToolResult
 from ainvest.agents.tools.models import ToolName
 from ainvest.data.indicators import Digest
 from ainvest.schemas.common import DomainModel, MachineCode, QualityFlag, StableId
@@ -117,6 +118,7 @@ class ResearchAgentResult(DomainModel):
     quality_flags: tuple[QualityFlag, ...]
     error_code: MachineCode | None
     record: ResearchRunRecord
+    captures: Annotated[tuple[CapturedToolResult, ...], Field(max_length=16)] = ()
 
     @model_validator(mode="after")
     def _result(self) -> Self:

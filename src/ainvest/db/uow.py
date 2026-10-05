@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from collections.abc import Iterator
 from contextlib import AbstractContextManager, contextmanager
-from typing import Any, Self
+from typing import TYPE_CHECKING, Any, Self
 
 from sqlalchemy.orm import Session, sessionmaker
 
@@ -16,6 +16,10 @@ from ainvest.db.repositories import (
     RiskDecisionRepository,
     TelegramUpdateRepository,
 )
+
+if TYPE_CHECKING:
+    from ainvest.agents.research_archive import ResearchStorageQuota
+    from ainvest.db.research import ResearchRepository
 
 
 class UnitOfWork:
@@ -73,6 +77,14 @@ class UnitOfWork:
         if self.session is None:
             raise RuntimeError("UnitOfWork is not active")
         self.session.commit()
+
+    def research_repository(self, quota: ResearchStorageQuota) -> ResearchRepository:
+        """Opt-in research persistence with explicit logical capacity limits."""
+        from ainvest.db.research import ResearchRepository
+
+        if self.session is None:
+            raise RuntimeError("UnitOfWork is not active")
+        return ResearchRepository(self.session, quota, begin_write=self.begin_atomic_write)
 
     def rollback(self) -> None:
         """Explicit rollback without leaving the context."""

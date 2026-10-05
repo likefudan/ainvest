@@ -110,6 +110,7 @@ Last updated: 2026-09-30
 - **Branch / immutable base:** claim `agent/p04-t7-claim` from
   `066394bd5b866ebb48df3c2ca203762a49897b2a`; implementation
   `agent/p04-t7-research-builder` starts at the exact resulting claim merge.
+  Claim #195 merged at `5a0dde2cd969a38aa0ddd6da6128d0896f58097e`.
 - **Authority / dependencies:** P04-T7; DEC-003/004/009/013/014;
   P04-T5/T6 and P02-T6/T7/T8 merged. P04-T6 #194 is the base above.
 - **Allowed paths:** `src/ainvest/agents/research_{builder,capture,archive}.py`,
@@ -121,6 +122,13 @@ Last updated: 2026-09-30
   `tests/integration/test_research_builder_flow.py`,
   `docs/research-builder.md`, narrow links/handoff notes in
   `docs/research-agent.md`, coordinator-owned `docs/tasks/status.md`.
+- **Root scope correction (2026-10-04):** also permit narrowly isolating the
+  offline SDK constructor from ambient credentials/selectors and rejecting
+  ambient custom-header configuration, with regression coverage in
+  `tests/integration/test_research_agent_flow.py`. Locked SDK inspection found
+  implicit environment fallbacks despite the mock-only transport. This is
+  security tightening only; fixed model, wire settings, tools, permissions,
+  dependencies and operational activation remain unchanged.
 - **Delivery:** bounded immutable captures of actually returned named tool
   results, digest/run/scope/citation reconciliation and deterministic packet
   assembly. Financial/technical/portfolio fields come only from typed tools;
@@ -140,6 +148,19 @@ Last updated: 2026-09-30
   staging files/processes/secrets/databases, actual AI calls, model/settings or
   permission changes, deployment, owner risk/retention/recovery choices, Live.
   DEC-009 remains unresolved; offline assembly can continue independently.
+- **Implementation / local evidence:** immutable typed tool captures; scoped
+  evidence/digest reconciliation; tool-only numbers and history-derived technical
+  recomputation; partial/error withholding; deterministic offline archive replay.
+  Explicit quota-bound append stores run/packet/audit atomically, with conflict,
+  mirrored-row, digest, checkpoint and bounded-read checks. No migration or
+  operational defaults. Canonical setup/verify passed: 1832 unit, 245 contract,
+  87 integration, 2182 aggregate; one existing optional Telegram-runtime skip,
+  no skipped live-safety tests; mypy 326 files, coverage 87.33%. Full locked
+  dependency audit found no known vulnerabilities (pinned URL gateway is checked
+  by its artifact boundary). Final packet SQL-size preflight also passed focused
+  repository tests and type checks. Root review complete; current-head CI remains
+  required. PostgreSQL locking is not integration-verified; real AI/budgets,
+  raw broker wire captures, physical storage sizing and retention remain gated.
 
 ## Execution envelope: P04-T6 bounded research narrative agent
 

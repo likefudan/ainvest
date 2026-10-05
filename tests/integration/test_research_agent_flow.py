@@ -3,12 +3,51 @@
 import asyncio
 import socket
 
+import httpx
 import pytest
 from research_agent_fixtures import responses_transport
 from research_tool_fixtures import fixtures
 
 from ainvest.agents.research_agent import ResearchAgent, offline_responses_model
 from ainvest.agents.tools import ResearchTools
+
+
+def test_offline_sdk_does_not_use_ambient_credentials(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.delenv("OPENAI_CUSTOM_HEADERS", raising=False)
+    for name in (
+        "OPENAI_API_KEY",
+        "OPENAI_ADMIN_KEY",
+        "OPENAI_ORG_ID",
+        "OPENAI_PROJECT_ID",
+        "OPENAI_WEBHOOK_SECRET",
+        "OPENAI_BASE_URL",
+    ):
+        monkeypatch.setenv(name, "synthetic-ambient-do-not-use")
+    transport, requests = responses_transport()
+
+    def inspect(request: httpx.Request) -> httpx.Response:
+        assert "synthetic-ambient-do-not-use" not in str(request.headers)
+        assert request.url.host == "api.openai.com"
+        assert request.headers["authorization"] == "Bearer offline-placeholder-not-a-key"
+        return transport.handle_request(request)
+
+    scope, sources = fixtures()
+    with ResearchTools(scope, sources) as tools:
+        result = asyncio.run(
+            ResearchAgent(offline_responses_model(httpx.MockTransport(inspect))).run(tools)
+        )
+    assert result.status == "complete", result.error_code
+    assert len(requests) == 2
+
+
+def test_offline_custom_headers_fail_before_sdk_request(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setenv("OPENAI_CUSTOM_HEADERS", "X-Synthetic-Secret: do-not-read")
+    transport, requests = responses_transport()
+    scope, sources = fixtures()
+    with ResearchTools(scope, sources) as tools:
+        result = asyncio.run(ResearchAgent(offline_responses_model(transport)).run(tools))
+    assert result.status == "error" and result.error_code == "OFFLINE_CONFIG_UNSAFE"
+    assert not requests and result.record.requests == 0
 
 
 def test_sdk_wire_policy_and_fresh_context(monkeypatch: pytest.MonkeyPatch) -> None:

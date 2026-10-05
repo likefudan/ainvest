@@ -12,6 +12,7 @@ from threading import Lock
 from typing import TYPE_CHECKING, Literal, cast
 
 from ainvest.agents.prompts import SYSTEM_PROMPT
+from ainvest.agents.research_capture import MAX_RUN_CAPTURE_BYTES, CapturedToolResult
 from ainvest.agents.research_models import (
     ModelReply,
     ModelTelemetry,
@@ -74,6 +75,8 @@ class ResearchReadToolset:
         self._active = True
         self._busy = False
         self._digests: list[str] = []
+        self._captures: list[CapturedToolResult] = []
+        self._capture_bytes = 0
         self._evidence: dict[str, EvidenceCitation] = {}
         self._names: set[ToolName] = set()
         self._flags: set[QualityFlag] = set()
@@ -104,7 +107,12 @@ class ResearchReadToolset:
                 raise _Rejected("TOOL_RUN_CLOSED")
             # The model only gets the fixed, validated versioned result.
             typed = cast(ToolResult[DomainModel], result)
-            self._digests.append(digest_bytes(result.model_dump_json().encode()))
+            capture = CapturedToolResult.capture_json(name, result.model_dump_json())
+            self._capture_bytes += len(capture.json_result.encode())
+            if self._capture_bytes > MAX_RUN_CAPTURE_BYTES:
+                raise _Rejected("TOOL_CAPTURE_LIMIT")
+            self._captures.append(capture)
+            self._digests.append(capture.digest)
             self._names.add(name)
             self._flags.update(typed.quality_flags)
             self._error |= typed.status == "error"
@@ -245,6 +253,7 @@ class ResearchAgent:
                 error_code=code,
                 quality_flags=(QualityFlag.PARTIAL,),
                 record=record.model_copy(update={"tool_output_digests": tuple(facade._digests)}),
+                captures=tuple(facade._captures),
             )
 
         if self._model is None:
@@ -339,6 +348,7 @@ class ResearchAgent:
                         quality_flags=tuple(sorted(flags)),
                         error_code=None,
                         record=record,
+                        captures=tuple(facade._captures),
                     )
                 except TransientModelError as exc:
                     add_usage(exc.telemetry)
@@ -371,6 +381,8 @@ def offline_responses_model(transport: "httpx.MockTransport") -> ModelPort:
     No secret is read, no network transport can be supplied, no real AI switch
     is exposed. Operational credential/budget composition is a future owner gate.
     """
+    import os
+
     import httpx
     from openai import APIConnectionError, APITimeoutError, AsyncOpenAI
     from pydantic_ai import Agent, NativeOutput, Tool
@@ -393,6 +405,13 @@ def offline_responses_model(transport: "httpx.MockTransport") -> ModelPort:
         return False
 
     async def invoke(context: AgentContext) -> ModelReply:
+        # The locked SDK unconditionally reads this variable in its ordinary
+        # client constructor. Check presence only, before construction; never
+        # read its value or mutate process-wide environment configuration.
+        if "OPENAI_CUSTOM_HEADERS" in os.environ:
+            raise ModelFailure(
+                "OFFLINE_CONFIG_UNSAFE", ModelTelemetry(requests=0, usage_complete=True)
+            )
         request_ids: list[str] = []
         response_ids: list[str] = []
         requests = 0
@@ -449,6 +468,10 @@ def offline_responses_model(transport: "httpx.MockTransport") -> ModelPort:
         ) as http:
             client = AsyncOpenAI(
                 api_key="offline-placeholder-not-a-key",
+                admin_api_key="",
+                organization="",
+                project="",
+                webhook_secret="",
                 base_url="https://api.openai.com/v1",
                 http_client=http,
                 max_retries=0,
