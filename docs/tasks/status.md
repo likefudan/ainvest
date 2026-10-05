@@ -105,11 +105,14 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T12 offline Gate 2 evidence and owner gate
 
-- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `offline_evidence_complete_owner_gate_pending`,
+  2026-10-04; continuous
   offline work authorized, root self-review only.
 - **Branch / immutable base:** `agent/p04-t12-claim` starts at #204 squash
   `ec898c13585adb81b58844a454913ce9653c876d`; implementation
   `agent/p04-t12-offline-gate` starts only after the exact claim merge.
+  Claim #205 merged at `ac693b5eb193ac740c6aafaf678d34aba0a0612e`;
+  implementation starts at that exact base.
 - **Authority / dependencies:** P04-T12, design Phase 2, DEC-004/009;
   P04-T0–T11 software implementations merged. DEC-009 remains proposed.
 - **Allowed paths:** `tests/unit/gate2_fixtures.py`,
@@ -133,6 +136,23 @@ Last updated: 2026-09-30
 - **Excluded:** all production-code changes, model/prompt/pin/dependency edits,
   provider/real AI/broker requests, runtime files/DB/secrets/poller, deployment,
   owner strategy/risk/retention/recovery decisions, full acceptance and Live.
+- **Implementation / local evidence:** fixed read-only tools/fake agent/build
+  and archive replay prove typed market/technical/portfolio numeric traceability.
+  Generated complete packet enters existing Gate 1 strategy/sizing/risk/Paper
+  composition: pending/zero fills by default; explicit test approval gives
+  simulated fill and ledger conservation. Twelve-case offline evaluations,
+  four failed no-packet scenarios, temporary quota-bound DB replay and saved
+  read-contract normalization retain disabled real/provider qualification.
+  Repeatable JSON harness and full Phase 2 evidence/remaining-gate record added.
+  No production paths/runtime/secrets/providers changed. Canonical setup/verify:
+  1868 unit, 245 contract, 97 integration, 2247 aggregate; one existing optional
+  Telegram skip, no live-safety skips; mypy 348 files, coverage 87.52%; locked
+  audit found no known vulnerabilities (gateway URL separately artifact pinned).
+  Root self-review complete; current-head required CI remains a merge gate.
+  Full P04-T12/Gate 2 acceptance is not asserted: DEC-009 project/monthly budget/
+  secret reference, real-model/provider qualification and operational budget/
+  notification wiring remain pending. Next owner input is monthly USD ceiling;
+  no real key should be sent in chat. Implementation PR records merge evidence.
 
 ## Execution envelope: P04-T11 deterministic performance reports
 
@@ -3229,7 +3249,7 @@ can never become a live quote fallback.
 | `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
 | `P04-T10` | `merged` | `P04-T9` (merged) | #202; costs/adjustments/temporal validation; execution envelope above |
 | `P04-T11` | `merged` | `P04-T9`, `P04-T10` (merged) | #204; deterministic performance reporting; execution envelope above |
-| `P04-T12` | `claimed` (offline evidence only) | all `P04-T0`–`P04-T11` software merged; DEC-009 unresolved | Gate 2 harness/documentation; full qualification remains closed |
+| `P04-T12` | `offline_evidence_complete_owner_gate_pending` | all `P04-T0`–`P04-T11` software merged; DEC-009 unresolved | Gate 2 harness/documentation; full acceptance, real AI and scheduling remain closed |
 
 ##### Execution envelope: P04-T3 news and market calendar
 
