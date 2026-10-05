@@ -105,12 +105,14 @@ Last updated: 2026-09-30
 
 ## Execution envelope: P04-T10 costs, adjustments and temporal validation
 
-- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; continuous
   offline development authorized, root self-review only.
-- **Branch / immutable base:** claim and implementation branch
+- **Branch / immutable base:** claim branch
   `agent/p04-t10-cost-validation` starts at P04-T9 #200 squash
   `09838f6a478b8d0f51b6c234f2928f5e2f3142dc`. Implementation starts only
   after this tracker-only claim merges; record its exact merge before coding.
+  Claim #201 merged at `7a078769975fba1f5bd2897f25e71d44bd860857`;
+  implementation branch `agent/p04-t10-costs` starts at that exact base.
 - **Authority / dependency:** P04-T10 and design 14.2; P04-T9 merged.
 - **Allowed paths:** `src/ainvest/backtest/{costs,validation}.py`,
   `tests/unit/backtest/test_{costs,validation}.py`,
@@ -133,6 +135,20 @@ Last updated: 2026-09-30
 - **Excluded:** existing replay/schema/data/strategy/risk/execution changes,
   performance reporting (T11), actual AI/broker/network requests, staging
   env/secrets/DB, service activation and owner DEC-009/011/012/013/014 choices.
+- **Implementation / local evidence:** deterministic next-open adverse-price
+  diagnostics with shared volume/partial fills, once-per-candidate flat fees,
+  conservative expiry/limit/rounding and JSON request recomputation. Raw lot
+  split/explicit dividend-credit transforms preserve total basis and reject
+  repeated or adjusted-series actions. Temporal checks retain supplied clocks,
+  universe coverage and paired future-suffix probes; bounded rolling folds
+  freeze parameters before test periods. Actual isolated replay composition and
+  deliberate leaking final-price strategy tests pass. No portfolio feedback,
+  performance claim, provider prices/fees, persistence or runtime activation.
+  Canonical setup/verify: 1859 unit, 245 contract, 89 integration, 2230 aggregate;
+  one existing optional Telegram skip, no live-safety skips; mypy 343 files,
+  coverage 87.44%. Locked audit found no known vulnerabilities (direct-URL
+  rh-mcp remains separately artifact-pin verified). Root review complete;
+  current-head CI remains required before merge.
 
 ## Execution envelope: P04-T9 point-in-time strategy replay
 
@@ -3132,7 +3148,7 @@ can never become a live quote fallback.
 | `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
 | `P04-T8` | `merged` | `P04-T6`, `P04-T7` (merged) | #198; offline evaluations and explicit-budget boundary; qualification gates remain closed |
 | `P04-T9` | `merged` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` (merged) | #200; point-in-time isolated decision replay; execution envelope above |
-| `P04-T10` | `claimed` | `P04-T9` (merged) | costs/adjustments/temporal validation; execution envelope above |
+| `P04-T10` | `in_progress` | `P04-T9` (merged) | costs/adjustments/temporal validation; execution envelope above |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
 | `P04-T12` | `not_started` | all `P04-T0`–`P04-T11` merged | `docs/releases/phase-2-acceptance.md`; Gate 2 harness/fixtures only |
 
