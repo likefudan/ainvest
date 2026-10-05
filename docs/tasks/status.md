@@ -5,7 +5,28 @@ records who owns a task, the exact source state they inherited, their permitted
 write scope, dependencies, verification contract, blockers, and handoff. It is
 not a substitute for the task card in `IMPLEMENTATION_TODO.md`.
 
-Last updated: 2026-09-30
+Last updated: 2026-10-05
+
+## Execution envelope: DEC-009 owner-approved monthly budget record
+
+- **Owner / status:** root coordinator, `budget_recorded_project_reference_pending`,
+  2026-10-05; root self-review, no subagents.
+- **Branch / immutable base:** `agent/dec009-budget-20` from P04-T12 #206
+  squash `c990e3a3cc0a05dbe08556e767514f8787b4c28d`.
+- **Authority / inputs:** owner answered the monthly USD ceiling question
+  with `20美元`; approved amount is USD 20 per month. DEC-004 fixed-model
+  settings and all trading/release gates remain unchanged.
+- **Allowed paths / delivery:** this tracker, `docs/decisions/README.md`,
+  `docs/releases/phase-2-acceptance.md`; record the budget-only approval and
+  distinguish it from full DEC-009 acceptance or operational enforcement.
+- **Excluded:** production code, dependency/prompt/model changes, runtime
+  settings, secrets, provider account/billing changes, API calls, deployment,
+  scheduled Paper and Live. No credential values are read or recorded.
+- **Verification / handoff:** documentation diff and whitespace review;
+  canonical setup/verify and current-head required CI before merge. The next
+  required owner input is the OpenAI API project identity and local secret
+  reference, not the key itself. Full Gate 2 remains unaccepted. The resulting
+  PR is the merge record; historical budget-pending envelopes below are retained.
 
 ## Execution envelope: strategy worker Linux RSS correction
 
