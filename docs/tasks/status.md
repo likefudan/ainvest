@@ -103,9 +103,49 @@ Last updated: 2026-09-30
   Real AI use remains disabled pending DEC-009. Operational storage, retention
   and recovery objectives remain separate owner/deployment decisions.
 
+## Execution envelope: P04-T8 offline research evaluation and budget boundary
+
+- **Owner / status:** root coordinator, `claimed`, 2026-10-04; continuous
+  progress authorized, root self-review only. Implementation waits for this
+  claim to merge after P04-T7.
+- **Branch / immutable base:** `agent/p04-t8-claim` starts at the exact P04-T7
+  #196 squash merge `30e53aa489162092a8f3b9fdc75a95c2451039d8`;
+  `agent/p04-t8-research-evals` starts at the resulting
+  immutable claim merge. Record both SHAs before implementation.
+- **Authority / dependencies:** P04-T8; P04-T6/T7; DEC-004/009. Design
+  sections 5.2, 10.1 and 14; no model or prompt changes.
+- **Allowed paths:** `src/ainvest/agents/research_{evaluation,budget}.py`,
+  `tests/evals/research/**`, `scripts/run_research_evals.py`,
+  `docs/research-evaluations.md`, narrow evaluation link in
+  `docs/research-builder.md`, coordinator-owned `docs/tasks/status.md`.
+- **Delivery:** versioned synthetic cases for ordinary data, conflicting
+  sources, old news, missing filings, extreme markets, untrusted source
+  instructions and deliberately invalid model output. Machine-readable reports
+  retain model/prompt/tool/case versions and digests, schema and evidence success,
+  unsupported claims, numeric consistency, latency and observed tokens. Cost
+  uses only explicitly supplied synthetic/versioned rates, not guessed current
+  API prices. Deterministic release checks fail closed on safety regressions.
+- **Budget boundary:** caller-supplied ceiling/rates, worst-case reservation
+  before starting new research, observed reconciliation and sticky pause/alert
+  on exhaustion or unknown usage. No default monthly allowance or real billing
+  account is selected, and no model downgrade is permitted. Tests demonstrate
+  the pure boundary with synthetic model ports; no scheduled service is enabled.
+- **Qualification:** fake-model results establish software invariants, not
+  real-model injection resistance or production quality. Report readiness must
+  keep real-model/full-release qualification and DEC-009 unresolved; offline
+  passing reports cannot authorize scheduled Paper or real AI.
+- **Verification:** deterministic case/report replay and version comparability,
+  intentionally failing safety/quality gates, no execution/config mutation,
+  budget exhaustion/unknown-usage reservation rejection and sanitized alerts;
+  canonical setup/verify, dependency audit and current-head required CI.
+- **Excluded:** existing agent/builder behavior, shared schemas, data/broker/
+  approval/strategy changes, dependency upgrades, real model calls, runtime
+  scheduling, staging env/secrets/databases, financial/retention/recovery policy,
+  owner budget acceptance, deployment and Live.
+
 ## Execution envelope: P04-T7 evidence-bound research assembly
 
-- **Owner / status:** root coordinator, `in_progress`, 2026-10-04; owner
+- **Owner / status:** root coordinator, `merged`, 2026-10-04; owner
   authorized continuous progress, root self-review only.
 - **Branch / immutable base:** claim `agent/p04-t7-claim` from
   `066394bd5b866ebb48df3c2ca203762a49897b2a`; implementation
@@ -161,6 +201,10 @@ Last updated: 2026-09-30
   repository tests and type checks. Root review complete; current-head CI remains
   required. PostgreSQL locking is not integration-verified; real AI/budgets,
   raw broker wire captures, physical storage sizing and retention remain gated.
+- **Merge evidence:** #196 squash `30e53aa489162092a8f3b9fdc75a95c2451039d8`;
+  current-head Verify (Linux), Secret scan, Dependency audit, SAST and CodeQL
+  all passed. This is offline library completion, not operational deployment
+  or AI/Paper release qualification.
 
 ## Execution envelope: P04-T6 bounded research narrative agent
 
@@ -2974,8 +3018,8 @@ can never become a live quote fallback.
 | `P04-T4` | `merged` | `P04-T0`–`P04-T3`, `P02-T1` (merged) | #189 `2d962cadf47d78c7ee71cd5480d6051534ce3b8c`; bounded persistence and offline replay; envelope above |
 | `P04-T5` | `merged` | `P04-T0`–`P04-T4`, `P02-T1`–`P02-T2` (merged) | #192; deterministic read tools; execution envelope above |
 | `P04-T6` | `merged` (offline library) | `P04-T5`, `DEC-004`; real calls still require `DEC-009` | #194; fixed Responses SDK mock verification; execution envelope above |
-| `P04-T7` | `in_progress` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | evidence-bound assembly and bounded research persistence; execution envelope above |
-| `P04-T8` | `not_started` | `P04-T6`, `P04-T7` | `tests/evals/research/**`, `scripts/run_research_evals.py`, versioned evaluation fixtures/reports |
+| `P04-T7` | `merged` | `P04-T5`, `P04-T6`, `P02-T6`–`P02-T8` (merged) | #196; evidence-bound assembly and bounded research persistence; execution envelope above |
+| `P04-T8` | `claimed` | `P04-T6`, `P04-T7` (merged) | offline evaluations and explicit-budget boundary; execution envelope above |
 | `P04-T9` | `not_started` | `P03-T0`–`P03-T5`, `P03-T14`, `P04-T4` | `backtest/runner.py`; replay fixtures and tests |
 | `P04-T10` | `not_started` | `P04-T9` | `backtest/{costs,validation}.py`; leakage/cost/walk-forward tests |
 | `P04-T11` | `not_started` | `P04-T9`, `P04-T10` | `backtest/reporting.py`; deterministic report fixtures/tests; reporting dependency only when assigned |
